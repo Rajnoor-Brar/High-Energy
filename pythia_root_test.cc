@@ -24,7 +24,7 @@ int main() {
         vector <double> id, status, mass, px, py, pz, pT, energy;
 
         eventTree->Branch("collisionEnergy", &collisionEnergy);
-        eventTree->Branch("eventNum", &eventNum);
+        eventTree->Branch("particleCount", &eventNum);
         eventTree->Branch("id", &id);
         eventTree->Branch("status", &status);
         eventTree->Branch("mass", &mass);
