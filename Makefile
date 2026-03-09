@@ -1,34 +1,36 @@
-# Currently you have by hand to remove the pedantic options in:
-# $(MYPYTHIA)/Makefile.inc
-# to make charged_particle_tree compile (step 3)
-
 SHELL = /bin/sh
 
+# Load user-provided CXXFLAGS from Pythia, then override strict options
 -include $(MYPYTHIA)/Makefile.inc
 
-# PYTHIA variables
+# Remove -pedantic and -Werror (automatically)
+CXXFLAGS := $(filter-out -Werror -pedantic,$(CXXFLAGS)) -mcpu=native -O3
 
-PYTHIA_INCDIR=$(PYTHIA8)/include
-PYTHIA_LIBDIR=$(PYTHIA8)/lib
+# Pythia paths
+PYTHIA_INCDIR = $(shell pythia8-config --includedir)
+PYTHIA_LIBDIR = $(shell pythia8-config --libdir)
 
-# ROOT variables (ROOTCFLAGS also includes include path)
-ROOTCFLAGS=$(shell root-config --cflags)
-ROOTLIBS=$(shell root-config --glibs)
+# ROOT paths
+ROOTCFLAGS = $(shell root-config --cflags)
+ROOTLIBS   = $(shell root-config --glibs)
 
-# There is no default behaviour, so remind user.
+# Default reminder
 all:
-	@echo "Usage: make XXX, where XXX.cc is your program"
+	@echo "Usage: make <program> or make <program>.exe (source file must be <program>.cc)"
 
-# Create an executable for one of the normal test programs
-%:	%.cc $(PYTHIA_LIBDIR)/libpythia8.so #dependencies
+# Rule: source.cc → executable.exe
+%.exe: %.cc $(PYTHIA_LIBDIR)/libpythia8.dylib
 	$(CXX) $(CXXFLAGS) $(ROOTCFLAGS) -I$(PYTHIA_INCDIR) \
-	$@.cc -o $@.exe \
+	$< -o $@ \
+	$(ROOTLIBS) -lEG \
 	-L$(PYTHIA_LIBDIR) -lpythia8 \
-	$(ROOTLIBS) -lEG
+	-Wl,-rpath,$(PYTHIA_LIBDIR)
+	@echo "$< --> $@"
+# Allow `make myfile` as alias for `make myfile.exe`
+%: %.exe
+	@true
 
-
-# Clean up: remove executables and outdated files.
+# Clean rule
 .PHONY: clean
 clean:
-	rm -f *.exe
-	rm -f *~; rm -f \#*; rm -f core*
+	rm -f *.exe *~ \#* core*

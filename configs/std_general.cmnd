@@ -1,0 +1,14 @@
+! =========================================
+! General generator configuration
+! =========================================
+
+MultiPartonInteractions:pT0Ref = 2.5
+HadronLevel:all                = on
+BeamRemnants:remnantMode       = 1
+BeamRemnants:saturation        = 3
+StringPT:sigma                 = 0.335
+
+! Parton spatial model
+PartonVertex:setVertex     = on
+PartonVertex:protonRadius  = 0.7
+PartonVertex:emissionWidth = 0.1

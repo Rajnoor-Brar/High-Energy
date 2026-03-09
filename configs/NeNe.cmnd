@@ -1,0 +1,51 @@
+! =============================
+! Beam
+Beams:idA = 1000100200
+Beams:idB = 1000100200
+Beams:eCM = 7000
+
+! Random
+Random:setSeed = on
+Random:seed    = 270403
+
+! Heavy ion
+HeavyIon:mode           = 1
+HeavyIon:SigFitNGen     = 0
+HeavyIon:SigFitDefAvNDb = 0.98
+HeavyIon:SigFitDefPar   = 1.51,3.58,1.21
+
+! MPI / Hadronisation
+MultiPartonInteractions:pT0Ref = 2.5
+HadronLevel:all                = on
+BeamRemnants:remnantMode       = 1
+BeamRemnants:saturation        = 3
+StringPT:sigma                 = 0.335
+
+! Physics toggles
+HardQCD:all       = on
+SoftQCD:inelastic = on
+PhaseSpace:pTHatMin = 5.0
+
+! Colour reconnection
+ColourReconnection:mode              = 1
+ColourReconnection:allowJunctions    = on
+ColourReconnection:allowDoubleJunRem = off
+ColourReconnection:m0                = 0.3
+ColourReconnection:timeDilationMode  = 2
+ColourReconnection:timeDilationPar   = 0.18
+
+! Ropewalk
+Ropewalk:RopeHadronization = on
+Ropewalk:doFlavour         = on
+Ropewalk:doShoving         = on
+Ropewalk:deltat            = 0.1
+Ropewalk:gAmplitude        = 5.0
+Ropewalk:tInit  = 1.5
+Ropewalk:tShove = 0.2
+Ropewalk:r0     = 0.5
+Ropewalk:m0     = 0.2
+
+! Vertex
+PartonVertex:setVertex     = on
+PartonVertex:protonRadius  = 0.7
+PartonVertex:emissionWidth = 0.1

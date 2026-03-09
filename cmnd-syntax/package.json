@@ -1,0 +1,28 @@
+{
+  "name": "cmnd-syntax",
+  "displayName": "CMND Syntax",
+  "description": "Minimal syntax highlighting for .cmnd files (PYTHIA style)",
+  "version": "0.0.1",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.50.0"
+  },
+  "categories": ["Programming Languages"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "cmnd",
+        "aliases": ["CMND", "cmnd"],
+        "extensions": [".cmnd"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "cmnd",
+        "scopeName": "source.cmnd",
+        "path": "./syntaxes/cmnd.tmLanguage.json"
+      }
+    ]
+  }
+}
