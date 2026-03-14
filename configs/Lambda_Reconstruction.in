@@ -1,0 +1,25 @@
+06
+500
+100
+100
+1000
+0.1
+0.05
+0.1
+output/Lambda_Reconstruction/
+params/
+
+
+
+
+In Order:
+01    Int        Serial
+02    Int        Event Count
+03    Int        Print Interval, interval at which it prints "x out of n done"
+04    Int        Bin Count
+05    Double     Hist Scaling 
+06    Double     Delta Energy in GeV
+07    Double     Delta Mass in Gev
+08    Double     Delta Theta in radians
+09    String     Directory
+10    String     Output Log Directory

@@ -3,6 +3,7 @@
 #include "Math/Vector4D.h"
 
 #include <iostream>
+#include <cstdlib>
 #include <fstream>
 #include <vector>
 #include <string>
@@ -11,140 +12,264 @@
 #include "TFile.h"
 #include "TTree.h"
 #include "TH1D.h"
+#include <sys/ioctl.h>
+#include <unistd.h>
+
+#define DEFINE_VARS(name, title) \
+    TDirectory* name##ValidatedDirectory = outFile->mkdir(title "Validated"); \
+    Int_t name##ValidatedCount=0, name##ValidatedParticles=0;\
+    TH1D* name##ValidatedMassHist = new TH1D(#name "Validated_" "Mass_Hist", \
+        "Mass Distribution of Reconstructed Lambda-particles", \
+        binCount, lambdaMass*0.8, lambdaMass*3); \
+    TH1D* name##ValidatedEnergyHist = new TH1D(#name "Validated_" "Energy_Hist", \
+        "Energy Distribution of Reconstructed Lambda-particles", \
+        binCount, lambdaEnergy*0.8, lambdaEnergy*7); \
+    TH1D* name##ValidatedEtaHist = new TH1D(#name "Validated_" "Eta_Hist", \
+        "Eta Distribution of Reconstructed Lambda-particles", \
+        binCount, 0, 3*M_PI); \
+    TH1I* name##ValidatedCountHist = new TH1I(#name "CountHist", \
+        "Count of Reconstructed Lambda-particles", \
+        101, -0.5, 100.5);   
+
+#define DEFINE_THEM_ALL \
+    DEFINE_VARS(un,"un")\
+    DEFINE_VARS(Mass, "Mass") \
+    DEFINE_VARS(Energy, "Energy") \
+    DEFINE_VARS(Theta, "Theta") \
+    DEFINE_VARS(EnergyMass, "Energy-Mass") \
+    DEFINE_VARS(EnergyTheta, "Energy-Theta") \
+    DEFINE_VARS(MassTheta, "Mass-Theta") \
+    DEFINE_VARS(All, "All")
+
+#define FILL_TO(name)\
+    name##ValidatedCount++;\
+    name##ValidatedParticles++;\
+    name##ValidatedMassHist->Fill(lambda.M());\
+    name##ValidatedEnergyHist->Fill(lambda.E());\
+    name##ValidatedEtaHist->Fill(lambda.Eta());
+
+#define COUNT_FILLER\
+    unValidatedCountHist->Fill(unValidatedCount);\
+    MassValidatedCountHist->Fill(MassValidatedCount);\
+    EnergyValidatedCountHist->Fill(EnergyValidatedCount);\
+    ThetaValidatedCountHist->Fill(ThetaValidatedCount);\
+    EnergyMassValidatedCountHist->Fill(EnergyMassValidatedCount);\
+    EnergyThetaValidatedCountHist->Fill(EnergyThetaValidatedCount);\
+    MassThetaValidatedCountHist->Fill(MassThetaValidatedCount);\
+    AllValidatedCountHist->Fill(AllValidatedCount);
+
+#define COUNT_RESETTER\
+    unValidatedCount=0;\
+    MassValidatedCount=0;\
+    EnergyValidatedCount=0;\
+    ThetaValidatedCount=0;\
+    EnergyMassValidatedCount=0;\
+    EnergyThetaValidatedCount=0;\
+    MassThetaValidatedCount=0;\
+    AllValidatedCount=0;
+
+#define WRITE_TO(name)\
+    name##ValidatedDirectory->cd();\
+    name##ValidatedCountHist->Scale(histScale/nEvents);\
+    name##ValidatedCountHist->Write();\
+    name##ValidatedMassHist->Scale(histScale/name##ValidatedParticles);\
+    name##ValidatedMassHist->Write();\
+    name##ValidatedEnergyHist->Scale(histScale/name##ValidatedParticles);\
+    name##ValidatedEnergyHist->Write();\
+    name##ValidatedEtaHist->Scale(histScale/name##ValidatedParticles);\
+    name##ValidatedEtaHist->Write();
+
+#define WRITE_THEM_ALL\
+    WRITE_TO(un)\
+    WRITE_TO(Mass)\
+    WRITE_TO(Energy)\
+    WRITE_TO(Theta)\
+    WRITE_TO(EnergyMass)\
+    WRITE_TO(EnergyTheta)\
+    WRITE_TO(MassTheta)\
+    WRITE_TO(All)
 
 using Lorentz = ROOT::Math::PxPyPzEVector;
+using SysClock = std::chrono::system_clock;
+using Minutes = std::chrono::minutes;
+using Seconds = std::chrono::seconds;
+namespace Chrono = std::chrono;
+
+// ------------------------------------------------------------------------------------------------------------------------------------
 
 int main() {
+    struct winsize w;
+    ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
 
-    const std::chrono::time_point<std::chrono::system_clock> start = std::chrono::system_clock::now();
-    const time_t localStart = std::chrono::system_clock::to_time_t(start);
+    const Chrono::time_point<SysClock> start = SysClock::now();
+    const time_t localStart = SysClock::to_time_t(start);
     std::cout << std::put_time(std::localtime(&localStart), "%F %T \n");
     
-    //=== Pythia initialization ===
-    Pythia8::Pythia pythia;
+            Pythia8::Pythia pythia;
 
     pythia.readFile("configs/Lambda_Reconstruction.cmnd");
 
-            FILE* configFile = fopen("configs/Lambda_Reconstruction.log", "r");
+        Double_t EnergyTolerance=0.1, MassTolerance=0.05, ThetaTolerance=0.1;
+        Int_t serial=0, nEvents=100, printInterval=10, binCount=100; Double_t histScale=100;
 
-            Int_t serial=0, nEvents=100;
-            TString directory = "output/Lambda_Reconstruction/";
-            
+            std::ifstream configFile("configs/Lambda_Reconstruction.in");
+
+            TString rootDirectory = "output/Lambda_Reconstruction/", logDirectory = "params/";
             TString beamEnergy = pythia.settings.parm("Beams:eCM") > 0 ? Form("%.0f", pythia.settings.parm("Beams:eCM")) : "UnknownEnergy";
 
-            if (configFile) {
-                fscanf(configFile, "%d", &serial);
-                fscanf(configFile, "%d", &nEvents);
-                fclose(configFile);
-            } else {
-                std::cerr << "Could not open config file. Using default values." << std::endl;
-            }
+            configFile >> serial >> nEvents >> printInterval >> binCount >> histScale;
+            configFile >> EnergyTolerance >> MassTolerance >> ThetaTolerance ;
+            configFile >> rootDirectory >> logDirectory;
+            configFile.close();
 
-            Lorentz lambda, proton, pion;
-            Int_t pairCount =0;
-            
-            std::vector<Lorentz> protonList, pionList;
-            TString outName = Form("%sLR_NeNe_%02d_%sGeV_%d.root", directory.Data(), serial, beamEnergy.Data(), nEvents);
+            TString outName = Form("%sLR_NeNe_%02d_%sGeV_%d.root" , rootDirectory.Data(),                      serial, beamEnergy.Data(), nEvents);
+            TString logName = Form("%s%sLR_NeNe_%02d_%sGeV_%d.log", rootDirectory.Data(), logDirectory.Data(), serial, beamEnergy.Data(), nEvents);
 
     TFile* outFile = new TFile(outName, "RECREATE");
 
-    TTree* protonTree = new TTree("ProtonTree", "Lambda Reconstruction Tree");
-    TTree* pionTree = new TTree("PionTree", "Lambda Reconstruction Tree");
-    TTree* pairTree = new TTree("PairTree", "Lambda Reconstruction Tree");
+    TTree* protonTree = new TTree("ProtonTree" , "Lambda Reconstruction Tree");
+    TTree* pionTree   = new TTree("PionTree"   , "Lambda Reconstruction Tree");
+    TTree* lambdaTree = new TTree("LambdaTree" , "Lambda Reconstruction Tree");
+
+    Lorentz lambda, proton, pion;
+        protonTree -> Branch("proton" , &proton) ;
+        pionTree   -> Branch("pion"   , &pion)   ;
+        lambdaTree -> Branch("lambda" , &lambda) ;
     
-            protonTree->Branch("proton", &proton);
-            pionTree->Branch("pion", &pion);
-            pairTree->Branch("lambda", &pairCount); // Store the count of valid pairs for each event
+    std::vector<Lorentz> protonList, pionList;
 
-        Double_t pr_Px, pr_Py, pr_Pz, pr_E;
-        Double_t pi_Px, pi_Py, pi_Pz, pi_E;
+    Double_t lambdaMass = 1.115, lambdaEnergy = 1.115, protonMass = 0.938, pionMass = 0.140,\
+             massDiff = lambdaMass - (protonMass + pionMass);
+    
+            DEFINE_THEM_ALL
+            // Defines count variables, Histograms and Directory
 
-    TH1D* pairHist = new TH1D("pairHist", "Valid Proton-Pion Pairs per Event;Number of Pairs;Counts", 41, -0.5, 40.5);
+    Bool_t energyCheck, massCheck, thetaCheck ; Double_t theta;
+    Int_t nRealEvents = 0, iEvent, particle, nProtons, iProton, nPions, iPion;
+    int nDigits=0,temp=nEvents, nCols = (int)w.ws_col ? ((int)w.ws_col)-6 : 100; while(temp>0){nDigits++; temp/=10;}
 
-    Int_t nRealEvents = 0, iEvent, particle;
-
-    std::vector<std::vector<Int_t>> validPrPiIndices; // Store valid proton-pion index pairs for Lambda reconstruction
-
-    Int_t nProtons, iProton;
-    Int_t nPions, iPion;
-    //Below in units Gev/c^2
-    Double_t lambdaMass = 1.115, protonMass = 0.938, pionMass = 0.140, massDiff = lambdaMass - (protonMass + pionMass);
-    Double_t theta;
-    Double_t energyVariance=0.1, massVariance=0.05;
-    Double_t thetaVariance=0.1; //radians
-
-    Bool_t energyCheck, massCheck, thetaCheck ;
-    // Initialize Pythia
     pythia.init();
+
+    std::cout<<std::endl;
 
     for(iEvent = 0; iEvent <nEvents; ++iEvent){
         if(!pythia.next()) continue;
 
-        if (iEvent==0) {pythia.info.list();  pythia.event.list(); }
+        if (iEvent==0) {pythia.info.list();} if(iEvent==1){std::cout<<"\033[A\033[A\r\033[J\n\nEvents Processed : 1 \n\n";}
         nRealEvents++;
 
         for (particle=0; particle<pythia.event.size(); ++particle) {
             if (pythia.event[particle].id() == 2212) { // Proton
-                proton.SetPxPyPzE(pythia.event[particle].px(), pythia.event[particle].py(), pythia.event[particle].pz(), pythia.event[particle].e());
+                proton.SetPxPyPzE(\
+                                    pythia.event[particle].px(), \
+                                    pythia.event[particle].py(), \
+                                    pythia.event[particle].pz(), \
+                                    pythia.event[particle].e()   \
+                                );
                 protonList.push_back(proton);
                 protonTree->Fill();
             }
             else if (pythia.event[particle].id() == -211) { // Pion
-                pion.SetPxPyPzE(pythia.event[particle].px(), pythia.event[particle].py(), pythia.event[particle].pz(), pythia.event[particle].e());
+                pion.SetPxPyPzE(\
+                                    pythia.event[particle].px(), \
+                                    pythia.event[particle].py(), \
+                                    pythia.event[particle].pz(), \
+                                    pythia.event[particle].e()   \
+                                );
                 pionList.push_back(pion);
                 pionTree->Fill();
             }
         }
-         if(iEvent%50==0){std::cout<<"\n\n\t\tEvents processed : "<<iEvent<<" out of "<< nEvents<<"\n\n";}
+
+        if((iEvent+1)%printInterval==0){std::cout<<"\033[A\033[A\r\033[J"<<"\t\tEvents processed : "\
+                                  <<std::setw(nDigits)<<std::setfill('0')<<iEvent+1<<" out of "<< nEvents<<"  |  "<<std::setw(2)<<100*(iEvent+1)/nEvents<<"%\n\n";}
+        std::cout<<"\033[A\r\033[J"<<"|"<<std::setw((int)((iEvent+1)*nCols/nEvents))<<std::setfill('*')<<">"\
+                 <<std::setw(nCols-(int)((iEvent+1)*nCols/nEvents))<<std::setfill('_')<<"|"<<"\n";
 
         nProtons = protonList.size();
         nPions = pionList.size();
-        pairCount = 0; // Reset pair count for each event
         
+            COUNT_RESETTER
 
         for(iProton = 0; iProton < nProtons; ++iProton){
             for(iPion = 0; iPion < nPions; ++iPion){
-                proton = protonList[iProton];
-                pion = pionList[iPion];
+                proton = protonList [iProton];
+                pion   = pionList   [iPion]  ;
 
                 lambda = proton + pion;
+                lambdaTree->Fill();
+
+                FILL_TO(un)
 
                 proton.BoostToCM(lambda);
                 pion.BoostToCM(lambda);
 
-                energyCheck = (lambda.E() > lambdaMass - energyVariance && lambda.E() < lambdaMass + energyVariance);
-                massCheck = (lambda.M() > lambdaMass - massVariance && lambda.M() < lambdaMass + massVariance);
-
                 theta = ((proton.Px()*pion.Px() + proton.Py()*pion.Py() + proton.Pz()*pion.Pz()) / (proton.P() * pion.P()));
-                thetaCheck = ((theta > 1-cos(thetaVariance)) && (theta < 1+cos(thetaVariance))); // Check if the angle between proton and pion is small enough
 
-                if (energyCheck && massCheck && thetaCheck) {
-                    pairCount++;
-                }
+                energyCheck = (lambda.E() > (lambdaMass - EnergyTolerance) && lambda.E() < (lambdaMass + EnergyTolerance));
+                massCheck   = (lambda.M() > (lambdaMass - MassTolerance  ) && lambda.M() < (lambdaMass + MassTolerance  ));
+                thetaCheck  = (theta      > (   -1 - cos(ThetaTolerance)  ) &&  theta     < (   -1 + cos(ThetaTolerance)  )); 
+                // Check if the angle between proton and pion is small enough
+
+                if (massCheck  )                            {  FILL_TO(Mass)        }
+                if (energyCheck)                            {  FILL_TO(Energy)      }
+                if (thetaCheck )                            {  FILL_TO(Theta)       }
+                if (massCheck   && energyCheck)             {  FILL_TO(EnergyMass)  }
+                if (massCheck   && thetaCheck )             {  FILL_TO(MassTheta)   }
+                if (energyCheck && thetaCheck )             {  FILL_TO(EnergyTheta) }
+                if (energyCheck && massCheck && thetaCheck) {  FILL_TO(All)         }
             }
         }
-        pairHist->Fill(pairCount);
-        pairTree->Fill();
+        COUNT_FILLER
         protonList.clear();
         pionList.clear();
     }
-
+    std::cout<<std::setfill(' ')<<" ";
     pythia.stat();
-    // pairHist->Scale(1/nEvents);
 
-    pairHist->Write();
     protonTree->Write();
     pionTree->Write();
-    pairTree->Write();
+    lambdaTree->Write();
+
+        WRITE_THEM_ALL
+
     outFile->Close();
 
-    const std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
-    const time_t localNow = std::chrono::system_clock::to_time_t(now);
+    const Chrono::time_point<SysClock> now = SysClock::now();
+    const time_t localNow = SysClock::to_time_t(now);
     std::cout << std::put_time(std::localtime(&localNow), "%F %T \n");
     
     auto elapsed = now - start;
-    std::cout << std::chrono::duration_cast<std::chrono::seconds>(elapsed).count() << " s\n";
-    std::cout << std::chrono::duration_cast<std::chrono::minutes>(elapsed).count() << " min\n";
+    std::cout << Chrono::duration_cast<Seconds>(elapsed).count() << " s\n";
+    std::cout << Chrono::duration_cast<Minutes>(elapsed).count() << " min\n";
+
+    std::ofstream logStream(logName.Data(), std::ios::trunc);
+
+    logStream<< "Serial                    : " << std::setw(2) << std::setfill('0') << serial                                  << std::endl;
+    logStream<< "Beam Energy               : " << beamEnergy.Data()                                                            << std::endl;
+    logStream<< "Event Count               : " << nEvents                                                                      << std::endl;
+    logStream<< "Real Event Count          : " << nRealEvents                                                                  << std::endl;
+    logStream<< "Last Run                  : " << std::put_time(std::localtime(&localStart), "%F %T")                          << std::endl;
+    logStream<< "Time Taken                : " << Chrono::duration_cast<Seconds>(elapsed).count() << " seconds"                << std::endl;
+    logStream<< "                          : " << Chrono::duration_cast<Minutes>(elapsed).count() << " min"                    << std::endl;
+    logStream<< "Time Taken per 100 Events : " << Chrono::duration_cast<Seconds>((100*elapsed)/nEvents).count() << " seconds"  << std::endl;
+    logStream<< "                          : " << Chrono::duration_cast<Minutes>((100*elapsed)/nEvents).count() << " min"      << std::endl;
+    logStream<< "Energy Tolerance          : " << EnergyTolerance                                                              << std::endl;
+    logStream<< "Mass Tolerance            : " << MassTolerance                                                                << std::endl;
+    logStream<< "Theta Tolerance           : " << ThetaTolerance                                                               << std::endl;
+
+    std::streambuf* oldStream = std::cout.rdbuf();
+    std::cout.rdbuf(logStream.rdbuf());
+    std::cout<<"\n\n\n";
+
+    pythia.info.list();
+    std::cout<<"\n\n\n";
+    pythia.stat();
+    // std::cout<<"\n\n\n";
+    // pythia.event.list(); 
+
+    std::cout.rdbuf(oldStream);
+    logStream.close();
 
     return 0;
 }

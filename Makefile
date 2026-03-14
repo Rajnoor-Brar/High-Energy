@@ -1,7 +1,7 @@
 SHELL := /bin/sh
-CXX ?= g++
+CXX ?= clang++
 
-BASE_CXXFLAGS := -O3 -mcpu=native -march=native -std=c++17
+BASE_CXXFLAGS := -O2 -mcpu=native -march=native -std=c++17
 
 ROOT_FLAGS   := $(shell root-config --cflags --ldflags --glibs)
 PYTHIA_FLAGS := $(shell pythia8-config --cxxflags --ldflags)

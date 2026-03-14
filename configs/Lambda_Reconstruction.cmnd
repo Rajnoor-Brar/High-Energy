@@ -1,4 +1,6 @@
 ! =============================
+Print:quiet = on
+
 ! Beam
 Beams:idA = 1000100200
 Beams:idB = 1000100200
