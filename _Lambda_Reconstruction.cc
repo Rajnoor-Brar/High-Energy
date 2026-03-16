@@ -93,17 +93,63 @@ using Lorentz = ROOT::Math::PxPyPzEVector;
 using SysClock = std::chrono::system_clock;
 using Minutes = std::chrono::minutes;
 using Seconds = std::chrono::seconds;
+using Hours = std::chrono::hours;
+using String = std::string;
+using std::to_string;
 namespace Chrono = std::chrono;
+
+struct winsize w;
+
+void printProgressStat(int iEvent, int nEvents, int nDigits, String ETA){
+
+    std::cout<<std::setfill(' ')<<"\033[2A\r"<<"\t Events processed : "
+                                  <<std::setw(nDigits)<<std::setfill(' ')<<iEvent<<" out of "<< nEvents<<"  |  "
+                                  <<std::setw(2)<<100*iEvent/nEvents
+                                    <<"% \033[B\r"<<ETA<<"\033[B\r"<<std::flush;
+}
+
+String durationString(Chrono::microseconds duration, bool showSeconds=false){
+    std::ostringstream durString;
+    int totalSeconds = Chrono::duration_cast<Seconds>(duration).count(),
+        expectedSeconds = totalSeconds%60,
+        expectedMinutes = (totalSeconds/60)%60,
+        expectedHours   = (totalSeconds/3600)%24, 
+        expectedDays    = totalSeconds/86400;
+
+    durString<<(expectedDays ? to_string(expectedDays)+" days " : "")
+            <<(expectedHours ? to_string(expectedHours)+" hours " : "")
+            <<(expectedMinutes ? to_string(expectedMinutes)+" minutes " : ((!showSeconds && (expectedDays || expectedHours)) ? "" : " a min "))
+            <<(showSeconds && expectedSeconds ? to_string(expectedSeconds)+" seconds " : "");
+    return durString.str();
+}
+    
+String updatedETA(int iEvent, int nEvents,Chrono::microseconds duration){
+    Chrono::microseconds waitTime = ((nEvents-iEvent)/iEvent)*duration;
+
+    std::ostringstream ETA;
+
+    time_t expectedTime = SysClock::to_time_t(SysClock::now() + waitTime);
+    ETA<<"\033[2K\tETA : "<<std::put_time(std::localtime(&expectedTime), "%F %T ")
+                    <<" in " <<durationString(waitTime);         
+    return ETA.str();
+}
+
+void printProgressBar(double progress){
+    ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+    int nCols = (int)w.ws_col ? ((int)w.ws_col)-6 : 100;
+    int filledCols = (int)(progress*nCols);
+    std::cout<<"\r\033[2K"<<"\033[32;1m|"<<String(filledCols,'-')<<"\033[0m"<<">"<<"\033[31m"<<String(nCols-filledCols,'.')<<"|\033[0m"<<std::flush;
+}
 
 // ------------------------------------------------------------------------------------------------------------------------------------
 
 int main() {
-    struct winsize w;
-    ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+
 
     const Chrono::time_point<SysClock> start = SysClock::now();
+    Chrono::time_point<SysClock> now;
+    Chrono::microseconds elapsed = now - start;
     const time_t localStart = SysClock::to_time_t(start);
-    std::cout << std::put_time(std::localtime(&localStart), "%F %T \n");
     
             Pythia8::Pythia pythia;
 
@@ -146,16 +192,23 @@ int main() {
 
     Bool_t energyCheck, massCheck, thetaCheck ; Double_t theta;
     Int_t nRealEvents = 0, iEvent, particle, nProtons, iProton, nPions, iPion;
-    int nDigits=0,temp=nEvents, nCols = (int)w.ws_col ? ((int)w.ws_col)-6 : 100; while(temp>0){nDigits++; temp/=10;}
+    ioctl(STDOUT_FILENO, TIOCGWINSZ, &w); int progGap=nEvents/(w.ws_col-6);
+
+    int nDigits=0,temp=nEvents; while(temp>0){nDigits++; temp/=10;}
 
     pythia.init();
 
     std::cout<<std::endl;
 
-    for(iEvent = 0; iEvent <nEvents; ++iEvent){
+    for(iEvent = 1; iEvent <=nEvents; ++iEvent){
         if(!pythia.next()) continue;
 
-        if (iEvent==0) {pythia.info.list();} if(iEvent==1){std::cout<<"\033[A\033[A\r\033[J\n\nEvents Processed : 1 \n\n";}
+        if (iEvent==1) {pythia.info.list();} 
+        if( iEvent==2) {
+            std::cout<<"\n\n";
+            printProgressStat(2, nEvents, nDigits, updatedETA(2, nEvents, SysClock::now() - start)); 
+            printProgressBar(0.01);
+        }
         nRealEvents++;
 
         for (particle=0; particle<pythia.event.size(); ++particle) {
@@ -181,10 +234,13 @@ int main() {
             }
         }
 
-        if((iEvent+1)%printInterval==0){std::cout<<"\033[A\033[A\r\033[J"<<"\t\tEvents processed : "\
-                                  <<std::setw(nDigits)<<std::setfill('0')<<iEvent+1<<" out of "<< nEvents<<"  |  "<<std::setw(2)<<100*(iEvent+1)/nEvents<<"%\n\n";}
-        std::cout<<"\033[A\r\033[J"<<"|"<<std::setw((int)((iEvent+1)*nCols/nEvents))<<std::setfill('*')<<">"\
-                 <<std::setw(nCols-(int)((iEvent+1)*nCols/nEvents))<<std::setfill('_')<<"|"<<"\n";
+        if(iEvent%printInterval==0){
+            now = SysClock::now();
+            elapsed = now -start;
+            printProgressStat(iEvent, nEvents, nDigits, updatedETA(iEvent, nEvents, elapsed));
+        }
+        
+        if(iEvent%progGap==0) {printProgressBar((double)((double)iEvent/nEvents));}
 
         nProtons = protonList.size();
         nPions = pionList.size();
@@ -209,7 +265,7 @@ int main() {
                 energyCheck = (lambda.E() > (lambdaMass - EnergyTolerance) && lambda.E() < (lambdaMass + EnergyTolerance));
                 massCheck   = (lambda.M() > (lambdaMass - MassTolerance  ) && lambda.M() < (lambdaMass + MassTolerance  ));
                 thetaCheck  = (theta      > (   -1 - cos(ThetaTolerance)  ) &&  theta     < (   -1 + cos(ThetaTolerance)  )); 
-                // Check if the angle between proton and pion is small enough
+                // Check if the angle between proton and pion is small enough and opposite
 
                 if (massCheck  )                            {  FILL_TO(Mass)        }
                 if (energyCheck)                            {  FILL_TO(Energy)      }
@@ -224,7 +280,7 @@ int main() {
         protonList.clear();
         pionList.clear();
     }
-    std::cout<<std::setfill(' ')<<" ";
+    std::cout<<std::setfill(' ')<<"\n\n";
     pythia.stat();
 
     protonTree->Write();
@@ -235,13 +291,13 @@ int main() {
 
     outFile->Close();
 
-    const Chrono::time_point<SysClock> now = SysClock::now();
+    now = SysClock::now();
+    elapsed = now - start;
     const time_t localNow = SysClock::to_time_t(now);
     std::cout << std::put_time(std::localtime(&localNow), "%F %T \n");
     
-    auto elapsed = now - start;
-    std::cout << Chrono::duration_cast<Seconds>(elapsed).count() << " s\n";
-    std::cout << Chrono::duration_cast<Minutes>(elapsed).count() << " min\n";
+    elapsed = now - start;
+    std::cout << durationString(elapsed, true) << std::endl;
 
     std::ofstream logStream(logName.Data(), std::ios::trunc);
 
@@ -250,13 +306,14 @@ int main() {
     logStream<< "Event Count               : " << nEvents                                                                      << std::endl;
     logStream<< "Real Event Count          : " << nRealEvents                                                                  << std::endl;
     logStream<< "Last Run                  : " << std::put_time(std::localtime(&localStart), "%F %T")                          << std::endl;
-    logStream<< "Time Taken                : " << Chrono::duration_cast<Seconds>(elapsed).count() << " seconds"                << std::endl;
-    logStream<< "                          : " << Chrono::duration_cast<Minutes>(elapsed).count() << " min"                    << std::endl;
+    logStream<< "Time Taken                : " << Chrono::duration_cast<Seconds>(elapsed).count()               << " seconds"  << std::endl;
+    logStream<< "                          : " << Chrono::duration_cast<Minutes>(elapsed).count()               << " min"      << std::endl;
     logStream<< "Time Taken per 100 Events : " << Chrono::duration_cast<Seconds>((100*elapsed)/nEvents).count() << " seconds"  << std::endl;
     logStream<< "                          : " << Chrono::duration_cast<Minutes>((100*elapsed)/nEvents).count() << " min"      << std::endl;
     logStream<< "Energy Tolerance          : " << EnergyTolerance                                                              << std::endl;
     logStream<< "Mass Tolerance            : " << MassTolerance                                                                << std::endl;
     logStream<< "Theta Tolerance           : " << ThetaTolerance                                                               << std::endl;
+    logStream<< "Progress Bar Update Rate  : " << progGap                                                                      << std::endl;
 
     std::streambuf* oldStream = std::cout.rdbuf();
     std::cout.rdbuf(logStream.rdbuf());
@@ -265,8 +322,6 @@ int main() {
     pythia.info.list();
     std::cout<<"\n\n\n";
     pythia.stat();
-    // std::cout<<"\n\n\n";
-    // pythia.event.list(); 
 
     std::cout.rdbuf(oldStream);
     logStream.close();
