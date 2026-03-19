@@ -5,6 +5,7 @@
 #include <iostream>
 #include <cstdlib>
 #include <fstream>
+#include <filesystem>
 #include <vector>
 #include <string>
 #include <chrono>
@@ -15,87 +16,101 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
+
 #define DEFINE_VARS(name, title) \
     TDirectory* name##ValidatedDirectory = outFile->mkdir(title "Validated"); \
-    Int_t name##ValidatedCount=0, name##ValidatedParticles=0;\
-    TH1D* name##ValidatedMassHist = new TH1D(#name "Validated_" "Mass_Hist", \
-        "Mass Distribution of Reconstructed Lambda-particles", \
-        binCount, lambdaMass*0.8, lambdaMass*3); \
-    TH1D* name##ValidatedEnergyHist = new TH1D(#name "Validated_" "Energy_Hist", \
-        "Energy Distribution of Reconstructed Lambda-particles", \
-        binCount, lambdaEnergy*0.8, lambdaEnergy*7); \
-    TH1D* name##ValidatedEtaHist = new TH1D(#name "Validated_" "Eta_Hist", \
-        "Eta Distribution of Reconstructed Lambda-particles", \
-        binCount, 0, 3*M_PI); \
-    TH1I* name##ValidatedCountHist = new TH1I(#name "CountHist", \
-        "Count of Reconstructed Lambda-particles", \
-        101, -0.5, 100.5);   
-
-#define DEFINE_THEM_ALL \
-    DEFINE_VARS(un,"un")\
-    DEFINE_VARS(Mass, "Mass") \
-    DEFINE_VARS(Energy, "Energy") \
-    DEFINE_VARS(Theta, "Theta") \
-    DEFINE_VARS(EnergyMass, "Energy-Mass") \
-    DEFINE_VARS(EnergyTheta, "Energy-Theta") \
-    DEFINE_VARS(MassTheta, "Mass-Theta") \
-    DEFINE_VARS(All, "All")
+    Int_t name##ValidatedCount=0;\
+    TH1D* name##ValidatedMassHist          = new TH1D(#name "Validated_Mass_Hist"               , "Mass Distribution of Reconstructed Lambda-particles", \
+                                                                                                        binCount, binLimiter(#name,0,0), binLimiter(#name,0,1)); \
+    TH1D* name##ValidatedEnergyHist        = new TH1D(#name "Validated_Energy_Hist"             , "Energy Distribution of Reconstructed Lambda-particles",  \
+                                                                                                        binCount, binLimiter(#name,1,0), binLimiter(#name,1,1)); \
+    TH1D* name##ValidatedNetMomentumHist   = new TH1D(#name "Validated_Total_Momentum_Hist"     , "Momentum Distribution of Reconstructed Lambda-particles", \
+                                                                                                        binCount, binLimiter(#name,2,0), binLimiter(#name,2,1)); \
+    TH1D* name##ValidatedTransMomentumHist = new TH1D(#name "Validated_Transverse_Momentum_Hist", "Transverse Momentum Distribution of Reconstructed Lambda-particles", \
+                                                                                                        binCount, binLimiter(#name,3,0), binLimiter(#name,3,1)); \
+    TH1D* name##ValidatedEtaHist           = new TH1D(#name "Validated_Eta_Hist"                , "Eta Distribution of Reconstructed Lambda-particles", \
+                                                                                                        binCount, binLimiter(#name,4,0), binLimiter(#name,4,1)); \
+    TH1I* name##ValidatedCountHist         = new TH1I(#name "CountHist"                         , "Count of Reconstructed Lambda-particles", \
+                                                                                                        41, -0.5, 40.5);   
 
 #define FILL_TO(name)\
     name##ValidatedCount++;\
-    name##ValidatedParticles++;\
-    name##ValidatedMassHist->Fill(lambda.M());\
-    name##ValidatedEnergyHist->Fill(lambda.E());\
-    name##ValidatedEtaHist->Fill(lambda.Eta());
+    name##ValidatedTransMomentumHist ->Fill( lambda.Pt()  );\
+    name##ValidatedNetMomentumHist   ->Fill( lambda.P()   );\
+    name##ValidatedMassHist          ->Fill( lambda.M()   );\
+    name##ValidatedEnergyHist        ->Fill( lambda.E()   );\
+    name##ValidatedEtaHist           ->Fill( lambda.Eta() );
 
-#define COUNT_FILLER\
-    unValidatedCountHist->Fill(unValidatedCount);\
-    MassValidatedCountHist->Fill(MassValidatedCount);\
-    EnergyValidatedCountHist->Fill(EnergyValidatedCount);\
-    ThetaValidatedCountHist->Fill(ThetaValidatedCount);\
-    EnergyMassValidatedCountHist->Fill(EnergyMassValidatedCount);\
-    EnergyThetaValidatedCountHist->Fill(EnergyThetaValidatedCount);\
-    MassThetaValidatedCountHist->Fill(MassThetaValidatedCount);\
-    AllValidatedCountHist->Fill(AllValidatedCount);
+#define COUNT_FILL(name) \
+    name##ValidatedCountHist->Fill(name##ValidatedCount);
 
-#define COUNT_RESETTER\
-    unValidatedCount=0;\
-    MassValidatedCount=0;\
-    EnergyValidatedCount=0;\
-    ThetaValidatedCount=0;\
-    EnergyMassValidatedCount=0;\
-    EnergyThetaValidatedCount=0;\
-    MassThetaValidatedCount=0;\
-    AllValidatedCount=0;
+#define COUNT_RESET(name) \
+    name##ValidatedCount = 0;
 
-#define WRITE_TO(name)\
+#define SCALE_AND_WRITE(hist) \
+    { Double_t _n = nEvents; \
+      if (_n > 0) (hist)->Scale(histScale/_n, "width"); \
+            (hist)->Write(); }
+// (hist)->GetEntries()
+#define WRITE_TO(name) \
     name##ValidatedDirectory->cd();\
-    name##ValidatedCountHist->Scale(histScale/nEvents);\
-    name##ValidatedCountHist->Write();\
-    name##ValidatedMassHist->Scale(histScale/name##ValidatedParticles);\
-    name##ValidatedMassHist->Write();\
-    name##ValidatedEnergyHist->Scale(histScale/name##ValidatedParticles);\
-    name##ValidatedEnergyHist->Write();\
-    name##ValidatedEtaHist->Scale(histScale/name##ValidatedParticles);\
-    name##ValidatedEtaHist->Write();
+    name##ValidatedCountHist           ->Scale(histScale/nEvents);\
+    name##ValidatedCountHist           ->Write();\
+    SCALE_AND_WRITE(name##ValidatedMassHist) \
+    SCALE_AND_WRITE(name##ValidatedNetMomentumHist) \
+    SCALE_AND_WRITE(name##ValidatedTransMomentumHist) \
+    SCALE_AND_WRITE(name##ValidatedEnergyHist) \
+    SCALE_AND_WRITE(name##ValidatedEtaHist)
 
-#define WRITE_THEM_ALL\
-    WRITE_TO(un)\
-    WRITE_TO(Mass)\
-    WRITE_TO(Energy)\
-    WRITE_TO(Theta)\
-    WRITE_TO(EnergyMass)\
-    WRITE_TO(EnergyTheta)\
-    WRITE_TO(MassTheta)\
+#define DEFINE_THEM_ALL \
+    DEFINE_VARS(un,          "un")          \
+    DEFINE_VARS(Mass,        "Mass")        \
+    DEFINE_VARS(Energy,      "Energy")      \
+    DEFINE_VARS(Theta,       "Theta")       \
+    DEFINE_VARS(EnergyMass,  "Energy-Mass") \
+    DEFINE_VARS(EnergyTheta, "Energy-Theta")\
+    DEFINE_VARS(MassTheta,   "Mass-Theta")  \
+    DEFINE_VARS(All,         "All")
+
+#define COUNT_FILLER \
+    COUNT_FILL(un)          \
+    COUNT_FILL(Mass)        \
+    COUNT_FILL(Energy)      \
+    COUNT_FILL(Theta)       \
+    COUNT_FILL(EnergyMass)  \
+    COUNT_FILL(EnergyTheta) \
+    COUNT_FILL(MassTheta)   \
+    COUNT_FILL(All)
+
+#define COUNT_RESETTER \
+    COUNT_RESET(un)          \
+    COUNT_RESET(Mass)        \
+    COUNT_RESET(Energy)      \
+    COUNT_RESET(Theta)       \
+    COUNT_RESET(EnergyMass)  \
+    COUNT_RESET(EnergyTheta) \
+    COUNT_RESET(MassTheta)   \
+    COUNT_RESET(All)
+
+#define WRITE_THEM_ALL \
+    WRITE_TO(un)          \
+    WRITE_TO(Mass)        \
+    WRITE_TO(Energy)      \
+    WRITE_TO(Theta)       \
+    WRITE_TO(EnergyMass)  \
+    WRITE_TO(EnergyTheta) \
+    WRITE_TO(MassTheta)   \
     WRITE_TO(All)
 
-using Lorentz = ROOT::Math::PxPyPzEVector;
+using Lorentz  = ROOT::Math::PxPyPzEVector;
 using SysClock = std::chrono::system_clock;
-using Minutes = std::chrono::minutes;
-using Seconds = std::chrono::seconds;
-using Hours = std::chrono::hours;
-using String = std::string;
+using uSeconds = std::chrono::microseconds;
+using Seconds  = std::chrono::seconds;
+using Minutes  = std::chrono::minutes;
+using Hours    = std::chrono::hours;
+using String   = std::string;
 using std::to_string;
+namespace Filesystem = std::filesystem;
 namespace Chrono = std::chrono;
 
 struct winsize w;
@@ -108,7 +123,7 @@ void printProgressStat(int iEvent, int nEvents, int nDigits, String ETA){
                                     <<"% \033[B\r"<<ETA<<"\033[B\r"<<std::flush;
 }
 
-String durationString(Chrono::microseconds duration, bool showSeconds=false){
+String durationString(uSeconds duration, bool showSeconds=true){
     std::ostringstream durString;
     int totalSeconds = Chrono::duration_cast<Seconds>(duration).count(),
         expectedSeconds = totalSeconds%60,
@@ -118,19 +133,19 @@ String durationString(Chrono::microseconds duration, bool showSeconds=false){
 
     durString<<(expectedDays ? to_string(expectedDays)+" days " : "")
             <<(expectedHours ? to_string(expectedHours)+" hours " : "")
-            <<(expectedMinutes ? to_string(expectedMinutes)+" minutes " : ((!showSeconds && (expectedDays || expectedHours)) ? "" : " a min "))
-            <<(showSeconds && expectedSeconds ? to_string(expectedSeconds)+" seconds " : "");
+            <<(expectedMinutes ? to_string(expectedMinutes)+" minutes " : ((!showSeconds && !(expectedDays || expectedHours)) ? " a min " : ""))
+            <<((showSeconds && expectedSeconds) ? to_string(expectedSeconds)+" seconds " : "");
     return durString.str();
 }
     
 String updatedETA(int iEvent, int nEvents,Chrono::microseconds duration){
-    Chrono::microseconds waitTime = ((nEvents-iEvent)/iEvent)*duration;
+    uSeconds waitTime = ((nEvents-iEvent)/iEvent)*duration;
 
     std::ostringstream ETA;
 
     time_t expectedTime = SysClock::to_time_t(SysClock::now() + waitTime);
     ETA<<"\033[2K\tETA : "<<std::put_time(std::localtime(&expectedTime), "%F %T ")
-                    <<" in " <<durationString(waitTime);         
+                    <<" in " <<durationString(waitTime, true);         
     return ETA.str();
 }
 
@@ -141,6 +156,62 @@ void printProgressBar(double progress){
     std::cout<<"\r\033[2K"<<"\033[32;1m|"<<String(filledCols,'-')<<"\033[0m"<<">"<<"\033[31m"<<String(nCols-filledCols,'.')<<"|\033[0m"<<std::flush;
 }
 
+double binLimiter(String Validation, int quantity, int bound=1){
+    static double m = 1.115, e = 1.115, p = 1.115, pT = 1 , eta = 5;
+    static int lowLimit = 0, mediumLimit = 1, highLimit = 2;
+    int limit=-1, validationIndex = -1;
+
+    if      (Validation == "un")          validationIndex = 0;
+    else if (Validation == "Mass")        validationIndex = 1;
+    else if (Validation == "Energy")      validationIndex = 2;
+    else if (Validation == "Theta")       validationIndex = 3;
+    else if (Validation == "EnergyMass")  validationIndex = 4;
+    else if (Validation == "EnergyTheta") validationIndex = 5;
+    else if (Validation == "MassTheta")   validationIndex = 6;
+    else if (Validation == "All")         validationIndex = 7;
+    // 1 - mass, 2 - energy, 3 - P, 4 - Pt, 5 - Eta ; quantities ; indices are -1'ed
+    // 1 - un , 2 - Mass , 3 - Energy , 4 - Theta , 5 - EnergyMass , 6 - EnergyTheta ,  7- MassTheta ,  8 - All
+    static int limitMap[8][5]={
+                            {highLimit ,   highLimit ,    highLimit ,   highLimit ,   highLimit},
+                            { lowLimit ,   highLimit ,    highLimit ,   highLimit , mediumLimit},
+                            { lowLimit ,    lowLimit ,     lowLimit ,    lowLimit ,    lowLimit},
+                            {highLimit ,   highLimit ,    highLimit ,   highLimit ,   highLimit},
+                            { lowLimit ,    lowLimit ,     lowLimit ,    lowLimit ,    lowLimit},
+                            { lowLimit ,    lowLimit ,     lowLimit ,    lowLimit ,    lowLimit},
+                            { lowLimit , mediumLimit ,  mediumLimit , mediumLimit ,    lowLimit},
+                            { lowLimit ,    lowLimit ,     lowLimit ,    lowLimit ,    lowLimit}
+                    };
+    static double quantityLimits[5][3][2] = {
+        {
+            { m * 0.89 ,  m * 1.1 },
+            { m * 0.8   ,  m * 1.25   },
+            { m * 0.25,  m * 10  }
+        },
+        {
+            { e * 0.89 ,  e * 1.2 },
+            { e * 0.89 ,  e * 1.8   },
+            { e * 0.89 ,  e * 10  }
+        },
+        {
+            { 0      ,  p * 0.8 },
+            { 0      ,  p * 1.5 },
+            { 0      ,  p * 10  }
+        },
+        {
+            { 0      ,  pT * 0.6 },
+            { 0      ,  pT * 1.3 },
+            { 0      ,  pT * 3 }
+        },
+        {
+            { eta * -1 ,  eta * 1 },
+            { eta * -2 ,  eta * 2 },
+            { eta * -4 ,  eta * 4 }
+        }
+    };
+    if (validationIndex<0){std::cout<<"\n\n Validation Failed \n"; validationIndex=0;}
+    limit = limitMap[validationIndex][quantity];
+    return quantityLimits[quantity][limit][bound];
+}
 // ------------------------------------------------------------------------------------------------------------------------------------
 
 int main() {
@@ -148,19 +219,21 @@ int main() {
 
     const Chrono::time_point<SysClock> start = SysClock::now();
     Chrono::time_point<SysClock> now;
-    Chrono::microseconds elapsed = now - start;
+    uSeconds elapsed = Chrono::duration_cast<uSeconds>(now - start);
     const time_t localStart = SysClock::to_time_t(start);
     
             Pythia8::Pythia pythia;
-
+            
     pythia.readFile("configs/Lambda_Reconstruction.cmnd");
+    Double_t lambdaMass = 1.115, lambdaEnergy = 1.115, protonMass = 0.938, pionMass = 0.140,\
+             massDiff = lambdaMass - (protonMass + pionMass);
 
         Double_t EnergyTolerance=0.1, MassTolerance=0.05, ThetaTolerance=0.1;
         Int_t serial=0, nEvents=100, printInterval=10, binCount=100; Double_t histScale=100;
 
             std::ifstream configFile("configs/Lambda_Reconstruction.in");
 
-            TString rootDirectory = "output/Lambda_Reconstruction/", logDirectory = "params/";
+            TString rootDirectory = "output/Lambda_Reconstruction/", logDirectory = "output/Lambda_Reconstruction/params/";
             TString beamEnergy = pythia.settings.parm("Beams:eCM") > 0 ? Form("%.0f", pythia.settings.parm("Beams:eCM")) : "UnknownEnergy";
 
             configFile >> serial >> nEvents >> printInterval >> binCount >> histScale;
@@ -168,24 +241,23 @@ int main() {
             configFile >> rootDirectory >> logDirectory;
             configFile.close();
 
-            TString outName = Form("%sLR_NeNe_%02d_%sGeV_%d.root" , rootDirectory.Data(),                      serial, beamEnergy.Data(), nEvents);
-            TString logName = Form("%s%sLR_NeNe_%02d_%sGeV_%d.log", rootDirectory.Data(), logDirectory.Data(), serial, beamEnergy.Data(), nEvents);
+            TString outName = Form("%sLR_NeNe_%02d_%sGeV_%d.root" , rootDirectory.Data(), serial, beamEnergy.Data(), nEvents);
+            TString logName = Form("%sLR_NeNe_%02d_%sGeV_%d.log"  ,  logDirectory.Data(), serial, beamEnergy.Data(), nEvents);
 
+    Filesystem::create_directories(rootDirectory.Data());
+    Filesystem::create_directories( logDirectory.Data());
     TFile* outFile = new TFile(outName, "RECREATE");
 
-    TTree* protonTree = new TTree("ProtonTree" , "Lambda Reconstruction Tree");
-    TTree* pionTree   = new TTree("PionTree"   , "Lambda Reconstruction Tree");
-    TTree* lambdaTree = new TTree("LambdaTree" , "Lambda Reconstruction Tree");
+    // TTree* protonTree = new TTree("ProtonTree" , "Lambda Reconstruction Tree");
+    // TTree* pionTree   = new TTree("PionTree"   , "Lambda Reconstruction Tree");
+    // TTree* lambdaTree = new TTree("LambdaTree" , "Lambda Reconstruction Tree");
 
     Lorentz lambda, proton, pion;
-        protonTree -> Branch("proton" , &proton) ;
-        pionTree   -> Branch("pion"   , &pion)   ;
-        lambdaTree -> Branch("lambda" , &lambda) ;
+        // protonTree -> Branch("proton" , &proton) ;
+        // pionTree   -> Branch("pion"   , &pion)   ;
+        // lambdaTree -> Branch("lambda" , &lambda) ;
     
     std::vector<Lorentz> protonList, pionList;
-
-    Double_t lambdaMass = 1.115, lambdaEnergy = 1.115, protonMass = 0.938, pionMass = 0.140,\
-             massDiff = lambdaMass - (protonMass + pionMass);
     
             DEFINE_THEM_ALL
             // Defines count variables, Histograms and Directory
@@ -203,10 +275,11 @@ int main() {
     for(iEvent = 1; iEvent <=nEvents; ++iEvent){
         if(!pythia.next()) continue;
 
-        if (iEvent==1) {pythia.info.list();} 
+        if (iEvent==1) {pythia.info.list(); std::cout<<std::flush;} 
         if( iEvent==2) {
-            std::cout<<"\n\n";
-            printProgressStat(2, nEvents, nDigits, updatedETA(2, nEvents, SysClock::now() - start)); 
+            std::cout<<"\n\n\n";
+            elapsed = Chrono::duration_cast<uSeconds>(SysClock::now() - start);
+            printProgressStat(2, nEvents, nDigits, updatedETA(2, nEvents, elapsed)); 
             printProgressBar(0.01);
         }
         nRealEvents++;
@@ -220,7 +293,7 @@ int main() {
                                     pythia.event[particle].e()   \
                                 );
                 protonList.push_back(proton);
-                protonTree->Fill();
+                // protonTree->Fill();
             }
             else if (pythia.event[particle].id() == -211) { // Pion
                 pion.SetPxPyPzE(\
@@ -230,17 +303,17 @@ int main() {
                                     pythia.event[particle].e()   \
                                 );
                 pionList.push_back(pion);
-                pionTree->Fill();
+                // pionTree->Fill();
             }
         }
 
-        if(iEvent%printInterval==0){
+        if(iEvent%printInterval==0||iEvent==nEvents){
             now = SysClock::now();
-            elapsed = now -start;
+            elapsed = Chrono::duration_cast<uSeconds>(now - start);
             printProgressStat(iEvent, nEvents, nDigits, updatedETA(iEvent, nEvents, elapsed));
         }
         
-        if(iEvent%progGap==0) {printProgressBar((double)((double)iEvent/nEvents));}
+        if(iEvent%progGap==0||iEvent==nEvents) {printProgressBar((double)((double)iEvent/nEvents));}
 
         nProtons = protonList.size();
         nPions = pionList.size();
@@ -253,8 +326,7 @@ int main() {
                 pion   = pionList   [iPion]  ;
 
                 lambda = proton + pion;
-                lambdaTree->Fill();
-
+                // lambdaTree->Fill();
                 FILL_TO(un)
 
                 proton.BoostToCM(lambda);
@@ -283,16 +355,16 @@ int main() {
     std::cout<<std::setfill(' ')<<"\n\n";
     pythia.stat();
 
-    protonTree->Write();
-    pionTree->Write();
-    lambdaTree->Write();
+    // protonTree->Write();
+    // pionTree->Write();
+    // lambdaTree->Write();
 
         WRITE_THEM_ALL
 
     outFile->Close();
 
     now = SysClock::now();
-    elapsed = now - start;
+    elapsed = Chrono::duration_cast<uSeconds>( now - start);
     const time_t localNow = SysClock::to_time_t(now);
     std::cout << std::put_time(std::localtime(&localNow), "%F %T \n");
     
@@ -301,19 +373,17 @@ int main() {
 
     std::ofstream logStream(logName.Data(), std::ios::trunc);
 
-    logStream<< "Serial                    : " << std::setw(2) << std::setfill('0') << serial                                  << std::endl;
-    logStream<< "Beam Energy               : " << beamEnergy.Data()                                                            << std::endl;
-    logStream<< "Event Count               : " << nEvents                                                                      << std::endl;
-    logStream<< "Real Event Count          : " << nRealEvents                                                                  << std::endl;
-    logStream<< "Last Run                  : " << std::put_time(std::localtime(&localStart), "%F %T")                          << std::endl;
-    logStream<< "Time Taken                : " << Chrono::duration_cast<Seconds>(elapsed).count()               << " seconds"  << std::endl;
-    logStream<< "                          : " << Chrono::duration_cast<Minutes>(elapsed).count()               << " min"      << std::endl;
-    logStream<< "Time Taken per 100 Events : " << Chrono::duration_cast<Seconds>((100*elapsed)/nEvents).count() << " seconds"  << std::endl;
-    logStream<< "                          : " << Chrono::duration_cast<Minutes>((100*elapsed)/nEvents).count() << " min"      << std::endl;
-    logStream<< "Energy Tolerance          : " << EnergyTolerance                                                              << std::endl;
-    logStream<< "Mass Tolerance            : " << MassTolerance                                                                << std::endl;
-    logStream<< "Theta Tolerance           : " << ThetaTolerance                                                               << std::endl;
-    logStream<< "Progress Bar Update Rate  : " << progGap                                                                      << std::endl;
+    logStream<< "Serial                        : " << std::setw(2) << std::setfill('0') << serial            << std::endl;
+    logStream<< "Beam Energy                   : " << beamEnergy.Data()                                      << std::endl;
+    logStream<< "Event Count                   : " << nEvents                                                << std::endl;
+    logStream<< "Real Event Count              : " << nRealEvents                                            << std::endl;
+    logStream<< "Last Run                      : " << std::put_time(std::localtime(&localStart), "%F %T")    << std::endl;
+    logStream<< "Time Taken                    : " << durationString(elapsed)                                << std::endl;
+    logStream<< "Time Taken / 100 Events       : " << durationString((100*elapsed)/nEvents)                  << std::endl;
+    logStream<< "Energy Tolerance              : " << EnergyTolerance                                        << std::endl;
+    logStream<< "Mass Tolerance                : " << MassTolerance                                          << std::endl;
+    logStream<< "Theta Tolerance               : " << ThetaTolerance                                         << std::endl;
+    logStream<< "Progress Bar Update Interval  : " << progGap                                                << std::endl;
 
     std::streambuf* oldStream = std::cout.rdbuf();
     std::cout.rdbuf(logStream.rdbuf());

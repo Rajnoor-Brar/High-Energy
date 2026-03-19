@@ -1,0 +1,22 @@
+{
+  "name": "hep-contrast",
+  "displayName": "HEP Contrast",
+  "description": "A high-contrast light theme tuned for C++ and Python — deep ink on white, zero ambiguity.",
+  "version": "1.0.0",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "categories": [
+    "Themes"
+  ],
+  "contributes": {
+    "themes": [
+      {
+        "label": "HEP Contrast",
+        "uiTheme": "vs",
+        "path": "./themes/hep-contrast.json"
+      }
+    ]
+  }
+}
