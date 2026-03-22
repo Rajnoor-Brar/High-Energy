@@ -16,7 +16,6 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-
 #define DEFINE_VARS(name, title) \
     TDirectory* name##ValidatedDirectory = outFile->mkdir(title "Validated"); \
     Int_t name##ValidatedCount=0;\
@@ -368,7 +367,7 @@ int main() {
     const time_t localNow = SysClock::to_time_t(now);
     std::cout << std::put_time(std::localtime(&localNow), "%F %T \n");
     
-    elapsed = now - start;
+    elapsed = Chrono::duration_cast<uSeconds>( now - start);
     std::cout << durationString(elapsed, true) << std::endl;
 
     std::ofstream logStream(logName.Data(), std::ios::trunc);

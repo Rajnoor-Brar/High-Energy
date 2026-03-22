@@ -79,7 +79,7 @@ const C = {
   statusBg:       "#DEDEDE",
   statusFg:       "#111111",
   statusDebugBg:  "#EEDAF2",
-  statusRemoteBg: "#F2DAE7",
+  statusRemoteBg: "#dbdaf2ff",
   statusRemoteFg: "#111111",
 
   // ── Selection / highlights ────────────────────────────────────────
@@ -87,12 +87,12 @@ const C = {
   selectionHi:    "#DDEEFF",
   wordHi:         "#E0EBF5",
   wordHiStrong:   "#B8D4F0",
-  findMatch:      "#FFD700",
-  findMatchHi:    "#FFF0A0",
-  rangeHi:        "#FFFBCC",
+  findMatch:      "#ffc400ff",
+  findMatchHi:    "#ffdca0ff",
+  rangeHi:        "#ffecccff",
   listFocus:      "#C8DCFF",
   listActive:     "#D0E4FF",
-  listHover:      "#F0F0F0",
+  listHover:      "#F2F2F2",
 
   // ── Borders / dividers ────────────────────────────────────────────
   border:         "#DCDCDC",
