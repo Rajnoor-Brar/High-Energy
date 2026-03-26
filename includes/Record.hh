@@ -139,6 +139,9 @@ namespace Record {
         std::cout.rdbuf(logStream.rdbuf());
         std::cout << "\n\n\n";
 
+        pythia.settings.listChanged();
+        std::cout << "\n\n\n";
+
         if constexpr (std::is_same_v<PythiaT, Pythia8::Pythia>) {
             pythia.info.list();
             std::cout << "\n\n\n";

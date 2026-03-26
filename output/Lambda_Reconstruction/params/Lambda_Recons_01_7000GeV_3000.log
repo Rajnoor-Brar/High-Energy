@@ -2,9 +2,9 @@ Serial                        : 01
 Beam Energy                   : 7000
 Event Count                   : 3000
 Real Event Count              : 3000
-Last Run                      : 2026-03-27 03:10:35
-Time Taken                    : 2 minutes 7 seconds 
-Time Taken / 1000 Events      : 42.49 seconds 
+Last Run                      : 2026-03-27 03:20:42
+Time Taken                    : 1 minute 20 seconds 
+Time Taken / 1000 Events      : 26.83 seconds 
 Histogram Scale               : 1
 Progress Bar Update Interval  : 12
 Lambda Mass                   : 1.115
@@ -18,6 +18,57 @@ Theta Tolerance               : 0.1
 Lambda Momentum               : 1.115
 Lambda Transverse Momentum    : 1
 Eta Extent                    : 5
+
+
+
+
+ *-------  PYTHIA Flag + Mode + Parm + Word + FVec + MVec + PVec + WVec Settings (changes only)  ------------------* 
+ |                                                                                                                 | 
+ | Name                                          |                      Now |      Default         Min         Max | 
+ |                                               |                          |                                      | 
+ | BeamRemnants:remnantMode                      |                        1 |            0           0           1 | 
+ | BeamRemnants:saturation                       |                  3.00000 |      5.00000     0.10000  100000.000 | 
+ | Beams:eCM                                     |                 7000.000 |    14000.000         0.0             | 
+ | Beams:idA                                     |               1000100200 |         2212                         | 
+ | Beams:idB                                     |               1000100200 |         2212                         | 
+ | ColourReconnection:allowDoubleJunRem          |                      off |           on                         | 
+ | ColourReconnection:mode                       |                        1 |            0           0           4 | 
+ | HardQCD:all                                   |                       on |          off                         | 
+ | HeavyIon:SigFitDefAvNDb                       |                  0.98000 |          0.0                         | 
+ | HeavyIon:SigFitDefPar                         |                  1.51000 |                                      | 
+ |                                               |                  3.58000 |                                      | 
+ |                                               |                  1.21000 |                                      | 
+ | HeavyIon:SigFitNGen                           |                        0 |           20           0             | 
+ | Init:showChangedParticleData                  |                      off |           on                         | 
+ | Init:showChangedSettings                      |                      off |           on                         | 
+ | Init:showMultipartonInteractions              |                      off |           on                         | 
+ | Init:showProcesses                            |                      off |           on                         | 
+ | MultipartonInteractions:pT0Ref                |                  2.50000 |      2.28000     0.50000    10.00000 | 
+ | Next:numberCount                              |                        0 |         1000           0             | 
+ | Next:numberShowEvent                          |                        0 |            1           0             | 
+ | Next:numberShowInfo                           |                        0 |            1           0             | 
+ | Next:numberShowLHA                            |                        0 |            1           0             | 
+ | Next:numberShowProcess                        |                        0 |            1           0             | 
+ | Parallelism:numThreads                        |                        4 |            0           0             | 
+ | Parallelism:seeds                             |                   270403 |                                      | 
+ |                                               |                   270404 |                                      | 
+ |                                               |                   270405 |                                      | 
+ |                                               |                   270406 |                                      | 
+ | PartonVertex:ProtonRadius                     |                  0.70000 |      0.85000         0.0    10.00000 | 
+ | PartonVertex:setVertex                        |                       on |          off                         | 
+ | PhaseSpace:pTHatMin                           |                  5.00000 |          0.0         0.0             | 
+ | Print:errors                                  |                      off |           on                         | 
+ | Print:quiet                                   |                       on |          off                         | 
+ | Random:seed                                   |                   270403 |           -1               900000000 | 
+ | Random:setSeed                                |                       on |          off                         | 
+ | Ropewalk:doFlavour                            |                       on |          off                         | 
+ | Ropewalk:doShoving                            |                       on |          off                         | 
+ | Ropewalk:RopeHadronization                    |                       on |          off                         | 
+ | Ropewalk:tShove                               |                  0.20000 |      1.00000         0.0   100.00000 | 
+ | SoftQCD:inelastic                             |                       on |          off                         | 
+ | StringZ:useOldAExtra                          |                       on |          off                         | 
+ |                                                                                                                 | 
+ *-------  End PYTHIA Flag + Mode + Parm + Word + FVec + MVec + PVec + WVec Settings  -----------------------------* 
 
 
 
