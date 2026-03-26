@@ -3,6 +3,8 @@ Print:quiet = on
 Parallelism:numThreads = 4
 
 ! Beam
+
+1000100200:all = Ne20 Ne 10 20 0 0.0 0.0 0 0 0
 Beams:idA = 1000100200
 Beams:idB = 1000100200
 Beams:eCM = 7000

@@ -1,67 +1,60 @@
-#include "Pythia8/Pythia.h"
-#include "Pythia8/HeavyIons.h"
-#include "Math/Vector4D.h"
-
-#include <iostream>
-#include <cstdlib>
-#include <fstream>
-#include <filesystem>
-#include <vector>
-#include <string>
 #include <chrono>
-#include "TTimeStamp.h"
-#include "TFile.h"
-#include "TTree.h"
-#include "TH1D.h"
-#include <sys/ioctl.h>
-#include <unistd.h>
 
-#include "Lambda_Defines.hh"
+#include "Pythia8/Pythia.h"
 
-#include "progress.hh"
-// ------------------------------------------------------------------------------------------------------------------------------------
-
-DECLARE_THEM_ALL
-
-#include "Lambda_Analysis.hh"
+#include "Analysis.hh"
+#include "Config.hh"
+#include "Lambda.hh"
+#include "Record.hh"
 
 int main() {
-    
-            Pythia8::Pythia pythia;
-            
-    pythia.readFile("configs/Lambda_Reconstruction.cmnd");
-    beamEnergy = pythia.settings.parm("Beams:eCM") > 0 ? Form("%.0f", pythia.settings.parm("Beams:eCM")) : "UnknownEnergy";
-        EXTRACT_CONFIRGURATION
-    
-            DEFINE_THEM_ALL
-            // Defines count variables, Histograms and Directory
+    Pythia8::Pythia pythia;
 
-    int temp=nEvents;
-    nDigits=0; while(temp>0){nDigits++; temp/=10;}
+    pythia.readFile("configs/Lambda_Reconstruction.cmnd");
+    Config::Root        rootParams;
+    Config::Log         logParams;
+    Lambda::Parameters  analysisParams;
+
+    rootParams.beamEnergy = pythia.settings.parm("Beams:eCM") > 0 ? Form("%.0f", pythia.settings.parm("Beams:eCM")) : "UnknownEnergy";
+
+    Config::extractParameters("Lambda_Reconstruction", logParams, rootParams);
+    Lambda::extractPhysics("Lambda_Reconstruction", analysisParams);
+
+    Lambda::SkipList skipList;
+    skipList.validationSkips.push_back(Lambda::ValidationBasis::Mass);
+    skipList.validationSkips.push_back(Lambda::ValidationBasis::MassTheta);
+    // skipList.quantitySkips.push_back(Lambda::Quantity::Mass);
+
+    Lambda::RootArray validatedObjects;
+    Lambda::declareObjects(validatedObjects, analysisParams, rootParams, skipList);
+
+    int temp = logParams.nEvents;
+    int nDigits = 0;
+    while (temp > 0) {
+        ++nDigits;
+        temp /= 10;
+    }
+    logParams.nDigits = nDigits;
 
     pythia.init();
-    start = SysClock::now();
-    std::cout<<std::endl;
 
-    for(iEvent = 1; iEvent <=nEvents; ++iEvent){
-        if(!pythia.next()) continue;
-        pythiaAnalysis(pythia);
+    logParams.start = std::chrono::system_clock::now();
+
+    std::cout << std::endl;
+
+    for (int iEvent = 0; iEvent < logParams.nEvents; ++iEvent) {
+        if (!pythia.next()) {
+            continue;
+        }
+
+        Lambda::pythiaAnalysis(pythia, validatedObjects, analysisParams, logParams);
     }
 
-    std::cout<<std::setfill(' ')<<"\n\n";
-    pythia.stat();
+    Analysis::writeAll(validatedObjects, rootParams.histScale, logParams.nEvents);
+    rootParams.outFile->Close();
 
-        WRITE_THEM_ALL
-
-    outFile->Close();
-
-    now = SysClock::now();
-    elapsed = Chrono::duration_cast<uSeconds>( now - start);
-        time_t localNow = SysClock::to_time_t(now);
-    std::cout << std::put_time(std::localtime(&localNow), "%F %T \n");
-    std::cout << durationString(elapsed) << std::endl;
-
-           outputLog(pythia);
+    Record::terminalReport(pythia, rootParams, logParams);
+    Record::outputLog(pythia, rootParams, logParams, Lambda::logString(analysisParams));
 
     return 0;
 }

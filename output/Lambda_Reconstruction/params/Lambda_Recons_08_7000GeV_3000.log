@@ -1,0 +1,43 @@
+Serial                        : 08
+Beam Energy                   : 7000
+Event Count                   : 3000
+Real Event Count              : 3000
+Last Run                      : 2026-03-27 03:03:58
+Time Taken                    : 1 minute 45 seconds 
+Time Taken / 1000 Events      : 35.14 seconds 
+Histogram Scale               : 1
+Progress Bar Update Interval  : 12
+Lambda Mass                   : 1.115
+Lambda Energy                 : 1.115
+Proton Mass                   : 0.938
+Pion Mass                     : 0.14
+Mass Difference               : 0.037
+Energy Tolerance              : 0.1
+Mass Tolerance                : 0.05
+Theta Tolerance               : 0.1
+Lambda Momentum               : 1.115
+Lambda Transverse Momentum    : 1
+Eta Extent                    : 5
+
+
+
+
+ *-------  PYTHIA Error and Warning Messages Statistics  ----------------------------------------------------------* 
+ |                                                                                                                 | 
+ |  times   message                                                                                                | 
+ |                                                                                                                 | 
+ |     51   Error in Pythia::forceHadronLevel: hadronLevel failed; giving up                                       | 
+ |    270   Error in Settings::parm: value is out of range                                                         | 
+ |     63   Error in StringFragmentation::fragment: stuck in joining                                               | 
+ |    579   Error in StringFragmentation::fragmentToJunction: diquark too close to junction                        | 
+ |      1   Warning in Angantyr::next: could not setup signal or ND collisions                                     | 
+ |      2   Warning in MiniStringFragmentation::ministring2two: random axis needed to break tie                    | 
+ |   2244   Warning in PartonVertex::vertexHadrons: unidentified junction topology not handled                     | 
+ |      1   Warning in Pythia::check: not quite matched particle energy/momentum/mass                              | 
+ |    642   Warning in Pythia::forceHadronLevel: hadronLevel failed; try again                                     | 
+ |      1   Warning in PythiaParallel::init: experimental feature, please send feedback to authors@pythia.org      | 
+ |      2   Warning in StringFragmentation::collinearPair: JRF finding failure, use CoM instead                    | 
+ |      1   Warning in StringFragmentation::collinearPair: soft massless endpoint encountered in junction system.  | 
+ |      1   Warning in StringFragmentation::perturbedJRF: small junction system, two short legs                    | 
+ |                                                                                                                 | 
+ *-------  End PYTHIA Error and Warning Messages Statistics  ------------------------------------------------------* 
