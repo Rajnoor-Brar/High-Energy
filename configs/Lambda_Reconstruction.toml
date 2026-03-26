@@ -1,0 +1,22 @@
+[run]
+serial = 8
+event_count = 3000
+print_interval = 50
+bin_count = 500
+beam_energy = 7000
+# beam energy here is unused, specify in cmnd file
+[physics]
+hist_scaling = 1.0
+delta_energy_gev = 0.1
+delta_mass_gev = 0.05
+delta_theta_rad = 0.1
+
+[paths]
+directory = "output/Lambda_Reconstruction/"
+output_log_directory = "output/Lambda_Reconstruction/params/"
+
+[file]
+prefix = "Lambda_Recons"
+serial = true
+energy = true
+events = true

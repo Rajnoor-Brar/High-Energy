@@ -1,5 +1,6 @@
 ! =============================
 Print:quiet = on
+Parallelism:numThreads = 4
 
 ! Beam
 Beams:idA = 1000100200

@@ -1,7 +1,7 @@
 SHELL := /bin/sh
 CXX ?= clang++
 
-BASE_CXXFLAGS := -O2 -mcpu=native -march=native -std=c++17
+BASE_CXXFLAGS := -O2 -mcpu=native -march=native -std=c++17 -I./includes  $(pkg-config --cflags --libs tomlplusplus)
 
 ROOT_FLAGS   := $(shell root-config --cflags --ldflags --glibs)
 PYTHIA_FLAGS := $(shell pythia8-config --cxxflags --ldflags)
