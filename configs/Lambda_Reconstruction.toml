@@ -1,23 +1,27 @@
 [run]
-serial = 1
-event_count = 3000
-print_interval = 50
-bin_count = 500
+serial = 2
+
+event_count = 10000000
 beam_energy = 7000
+
+bin_count = 500
 hist_scaling = 1.0
-# beam energy here is unused, specify in cmnd file
+
+print_interval = 200
+write_interval = 1000000
 
 [paths]
+# paths to save root and log file
 directory = "output/Lambda_Reconstruction/"
 output_log_directory = "output/Lambda_Reconstruction/params/"
 
 [file]
+# file name parameters
 prefix = "Lambda_Recons"
 serial = true
 energy = true
 events = true
 
 [physics]
-delta_energy_gev = 0.1
-delta_mass_gev = 0.05
+delta_energy_gev = 0.15
 delta_theta_rad = 0.1

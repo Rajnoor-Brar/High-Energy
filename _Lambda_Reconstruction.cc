@@ -20,13 +20,8 @@ int main() {
     Config::extractParameters("Lambda_Reconstruction", logParams, rootParams);
     Lambda::extractPhysics("Lambda_Reconstruction", analysisParams);
 
-    Lambda::SkipList skipList;
-    skipList.validationSkips.push_back(Lambda::ValidationBasis::Mass);
-    skipList.validationSkips.push_back(Lambda::ValidationBasis::MassTheta);
-    // skipList.quantitySkips.push_back(Lambda::Quantity::Mass);
-
-    Lambda::RootArray validatedObjects;
-    Lambda::declareObjects(validatedObjects, analysisParams, rootParams, skipList);
+    Lambda::RootArray histogramSets;
+    Lambda::declareObjects(histogramSets, analysisParams, rootParams);
 
     int temp = logParams.nEvents;
     int nDigits = 0;
@@ -47,10 +42,10 @@ int main() {
             continue;
         }
 
-        Lambda::pythiaAnalysis(pythia, validatedObjects, analysisParams, logParams);
+        Lambda::pythiaAnalysis(pythia, histogramSets, analysisParams, logParams);
     }
 
-    Analysis::writeAll(validatedObjects, rootParams.histScale, logParams.nEvents);
+    Analysis::writeAll(histogramSets, rootParams.histScale, logParams.nEvents);
     rootParams.outFile->Close();
 
     Record::terminalReport(pythia, rootParams, logParams);

@@ -22,6 +22,7 @@ namespace Config {
         Int_t              nDigits = 0;
         Int_t              printInterval = 10;
         Int_t              barInterval = 50;
+        
         TimePoint          start = TimePoint{};
         uSeconds           elapsed = uSeconds(0);
     };

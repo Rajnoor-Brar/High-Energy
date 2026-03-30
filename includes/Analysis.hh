@@ -67,7 +67,7 @@ namespace Analysis {
             }
         }
 
-        hist->Write();
+        hist->Write("", TObject::kOverwrite);
     }
 
     template <typename Basis, std::size_t HistCount>
