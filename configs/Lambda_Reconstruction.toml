@@ -1,19 +1,20 @@
 [run]
-serial = 2
-
-event_count = 10000000
+serial = 1
+sr_Padding = 2
+event_count = 20_00_000 
 beam_energy = 7000
 
+[logging]
 bin_count = 500
 hist_scaling = 1.0
-
-print_interval = 200
-write_interval = 1000000
+print_interval = 50
+check_interval = 20000
 
 [paths]
 # paths to save root and log file
 directory = "output/Lambda_Reconstruction/"
-output_log_directory = "output/Lambda_Reconstruction/params/"
+output_log_directory = "output/Lambda_Reconstruction/logs/"
+checkpoint_directory = "output/Lambda_Reconstruction/checkpoints/"
 
 [file]
 # file name parameters

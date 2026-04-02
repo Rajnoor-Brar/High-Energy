@@ -23,18 +23,19 @@
 #include "Analysis.hh"
 #include "Config.hh"
 #include "Record.hh"
-#include </opt/homebrew/Cellar/tomlplusplus/3.4.0/include/toml++/toml.hpp>
+#include <toml++/toml.hpp>
 
 namespace Lambda {
     using Lorentz = ROOT::Math::PxPyPzEVector;
 
     enum class RangeSize : std::size_t { Low, Medium, High };
-    enum class Quantity : std::size_t { Mass, Energy, NetMomentum, TransMomentum, Eta };
+    enum class Quantity : std::size_t { Mass, Energy, NetMomentum, TransMomentum, AxialMomentum, Eta };
     enum class HistogramSet : std::size_t { Unvalidated, Validated, Selected };
 
-    constexpr std::size_t kQuantityCount     = 5;
+    constexpr std::size_t kQuantityCount     = 6;
     constexpr std::size_t kHistogramSetCount = 3;
     constexpr std::size_t kRangeCount        = 3;
+    inline constexpr auto kSlowEventThreshold = std::chrono::seconds(5);
 
     using RootObjects = Analysis::RootObjects<HistogramSet, kQuantityCount>;
     using RootArray   = std::vector<RootObjects>;
@@ -49,6 +50,7 @@ namespace Lambda {
         Double_t ThetaTolerance      = 0.1;
         Double_t lambdaMomentum      = 1.115;
         Double_t lambdaTransMomentum = 1.0;
+        Double_t lambdaAxialMomentum = 1.0;
         Double_t etaExtent           = 5.0;
     };
 
@@ -86,14 +88,14 @@ namespace Lambda {
 
     static constexpr std::array<HistogramSetAttributes, kHistogramSetCount> kHistogramSetMap{{
         {HistogramSet::Unvalidated, "Unvalidated", "Unvalidated",
-            {true, true, true, true, true},
-            {RangeSize::High, RangeSize::High, RangeSize::High, RangeSize::High, RangeSize::High}},
+            {true, true, true, true, true, true},
+            {RangeSize::High, RangeSize::High, RangeSize::High, RangeSize::High, RangeSize::High, RangeSize::High}},
         {HistogramSet::Validated, "Validated", "Validated",
-            {true, true, true, true, true},
-            {RangeSize::Low, RangeSize::Low, RangeSize::Low, RangeSize::Low, RangeSize::Low}},
+            {true, true, true, true, true, true},
+            {RangeSize::Low, RangeSize::Low, RangeSize::Low, RangeSize::Low, RangeSize::Low, RangeSize::Low}},
         {HistogramSet::Selected, "Selected", "Selected",
-            {true, true, true, true, true},
-            {RangeSize::Low, RangeSize::Low, RangeSize::Low, RangeSize::Low, RangeSize::Low}}
+            {true, true, true, true, true, true},
+            {RangeSize::Low, RangeSize::Low, RangeSize::Low, RangeSize::Low, RangeSize::Low, RangeSize::Low}}
     }};
 
     inline std::array<QuantityAttributes, kQuantityCount> makeQuantityMap(const Parameters& parameters) {
@@ -114,6 +116,10 @@ namespace Lambda {
                 {{{0.0, parameters.lambdaTransMomentum * 0.8},
                   {0.0, parameters.lambdaTransMomentum * 1.3},
                   {0.0, parameters.lambdaTransMomentum * 4.0}}}},
+            {Quantity::AxialMomentum, "Axial_Momentum_Hist", "Axial Momentum Distribution of Reconstructed Lambda-particles",
+                {{{parameters.lambdaAxialMomentum * -0.8, parameters.lambdaAxialMomentum * 0.8},
+                  {parameters.lambdaAxialMomentum * -1.3, parameters.lambdaAxialMomentum * 1.3},
+                  {parameters.lambdaAxialMomentum * -4.0, parameters.lambdaAxialMomentum * 4.0}}}},
             {Quantity::Eta, "Eta_Hist", "Eta Distribution of Reconstructed Lambda-particles",
                 {{{-parameters.etaExtent, parameters.etaExtent},
                   {-2.0 * parameters.etaExtent, 2.0 * parameters.etaExtent},
@@ -127,6 +133,7 @@ namespace Lambda {
             case Quantity::Energy:        return particle.E();
             case Quantity::NetMomentum:   return particle.P();
             case Quantity::TransMomentum: return particle.Pt();
+            case Quantity::AxialMomentum: return particle.Pz();
             case Quantity::Eta:           return particle.Eta();
         }
 
@@ -171,8 +178,10 @@ namespace Lambda {
         Pythia8::Pythia& pythia,
         RootArray& histogramSets,
         const Parameters& parameters,
+        Config::Root& root,
         Config::Log& logging
     );
+    inline std::string logString(const Parameters& parameters);
 
     inline void declareObjects(
         RootArray& objects,
@@ -251,10 +260,13 @@ namespace Lambda {
         Pythia8::Pythia&     pythia,
                  RootArray&  histogramSets,
         const    Parameters& parameters,
+        Config::Root&        root,
         Config:: Log&        logging
     ) {
-        const Int_t eventIndex = ++logging.iEvent;
+        const std::size_t eventIndex = ++logging.iEvent;
         ++logging.nRealEvents;
+        const auto analysisStart = std::chrono::steady_clock::now();
+        bool slowEventReported = false;
 
         static int wsCol = [] {
             struct winsize windowSize{};
@@ -262,7 +274,11 @@ namespace Lambda {
             return static_cast<int>(windowSize.ws_col);
         }();
 
-        static Int_t progressGap = std::max<Int_t>(1, logging.nEvents / std::max(1, wsCol - 6));
+        const std::size_t progressDivisor =
+            static_cast<std::size_t>(std::max(1, wsCol - 6));
+        const std::size_t progressGap = std::max<std::size_t>(1, logging.nEvents / progressDivisor);
+        const std::size_t printInterval = std::max<std::size_t>(1, logging.printInterval);
+        const std::size_t checkInterval = logging.checkInterval;
 
         Lorentz lambda, proton, pion;
         std::vector<Lorentz> protonList, pionList;
@@ -270,8 +286,7 @@ namespace Lambda {
         protonList.reserve(pythia.event.size());
         pionList.reserve(pythia.event.size());
 
-        size_t particle, iProton, iPion;
-        std::vector<size_t> selectedPionIndex;
+        std::size_t particle, iProton, iPion;
 
         if (eventIndex == 1) {
             pythia.info.list();
@@ -310,7 +325,25 @@ namespace Lambda {
             }
         }
 
-        if (eventIndex % logging.printInterval == 0 || eventIndex == logging.nEvents) {
+        auto reportSlowEvent = [&](std::size_t protonCount, std::size_t pionCount) {
+            if (slowEventReported) {
+                return;
+            }
+
+            const Config::uSeconds elapsed =
+                std::chrono::duration_cast<Config::uSeconds>(std::chrono::steady_clock::now() - analysisStart);
+            if (elapsed < Lambda::kSlowEventThreshold) {
+                return;
+            }
+
+            slowEventReported = true;
+            std::cerr << "\n[slow-event] event " << eventIndex
+                      << " has been running for " << Record::durationString(elapsed, true)
+                      << " | protons=" << protonCount
+                      << " | pions=" << pionCount << std::endl;
+        };
+
+        if (eventIndex % printInterval == 0 || eventIndex == logging.nEvents) {
             logging.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logging.start);
 
             Record::printProgressStat( eventIndex, logging.nEvents, logging.nDigits,
@@ -325,19 +358,23 @@ namespace Lambda {
 
         Analysis::resetAllCounts(histogramSets);
 
-        selectedPionIndex.clear();
-        selectedPionIndex.reserve(pionList.size());
+        std::vector<char> pionTaken(pionList.size(), 0);
 
         for (iProton = 0; iProton < protonList.size(); ++iProton) {
             Bool_t   hasCandidate   = false;
-            size_t   bestPionIndex  = 0;
+            std::size_t   bestPionIndex  = 0;
             Double_t leastMassDelta = 0.0;
             Lorentz  bestLambda;
 
             proton = protonList[iProton];
+            reportSlowEvent(protonList.size(), pionList.size());
 
             for (iPion = 0; iPion < pionList.size(); ++iPion) {
-                if (std::find(selectedPionIndex.begin(), selectedPionIndex.end(), iPion) != selectedPionIndex.end()) {
+                if ((iPion & 511u) == 0u) {
+                    reportSlowEvent(protonList.size(), pionList.size());
+                }
+
+                if (pionTaken[iPion] != 0) {
                     continue;
                 }
 
@@ -370,16 +407,28 @@ namespace Lambda {
                 continue;
             }
 
-            selectedPionIndex.push_back(bestPionIndex);
+            pionTaken[bestPionIndex] = 1;
 
             fill(histogramSets, HistogramSet::Selected, bestLambda);
         }
 
         Analysis::countAll(histogramSets);
+        reportSlowEvent(protonList.size(), pionList.size());
+
+        if (checkInterval > 0 && eventIndex % checkInterval == 0) {
+            Analysis::checkpointWrite(histogramSets, root.checkpointOutName, root.histScale, eventIndex);
+
+            logging.elapsed =
+                std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logging.start);
+            Record::outputLog(pythia, root, logging, logString(parameters), root.checkpointLogName);
+        }
     }
 
-    inline void extractPhysics( const std::string& project, Parameters& parameters) {
-        toml::table config = toml::parse_file("configs/" + project + ".toml");
+    inline void extractPhysics(
+        const std::string& configPath,
+        Parameters& parameters
+    ) {
+        toml::table config = toml::parse_file(configPath);
         parameters.EnergyTolerance = config["physics"]["delta_energy_gev"].value_or(0.1);
         parameters.ThetaTolerance  = config["physics"]["delta_theta_rad"].value_or(0.1);
     }

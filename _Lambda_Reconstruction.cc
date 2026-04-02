@@ -7,8 +7,10 @@
 #include "Lambda.hh"
 #include "Record.hh"
 
-int main() {
+int main(int argc, char* argv[]) {
     Pythia8::Pythia pythia;
+    const std::string project    = "Lambda_Reconstruction";
+    const std::string configPath = argc > 1 ? argv[1] : "configs/" + project + ".toml";
 
     pythia.readFile("configs/Lambda_Reconstruction.cmnd");
     Config::Root        rootParams;
@@ -17,14 +19,14 @@ int main() {
 
     rootParams.beamEnergy = pythia.settings.parm("Beams:eCM") > 0 ? Form("%.0f", pythia.settings.parm("Beams:eCM")) : "UnknownEnergy";
 
-    Config::extractParameters("Lambda_Reconstruction", logParams, rootParams);
-    Lambda::extractPhysics("Lambda_Reconstruction", analysisParams);
+    Config::extractParameters(configPath, project, logParams, rootParams);
+    Lambda::extractPhysics(configPath, analysisParams);
 
     Lambda::RootArray histogramSets;
     Lambda::declareObjects(histogramSets, analysisParams, rootParams);
 
-    int temp = logParams.nEvents;
-    int nDigits = 0;
+    std::size_t temp = logParams.nEvents;
+    std::size_t nDigits = 0;
     while (temp > 0) {
         ++nDigits;
         temp /= 10;
@@ -37,16 +39,15 @@ int main() {
 
     std::cout << std::endl;
 
-    for (int iEvent = 0; iEvent < logParams.nEvents; ++iEvent) {
+    for (std::size_t iEvent = 0; iEvent < logParams.nEvents; ++iEvent) {
         if (!pythia.next()) {
             continue;
         }
 
-        Lambda::pythiaAnalysis(pythia, histogramSets, analysisParams, logParams);
+        Lambda::pythiaAnalysis(pythia, histogramSets, analysisParams, rootParams, logParams);
     }
 
-    Analysis::writeAll(histogramSets, rootParams.histScale, logParams.nEvents);
-    rootParams.outFile->Close();
+    Analysis::wrapUp(histogramSets, rootParams.outFile, rootParams.histScale, logParams.nEvents);
 
     Record::terminalReport(pythia, rootParams, logParams);
     Record::outputLog(pythia, rootParams, logParams, Lambda::logString(analysisParams));

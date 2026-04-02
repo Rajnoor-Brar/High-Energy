@@ -1,0 +1,15 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		}
+	],
+	"settings": {
+		"workbench.iconTheme": "material-icon-theme",
+		"workbench.preferredHighContrastLightColorTheme": "HEP Contrast",
+		"workbench.preferredDarkColorTheme": "Xcode Default (Dark)",
+		"workbench.colorCustomizations": {
+		
+		}
+	}
+}

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <chrono>
 #include <cmath>
 #include <ctime>
@@ -9,6 +10,7 @@
 #include <sstream>
 #include <string>
 #include <type_traits>
+#include <vector>
 
 #include <sys/ioctl.h>
 #include <unistd.h>
@@ -18,6 +20,47 @@
 #include "Config.hh"
 
 namespace Record {
+
+    inline std::string numberFormat(std::size_t number, std::size_t padding) {
+        std::ostringstream stream;
+        std::vector<std::size_t> groups;
+
+        if (number == 0) {
+            stream << '0';
+            const std::string result = stream.str();
+            return result.size() < padding ? std::string(padding - result.size(), ' ') + result : result;
+        }
+
+        while (number > 0) {
+            groups.push_back(number % 1000);
+            number /= 1000;
+        }
+
+        for (std::size_t i = groups.size(); i > 0; --i) {
+            if (i == groups.size()) {
+                stream << groups[i - 1];
+            } else {
+                stream << ',' << std::setw(3) << std::setfill('0') << groups[i - 1];
+            }
+        }
+
+        const std::string result = stream.str();
+        return result.size() < padding ? std::string(padding - result.size(), ' ') + result : result;
+    }
+
+    inline std::string timeString(const time_t& timeValue, bool highlightClock = true) {
+        std::ostringstream stream;
+        stream << std::put_time(
+            std::localtime(&timeValue),
+            highlightClock ? "%F \033[34;1m%T\033[0m " : "%F %T"
+        );
+        return stream.str();
+    }
+
+    inline std::string timeString(const Config::TimePoint& timePoint, bool highlightClock = true) {
+        const time_t localTime = std::chrono::system_clock::to_time_t(timePoint);
+        return timeString(localTime, highlightClock);
+    }
 
     inline std::string durationString(Config::uSeconds duration, bool preciseSecond = false) {
         using Seconds = std::chrono::seconds;
@@ -51,10 +94,10 @@ namespace Record {
         return stream.str();
     }
 
-    inline std::string updatedETA(int iEvent, int nEvents, Config::uSeconds duration) {
+    inline std::string updatedETA(std::size_t iEvent, std::size_t nEvents, Config::uSeconds duration) {
         using SysClock = std::chrono::system_clock;
 
-        if (nEvents < iEvent || iEvent <= 0) {
+        if (nEvents < iEvent || iEvent == 0) {
             return "ETA: --";
         }
 
@@ -64,15 +107,27 @@ namespace Record {
         std::ostringstream eta;
         const time_t expectedTime = SysClock::to_time_t(SysClock::now() + waitTime);
 
-        eta << "\033[2K\tETA : " << std::put_time(std::localtime(&expectedTime), "%F %T ")
+        eta << "\033[2K\tETA : " << timeString(expectedTime)
             << " in " << durationString(waitTime);
         return eta.str();
     }
 
-    inline void printProgressStat(int iEvent, int nEvents, int nDigits, const std::string& eta) {
+    inline void printProgressStat(
+        std::size_t iEvent,
+        std::size_t nEvents,
+        std::size_t nDigits,
+        const std::string& eta
+    ) {
+        static_cast<void>(nDigits);
+        const std::size_t percent = nEvents > 0
+            ? static_cast<std::size_t>((100.0 * static_cast<double>(iEvent)) / static_cast<double>(nEvents))
+            : 0;
+        const std::size_t eventWidth = numberFormat(nEvents, 0).size();
+
         std::cout << std::setfill(' ') << "\033[2A\r"
-                  << "\t Events processed : " << std::setw(nDigits) << iEvent << " out of " << nEvents << "  |  "
-                  << std::setw(2) << 100 * iEvent / nEvents << "% \033[B\r" << eta << "\033[B\r" << std::flush;
+                  << "\t Events processed : " << "\033[32;1m" << numberFormat(iEvent, eventWidth) << "\033[0m"
+                  << " out of " << numberFormat(nEvents, 0) << "  |  "
+                  << std::setw(2) << percent << "% \033[B\r" << eta << "\033[B\r" << std::flush;
     }
 
     inline void printProgressBar(double progress) {
@@ -87,23 +142,24 @@ namespace Record {
 
         std::cout << "\r\033[2K"
                   << "\033[32;1m|" << std::string(filledCols, done) << "\033[0m"
-                  << ">"
-                  << "\033[31m" << std::string(nCols - filledCols, toDo) << "|\033[0m"
+                  << (progress < 1.0 ? ">\033[31m" : std::string("\033[32;1m") + done)
+                  << std::string(nCols - filledCols, toDo) << "|\033[0m"
                   << std::flush;
     }
 
     template <typename PythiaT>
-    void terminalReport(PythiaT& pythia, const Config::Root& root, Config::Log& logging) {
-        std::cout << "\n\n\n";
-        pythia.stat();
-        std::cout << "\n\n";
+    void terminalReport(PythiaT& pythia, const Config::Root& root, Config::Log& logging, bool stats=false) {
 
+        std::cout << "\n\n\n";
+        if (stats){
+                pythia.stat();
+                std::cout << "\n\n";
+        }
         const Config::TimePoint now = std::chrono::system_clock::now();
-        const time_t localNow       = std::chrono::system_clock::to_time_t(now);
         logging.elapsed             = std::chrono::duration_cast<Config::uSeconds>(now - logging.start);
 
         std::cout << "Finished :\n" << std::string(10, ' ')
-                  << std::put_time(std::localtime(&localNow), "%F %T")
+                  << timeString(now)
                   << "\n" << std::string(10, ' ') << durationString(logging.elapsed) << std::endl;
         std::cout << "\nFile Title : " << root.fileTitle.Data() << std::endl << std::endl;
     }
@@ -113,20 +169,23 @@ namespace Record {
         PythiaT& pythia,
         const Config::Root& root,
         const Config::Log& logging,
-        const std::string& programLog = {}
+        const std::string& programLog = {},
+        const TString& logPath = ""
     ) {
-        std::ofstream logStream(root.logName.Data(), std::ios::trunc);
+        const char* targetLogPath = logPath.Length() > 0 ? logPath.Data() : root.logName.Data();
+        std::ofstream logStream(targetLogPath, std::ios::trunc);
         const time_t localStart = std::chrono::system_clock::to_time_t(logging.start);
 
         logStream << "Serial                        : " << std::setw(2) << std::setfill('0') << logging.serial << std::endl;
         logStream << "Beam Energy                   : " << root.beamEnergy.Data() << std::endl;
-        logStream << "Event Count                   : " << logging.nEvents << std::endl;
-        logStream << "Real Event Count              : " << logging.nRealEvents << std::endl;
-        logStream << "Last Run                      : " << std::put_time(std::localtime(&localStart), "%F %T") << std::endl;
+        logStream << "Event Count                   : " << numberFormat(logging.nEvents, 0) << std::endl;
+        logStream << "Real Event Count              : " << numberFormat(logging.nRealEvents, 0) << std::endl;
+        logStream << "Last Run                      : " << timeString(localStart,false) << std::endl;
         logStream << "Time Taken                    : " << durationString(logging.elapsed) << std::endl;
         logStream << "Time Taken / 1000 Events      : " << durationString((1000 * logging.elapsed) / logging.nEvents, true) << std::endl;
         logStream << "Histogram Scale               : " << root.histScale << std::endl;
-        logStream << "Progress Bar Update Interval  : " << logging.barInterval << std::endl;
+        logStream << "Progress Bar Update Interval  : " << numberFormat(logging.barInterval, 0) << std::endl;
+        logStream << "Check Interval                : " << numberFormat(logging.checkInterval, 0) << std::endl;
 
         if (!programLog.empty()) {
             logStream << programLog;

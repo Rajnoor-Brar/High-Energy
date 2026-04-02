@@ -8,37 +8,33 @@
 #include "Lambda.hh"
 #include "Record.hh"
 
-int main() {
+int main(int argc, char* argv[]) {
     Pythia8::PythiaParallel pythia;
+    const std::string project    = "Lambda_Reconstruction";
+    const std::string configPath = argc > 1 ? argv[1] : "configs/" + project + ".toml";
 
     pythia.readFile("configs/Lambda_Reconstruction.cmnd");
     Config::Root     rootParams;
     Config::Log      logParams;
     Lambda::Parameters analysisParams;
 
-    rootParams.beamEnergy = pythia.settings.parm("Beams:eCM") > 0 ? Form("%.0f", pythia.settings.parm("Beams:eCM")) : "UnknownEnergy";
+        rootParams.beamEnergy = pythia.settings.parm("Beams:eCM") > 0 ? Form("%.0f", pythia.settings.parm("Beams:eCM")) : "UnknownEnergy";
 
-    Config::extractParameters("Lambda_Reconstruction", logParams, rootParams);
-    Lambda::extractPhysics("Lambda_Reconstruction", analysisParams);
+    Config::extractParameters(configPath, project, logParams, rootParams);
+    Lambda::extractPhysics(configPath, analysisParams);
 
     Lambda::RootArray histogramSets;
     Lambda::declareObjects(histogramSets, analysisParams, rootParams);
 
-    int temp = logParams.nEvents;
-    int nDigits = 0;
-    while (temp > 0) {  ++nDigits; temp /= 10;}
-    logParams.nDigits = nDigits;
-
     pythia.init();
 
-    logParams.start = std::chrono::system_clock::now();
+        logParams.start = std::chrono::system_clock::now();
 
-    pythia.run(logParams.nEvents, [&](Pythia8::Pythia* worker) {
-        Lambda::pythiaAnalysis(*worker, histogramSets, analysisParams, logParams);
+    pythia.run(static_cast<long>(logParams.nEvents), [&](Pythia8::Pythia* worker) {
+        Lambda::pythiaAnalysis(*worker, histogramSets, analysisParams, rootParams, logParams);
     });
 
-    Analysis::writeAll(histogramSets, rootParams.histScale, logParams.nEvents);
-    rootParams.outFile->Close();
+    Analysis::wrapUp(histogramSets, rootParams.outFile, rootParams.histScale, logParams.nEvents);
 
     Record::terminalReport(pythia, rootParams, logParams);
 

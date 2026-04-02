@@ -14,7 +14,9 @@
                 "-I/Users/Rajnoor/Directory/HEP/install/pythia8/include",
                 "-I/Users/Rajnoor/Directory/HEP/install/root/include",
                 "-L/Users/Rajnoor/Directory/HEP/install/pythia8/lib",
-                "-L/Users/Rajnoor/Directory/HEP/install/root/lib"
+                "-L/Users/Rajnoor/Directory/HEP/install/root/lib",
+                "-I/opt/homebrew/Cellar/tomlplusplus/3.4.0/include",
+                "-L/opt/homebrew/Cellar/tomlplusplus/3.4.0/lib"
             ]
         }
     ],

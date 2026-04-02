@@ -1,0 +1,167 @@
+Serial                        : 03
+Beam Energy                   : 7000
+Event Count                   : 10000
+Real Event Count              : 5000
+Last Run                      : 2026-03-30 15:28:03
+Time Taken                    : 1 minute 17 seconds 
+Time Taken / 1000 Events      : 7.77 seconds 
+Histogram Scale               : 1
+Progress Bar Update Interval  : 42
+Write Interval                : 5000
+Lambda Mass                   : 1.115
+Lambda Energy                 : 1.115
+Proton Mass                   : 0.938
+Pion Mass                     : 0.14
+Mass Difference               : 0.037
+Energy Tolerance              : 0.15
+Theta Tolerance               : 0.1
+Lambda Momentum               : 1.115
+Lambda Transverse Momentum    : 1
+Eta Extent                    : 5
+
+
+
+
+ *-------  PYTHIA Flag + Mode + Parm + Word + FVec + MVec + PVec + WVec Settings (changes only)  ------------------* 
+ |                                                                                                                 | 
+ | Name                                          |                      Now |      Default         Min         Max | 
+ |                                               |                          |                                      | 
+ | BeamRemnants:remnantMode                      |                        1 |            0           0           1 | 
+ | BeamRemnants:saturation                       |                  3.00000 |      5.00000     0.10000  100000.000 | 
+ | Beams:eCM                                     |                 7000.000 |    14000.000         0.0             | 
+ | Beams:idA                                     |               1000100200 |         2212                         | 
+ | Beams:idB                                     |               1000100200 |         2212                         | 
+ | ColourReconnection:allowDoubleJunRem          |                      off |           on                         | 
+ | ColourReconnection:mode                       |                        1 |            0           0           4 | 
+ | HeavyIon:SigFitDefAvNDb                       |                  0.98000 |          0.0                         | 
+ | HeavyIon:SigFitDefPar                         |                  1.51000 |                                      | 
+ |                                               |                  3.58000 |                                      | 
+ |                                               |                  1.21000 |                                      | 
+ | HeavyIon:SigFitNGen                           |                        0 |           20           0             | 
+ | Init:showChangedParticleData                  |                      off |           on                         | 
+ | Init:showChangedSettings                      |                      off |           on                         | 
+ | Init:showMultipartonInteractions              |                      off |           on                         | 
+ | Init:showProcesses                            |                      off |           on                         | 
+ | MultipartonInteractions:pT0Ref                |                  2.50000 |      2.28000     0.50000    10.00000 | 
+ | Next:numberCount                              |                        0 |         1000           0             | 
+ | Next:numberShowEvent                          |                        0 |            1           0             | 
+ | Next:numberShowInfo                           |                        0 |            1           0             | 
+ | Next:numberShowLHA                            |                        0 |            1           0             | 
+ | Next:numberShowProcess                        |                        0 |            1           0             | 
+ | Parallelism:index                             |                        4 |           -1                         | 
+ | Parallelism:numThreads                        |                       10 |            0           0             | 
+ | Parallelism:seeds                             |                   270403 |                                      | 
+ |                                               |                   270404 |                                      | 
+ |                                               |                   270405 |                                      | 
+ |                                               |                   270406 |                                      | 
+ |                                               |                   270407 |                                      | 
+ |                                               |                   270408 |                                      | 
+ |                                               |                   270409 |                                      | 
+ |                                               |                   270410 |                                      | 
+ |                                               |                   270411 |                                      | 
+ |                                               |                   270412 |                                      | 
+ | PartonLevel:all                               |                      off |           on                         | 
+ | PartonVertex:ProtonRadius                     |                  0.70000 |      0.85000         0.0    10.00000 | 
+ | PartonVertex:setVertex                        |                       on |          off                         | 
+ | Print:errors                                  |                      off |           on                         | 
+ | Print:quiet                                   |                       on |          off                         | 
+ | ProcessLevel:all                              |                      off |           on                         | 
+ | Random:seed                                   |                   270407 |           -1               900000000 | 
+ | Random:setSeed                                |                       on |          off                         | 
+ | Ropewalk:doFlavour                            |                       on |          off                         | 
+ | Ropewalk:doShoving                            |                       on |          off                         | 
+ | Ropewalk:RopeHadronization                    |                       on |          off                         | 
+ | Ropewalk:tShove                               |                  0.20000 |      1.00000         0.0   100.00000 | 
+ | StringZ:useOldAExtra                          |                       on |          off                         | 
+ | Tune:ee                                       |                        0 |            7          -1           7 | 
+ | Tune:pp                                       |                        0 |           14          -1          33 | 
+ |                                                                                                                 | 
+ *-------  End PYTHIA Flag + Mode + Parm + Word + FVec + MVec + PVec + WVec Settings  -----------------------------* 
+
+
+
+
+ --------  PYTHIA Info Listing  ---------------------------------------- 
+ 
+ Beam A: id =   2212, pz =  3.500e+03, e =  3.500e+03, m =  9.383e-01.
+ Beam B: id =   2112, pz = -3.500e+03, e =  3.500e+03, m =  9.396e-01.
+
+ In 1: id =   21, x =  3.349e-03, pdf =  1.226e+01 at Q2 =  1.075e+02.
+ In 2: id =   21, x =  4.265e-03, pdf =  1.083e+01 at same Q2.
+
+ Subprocess g g -> g g with code 111 is 2 -> 2.
+ It has sHat =  6.998e+02,    tHat = -1.326e+02,    uHat = -5.672e+02,
+       pTHat =  1.037e+01,   m3Hat =  0.000e+00,   m4Hat =  0.000e+00,
+    thetaHat =  9.008e-01,  phiHat =  3.722e+00.
+     alphaEM =  7.629e-03,  alphaS =  1.984e-01    at Q2 =  1.075e+02.
+
+ Impact parameter b =  3.624e-01 gives enhancement factor =  2.824e+00.
+ Max pT scale for MPI =  1.037e+01, ISR =  1.037e+01, FSR =  1.037e+01.
+ Number of MPI =     9, ISR =    19, FSRproc =    51, FSRreson =     0.
+
+ --------  End PYTHIA Info Listing  ------------------------------------
+
+
+
+
+ *-----  HeavyIon Event and Cross Section Statistics  -------------------------------------------------------------*
+ |                                                                                                                 |
+ | Primary NN sub-collision subprocess           Code |            Number of events       |      sigma +- delta    |
+ |                                                    |       Tried   Selected   Accepted |     (estimated) (mb)   |
+ |                                                    |                                   |                        |
+ |-----------------------------------------------------------------------------------------------------------------|
+ |                                                    |                                   |                        |
+ | g g -> g g                                     111 |         344        344        344 |   9.604e+02  5.699e+00 |
+ | g g -> q qbar (uds)                            112 |           6          6          6 |   1.684e+01  4.316e+01 |
+ | q g -> q g                                     113 |         133        133        133 |   3.663e+02  9.044e+00 |
+ | q q(bar)' -> q q(bar)'                         114 |          15         15         15 |   4.129e+01  2.685e+01 |
+ | g g -> c cbar                                  121 |           1          1          1 |   2.618e+00  9.808e+01 |
+ | g g -> b bbar                                  123 |           1          1          1 |   2.681e+00  1.004e+02 |
+ | sum                                                |        1404        500        500 |   1.390e+03  4.707e+00 |
+ |                                                    |                                   |                        |
+ |-----------------------------------------------------------------------------------------------------------------|
+ |                                                                                        |                        |
+ | Semi-inclusive Ne20 on Ne20 cross sections from the Glauber calculation:               |                        |
+ |                                                                                        |                        |
+ | Total                                                                                  |   2.935e+03  9.916e+01 |
+ | Non-Diffractive                                                                        |   1.493e+03  5.048e+01 |
+ | Total inelastic                                                                        |   1.646e+03  5.477e+01 |
+ | Elastic                                                                                |   1.288e+03  4.850e+01 |
+ | Diffractive target excitation                                                          |   5.223e+01  9.294e+00 |
+ | Diffractive projectile excitation                                                      |   3.903e+01  7.885e+00 |
+ | Double diffractive excitation                                                          |   6.194e+01  7.242e+00 |
+ | Elastic b-slope (GeV^-2)                                                               |   3.347e+02  1.945e+01 |
+ |                                                                                        |                        |
+ *-----  End HeavyIon Event and Cross Section Statistics ----------------------------------------------------------*
+
+ *-------  PYTHIA Error and Warning Messages Statistics  ----------------------------------------------------------* 
+ |                                                                                                                 | 
+ |  times   message                                                                                                | 
+ |                                                                                                                 | 
+ |      9   Error in Pythia::forceHadronLevel: hadronLevel failed; giving up                                       | 
+ |     57   Error in Settings::parm: value is out of range                                                         | 
+ |     15   Error in StringFragmentation::fragment: stuck in joining                                               | 
+ |    104   Error in StringFragmentation::fragmentToJunction: diquark too close to junction                        | 
+ |     29   Warning (MBIAS) in JunctionSplitting::checkColours: made a gluon colour singlet; redoing colours       | 
+ |     38   Warning (MBIAS) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
+ |     38   Warning (MBIAS) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
+ |      2   Warning (MBIAS) in MultipartonInteractions::init: maximum increased                                    | 
+ |     24   Warning (MBIAS) in SimpleSpaceShower::pT2nextQCD: weight above unity                                   | 
+ |      2   Warning (SASD) in MultipartonInteractions::init: maximum increased                                     | 
+ |      7   Warning (SIGNN) in JunctionSplitting::checkColours: made a gluon colour singlet; redoing colours       | 
+ |      2   Warning (SIGNN) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
+ |      2   Warning (SIGNN) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
+ |      1   Warning (SIGNP) in JunctionSplitting::checkColours: made a gluon colour singlet; redoing colours       | 
+ |      2   Warning (SIGNP) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
+ |      2   Warning (SIGNP) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
+ |      2   Warning (SIGPN) in JunctionSplitting::checkColours: made a gluon colour singlet; redoing colours       | 
+ |      7   Warning (SIGPN) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
+ |      7   Warning (SIGPN) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
+ |      4   Warning (SIGPP) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
+ |      4   Warning (SIGPP) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
+ |      1   Warning (SIGPP) in SimpleSpaceShower::pT2nextQCD: weight above unity                                   | 
+ |    377   Warning in PartonVertex::vertexHadrons: unidentified junction topology not handled                     | 
+ |    119   Warning in Pythia::forceHadronLevel: hadronLevel failed; try again                                     | 
+ |      1   Warning in TauDecays::decay: unknown correlated tau production, assuming from unpolarized photon       | 
+ |                                                                                                                 | 
+ *-------  End PYTHIA Error and Warning Messages Statistics  ------------------------------------------------------* 

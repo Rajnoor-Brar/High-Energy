@@ -2,12 +2,15 @@
 
 #include <array>
 #include <cstddef>
+#include <memory>
 #include <vector>
 
+#include "TFile.h"
 #include "TDirectory.h"
 #include "TH1.h"
 #include "TH1D.h"
 #include "TH1I.h"
+#include "TString.h"
 
 namespace Analysis {
     template <typename Enum>
@@ -53,25 +56,45 @@ namespace Analysis {
         }
     }
 
-    inline void scaleAndWrite(TH1* hist, Double_t histScale, Int_t nEvents, bool width = true) {
+    inline void scaleAndWrite(TH1* hist, Double_t histScale, std::size_t nEvents, bool width = true) {
         if (hist == nullptr) {
+            return;
+        }
+
+        std::unique_ptr<TH1> snapshot(static_cast<TH1*>(hist->Clone(hist->GetName())));
+        if (!snapshot) {
             return;
         }
 
         if (nEvents > 0) {
             const Double_t scale = histScale / static_cast<Double_t>(nEvents);
             if (width) {
-                hist->Scale(scale, "width");
+                snapshot->Scale(scale, "width");
             } else {
-                hist->Scale(scale);
+                snapshot->Scale(scale);
             }
         }
 
-        hist->Write("", TObject::kOverwrite);
+        snapshot->Write("", TObject::kOverwrite);
+    }
+
+    inline void scaleAndWriteToDir(
+        TDirectory* dir,
+        TH1* hist,
+        Double_t histScale,
+        std::size_t nEvents,
+        bool width = true
+    ) {
+        if (dir == nullptr || hist == nullptr) {
+            return;
+        }
+
+        dir->cd();
+        scaleAndWrite(hist, histScale, nEvents, width);
     }
 
     template <typename Basis, std::size_t HistCount>
-    inline void write(RootObjects<Basis, HistCount>& object, Double_t histScale, Int_t nEvents) {
+    inline void write(RootObjects<Basis, HistCount>& object, Double_t histScale, std::size_t nEvents) {
         if (object.dir == nullptr) {
             return;
         }
@@ -85,9 +108,73 @@ namespace Analysis {
     }
 
     template <typename Basis, std::size_t HistCount>
-    inline void writeAll(RootArray<Basis, HistCount>& objects, Double_t histScale, Int_t nEvents) {
+    inline void writeToDir(
+        RootObjects<Basis, HistCount>& object,
+        TDirectory* dir,
+        Double_t histScale,
+        std::size_t nEvents
+    ) {
+        if (dir == nullptr) {
+            return;
+        }
+
+        scaleAndWriteToDir(dir, object.count, histScale, nEvents, false);
+
+        for (TH1D* hist : object.hists) {
+            scaleAndWriteToDir(dir, hist, histScale, nEvents, true);
+        }
+    }
+
+    template <typename Basis, std::size_t HistCount>
+    inline void writeAll(RootArray<Basis, HistCount>& objects, Double_t histScale, std::size_t nEvents) {
         for (auto& object : objects) {
             write(object, histScale, nEvents);
+        }
+    }
+
+    template <typename Basis, std::size_t HistCount>
+    inline void checkpointWrite(
+        RootArray<Basis, HistCount>& objects,
+        const TString& mainOutName,
+        Double_t histScale,
+        std::size_t nEvents
+    ) {
+        std::string checkpointName = mainOutName.Data();
+        const std::string rootSuffix = ".root";
+        if (checkpointName.size() >= rootSuffix.size() &&
+            checkpointName.substr(checkpointName.size() - rootSuffix.size()) == rootSuffix) {
+            checkpointName.erase(checkpointName.size() - rootSuffix.size());
+        }
+        checkpointName += "_checkpoint.root";
+
+        TFile checkpointFile(checkpointName.c_str(), "RECREATE");
+        if (!checkpointFile.IsOpen()) {
+            return;
+        }
+
+        for (auto& object : objects) {
+            if (object.dir == nullptr) {
+                continue;
+            }
+
+            TDirectory* checkpointDir = checkpointFile.mkdir(object.dir->GetName());
+            writeToDir(object, checkpointDir, histScale, nEvents);
+        }
+
+        checkpointFile.Write("", TObject::kOverwrite);
+        checkpointFile.Close();
+    }
+
+    template <typename Basis, std::size_t HistCount>
+    inline void wrapUp(
+        RootArray<Basis, HistCount>& objects,
+        TFile* outFile,
+        Double_t histScale,
+        std::size_t nEvents
+    ) {
+        writeAll(objects, histScale, nEvents);
+        if (outFile != nullptr) {
+            outFile->Close();
         }
     }
 }
