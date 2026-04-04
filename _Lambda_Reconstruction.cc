@@ -24,30 +24,33 @@ int main(int argc, char* argv[]) {
 
     Lambda::RootArray histogramSets;
     Lambda::declareObjects(histogramSets, analysisParams, rootParams);
-
-    std::size_t temp = logParams.nEvents;
-    std::size_t nDigits = 0;
-    while (temp > 0) {
-        ++nDigits;
-        temp /= 10;
-    }
-    logParams.nDigits = nDigits;
+    Record::AsyncLogger asyncLogger;
 
     pythia.init();
 
     logParams.start = std::chrono::system_clock::now();
-
-    std::cout << std::endl;
+    asyncLogger.start(rootParams, logParams.statusIntervalMs);
+    asyncLogger.publish(
+        logParams,
+        Record::RunPhase::Starting,
+        0,
+        Record::RenderStatus,
+        Record::DontRenderBar,
+        Record::WriteRunStat
+    );
 
     for (std::size_t iEvent = 0; iEvent < logParams.nEvents; ++iEvent) {
         if (!pythia.next()) {
             continue;
         }
 
-        Lambda::pythiaAnalysis(pythia, histogramSets, analysisParams, rootParams, logParams);
+        Lambda::pythiaAnalysis(pythia, histogramSets, analysisParams, rootParams, logParams, asyncLogger);
     }
 
     Analysis::wrapUp(histogramSets, rootParams.outFile, rootParams.histScale, logParams.nEvents);
+    logParams.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logParams.start);
+    asyncLogger.finish(logParams, logParams.iEvent.load());
+    asyncLogger.stop();
 
     Record::terminalReport(pythia, rootParams, logParams);
     Record::outputLog(pythia, rootParams, logParams, Lambda::logString(analysisParams));

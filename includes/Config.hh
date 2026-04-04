@@ -22,6 +22,7 @@ namespace Config {
         std::size_t              nRealEvents = 0;
         std::size_t              nDigits = 0;
         std::size_t              printInterval = 10;
+        std::size_t              statusIntervalMs = 1000;
         std::size_t              barInterval = 50;
         std::size_t              checkInterval = 10000;
 
@@ -37,6 +38,7 @@ namespace Config {
         TString beamEnergy    = "";
         TString outName       = "";
         TString logName       = "";
+        TString runStatName   = "";
         TString checkpointOutName = "";
         TString checkpointLogName = "";
         TString fileTitle     = "";
@@ -57,6 +59,9 @@ namespace Config {
         logging.nEvents       = static_cast<std::size_t>(config["run"]["event_count"].value_or(1000));
 
         logging.printInterval = static_cast<std::size_t>(config["logging"]["print_interval"].value_or(100));
+        logging.statusIntervalMs = static_cast<std::size_t>(
+            config["logging"]["status_interval"].value_or(1000)
+        );
         logging.checkInterval = static_cast<std::size_t>(config["logging"]["check_interval"].value_or(10000));
         root.binCount         =                          config["logging"]["bin_count"].value_or(100);
         root.histScale        =                          config["logging"]["hist_scaling"].value_or(1.0);
@@ -79,9 +84,10 @@ namespace Config {
 
         std::string fileTitle = filePrefix;
 
+        std::string serial = std::string(Form(("_%0" + std::to_string(static_cast<int>(logging.srPadding)) + "d").c_str(), logging.serial));
+
         if (fileSerial) {
-            const int srPadding = static_cast<int>(logging.srPadding);
-            fileTitle += Form(("_%0" + std::to_string(srPadding) + "d").c_str(), logging.serial);
+            fileTitle += serial;
         }
         if (fileEnergy) {
             fileTitle += "_" + std::string(root.beamEnergy.Data()) + "GeV";
@@ -91,14 +97,17 @@ namespace Config {
         }
 
         root.fileTitle = fileTitle.c_str();
-        root.outName   = Form("%s%s.root", root.rootDirectory.Data(), fileTitle.c_str());
+        root.outName   = Form("%s%s/%s.root", root.rootDirectory.Data(), serial.c_str(), fileTitle.c_str());
         root.logName   = Form("%s%s.log", root.logDirectory.Data(), fileTitle.c_str());
+        root.runStatName = Form("%s%s_runstat.log", root.logDirectory.Data(), fileTitle.c_str());
         root.checkpointOutName = Form("%s%s_checkpoint.root", root.checkpointDirectory.Data(), fileTitle.c_str());
         root.checkpointLogName = Form("%s%s_checkpoint.log", root.checkpointDirectory.Data(), fileTitle.c_str());
 
-        std::filesystem::create_directories(root.rootDirectory.Data());
-        std::filesystem::create_directories(root.logDirectory.Data());
-        std::filesystem::create_directories(root.checkpointDirectory.Data());
+        std::filesystem::create_directories(std::filesystem::path(root.outName.Data()).parent_path());
+        std::filesystem::create_directories(std::filesystem::path(root.logName.Data()).parent_path());
+        std::filesystem::create_directories(std::filesystem::path(root.runStatName.Data()).parent_path());
+        std::filesystem::create_directories(std::filesystem::path(root.checkpointOutName.Data()).parent_path());
+        std::filesystem::create_directories(std::filesystem::path(root.checkpointLogName.Data()).parent_path());
 
         root.outFile = new TFile(root.outName, "RECREATE");
     }

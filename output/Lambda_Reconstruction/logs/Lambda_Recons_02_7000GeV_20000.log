@@ -1,13 +1,12 @@
-Serial                        : 01
+Serial                        : 02
 Beam Energy                   : 7000
-Event Count                   : 5,000
-Real Event Count              : 5,000
-Last Run                      : 2026-04-04 16:53:44
-Time Taken                    : 1 minute 37 seconds 
-Time Taken / 1000 Events      : 19.59 seconds 
+Event Count                   : 20,000
+Real Event Count              : 20,000
+Last Run                      : 2026-04-02 22:48:37
+Time Taken                    : 3 minutes 18 seconds 
+Time Taken / 1000 Events      : 9.93 seconds 
 Histogram Scale               : 1
-Status Snapshot Interval (ms) : 1,000
-Progress Bar Update Interval  : 21
+Progress Bar Update Interval  : 85
 Check Interval                : 20,000
 Lambda Mass                   : 1.115
 Lambda Energy                 : 1.115
@@ -50,7 +49,7 @@ Eta Extent                    : 5
  | Next:numberShowInfo                           |                        0 |            1           0             | 
  | Next:numberShowLHA                            |                        0 |            1           0             | 
  | Next:numberShowProcess                        |                        0 |            1           0             | 
- | Parallelism:numThreads                        |                        8 |            0           0             | 
+ | Parallelism:numThreads                        |                       20 |            0           0             | 
  | Parallelism:seeds                             |                 19780503 |                                      | 
  |                                               |                 19780504 |                                      | 
  |                                               |                 19780505 |                                      | 
@@ -59,6 +58,18 @@ Eta Extent                    : 5
  |                                               |                 19780508 |                                      | 
  |                                               |                 19780509 |                                      | 
  |                                               |                 19780510 |                                      | 
+ |                                               |                 19780511 |                                      | 
+ |                                               |                 19780512 |                                      | 
+ |                                               |                 19780513 |                                      | 
+ |                                               |                 19780514 |                                      | 
+ |                                               |                 19780515 |                                      | 
+ |                                               |                 19780516 |                                      | 
+ |                                               |                 19780517 |                                      | 
+ |                                               |                 19780518 |                                      | 
+ |                                               |                 19780519 |                                      | 
+ |                                               |                 19780520 |                                      | 
+ |                                               |                 19780521 |                                      | 
+ |                                               |                 19780522 |                                      | 
  | PartonVertex:ProtonRadius                     |                  0.70000 |      0.85000         0.0    10.00000 | 
  | PartonVertex:setVertex                        |                       on |          off                         | 
  | PhaseSpace:pTHatMin                           |                  5.00000 |          0.0         0.0             | 
@@ -80,22 +91,46 @@ Eta Extent                    : 5
  |                                                                                                                 | 
  |  times   message                                                                                                | 
  |                                                                                                                 | 
- |      9   Error in Pythia::check: unmatched particle energy/momentum/mass                                        | 
- |      1   Error in Pythia::forceHadronLevel: check of event revealed problems                                    | 
- |     54   Error in Pythia::forceHadronLevel: hadronLevel failed; giving up                                       | 
- |    489   Error in Settings::parm: value is out of range                                                         | 
- |     92   Error in StringFragmentation::fragment: stuck in joining                                               | 
- |    717   Error in StringFragmentation::fragmentToJunction: diquark too close to junction                        | 
- |      3   Warning in Angantyr::next: could not setup signal or ND collisions                                     | 
- |      1   Warning in MiniStringFragmentation::ministring2two: random axis needed to break tie                    | 
- |   3722   Warning in PartonVertex::vertexHadrons: unidentified junction topology not handled                     | 
- |      1   Warning in Pythia::check: energy-momentum not quite conserved                                          | 
- |      3   Warning in Pythia::check: not quite matched particle energy/momentum/mass                              | 
- |    809   Warning in Pythia::forceHadronLevel: hadronLevel failed; try again                                     | 
+ |      2   Error (MBIAS) in SimpleSpaceShower::pT2nearThreshold: stuck in loop                                    | 
+ |      1   Error in Pythia::check: energy-momentum not conserved                                                  | 
+ |     28   Error in Pythia::check: unmatched particle energy/momentum/mass                                        | 
+ |      3   Error in Pythia::forceHadronLevel: check of event revealed problems                                    | 
+ |    297   Error in Pythia::forceHadronLevel: hadronLevel failed; giving up                                       | 
+ |   2015   Error in Settings::parm: value is out of range                                                         | 
+ |    410   Error in StringFragmentation::fragment: stuck in joining                                               | 
+ |   3577   Error in StringFragmentation::fragmentToJunction: diquark too close to junction                        | 
+ |     72   Warning (MBIAS) in JunctionSplitting::checkColours: made a gluon colour singlet; redoing colours       | 
+ |     72   Warning (MBIAS) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
+ |     72   Warning (MBIAS) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
+ |      2   Warning (MBIAS) in MultipartonInteractions::init: maximum increased                                    | 
+ |      1   Warning (MBIAS) in Pythia::check: energy-momentum not quite conserved                                  | 
+ |      1   Warning (MBIAS) in SimpleSpaceShower::pT2nextQCD: small daughter PDF                                   | 
+ |     40   Warning (MBIAS) in SimpleSpaceShower::pT2nextQCD: weight above unity                                   | 
+ |      2   Warning (SASD) in MultipartonInteractions::init: maximum increased                                     | 
+ |      4   Warning (SIGNN) in JunctionSplitting::checkColours: made a gluon colour singlet; redoing colours       | 
+ |      4   Warning (SIGNN) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
+ |      4   Warning (SIGNN) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
+ |      8   Warning (SIGNP) in JunctionSplitting::checkColours: made a gluon colour singlet; redoing colours       | 
+ |     16   Warning (SIGNP) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
+ |     16   Warning (SIGNP) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
+ |      4   Warning (SIGPN) in JunctionSplitting::checkColours: made a gluon colour singlet; redoing colours       | 
+ |     10   Warning (SIGPN) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
+ |     10   Warning (SIGPN) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
+ |      8   Warning (SIGPP) in JunctionSplitting::checkColours: made a gluon colour singlet; redoing colours       | 
+ |     10   Warning (SIGPP) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
+ |     10   Warning (SIGPP) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
+ |      1   Warning (SIGPP) in SimpleSpaceShower::pT2nextQCD: weight above unity                                   | 
+ |      5   Warning in Angantyr::next: could not setup signal or ND collisions                                     | 
+ |      2   Warning in HadronWidths::pickMasses: angular momentum and running widths not used                      | 
+ |     32   Warning in MiniStringFragmentation::ministring2two: random axis needed to break tie                    | 
+ |  14853   Warning in PartonVertex::vertexHadrons: unidentified junction topology not handled                     | 
+ |      4   Warning in Pythia::check: energy-momentum not quite conserved                                          | 
+ |     11   Warning in Pythia::check: not quite matched particle energy/momentum/mass                              | 
+ |   3987   Warning in Pythia::forceHadronLevel: hadronLevel failed; try again                                     | 
  |      1   Warning in PythiaParallel::init: experimental feature, please send feedback to authors@pythia.org      | 
- |      1   Warning in StringFragmentation::collinearPair: JRF finding failure, use CoM instead                    | 
- |      1   Warning in StringFragmentation::collinearPair: soft massless endpoint encountered in junction system.  | 
- |      2   Warning in StringFragmentation::finalRegion: random axis needed to break tie                           | 
- |     20   Warning in StringFragmentation::perturbedJRF: small junction system, two short legs                    | 
+ |     13   Warning in StringFragmentation::collinearPair: JRF finding failure, use CoM instead                    | 
+ |      5   Warning in StringFragmentation::collinearPair: soft massless endpoint encountered in junction system.  | 
+ |     10   Warning in StringFragmentation::finalRegion: random axis needed to break tie                           | 
+ |     13   Warning in StringFragmentation::perturbedJRF: small junction system, two short legs                    | 
  |                                                                                                                 | 
  *-------  End PYTHIA Error and Warning Messages Statistics  ------------------------------------------------------* 

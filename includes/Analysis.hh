@@ -145,7 +145,7 @@ namespace Analysis {
             checkpointName.substr(checkpointName.size() - rootSuffix.size()) == rootSuffix) {
             checkpointName.erase(checkpointName.size() - rootSuffix.size());
         }
-        checkpointName += "_checkpoint.root";
+        checkpointName += ".root";
 
         TFile checkpointFile(checkpointName.c_str(), "RECREATE");
         if (!checkpointFile.IsOpen()) {

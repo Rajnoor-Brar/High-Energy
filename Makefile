@@ -1,5 +1,5 @@
 SHELL := /bin/sh
-CXX ?= clang++
+CXX ?= g++
 
 BASE_CXXFLAGS := -O2 -mcpu=native -march=native -std=c++17 -I./includes
 TOML_FLAGS   := $(shell pkg-config --cflags --libs tomlplusplus)
@@ -12,7 +12,7 @@ all:
 
 # Build rule
 %.exe: %.cc
-	@$(CXX) $(ROOT_FLAGS) $(PYTHIA_FLAGS) $(TOML_FLAGS) $(BASE_CXXFLAGS) $< -o $@
+	@$(CXX) $< -o $@ $(ROOT_FLAGS) $(PYTHIA_FLAGS) $(TOML_FLAGS) $(BASE_CXXFLAGS)
 	@echo "$< --> $@"
 
 # Allow `make myprog` to build `myprog.exe`

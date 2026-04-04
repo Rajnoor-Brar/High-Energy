@@ -15,29 +15,40 @@ int main(int argc, char* argv[]) {
 
     pythia.readFile("configs/Lambda_Reconstruction.cmnd");
     Config::Root     rootParams;
+                     rootParams.beamEnergy = pythia.settings.parm("Beams:eCM") > 0 ? Form("%.0f", pythia.settings.parm("Beams:eCM")) : "UnknownEnergy";
     Config::Log      logParams;
-    Lambda::Parameters analysisParams;
-
-        rootParams.beamEnergy = pythia.settings.parm("Beams:eCM") > 0 ? Form("%.0f", pythia.settings.parm("Beams:eCM")) : "UnknownEnergy";
-
     Config::extractParameters(configPath, project, logParams, rootParams);
-    Lambda::extractPhysics(configPath, analysisParams);
 
+    Lambda::Parameters analysisParams;
+    Lambda::extractPhysics(configPath, analysisParams);
     Lambda::RootArray histogramSets;
     Lambda::declareObjects(histogramSets, analysisParams, rootParams);
 
+    Record::AsyncLogger logger;
+
+    logParams.start = std::chrono::system_clock::now();
+    logger.start(rootParams, logParams.statusIntervalMs);
+    logger.publish(
+        logParams,
+        Record::RunPhase::Starting,
+        0,
+        Record::RenderStatus,
+        Record::DontRenderBar,
+        Record::WriteRunStat
+    );
+    
     pythia.init();
 
-        logParams.start = std::chrono::system_clock::now();
-
     pythia.run(static_cast<long>(logParams.nEvents), [&](Pythia8::Pythia* worker) {
-        Lambda::pythiaAnalysis(*worker, histogramSets, analysisParams, rootParams, logParams);
+        Lambda::pythiaAnalysis(*worker, histogramSets, analysisParams, rootParams, logParams, logger);
     });
 
     Analysis::wrapUp(histogramSets, rootParams.outFile, rootParams.histScale, logParams.nEvents);
+    logParams.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logParams.start);
+    logger.finish(logParams, logParams.iEvent.load());
+    logger.stop();
 
     Record::terminalReport(pythia, rootParams, logParams);
-
     Record::outputLog(pythia, rootParams, logParams, Lambda::logString(analysisParams));
 
     return 0;

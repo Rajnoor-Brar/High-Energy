@@ -1,13 +1,13 @@
-Serial                        : 03
+Serial                        : 01
 Beam Energy                   : 7000
-Event Count                   : 10000
-Real Event Count              : 5000
-Last Run                      : 2026-03-30 15:28:03
-Time Taken                    : 1 minute 17 seconds 
-Time Taken / 1000 Events      : 7.77 seconds 
+Event Count                   : 20
+Real Event Count              : 20
+Last Run                      : 2026-04-04 11:11:47
+Time Taken                    : 2 seconds 
+Time Taken / 1000 Events      : 1 minute 47.32 seconds 
 Histogram Scale               : 1
-Progress Bar Update Interval  : 42
-Write Interval                : 5000
+Progress Bar Update Interval  : 20
+Check Interval                : 5
 Lambda Mass                   : 1.115
 Lambda Energy                 : 1.115
 Proton Mass                   : 0.938
@@ -48,26 +48,13 @@ Eta Extent                    : 5
  | Next:numberShowInfo                           |                        0 |            1           0             | 
  | Next:numberShowLHA                            |                        0 |            1           0             | 
  | Next:numberShowProcess                        |                        0 |            1           0             | 
- | Parallelism:index                             |                        4 |           -1                         | 
- | Parallelism:numThreads                        |                       10 |            0           0             | 
- | Parallelism:seeds                             |                   270403 |                                      | 
- |                                               |                   270404 |                                      | 
- |                                               |                   270405 |                                      | 
- |                                               |                   270406 |                                      | 
- |                                               |                   270407 |                                      | 
- |                                               |                   270408 |                                      | 
- |                                               |                   270409 |                                      | 
- |                                               |                   270410 |                                      | 
- |                                               |                   270411 |                                      | 
- |                                               |                   270412 |                                      | 
+ | Parallelism:numThreads                        |                        8 |            0           0             | 
  | PartonLevel:all                               |                      off |           on                         | 
  | PartonVertex:ProtonRadius                     |                  0.70000 |      0.85000         0.0    10.00000 | 
  | PartonVertex:setVertex                        |                       on |          off                         | 
  | Print:errors                                  |                      off |           on                         | 
  | Print:quiet                                   |                       on |          off                         | 
  | ProcessLevel:all                              |                      off |           on                         | 
- | Random:seed                                   |                   270407 |           -1               900000000 | 
- | Random:setSeed                                |                       on |          off                         | 
  | Ropewalk:doFlavour                            |                       on |          off                         | 
  | Ropewalk:doShoving                            |                       on |          off                         | 
  | Ropewalk:RopeHadronization                    |                       on |          off                         | 
@@ -86,18 +73,18 @@ Eta Extent                    : 5
  Beam A: id =   2212, pz =  3.500e+03, e =  3.500e+03, m =  9.383e-01.
  Beam B: id =   2112, pz = -3.500e+03, e =  3.500e+03, m =  9.396e-01.
 
- In 1: id =   21, x =  3.349e-03, pdf =  1.226e+01 at Q2 =  1.075e+02.
- In 2: id =   21, x =  4.265e-03, pdf =  1.083e+01 at same Q2.
+ In 1: id =   21, x =  2.351e-05, pdf =  7.307e+01 at Q2 =  4.274e+01.
+ In 2: id =    2, x =  1.508e-01, pdf =  3.539e-01 at same Q2.
 
- Subprocess g g -> g g with code 111 is 2 -> 2.
- It has sHat =  6.998e+02,    tHat = -1.326e+02,    uHat = -5.672e+02,
-       pTHat =  1.037e+01,   m3Hat =  0.000e+00,   m4Hat =  0.000e+00,
-    thetaHat =  9.008e-01,  phiHat =  3.722e+00.
-     alphaEM =  7.629e-03,  alphaS =  1.984e-01    at Q2 =  1.075e+02.
+ Subprocess q g -> q g with code 113 is 2 -> 2.
+ It has sHat =  1.737e+02,    tHat = -9.791e+01,    uHat = -7.584e+01,
+       pTHat =  6.533e+00,   m3Hat =  0.000e+00,   m4Hat =  3.300e-01,
+    thetaHat =  1.698e+00,  phiHat =  1.329e+00.
+     alphaEM =  7.592e-03,  alphaS =  2.234e-01    at Q2 =  4.274e+01.
 
- Impact parameter b =  3.624e-01 gives enhancement factor =  2.824e+00.
- Max pT scale for MPI =  1.037e+01, ISR =  1.037e+01, FSR =  1.037e+01.
- Number of MPI =     9, ISR =    19, FSRproc =    51, FSRreson =     0.
+ Impact parameter b =  1.850e-01 gives enhancement factor =  3.396e+00.
+ Max pT scale for MPI =  6.537e+00, ISR =  6.537e+00, FSR =  6.537e+00.
+ Number of MPI =    13, ISR =    26, FSRproc =    81, FSRreson =     0.
 
  --------  End PYTHIA Info Listing  ------------------------------------
 
@@ -111,26 +98,23 @@ Eta Extent                    : 5
  |                                                    |                                   |                        |
  |-----------------------------------------------------------------------------------------------------------------|
  |                                                    |                                   |                        |
- | g g -> g g                                     111 |         344        344        344 |   9.604e+02  5.699e+00 |
- | g g -> q qbar (uds)                            112 |           6          6          6 |   1.684e+01  4.316e+01 |
- | q g -> q g                                     113 |         133        133        133 |   3.663e+02  9.044e+00 |
- | q q(bar)' -> q q(bar)'                         114 |          15         15         15 |   4.129e+01  2.685e+01 |
- | g g -> c cbar                                  121 |           1          1          1 |   2.618e+00  9.808e+01 |
- | g g -> b bbar                                  123 |           1          1          1 |   2.681e+00  1.004e+02 |
- | sum                                                |        1404        500        500 |   1.390e+03  4.707e+00 |
+ | g g -> g g                                     111 |          11         11         11 |   8.580e+02  1.638e+02 |
+ | q g -> q g                                     113 |           8          8          8 |   6.239e+02  1.915e+02 |
+ | q q(bar)' -> q q(bar)'                         114 |           1          1          1 |   7.533e+01  5.219e+02 |
+ | sum                                                |          48         20         20 |   1.557e+03  1.211e+02 |
  |                                                    |                                   |                        |
  |-----------------------------------------------------------------------------------------------------------------|
  |                                                                                        |                        |
  | Semi-inclusive Ne20 on Ne20 cross sections from the Glauber calculation:               |                        |
  |                                                                                        |                        |
- | Total                                                                                  |   2.935e+03  9.916e+01 |
- | Non-Diffractive                                                                        |   1.493e+03  5.048e+01 |
- | Total inelastic                                                                        |   1.646e+03  5.477e+01 |
- | Elastic                                                                                |   1.288e+03  4.850e+01 |
- | Diffractive target excitation                                                          |   5.223e+01  9.294e+00 |
- | Diffractive projectile excitation                                                      |   3.903e+01  7.885e+00 |
- | Double diffractive excitation                                                          |   6.194e+01  7.242e+00 |
- | Elastic b-slope (GeV^-2)                                                               |   3.347e+02  1.945e+01 |
+ | Total                                                                                  |   3.300e+03  5.520e+02 |
+ | Non-Diffractive                                                                        |   1.700e+03  2.840e+02 |
+ | Total inelastic                                                                        |   1.846e+03  2.993e+02 |
+ | Elastic                                                                                |   1.453e+03  2.743e+02 |
+ | Diffractive target excitation                                                          |   7.380e+01  5.636e+01 |
+ | Diffractive projectile excitation                                                      |   3.489e+00  2.626e+00 |
+ | Double diffractive excitation                                                          |   6.948e+01  4.814e+01 |
+ | Elastic b-slope (GeV^-2)                                                               |   3.609e+02  1.051e+02 |
  |                                                                                        |                        |
  *-----  End HeavyIon Event and Cross Section Statistics ----------------------------------------------------------*
 
@@ -138,30 +122,21 @@ Eta Extent                    : 5
  |                                                                                                                 | 
  |  times   message                                                                                                | 
  |                                                                                                                 | 
- |      9   Error in Pythia::forceHadronLevel: hadronLevel failed; giving up                                       | 
- |     57   Error in Settings::parm: value is out of range                                                         | 
- |     15   Error in StringFragmentation::fragment: stuck in joining                                               | 
- |    104   Error in StringFragmentation::fragmentToJunction: diquark too close to junction                        | 
- |     29   Warning (MBIAS) in JunctionSplitting::checkColours: made a gluon colour singlet; redoing colours       | 
- |     38   Warning (MBIAS) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
- |     38   Warning (MBIAS) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
- |      2   Warning (MBIAS) in MultipartonInteractions::init: maximum increased                                    | 
- |     24   Warning (MBIAS) in SimpleSpaceShower::pT2nextQCD: weight above unity                                   | 
- |      2   Warning (SASD) in MultipartonInteractions::init: maximum increased                                     | 
- |      7   Warning (SIGNN) in JunctionSplitting::checkColours: made a gluon colour singlet; redoing colours       | 
- |      2   Warning (SIGNN) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
- |      2   Warning (SIGNN) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
- |      1   Warning (SIGNP) in JunctionSplitting::checkColours: made a gluon colour singlet; redoing colours       | 
- |      2   Warning (SIGNP) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
- |      2   Warning (SIGNP) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
- |      2   Warning (SIGPN) in JunctionSplitting::checkColours: made a gluon colour singlet; redoing colours       | 
- |      7   Warning (SIGPN) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
- |      7   Warning (SIGPN) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
+ |      2   Error in Settings::parm: value is out of range                                                         | 
+ |      5   Warning (MBIAS) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
+ |      5   Warning (MBIAS) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
+ |      8   Warning (MBIAS) in MultipartonInteractions::init: maximum increased                                    | 
+ |      1   Warning (MBIAS) in SimpleSpaceShower::pT2nextQCD: weight above unity                                   | 
+ |      8   Warning (SASD) in MultipartonInteractions::init: maximum increased                                     | 
+ |      4   Warning (SIGNN) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
+ |      4   Warning (SIGNN) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
+ |      4   Warning (SIGNP) in JunctionSplitting::checkColours: made a gluon colour singlet; redoing colours       | 
+ |      4   Warning (SIGNP) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
+ |      4   Warning (SIGNP) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
+ |      4   Warning (SIGPN) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
+ |      4   Warning (SIGPN) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
  |      4   Warning (SIGPP) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
  |      4   Warning (SIGPP) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
- |      1   Warning (SIGPP) in SimpleSpaceShower::pT2nextQCD: weight above unity                                   | 
- |    377   Warning in PartonVertex::vertexHadrons: unidentified junction topology not handled                     | 
- |    119   Warning in Pythia::forceHadronLevel: hadronLevel failed; try again                                     | 
- |      1   Warning in TauDecays::decay: unknown correlated tau production, assuming from unpolarized photon       | 
+ |     15   Warning in PartonVertex::vertexHadrons: unidentified junction topology not handled                     | 
  |                                                                                                                 | 
  *-------  End PYTHIA Error and Warning Messages Statistics  ------------------------------------------------------* 

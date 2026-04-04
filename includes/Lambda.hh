@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstddef>
 #include <iostream>
+#include <mutex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -179,7 +180,8 @@ namespace Lambda {
         RootArray& histogramSets,
         const Parameters& parameters,
         Config::Root& root,
-        Config::Log& logging
+        Config::Log& logging,
+        Record::AsyncLogger& asyncLogger
     );
     inline std::string logString(const Parameters& parameters);
 
@@ -261,7 +263,8 @@ namespace Lambda {
                  RootArray&  histogramSets,
         const    Parameters& parameters,
         Config::Root&        root,
-        Config:: Log&        logging
+        Config:: Log&        logging,
+        Record::AsyncLogger& asyncLogger
     ) {
         const std::size_t eventIndex = ++logging.iEvent;
         ++logging.nRealEvents;
@@ -279,6 +282,7 @@ namespace Lambda {
         const std::size_t progressGap = std::max<std::size_t>(1, logging.nEvents / progressDivisor);
         const std::size_t printInterval = std::max<std::size_t>(1, logging.printInterval);
         const std::size_t checkInterval = logging.checkInterval;
+        logging.barInterval = progressGap;
 
         Lorentz lambda, proton, pion;
         std::vector<Lorentz> protonList, pionList;
@@ -289,20 +293,9 @@ namespace Lambda {
         std::size_t particle, iProton, iPion;
 
         if (eventIndex == 1) {
+            std::lock_guard<std::mutex> terminalLock(Record::terminalMutex());
             pythia.info.list();
-            std::cout << std::flush;
-        }
-
-        if (eventIndex == 2) {
-            std::cout << "\n\n\n";
-            logging.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logging.start);
-            Record::printProgressStat(
-                2,
-                logging.nEvents,
-                logging.nDigits,
-                Record::updatedETA(2, logging.nEvents, logging.elapsed)
-            );
-            Record::printProgressBar(0.01);
+            std::cout <<"\n\n\n"<< std::flush;
         }
 
         for (particle = 0; particle < pythia.event.size(); ++particle) {
@@ -343,22 +336,22 @@ namespace Lambda {
                       << " | pions=" << pionCount << std::endl;
         };
 
-        if (eventIndex % printInterval == 0 || eventIndex == logging.nEvents) {
-            logging.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logging.start);
-
-            Record::printProgressStat( eventIndex, logging.nEvents, logging.nDigits,
-                                        Record::updatedETA(eventIndex, logging.nEvents, logging.elapsed)
-            );
-        }
-
-        if (eventIndex % progressGap == 0 || eventIndex == logging.nEvents) {
-            Record::printProgressBar(static_cast<double>(eventIndex) / logging.nEvents);
-            logging.barInterval = progressGap;
-        }
-
         Analysis::resetAllCounts(histogramSets);
 
         std::vector<char> pionTaken(pionList.size(), 0);
+        logging.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logging.start);
+        
+        asyncLogger.publish(
+            logging,
+            Record::RunPhase::SelectionLoop,
+            eventIndex,
+            Record::DontRenderStatus,
+            Record::DontRenderBar,
+            Record::DontWriteRunStat,
+            Record::HasParticleCounts,
+            protonList.size(),
+            pionList.size()
+        );
 
         for (iProton = 0; iProton < protonList.size(); ++iProton) {
             Bool_t   hasCandidate   = false;
@@ -414,12 +407,48 @@ namespace Lambda {
 
         Analysis::countAll(histogramSets);
         reportSlowEvent(protonList.size(), pionList.size());
+        logging.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logging.start);
+
+        const bool shouldRenderStatus = (eventIndex % printInterval == 0) || (eventIndex == logging.nEvents);
+        const bool shouldRenderBar = (eventIndex % progressGap == 0) || (eventIndex == logging.nEvents);
+
+        asyncLogger.publish(
+            logging,
+            Record::RunPhase::Running,
+            eventIndex,
+            shouldRenderStatus,
+            shouldRenderBar,
+            Record::DontWriteRunStat
+        );
 
         if (checkInterval > 0 && eventIndex % checkInterval == 0) {
+            logging.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logging.start);
+            asyncLogger.publish(
+                logging,
+                Record::RunPhase::CheckpointWrite,
+                eventIndex,
+                Record::DontRenderStatus,
+                Record::DontRenderBar,
+                Record::DontWriteRunStat,
+                Record::HasParticleCounts,
+                protonList.size(),
+                pionList.size()
+            );
             Analysis::checkpointWrite(histogramSets, root.checkpointOutName, root.histScale, eventIndex);
 
             logging.elapsed =
                 std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logging.start);
+            asyncLogger.publish(
+                logging,
+                Record::RunPhase::CheckpointLog,
+                eventIndex,
+                Record::DontRenderStatus,
+                Record::DontRenderBar,
+                Record::DontWriteRunStat,
+                Record::HasParticleCounts,
+                protonList.size(),
+                pionList.size()
+            );
             Record::outputLog(pythia, root, logging, logString(parameters), root.checkpointLogName);
         }
     }
