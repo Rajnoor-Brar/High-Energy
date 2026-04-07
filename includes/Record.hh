@@ -9,8 +9,10 @@
 #include <iomanip>
 #include <iostream>
 #include <mutex>
+#include <map>
 #include <optional>
 #include <sstream>
+#include <set>
 #include <string>
 #include <thread>
 #include <type_traits>
@@ -19,12 +21,27 @@
 
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <termios.h>
 
 #include "Pythia8/Pythia.h"
 
 #include "Config.hh"
 
 namespace Record {
+    termios oldt;
+
+    inline void disable_input_echo() {
+        termios newt;
+        tcgetattr(STDIN_FILENO, &oldt);
+        newt = oldt;
+
+        newt.c_lflag &= ~(ECHO | ICANON);  // no echo, no line buffering
+        tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+    }
+
+    inline void restore_terminal() {
+        tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+    }
 
     constexpr bool RenderStatus = true;
     constexpr bool RenderBar = true;
@@ -37,12 +54,28 @@ namespace Record {
     constexpr bool HasParticleCounts = true;
     constexpr bool NoParticleCounts = false;
 
+    constexpr bool CallbackCompleted = true;
+    constexpr bool NoCallbackCompleted = false;
+
+    constexpr bool SlowCallback = true;
+    constexpr bool NotSlowCallback = false;
+
+    constexpr auto kTerminalRefreshInterval = std::chrono::minutes(1);
+    constexpr auto kTerminalStallThreshold  = std::chrono::minutes(5);
+
+    constexpr size_t NoEvents = 0;
+
     enum class RunPhase {
         Starting,
-        Running,
-        SelectionLoop,
-        CheckpointWrite,
-        CheckpointLog,
+        Generation,
+        Analysis,
+        Logging,
+        Finished
+    };
+
+    enum class ThreadPhase {
+        Analysis,
+        Simulation,
         Finished
     };
 
@@ -64,8 +97,36 @@ namespace Record {
 
     struct PendingActions {
         bool renderStatus = false;
-        bool renderBar = false;
+        bool renderBar    = false;
         bool writeRunStat = false;
+
+        bool any() const { return renderStatus || renderBar || writeRunStat; }
+
+        void merge(const PendingActions& other) {
+            renderStatus |= other.renderStatus;
+            renderBar    |= other.renderBar;
+            writeRunStat |= other.writeRunStat;
+        }
+    };
+
+    struct ThreadSnapshot {
+        int               workerIndex = -1;
+        ThreadPhase       phase = ThreadPhase::Simulation;
+        std::size_t       eventIndex = 0;
+        std::size_t       callbacksCompleted = 0;
+        Config::TimePoint lastUpdateTime = Config::TimePoint{};
+        std::size_t       protonCount = 0;
+        std::size_t       pionCount = 0;
+        bool              hasParticleCounts = false;
+    };
+    struct WorkBatch {
+        std::optional<PendingActions> actions;
+        std::optional<RunSnapshot>    actionSnapshot;
+        std::optional<RunSnapshot>    periodicSnapshot;
+        std::vector<ThreadSnapshot>   threadSnapshots;
+        bool runStatDeadlineReached  = false;
+        bool terminalDeadlineReached = false;
+        bool shouldExit              = false;
     };
 
     inline std::mutex& terminalMutex() {
@@ -90,8 +151,8 @@ namespace Record {
         }
 
         while (number > 0) {
-            groups.push_back(number % 1000);
-            number /= 1000;
+            groups.push_back(number % 1000); // get chunks of last three digits
+            number /= 1000;                  // remove those digits
         }
 
         for (std::size_t i = groups.size(); i > 0; --i) {
@@ -152,12 +213,7 @@ namespace Record {
         return stream.str();
     }
 
-    inline std::string updatedETA(
-        std::size_t iEvent,
-        std::size_t nEvents,
-        Config::uSeconds duration,
-        bool highlightClock = true
-    ) {
+    inline std::string updatedETA(std::size_t iEvent, std::size_t nEvents, Config::uSeconds duration, bool highlightClock = true) {
         using SysClock = std::chrono::system_clock;
 
         if (nEvents < iEvent || iEvent == 0) {
@@ -175,12 +231,21 @@ namespace Record {
 
     inline const char* phaseString(RunPhase phase) {
         switch (phase) {
-            case RunPhase::Starting:        return "Starting";
-            case RunPhase::Running:         return "Running";
-            case RunPhase::SelectionLoop:   return "SelectionLoop";
-            case RunPhase::CheckpointWrite: return "CheckpointWrite";
-            case RunPhase::CheckpointLog:   return "CheckpointLog";
-            case RunPhase::Finished:        return "Finished";
+            case RunPhase::Starting:  return "Starting";
+            case RunPhase::Generation: return "Generation";
+            case RunPhase::Analysis: return "Analysis";
+            case RunPhase::Logging:   return "Logging";
+            case RunPhase::Finished:  return "Finished";
+        }
+
+        return "Unknown";
+    }
+
+    inline const char* threadPhaseString(ThreadPhase phase) {
+        switch (phase) {
+            case ThreadPhase::Analysis:   return "Analysis";
+            case ThreadPhase::Simulation: return "Simulation";
+            case ThreadPhase::Finished:   return "Finished";
         }
 
         return "Unknown";
@@ -249,6 +314,38 @@ namespace Record {
         return stream.str();
     }
 
+    inline std::string threadStatString(const ThreadSnapshot& snapshot, const Config::TimePoint& now) {
+        std::ostringstream stream;
+        const auto idleFor = std::chrono::duration_cast<Config::uSeconds>(now - snapshot.lastUpdateTime);
+
+        stream << "Worker Index                  : " << std::setw(2) << std::setfill('0') << snapshot.workerIndex << '\n';
+        stream << "Thread Phase                  : " << threadPhaseString(snapshot.phase) << '\n';
+        stream << "Last Global Event             : " << numberFormat(snapshot.eventIndex, 0) << '\n';
+        stream << "Events Completed              : " << numberFormat(snapshot.callbacksCompleted, 0) << '\n';
+        stream << "Last Update                   : " << timeString(snapshot.lastUpdateTime, false) << '\n';
+        stream << "No Update For                 : " << durationString(idleFor) << '\n';
+
+        if (snapshot.hasParticleCounts) {
+            stream << "Proton Count                  : " << numberFormat(snapshot.protonCount, 0) << '\n';
+            stream << "Pion Count                    : " << numberFormat(snapshot.pionCount, 0) << '\n';
+        }
+
+        return stream.str();
+    }
+
+    inline Config::uSeconds terminalIdleFor(const RunSnapshot& snapshot) {
+        return std::chrono::duration_cast<Config::uSeconds>(
+            std::chrono::system_clock::now() - snapshot.lastUpdateTime
+        );
+    }
+
+    inline bool isTerminalStalled(const RunSnapshot& snapshot) {
+        return snapshot.phase != RunPhase::Starting
+            && snapshot.phase != RunPhase::Finished
+            && terminalIdleFor(snapshot)
+                >= std::chrono::duration_cast<Config::uSeconds>(kTerminalStallThreshold);
+    }
+
     inline void writeTextFile(const TString& path, const std::string& text) {
         std::ofstream stream(path.Data(), std::ios::trunc);
         stream << text;
@@ -260,23 +357,29 @@ namespace Record {
             : 0;
         const std::size_t eventWidth = numberFormat(snapshot.nEvents, 0).size();
 
-        std::cout << "\033[2A\r\033[2K";
+        std::cout << "\033[3A\r\033[2K";
 
             if (snapshot.phase == RunPhase::Starting) {
-                std::cout<< "\t\033[34;1m Initializing... \033[0m"
-                << "\033[B\r\033[2K\t ";
+                std::cout<< "\033[B\r\033[2K"<< "\t\033[34;1m Initializing... \033[0m"
+                 << "\033[B\r\033[2K";
             } 
             else if (snapshot.phase == RunPhase::Finished){
-                std::cout << "\t\033[32;1m Finished\033[0m"
-                << "\033[B\r\033[2K\t ";
+                std::cout << "\033[B\r\033[2K" << "\t\033[32;1m Finished\033[0m"
+                << "\033[B\r\033[2K";
             }
             else{
+                const bool stalled = isTerminalStalled(snapshot);
                 std::cout << "\t Events processed : " << "\033[32;1m"
                   << numberFormat(snapshot.eventIndex, eventWidth) << "\033[0m"
                   << " out of " << numberFormat(snapshot.nEvents, 0) << "  |  "
                   << std::setw(2) << percent << "% "
-                  << "\033[B\r\033[2K\t "
-                  << "ETA: " << snapshot.eta;
+                  << "\033[B\r\033[2K\t "<<"ETA: " << snapshot.eta
+                  << "\033[B\r\033[2K\t"
+                  << (stalled
+                          ? std::string("\033[31;1mStalled for ")
+                                + durationString(terminalIdleFor(snapshot))
+                                + "\033[0m"
+                          : "");
             }
             std::cout<< "\033[B\r"<< std::flush;
 
@@ -301,23 +404,24 @@ namespace Record {
     }
 
     class AsyncLogger {
-    public:
+      public:
         AsyncLogger() = default;
-
-        ~AsyncLogger() {
-            stop();
-        }
+        ~AsyncLogger() { stop();  }
 
         void start(const Config::Root& root, std::size_t statusIntervalMs) {
             stop();
             {
                 std::lock_guard<std::mutex> lock(mutex_);
-                runStatPath_ = root.runStatName;
+                runStatPath_         = root.runStatName;
+                threadStatDirectory_ = root.threadStatDirectory;
                 pendingActions_.reset();
                 latestSnapshot_.reset();
-                stopRequested_ = false;
+                dirtyThreadWorkers_.clear();
+                threadSnapshots_.clear();
+                stopRequested_       = false;
                 terminalInitialized_ = false;
-                statusIntervalMs_ = statusIntervalMs > 0 ? statusIntervalMs : 1000;
+                progressBarVisible_  = false;
+                statusIntervalMs_    = statusIntervalMs > 0 ? statusIntervalMs : 1000;
             }
             worker_ = std::thread(&AsyncLogger::runLoop, this);
         }
@@ -326,30 +430,49 @@ namespace Record {
             const Config::Log& logging,
             RunPhase phase,
             std::size_t eventIndex,
-            bool renderStatus = false,
-            bool renderBar = false,
-            bool writeRunStat = false,
+            bool renderStatus      = false,
+            bool renderBar         = false,
+            bool writeRunStat      = false,
             bool hasParticleCounts = false,
             std::size_t protonCount = 0,
-            std::size_t pionCount = 0
+            std::size_t pionCount   = 0
         ) {
-            RunSnapshot snapshot =
-                makeSnapshot(logging, phase, eventIndex, protonCount, pionCount, hasParticleCounts);
+            RunSnapshot snapshot = makeSnapshot(logging, phase, eventIndex, protonCount, pionCount, hasParticleCounts);
 
             std::lock_guard<std::mutex> lock(mutex_);
             latestSnapshot_ = std::move(snapshot);
 
-            if (!(renderStatus || renderBar || writeRunStat)) {
-                return;
+            const PendingActions incoming{renderStatus, renderBar, writeRunStat};
+            if (incoming.any()) {
+                mergePending(incoming);
+                condition_.notify_one();
             }
+        }
 
-            if (pendingActions_.has_value()) {
-                pendingActions_->renderStatus = pendingActions_->renderStatus || renderStatus;
-                pendingActions_->renderBar = pendingActions_->renderBar || renderBar;
-                pendingActions_->writeRunStat = pendingActions_->writeRunStat || writeRunStat;
-            } else {
-                pendingActions_ = PendingActions{renderStatus, renderBar, writeRunStat};
-            }
+        void publishThreadStats(
+            int workerIndex,
+            ThreadPhase phase,
+            std::size_t eventIndex,
+            bool callbackCompleted = false,
+            bool hasParticleCounts = false,
+            std::size_t protonCount = 0,
+            std::size_t pionCount   = 0
+        ) {
+            if (workerIndex < 0) return;
+
+            std::lock_guard<std::mutex> lock(mutex_);
+            ThreadSnapshot& snapshot   = threadSnapshots_[workerIndex];
+            snapshot.workerIndex       = workerIndex;
+            snapshot.phase             = phase;
+            snapshot.eventIndex        = eventIndex;
+            snapshot.lastUpdateTime    = std::chrono::system_clock::now();
+            snapshot.hasParticleCounts = hasParticleCounts;
+            snapshot.protonCount       = hasParticleCounts ? protonCount : 0;
+            snapshot.pionCount         = hasParticleCounts ? pionCount : 0;
+
+            if (callbackCompleted) ++snapshot.callbacksCompleted;
+
+            dirtyThreadWorkers_.insert(workerIndex);
             condition_.notify_one();
         }
 
@@ -358,17 +481,11 @@ namespace Record {
             {
                 std::lock_guard<std::mutex> lock(mutex_);
                 latestSnapshot_ = std::move(snapshot);
-
-                if (pendingActions_.has_value()) {
-                    pendingActions_->renderStatus = true;
-                    pendingActions_->renderBar = true;
-                    pendingActions_->writeRunStat = true;
-                } else {
-                    pendingActions_ = PendingActions{true, true, true};
-                }
-                stopRequested_ = true;
+                mergePending(PendingActions{RenderStatus, RenderBar, WriteRunStat});
+                stopRequested_  = true;
             }
             condition_.notify_one();
+            stop();
         }
 
         void stop() {
@@ -378,124 +495,171 @@ namespace Record {
             }
             condition_.notify_one();
 
-            if (worker_.joinable()) {
+            if (worker_.joinable())
                 worker_.join();
-            }
         }
 
-    private:
+      private:
+        void mergePending(const PendingActions& incoming) {
+            if (pendingActions_.has_value())
+                pendingActions_->merge(incoming);
+            else
+                pendingActions_ = incoming;
+        }
+
+        WorkBatch collectPendingWork(bool runStatDeadline, bool terminalDeadline) {
+            WorkBatch batch;
+            batch.runStatDeadlineReached  = runStatDeadline;
+            batch.terminalDeadlineReached = terminalDeadline;
+
+            if (pendingActions_.has_value() && latestSnapshot_.has_value()) {
+                batch.actions        = *pendingActions_;
+                batch.actionSnapshot = *latestSnapshot_;
+                pendingActions_.reset();
+            }
+
+            if (latestSnapshot_.has_value() && (runStatDeadline || terminalDeadline))
+                batch.periodicSnapshot = *latestSnapshot_;
+
+            if (runStatDeadline) {
+                batch.threadSnapshots.reserve(threadSnapshots_.size());
+                for (const auto& [_, snap] : threadSnapshots_)
+                    batch.threadSnapshots.push_back(snap);
+            } else if (!dirtyThreadWorkers_.empty()) {
+                batch.threadSnapshots.reserve(dirtyThreadWorkers_.size());
+                for (int idx : dirtyThreadWorkers_) {
+                    auto it = threadSnapshots_.find(idx);
+                    if (it != threadSnapshots_.end())
+                        batch.threadSnapshots.push_back(it->second);
+                }
+            }
+            dirtyThreadWorkers_.clear();
+
+            batch.shouldExit = stopRequested_ && !batch.actions.has_value();
+            return batch;
+        }
+
+        void dispatchWork(const WorkBatch& batch) {
+            const bool wroteImmediateRunStat =
+                batch.actions.has_value()
+                && batch.actions->writeRunStat
+                && batch.actionSnapshot.has_value();
+
+            const bool renderedImmediately =
+                batch.actions.has_value()
+                && batch.actionSnapshot.has_value()
+                && (batch.actions->renderStatus || batch.actions->renderBar);
+
+            if (batch.actions.has_value() && batch.actionSnapshot.has_value())
+                processUpdate(*batch.actionSnapshot, *batch.actions);
+
+            if (batch.periodicSnapshot.has_value()) {
+                if (batch.runStatDeadlineReached && !wroteImmediateRunStat)
+                    flushRunStat(*batch.periodicSnapshot);
+                if (batch.terminalDeadlineReached && !renderedImmediately)
+                    heartbeatTerminal(*batch.periodicSnapshot);
+            }
+
+            for (const auto& snapshot : batch.threadSnapshots) writeThreadStats(snapshot);
+        }
+
         void runLoop() {
             using SteadyClock = std::chrono::steady_clock;
 
+            auto advanceDeadline = [](auto& next, auto interval) {
+                const auto now = SteadyClock::now();
+                while (next <= now) next += interval;
+            };
+
             std::unique_lock<std::mutex> lock(mutex_);
-            auto nextRunStatWrite =
-                SteadyClock::now() + std::chrono::milliseconds(statusIntervalMs_);
+            auto nextRunStatWrite    = SteadyClock::now() + std::chrono::milliseconds(statusIntervalMs_);
+            auto nextTerminalRefresh = SteadyClock::now() + kTerminalRefreshInterval;
 
             while (true) {
                 condition_.wait_until(
                     lock,
-                    nextRunStatWrite,
+                    std::min(nextRunStatWrite, nextTerminalRefresh),
                     [&] { return stopRequested_ || pendingActions_.has_value(); }
                 );
 
-                std::optional<PendingActions> actions;
-                std::optional<RunSnapshot> actionSnapshot;
-                if (pendingActions_.has_value() && latestSnapshot_.has_value()) {
-                    actions = *pendingActions_;
-                    actionSnapshot = *latestSnapshot_;
-                    pendingActions_.reset();
-                }
+                const auto now               = SteadyClock::now();
+                const bool runStatDeadline   = now >= nextRunStatWrite;
+                const bool terminalDeadline  = now >= nextTerminalRefresh;
 
-                const auto now = SteadyClock::now();
-                const bool deadlineReached = now >= nextRunStatWrite;
-                std::optional<RunSnapshot> heartbeatSnapshot;
-                if (latestSnapshot_.has_value() && deadlineReached) {
-                    heartbeatSnapshot = *latestSnapshot_;
-                }
-
-                const bool shouldExit = stopRequested_ && !actions.has_value();
+                WorkBatch batch = collectPendingWork(runStatDeadline, terminalDeadline);
                 lock.unlock();
 
-                const bool wroteImmediateRunStat =
-                    actions.has_value() && actions->writeRunStat && actionSnapshot.has_value();
-                if (actions.has_value() && actionSnapshot.has_value()) {
-                    processUpdate(*actionSnapshot, *actions);
-                }
-                if (heartbeatSnapshot.has_value() && !wroteImmediateRunStat) {
-                    heartbeatRunStat(*heartbeatSnapshot);
-                }
+                dispatchWork(batch);
 
-                if (shouldExit) {
-                    break;
-                }
+                if (batch.shouldExit) break;
 
-                if (deadlineReached) {
-                    const auto current = SteadyClock::now();
-                    const auto interval = std::chrono::milliseconds(statusIntervalMs_);
-                    while (nextRunStatWrite <= current) {
-                        nextRunStatWrite += interval;
-                    }
-                }
+                if (runStatDeadline)  advanceDeadline(nextRunStatWrite   , std::chrono::milliseconds(statusIntervalMs_));
+                if (terminalDeadline) advanceDeadline(nextTerminalRefresh, kTerminalRefreshInterval);
 
                 lock.lock();
             }
         }
 
-        void processUpdate(const RunSnapshot& snapshot, const PendingActions& actions) {
-            if (actions.writeRunStat) {
-                writeRunStat(snapshot);
-            }
+        // -------------------------------------------------------------------------
+        // Action handlers
+        // -------------------------------------------------------------------------
 
-            if (!(actions.renderStatus || actions.renderBar)) {
+        void processUpdate(const RunSnapshot& snapshot, const PendingActions& actions) {
+            if (actions.writeRunStat)
+                flushRunStat(snapshot);
+
+            if (!(actions.renderStatus || actions.renderBar))
                 return;
-            }
 
             std::lock_guard<std::mutex> terminalLock(terminalMutex());
             initializeTerminal();
-            if (actions.renderStatus) {
+            if (actions.renderStatus)   
                 renderStatus(snapshot);
-            }
             if (actions.renderBar) {
                 renderProgressBar(snapshot.progress);
+                progressBarVisible_ = true;
             }
         }
 
-        void heartbeatRunStat(const RunSnapshot& snapshot) {
-            if (runStatPath_.Length() == 0) {
-                return;
-            }
-
-            writeTextFile(
-                runStatPath_,
-                runStatString(snapshot, std::chrono::system_clock::now())
-            );
-        }
-
-        void writeRunStat(const RunSnapshot& snapshot) const {
-            if (runStatPath_.Length() == 0) {
-                return;
-            }
-
+        // Replaces both heartbeatRunStat() and writeRunStat() — identical bodies.
+        void flushRunStat(const RunSnapshot& snapshot) const {
+            if (runStatPath_.Length() == 0) return;                                                                      
             writeTextFile(runStatPath_, runStatString(snapshot, std::chrono::system_clock::now()));
+        } 
+
+        void heartbeatTerminal(const RunSnapshot& snapshot) {
+            std::lock_guard<std::mutex> terminalLock(terminalMutex());
+            if (!terminalInitialized_) return;
+            renderStatus(snapshot);
+            if (progressBarVisible_) renderProgressBar(snapshot.progress);
+        }
+
+        void writeThreadStats(const ThreadSnapshot& snapshot) const {
+            if (threadStatDirectory_.Length() == 0 || snapshot.workerIndex < 0) return;
+            const TString threadPath =
+                Form("%sThread_%02d.log", threadStatDirectory_.Data(), snapshot.workerIndex);
+            writeTextFile(threadPath, threadStatString(snapshot, std::chrono::system_clock::now()));
         }
 
         void initializeTerminal() {
-            if (terminalInitialized_) {
-                return;
-            }
+            if (terminalInitialized_) return;
             std::cout << "\n\n\n" << std::flush;
             terminalInitialized_ = true;
         }
 
-        TString runStatPath_ = "";
+        TString runStatPath_         = "";
+        TString threadStatDirectory_ = "";
         std::mutex mutex_;
         std::condition_variable condition_;
         std::optional<PendingActions> pendingActions_;
-        std::optional<RunSnapshot> latestSnapshot_;
-        std::thread worker_;
-        std::size_t statusIntervalMs_ = 1000;
-        bool stopRequested_ = false;
-        bool terminalInitialized_ = false;
+        std::optional<RunSnapshot>    latestSnapshot_;
+        std::set<int>                 dirtyThreadWorkers_;
+        std::map<int, ThreadSnapshot> threadSnapshots_;
+        std::thread                   worker_;
+        std::size_t                   statusIntervalMs_    = 1000;
+        bool                          stopRequested_       = false;
+        bool                          terminalInitialized_ = false;
+        bool                          progressBarVisible_  = false;
     };
 
     template <typename PythiaT>

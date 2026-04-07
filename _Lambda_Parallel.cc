@@ -9,6 +9,8 @@
 #include "Record.hh"
 
 int main(int argc, char* argv[]) {
+    Record::disable_input_echo();
+
     Pythia8::PythiaParallel pythia;
     const std::string project    = "Lambda_Reconstruction";
     const std::string configPath = argc > 1 ? argv[1] : "configs/" + project + ".toml";
@@ -17,7 +19,7 @@ int main(int argc, char* argv[]) {
     Config::Root     rootParams;
                      rootParams.beamEnergy = pythia.settings.parm("Beams:eCM") > 0 ? Form("%.0f", pythia.settings.parm("Beams:eCM")) : "UnknownEnergy";
     Config::Log      logParams;
-    Config::extractParameters(configPath, project, logParams, rootParams);
+    Config::extractConfiguration(configPath, project, logParams, rootParams);
 
     Lambda::Parameters analysisParams;
     Lambda::extractPhysics(configPath, analysisParams);
@@ -31,12 +33,12 @@ int main(int argc, char* argv[]) {
     logger.publish(
         logParams,
         Record::RunPhase::Starting,
-        0,
+        Record::NoEvents,
         Record::RenderStatus,
         Record::DontRenderBar,
         Record::WriteRunStat
     );
-    
+
     pythia.init();
 
     pythia.run(static_cast<long>(logParams.nEvents), [&](Pythia8::Pythia* worker) {
@@ -46,7 +48,6 @@ int main(int argc, char* argv[]) {
     Analysis::wrapUp(histogramSets, rootParams.outFile, rootParams.histScale, logParams.nEvents);
     logParams.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logParams.start);
     logger.finish(logParams, logParams.iEvent.load());
-    logger.stop();
 
     Record::terminalReport(pythia, rootParams, logParams);
     Record::outputLog(pythia, rootParams, logParams, Lambda::logString(analysisParams));

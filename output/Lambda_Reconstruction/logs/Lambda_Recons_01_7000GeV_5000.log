@@ -2,9 +2,9 @@ Serial                        : 01
 Beam Energy                   : 7000
 Event Count                   : 5,000
 Real Event Count              : 5,000
-Last Run                      : 2026-04-04 16:53:44
-Time Taken                    : 1 minute 37 seconds 
-Time Taken / 1000 Events      : 19.59 seconds 
+Last Run                      : 2026-04-07 22:43:40
+Time Taken                    : 1 minute 34 seconds 
+Time Taken / 1000 Events      : 19.00 seconds 
 Histogram Scale               : 1
 Status Snapshot Interval (ms) : 1,000
 Progress Bar Update Interval  : 21

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <unistd.h>
 #include <chrono>
 #include <filesystem>
 #include <string>
@@ -8,6 +9,7 @@
 #include "TFile.h"
 #include "TString.h"
 
+#include <sys/ioctl.h>
 #include <toml++/toml.hpp>
 
 namespace Config {
@@ -39,6 +41,7 @@ namespace Config {
         TString outName       = "";
         TString logName       = "";
         TString runStatName   = "";
+        TString threadStatDirectory = "";
         TString checkpointOutName = "";
         TString checkpointLogName = "";
         TString fileTitle     = "";
@@ -46,7 +49,20 @@ namespace Config {
         Double_t histScale    = 100;
     };
 
-    inline void extractParameters(
+    inline void sanitiseLoggingConfig(Log& logging) {
+        static int wsCol = [] {
+            struct winsize windowSize{};
+            ioctl(STDOUT_FILENO, TIOCGWINSZ, &windowSize);
+            return static_cast<int>(windowSize.ws_col);
+        }();
+
+        const std::size_t progressDivisor = static_cast<std::size_t>(std::max(1, wsCol - 6));
+        std::size_t interval = logging.nEvents / progressDivisor;
+        interval > 1 ? logging.barInterval = interval : logging.barInterval = 1;
+        logging.printInterval = std::max<std::size_t>(1, logging.printInterval);
+    }
+
+    inline void extractConfiguration(
         const std::string& configPath,
         const std::string& project,
         Log& logging,
@@ -63,12 +79,14 @@ namespace Config {
             config["logging"]["status_interval"].value_or(1000)
         );
         logging.checkInterval = static_cast<std::size_t>(config["logging"]["check_interval"].value_or(10000));
-        root.binCount         =                          config["logging"]["bin_count"].value_or(100);
-        root.histScale        =                          config["logging"]["hist_scaling"].value_or(1.0);
+        sanitiseLoggingConfig(logging);
 
         std::size_t temp = logging.nEvents, nDigits = 0;
         while (temp > 0) { ++nDigits; temp /= 10; }; logging.nDigits = nDigits;
 
+
+        root.binCount         =                          config["logging"]["bin_count"].value_or(100);
+        root.histScale        =                          config["logging"]["hist_scaling"].value_or(1.0);
         root.rootDirectory =
             config["paths"]["directory"].value_or(std::string("output/" + project + "/")).c_str();
         root.logDirectory =
@@ -86,28 +104,28 @@ namespace Config {
 
         std::string serial = std::string(Form(("_%0" + std::to_string(static_cast<int>(logging.srPadding)) + "d").c_str(), logging.serial));
 
-        if (fileSerial) {
-            fileTitle += serial;
-        }
-        if (fileEnergy) {
-            fileTitle += "_" + std::string(root.beamEnergy.Data()) + "GeV";
-        }
-        if (fileEvents) {
-            fileTitle += "_" + std::to_string(logging.nEvents);
-        }
+        if (fileSerial) fileTitle += serial;
+        if (fileEnergy) fileTitle += "_" + std::string(root.beamEnergy.Data()) + "GeV"; 
+        if (fileEvents) fileTitle += "_" + std::to_string(logging.nEvents);
 
         root.fileTitle = fileTitle.c_str();
-        root.outName   = Form("%s%s/%s.root", root.rootDirectory.Data(), serial.c_str(), fileTitle.c_str());
-        root.logName   = Form("%s%s.log", root.logDirectory.Data(), fileTitle.c_str());
-        root.runStatName = Form("%s%s_runstat.log", root.logDirectory.Data(), fileTitle.c_str());
-        root.checkpointOutName = Form("%s%s_checkpoint.root", root.checkpointDirectory.Data(), fileTitle.c_str());
-        root.checkpointLogName = Form("%s%s_checkpoint.log", root.checkpointDirectory.Data(), fileTitle.c_str());
+        root.outName             = Form("%s%s/%s.root"        , root.rootDirectory.Data(), serial.c_str(), fileTitle.c_str());
+        root.logName             = Form("%s%s.log"            , root.logDirectory.Data()                 , fileTitle.c_str());
+        root.runStatName         = Form("%s%s_runstat.log"    , root.logDirectory.Data()                 , fileTitle.c_str());
+        root.threadStatDirectory = Form("%s%s/"               , root.logDirectory.Data()                 , fileTitle.c_str());
+        root.checkpointOutName   = Form("%s%s_checkpoint.root", root.checkpointDirectory.Data()          , fileTitle.c_str());
+        root.checkpointLogName   = Form("%s%s_checkpoint.log" , root.checkpointDirectory.Data()          , fileTitle.c_str());
 
-        std::filesystem::create_directories(std::filesystem::path(root.outName.Data()).parent_path());
-        std::filesystem::create_directories(std::filesystem::path(root.logName.Data()).parent_path());
-        std::filesystem::create_directories(std::filesystem::path(root.runStatName.Data()).parent_path());
-        std::filesystem::create_directories(std::filesystem::path(root.checkpointOutName.Data()).parent_path());
-        std::filesystem::create_directories(std::filesystem::path(root.checkpointLogName.Data()).parent_path());
+        auto makeDirectory = [](const TString& file) {
+            std::filesystem::create_directories(std::filesystem::path(file.Data()).parent_path());
+        };
+
+        makeDirectory(root.outName);
+        makeDirectory(root.logName);
+        makeDirectory(root.runStatName);
+        makeDirectory(root.checkpointOutName);
+        makeDirectory(root.checkpointLogName);
+        std::filesystem::create_directories(root.threadStatDirectory.Data());
 
         root.outFile = new TFile(root.outName, "RECREATE");
     }

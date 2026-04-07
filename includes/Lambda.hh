@@ -268,21 +268,7 @@ namespace Lambda {
     ) {
         const std::size_t eventIndex = ++logging.iEvent;
         ++logging.nRealEvents;
-        const auto analysisStart = std::chrono::steady_clock::now();
-        bool slowEventReported = false;
-
-        static int wsCol = [] {
-            struct winsize windowSize{};
-            ioctl(STDOUT_FILENO, TIOCGWINSZ, &windowSize);
-            return static_cast<int>(windowSize.ws_col);
-        }();
-
-        const std::size_t progressDivisor =
-            static_cast<std::size_t>(std::max(1, wsCol - 6));
-        const std::size_t progressGap = std::max<std::size_t>(1, logging.nEvents / progressDivisor);
-        const std::size_t printInterval = std::max<std::size_t>(1, logging.printInterval);
-        const std::size_t checkInterval = logging.checkInterval;
-        logging.barInterval = progressGap;
+        const int workerIndex = pythia.mode("Parallelism:index");
 
         Lorentz lambda, proton, pion;
         std::vector<Lorentz> protonList, pionList;
@@ -295,10 +281,10 @@ namespace Lambda {
         if (eventIndex == 1) {
             std::lock_guard<std::mutex> terminalLock(Record::terminalMutex());
             pythia.info.list();
-            std::cout <<"\n\n\n"<< std::flush;
+            std::cout <<"\n\n\n\n"<< std::flush;
         }
 
-        for (particle = 0; particle < pythia.event.size(); ++particle) {
+        for (particle = 0; particle < pythia.event. size(); ++particle) {
             const auto& eventParticle = pythia.event[particle];
 
             if (eventParticle.id() == 2212) {
@@ -318,24 +304,6 @@ namespace Lambda {
             }
         }
 
-        auto reportSlowEvent = [&](std::size_t protonCount, std::size_t pionCount) {
-            if (slowEventReported) {
-                return;
-            }
-
-            const Config::uSeconds elapsed =
-                std::chrono::duration_cast<Config::uSeconds>(std::chrono::steady_clock::now() - analysisStart);
-            if (elapsed < Lambda::kSlowEventThreshold) {
-                return;
-            }
-
-            slowEventReported = true;
-            std::cerr << "\n[slow-event] event " << eventIndex
-                      << " has been running for " << Record::durationString(elapsed, true)
-                      << " | protons=" << protonCount
-                      << " | pions=" << pionCount << std::endl;
-        };
-
         Analysis::resetAllCounts(histogramSets);
 
         std::vector<char> pionTaken(pionList.size(), 0);
@@ -343,11 +311,20 @@ namespace Lambda {
         
         asyncLogger.publish(
             logging,
-            Record::RunPhase::SelectionLoop,
+            Record::RunPhase::Analysis,
             eventIndex,
             Record::DontRenderStatus,
             Record::DontRenderBar,
             Record::DontWriteRunStat,
+            Record::HasParticleCounts,
+            protonList.size(),
+            pionList.size()
+        );
+        asyncLogger.publishThreadStats(
+            workerIndex,
+            Record::ThreadPhase::Analysis,
+            eventIndex,
+            Record::NoCallbackCompleted,
             Record::HasParticleCounts,
             protonList.size(),
             pionList.size()
@@ -360,12 +337,8 @@ namespace Lambda {
             Lorentz  bestLambda;
 
             proton = protonList[iProton];
-            reportSlowEvent(protonList.size(), pionList.size());
 
             for (iPion = 0; iPion < pionList.size(); ++iPion) {
-                if ((iPion & 511u) == 0u) {
-                    reportSlowEvent(protonList.size(), pionList.size());
-                }
 
                 if (pionTaken[iPion] != 0) {
                     continue;
@@ -406,51 +379,39 @@ namespace Lambda {
         }
 
         Analysis::countAll(histogramSets);
-        reportSlowEvent(protonList.size(), pionList.size());
         logging.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logging.start);
 
-        const bool shouldRenderStatus = (eventIndex % printInterval == 0) || (eventIndex == logging.nEvents);
-        const bool shouldRenderBar = (eventIndex % progressGap == 0) || (eventIndex == logging.nEvents);
+        const bool shouldRenderStatus = (eventIndex % logging.printInterval == 0) || (eventIndex == 1) || (eventIndex == logging.nEvents);
+        const bool shouldRenderBar = (eventIndex % logging.barInterval == 0)  || (eventIndex == 1) || (eventIndex == logging.nEvents);
 
         asyncLogger.publish(
             logging,
-            Record::RunPhase::Running,
+            Record::RunPhase::Logging,
             eventIndex,
             shouldRenderStatus,
             shouldRenderBar,
-            Record::DontWriteRunStat
+            Record::DontWriteRunStat,
+            Record::HasParticleCounts,
+            protonList.size(),
+            pionList.size()
         );
 
-        if (checkInterval > 0 && eventIndex % checkInterval == 0) {
+        if (logging.checkInterval > 0 && eventIndex % logging.checkInterval == 0) {
             logging.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logging.start);
-            asyncLogger.publish(
-                logging,
-                Record::RunPhase::CheckpointWrite,
-                eventIndex,
-                Record::DontRenderStatus,
-                Record::DontRenderBar,
-                Record::DontWriteRunStat,
-                Record::HasParticleCounts,
-                protonList.size(),
-                pionList.size()
-            );
             Analysis::checkpointWrite(histogramSets, root.checkpointOutName, root.histScale, eventIndex);
 
             logging.elapsed =
                 std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logging.start);
-            asyncLogger.publish(
-                logging,
-                Record::RunPhase::CheckpointLog,
-                eventIndex,
-                Record::DontRenderStatus,
-                Record::DontRenderBar,
-                Record::DontWriteRunStat,
-                Record::HasParticleCounts,
-                protonList.size(),
-                pionList.size()
-            );
             Record::outputLog(pythia, root, logging, logString(parameters), root.checkpointLogName);
         }
+
+
+        asyncLogger.publishThreadStats(
+            workerIndex,
+            Record::ThreadPhase::Simulation,
+            eventIndex,
+            Record::CallbackCompleted
+        );
     }
 
     inline void extractPhysics(
