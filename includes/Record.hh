@@ -60,8 +60,7 @@ namespace Record {
     constexpr bool SlowCallback = true;
     constexpr bool NotSlowCallback = false;
 
-    constexpr auto kTerminalRefreshInterval = std::chrono::minutes(1);
-    constexpr auto kTerminalStallThreshold  = std::chrono::minutes(5);
+    Config::Seconds programStallThreshold  = Config::Seconds(300);
 
     constexpr size_t NoEvents = 0;
 
@@ -343,7 +342,7 @@ namespace Record {
         return snapshot.phase != RunPhase::Starting
             && snapshot.phase != RunPhase::Finished
             && terminalIdleFor(snapshot)
-                >= std::chrono::duration_cast<Config::uSeconds>(kTerminalStallThreshold);
+                >= programStallThreshold;
     }
 
     inline void writeTextFile(const TString& path, const std::string& text) {
@@ -357,15 +356,15 @@ namespace Record {
             : 0;
         const std::size_t eventWidth = numberFormat(snapshot.nEvents, 0).size();
 
-        std::cout << "\033[3A\r\033[2K";
+        std::cout << "\033[3F\033[2K";
 
             if (snapshot.phase == RunPhase::Starting) {
-                std::cout<< "\033[B\r\033[2K"<< "\t\033[34;1m Initializing... \033[0m"
-                 << "\033[B\r\033[2K";
+                std::cout<< "\033[E\033[2K"<< "\t\033[34;1m Initializing... \033[0m\033[E\033[2K";
+                //  << "\033[E\033[2K";
             } 
             else if (snapshot.phase == RunPhase::Finished){
-                std::cout << "\033[B\r\033[2K" << "\t\033[32;1m Finished\033[0m"
-                << "\033[B\r\033[2K";
+                std::cout << "\033[E\r\033[2K" << "\t\033[32;1m Finished\033[0m"
+                << "\033[E\033[2K";
             }
             else{
                 const bool stalled = isTerminalStalled(snapshot);
@@ -373,15 +372,15 @@ namespace Record {
                   << numberFormat(snapshot.eventIndex, eventWidth) << "\033[0m"
                   << " out of " << numberFormat(snapshot.nEvents, 0) << "  |  "
                   << std::setw(2) << percent << "% "
-                  << "\033[B\r\033[2K\t "<<"ETA: " << snapshot.eta
-                  << "\033[B\r\033[2K\t"
+                  << "\033[E\033[2K\t "<<"ETA: " << snapshot.eta
+                  << "\033[E\033[2K\t"
                   << (stalled
                           ? std::string("\033[31;1mStalled for ")
                                 + durationString(terminalIdleFor(snapshot))
                                 + "\033[0m"
                           : "");
             }
-            std::cout<< "\033[B\r"<< std::flush;
+            std::cout<< "\033[E\r"<< std::flush;
 
         
     }
@@ -389,18 +388,17 @@ namespace Record {
     inline void renderProgressBar(double progress) {
         struct winsize windowSize{};
         ioctl(STDOUT_FILENO, TIOCGWINSZ, &windowSize);
-
+        
         constexpr char done = '=';
         constexpr char toDo = '-';
-
         const int nCols      = windowSize.ws_col ? static_cast<int>(windowSize.ws_col) - 6 : 100;
         const int filledCols = static_cast<int>(progress * nCols);
+        
 
-        std::cout << "\r\033[2K"
-                  << "\033[32;1m|" << std::string(filledCols, done) << "\033[0m"
+        std::cout<<"\r\033[32;1m|" << std::string(filledCols, done) << "\033[0m"
                   << (progress < 1.0 ? ">\033[31m" : std::string("\033[32;1m") + done)
                   << std::string(nCols - filledCols, toDo) << "|\033[0m"
-                  << std::flush;
+                  << "\033[J\r" << std::flush;
     }
 
     class AsyncLogger {
@@ -408,7 +406,7 @@ namespace Record {
         AsyncLogger() = default;
         ~AsyncLogger() { stop();  }
 
-        void start(const Config::Root& root, std::size_t statusIntervalMs) {
+        void start(const Config::Root& root, const Config::Log& logging) {
             stop();
             {
                 std::lock_guard<std::mutex> lock(mutex_);
@@ -421,7 +419,9 @@ namespace Record {
                 stopRequested_       = false;
                 terminalInitialized_ = false;
                 progressBarVisible_  = false;
-                statusIntervalMs_    = statusIntervalMs > 0 ? statusIntervalMs : 1000;
+                heartbeat_interval_    = logging.heartbeat_interval > Config::uSeconds(0) ? logging.heartbeat_interval : Config::uSeconds(1000);
+                terminalRefreshInterval_ = logging.terminal_refresh_interval > Config::Seconds(0) ? logging.terminal_refresh_interval : Config::Seconds(60);
+                programStallThreshold  = logging.program_stall_threshold > Config::Seconds(0) ? logging.program_stall_threshold : Config::Seconds(300);
             }
             worker_ = std::thread(&AsyncLogger::runLoop, this);
         }
@@ -499,6 +499,10 @@ namespace Record {
                 worker_.join();
         }
 
+        void makeSpace(){
+            std::cout << "\n\n\n\n" << std::flush;
+        }
+
       private:
         void mergePending(const PendingActions& incoming) {
             if (pendingActions_.has_value())
@@ -572,8 +576,8 @@ namespace Record {
             };
 
             std::unique_lock<std::mutex> lock(mutex_);
-            auto nextRunStatWrite    = SteadyClock::now() + std::chrono::milliseconds(statusIntervalMs_);
-            auto nextTerminalRefresh = SteadyClock::now() + kTerminalRefreshInterval;
+            auto nextRunStatWrite    = SteadyClock::now() + heartbeat_interval_;
+            auto nextTerminalRefresh = SteadyClock::now() + terminalRefreshInterval_;
 
             while (true) {
                 condition_.wait_until(
@@ -593,16 +597,12 @@ namespace Record {
 
                 if (batch.shouldExit) break;
 
-                if (runStatDeadline)  advanceDeadline(nextRunStatWrite   , std::chrono::milliseconds(statusIntervalMs_));
-                if (terminalDeadline) advanceDeadline(nextTerminalRefresh, kTerminalRefreshInterval);
+                if (runStatDeadline)  advanceDeadline(nextRunStatWrite   , heartbeat_interval_);
+                if (terminalDeadline) advanceDeadline(nextTerminalRefresh, terminalRefreshInterval_);
 
                 lock.lock();
             }
         }
-
-        // -------------------------------------------------------------------------
-        // Action handlers
-        // -------------------------------------------------------------------------
 
         void processUpdate(const RunSnapshot& snapshot, const PendingActions& actions) {
             if (actions.writeRunStat)
@@ -621,7 +621,6 @@ namespace Record {
             }
         }
 
-        // Replaces both heartbeatRunStat() and writeRunStat() — identical bodies.
         void flushRunStat(const RunSnapshot& snapshot) const {
             if (runStatPath_.Length() == 0) return;                                                                      
             writeTextFile(runStatPath_, runStatString(snapshot, std::chrono::system_clock::now()));
@@ -656,7 +655,8 @@ namespace Record {
         std::set<int>                 dirtyThreadWorkers_;
         std::map<int, ThreadSnapshot> threadSnapshots_;
         std::thread                   worker_;
-        std::size_t                   statusIntervalMs_    = 1000;
+        Config::uSeconds              heartbeat_interval_    = Config::uSeconds(1000);
+        Config::Seconds               terminalRefreshInterval_ = Config::Seconds(60);
         bool                          stopRequested_       = false;
         bool                          terminalInitialized_ = false;
         bool                          progressBarVisible_  = false;
@@ -680,7 +680,7 @@ namespace Record {
         logStream << "Time Taken                    : " << durationString(logging.elapsed) << '\n';
         logStream << "Time Taken / 1000 Events      : " << durationString((1000 * logging.elapsed) / logging.nEvents, true) << '\n';
         logStream << "Histogram Scale               : " << root.histScale << '\n';
-        logStream << "Status Snapshot Interval (ms) : " << numberFormat(logging.statusIntervalMs, 0) << '\n';
+        logStream << "Status Snapshot Interval (ms) : " << numberFormat(logging.heartbeat_interval.count(), 0) << '\n';
         logStream << "Progress Bar Update Interval  : " << numberFormat(logging.barInterval, 0) << '\n';
         logStream << "Check Interval                : " << numberFormat(logging.checkInterval, 0) << '\n';
 

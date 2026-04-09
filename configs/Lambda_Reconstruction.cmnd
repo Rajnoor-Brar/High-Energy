@@ -10,8 +10,8 @@ Beams:idB = 1000100200
 Beams:eCM = 7000
 
 ! Random
-Random:setSeed = off
-Random:seed    = -1
+Random:setSeed = on
+Random:seed    = 270403
 !270403
 
 ! Heavy ion

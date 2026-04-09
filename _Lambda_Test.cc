@@ -1,7 +1,6 @@
 #include <chrono>
-
+#include <thread>
 #include "Pythia8/Pythia.h"
-#include "Pythia8/PythiaParallel.h"
 
 #include "Analysis.hh"
 #include "Config.hh"
@@ -9,45 +8,47 @@
 #include "Record.hh"
 
 int main(int argc, char* argv[]) {
-    Record::disable_input_echo();
-
-    Pythia8::PythiaParallel pythia;
+    Pythia8::Pythia pythia;
     const std::string project    = "Lambda_Reconstruction";
     const std::string configPath = argc > 1 ? argv[1] : "configs/" + project + ".toml";
 
     pythia.readFile("configs/Lambda_Reconstruction.cmnd");
-    Config::Root     rootParams;
-                     rootParams.beamEnergy = pythia.settings.parm("Beams:eCM") > 0 ? Form("%.0f", pythia.settings.parm("Beams:eCM")) : "UnknownEnergy";
-    Config::Log      logParams;
+    Config::Root        rootParams;
+    Config::Log         logParams;
+
+    rootParams.beamEnergy = pythia.settings.parm("Beams:eCM") > 0 ? Form("%.0f", pythia.settings.parm("Beams:eCM")) : "UnknownEnergy";
+
     Config::extractConfiguration(configPath, project, logParams, rootParams);
 
-    Lambda::Parameters analysisParams;
+
+    Lambda::Parameters  analysisParams;
     Lambda::extractPhysics(configPath, analysisParams);
     Lambda::RootArray histogramSets;
     Lambda::declareObjects(histogramSets, analysisParams, rootParams);
 
-    Record::AsyncLogger logger;
+    Record::AsyncLogger asyncLogger;
+
+    pythia.init();
 
     logParams.start = std::chrono::system_clock::now();
-    logger.start(rootParams, logParams);
-    logger.publish(
+    asyncLogger.start(rootParams, logParams);
+    asyncLogger.publish(
         logParams,
         Record::RunPhase::Starting,
-        Record::NoEvents,
+        0,
         Record::RenderStatus,
         Record::DontRenderBar,
         Record::WriteRunStat
     );
-
-    pythia.init();
-
-    pythia.run(static_cast<long>(logParams.nEvents), [&](Pythia8::Pythia* worker) {
-        Lambda::pythiaAnalysis(*worker, histogramSets, analysisParams, rootParams, logParams, logger);
-    });
+    pythia.next();
+    for (std::size_t iEvent = 0; iEvent < logParams.nEvents; ++iEvent) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        Lambda::pythiaAnalysis(pythia, histogramSets, analysisParams, rootParams, logParams, asyncLogger);
+    }
 
     Analysis::wrapUp(histogramSets, rootParams.outFile, rootParams.histScale, logParams.nEvents);
     logParams.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logParams.start);
-    logger.finish(logParams, logParams.iEvent.load());
+    asyncLogger.finish(logParams, logParams.iEvent.load());
 
     Record::terminalReport(pythia, rootParams, logParams);
     Record::outputLog(pythia, rootParams, logParams, Lambda::logString(analysisParams));

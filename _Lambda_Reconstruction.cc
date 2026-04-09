@@ -15,21 +15,21 @@ int main(int argc, char* argv[]) {
     pythia.readFile("configs/Lambda_Reconstruction.cmnd");
     Config::Root        rootParams;
     Config::Log         logParams;
-    Lambda::Parameters  analysisParams;
 
     rootParams.beamEnergy = pythia.settings.parm("Beams:eCM") > 0 ? Form("%.0f", pythia.settings.parm("Beams:eCM")) : "UnknownEnergy";
 
-    Config::extractParameters(configPath, project, logParams, rootParams);
-    Lambda::extractPhysics(configPath, analysisParams);
+    Config::extractConfiguration(configPath, project, logParams, rootParams);
 
+
+    Lambda::Parameters  analysisParams;
+    Lambda::extractPhysics(configPath, analysisParams);
     Lambda::RootArray histogramSets;
     Lambda::declareObjects(histogramSets, analysisParams, rootParams);
+
     Record::AsyncLogger asyncLogger;
 
-    pythia.init();
-
     logParams.start = std::chrono::system_clock::now();
-    asyncLogger.start(rootParams, logParams.statusIntervalMs);
+    asyncLogger.start(rootParams, logParams);
     asyncLogger.publish(
         logParams,
         Record::RunPhase::Starting,
@@ -39,6 +39,8 @@ int main(int argc, char* argv[]) {
         Record::WriteRunStat
     );
 
+    pythia.init();
+    
     for (std::size_t iEvent = 0; iEvent < logParams.nEvents; ++iEvent) {
         if (!pythia.next()) {
             continue;
@@ -50,7 +52,6 @@ int main(int argc, char* argv[]) {
     Analysis::wrapUp(histogramSets, rootParams.outFile, rootParams.histScale, logParams.nEvents);
     logParams.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logParams.start);
     asyncLogger.finish(logParams, logParams.iEvent.load());
-    asyncLogger.stop();
 
     Record::terminalReport(pythia, rootParams, logParams);
     Record::outputLog(pythia, rootParams, logParams, Lambda::logString(analysisParams));

@@ -281,7 +281,7 @@ namespace Lambda {
         if (eventIndex == 1) {
             std::lock_guard<std::mutex> terminalLock(Record::terminalMutex());
             pythia.info.list();
-            std::cout <<"\n\n\n\n"<< std::flush;
+            asyncLogger.makeSpace();
         }
 
         for (particle = 0; particle < pythia.event. size(); ++particle) {
@@ -309,17 +309,6 @@ namespace Lambda {
         std::vector<char> pionTaken(pionList.size(), 0);
         logging.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logging.start);
         
-        asyncLogger.publish(
-            logging,
-            Record::RunPhase::Analysis,
-            eventIndex,
-            Record::DontRenderStatus,
-            Record::DontRenderBar,
-            Record::DontWriteRunStat,
-            Record::HasParticleCounts,
-            protonList.size(),
-            pionList.size()
-        );
         asyncLogger.publishThreadStats(
             workerIndex,
             Record::ThreadPhase::Analysis,
@@ -386,7 +375,7 @@ namespace Lambda {
 
         asyncLogger.publish(
             logging,
-            Record::RunPhase::Logging,
+            Record::RunPhase::Analysis,
             eventIndex,
             shouldRenderStatus,
             shouldRenderBar,

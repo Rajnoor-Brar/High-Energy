@@ -2,10 +2,11 @@ Serial                        : 02
 Beam Energy                   : 7000
 Event Count                   : 10,000,000
 Real Event Count              : 9,640,000
-Last Run                      : 2026-04-02 23:02:39
-Time Taken                    : 1 day 3 hours 2 minutes 36 seconds 
-Time Taken / 1000 Events      : 9.74 seconds 
+Last Run                      : 2026-04-07 23:58:36
+Time Taken                    : 1 day 2 hours 48 minutes 58 seconds 
+Time Taken / 1000 Events      : 9.65 seconds 
 Histogram Scale               : 1
+Status Snapshot Interval (ms) : 1,000
 Progress Bar Update Interval  : 42,553
 Check Interval                : 20,000
 Lambda Mass                   : 1.115
@@ -94,20 +95,20 @@ Eta Extent                    : 5
  --------  PYTHIA Info Listing  ---------------------------------------- 
  
  Beam A: id =   2112, pz =  3.500e+03, e =  3.500e+03, m =  9.396e-01.
- Beam B: id =   2112, pz = -3.500e+03, e =  3.500e+03, m =  9.396e-01.
+ Beam B: id =   2212, pz = -3.500e+03, e =  3.500e+03, m =  9.383e-01.
 
- In 1: id =   21, x =  1.133e-03, pdf =  2.359e+01 at Q2 =  2.746e+02.
- In 2: id =   21, x =  2.114e-02, pdf =  4.308e+00 at same Q2.
+ In 1: id =   21, x =  3.357e-04, pdf =  3.168e+01 at Q2 =  6.569e+01.
+ In 2: id =   21, x =  4.778e-02, pdf =  2.258e+00 at same Q2.
 
  Subprocess g g -> g g with code 111 is 2 -> 2.
- It has sHat =  1.174e+03,    tHat = -4.381e+02,    uHat = -7.354e+02,
-       pTHat =  1.657e+01,   m3Hat =  0.000e+00,   m4Hat =  0.000e+00,
-    thetaHat =  1.315e+00,  phiHat =  9.291e-01.
-     alphaEM =  7.669e-03,  alphaS =  1.782e-01    at Q2 =  2.746e+02.
+ It has sHat =  7.860e+02,    tHat = -7.137e+02,    uHat = -7.236e+01,
+       pTHat =  8.105e+00,   m3Hat =  0.000e+00,   m4Hat =  0.000e+00,
+    thetaHat =  2.525e+00,  phiHat =  2.902e+00.
+     alphaEM =  7.609e-03,  alphaS =  2.110e-01    at Q2 =  6.569e+01.
 
- Impact parameter b =  4.374e-01 gives enhancement factor =  2.544e+00.
- Max pT scale for MPI =  1.657e+01, ISR =  1.657e+01, FSR =  1.657e+01.
- Number of MPI =     7, ISR =     9, FSRproc =    29, FSRreson =     0.
+ Impact parameter b =  1.140e+00 gives enhancement factor =  4.235e-01.
+ Max pT scale for MPI =  8.105e+00, ISR =  8.105e+00, FSR =  8.105e+00.
+ Number of MPI =     1, ISR =     1, FSRproc =    14, FSRreson =     0.
 
  --------  End PYTHIA Info Listing  ------------------------------------
 
@@ -121,9 +122,9 @@ Eta Extent                    : 5
  |                                                    |                                   |                        |
  |-----------------------------------------------------------------------------------------------------------------|
  |                                                    |                                   |                        |
- | g g -> g g                                     111 |      332435     332435     332435 |   9.125e+02  5.701e-03 |
+ | g g -> g g                                     111 |      332457     332457     332457 |   9.125e+02  5.701e-03 |
  | g g -> q qbar (uds)                            112 |        5786       5786       5786 |   1.589e+01  4.323e-02 |
- | q g -> q g                                     113 |      146160     146160     146160 |   4.014e+02  8.601e-03 |
+ | q g -> q g                                     113 |      146170     146170     146170 |   4.014e+02  8.601e-03 |
  | q q(bar)' -> q q(bar)'                         114 |       12188      12188      12188 |   3.345e+01  2.977e-02 |
  | q qbar -> g g                                  115 |         134        134        134 |   3.657e-01  2.822e-01 |
  | q qbar -> q' qbar' (uds)                       116 |          92         92         92 |   2.542e-01  3.450e-01 |
@@ -131,7 +132,7 @@ Eta Extent                    : 5
  | q qbar -> c cbar                               122 |          28         28         28 |   7.492e-02  6.044e-01 |
  | g g -> b bbar                                  123 |         836        836        836 |   2.287e+00  1.133e-01 |
  | q qbar -> b bbar                               124 |          14         14         14 |   3.853e-02  8.789e-01 |
- | sum                                                |     1408701     499452     499452 |   1.371e+03  4.652e-03 |
+ | sum                                                |     1408796     499484     499484 |   1.371e+03  4.651e-03 |
  |                                                    |                                   |                        |
  |-----------------------------------------------------------------------------------------------------------------|
  |                                                                                        |                        |
@@ -142,7 +143,7 @@ Eta Extent                    : 5
  | Total inelastic                                                                        |   1.635e+03  1.726e+00 |
  | Elastic                                                                                |   1.268e+03  1.514e+00 |
  | Diffractive target excitation                                                          |   5.035e+01  2.928e-01 |
- | Diffractive projectile excitation                                                      |   5.065e+01  2.937e-01 |
+ | Diffractive projectile excitation                                                      |   5.066e+01  2.937e-01 |
  | Double diffractive excitation                                                          |   5.862e+01  2.262e-01 |
  | Elastic b-slope (GeV^-2)                                                               |   3.262e+02  5.896e-01 |
  |                                                                                        |                        |
@@ -152,14 +153,14 @@ Eta Extent                    : 5
  |                                                                                                                 | 
  |  times   message                                                                                                | 
  |                                                                                                                 | 
- |      3   Error (MBIAS) in BeamRemnants::add: failed to find physical colour state after colour reconnection     | 
- |     21   Error (MBIAS) in BeamRemnants::setKinematics: kinematics construction failed after retrying 10 times   | 
- |   7861   Error (MBIAS) in SimpleSpaceShower::pT2nearThreshold: stuck in loop                                    | 
- |    283   Error (SASD) in SimpleSpaceShower::pT2nearThreshold: stuck in loop                                     | 
- |   1197   Error (SIGNN) in SimpleSpaceShower::pT2nearThreshold: stuck in loop                                    | 
- |   1037   Error (SIGNP) in SimpleSpaceShower::pT2nearThreshold: stuck in loop                                    | 
- |    918   Error (SIGPN) in SimpleSpaceShower::pT2nearThreshold: stuck in loop                                    | 
- |   1837   Error (SIGPP) in SimpleSpaceShower::pT2nearThreshold: stuck in loop                                    | 
+ |      2   Error (MBIAS) in BeamRemnants::add: failed to find physical colour state after colour reconnection     | 
+ |     25   Error (MBIAS) in BeamRemnants::setKinematics: kinematics construction failed after retrying 10 times   | 
+ |   8098   Error (MBIAS) in SimpleSpaceShower::pT2nearThreshold: stuck in loop                                    | 
+ |    296   Error (SASD) in SimpleSpaceShower::pT2nearThreshold: stuck in loop                                     | 
+ |   1219   Error (SIGNN) in SimpleSpaceShower::pT2nearThreshold: stuck in loop                                    | 
+ |   1029   Error (SIGNP) in SimpleSpaceShower::pT2nearThreshold: stuck in loop                                    | 
+ |    962   Error (SIGPN) in SimpleSpaceShower::pT2nearThreshold: stuck in loop                                    | 
+ |   1949   Error (SIGPP) in SimpleSpaceShower::pT2nearThreshold: stuck in loop                                    | 
  |      2   Error in Angantyr::next: could not setup DD sub-collision                                              | 
  |     19   Error in Angantyr::next: could not setup SD sub-collision                                              | 
  |     10   Error in HadronLevel::next: failed colour/junction check                                               | 
@@ -173,66 +174,66 @@ Eta Extent                    : 5
  |     52   Error in Pythia::forceHadronLevel: check of event revealed problems                                    | 
  |   7174   Error in Pythia::forceHadronLevel: hadronLevel failed; giving up                                       | 
  |     10   Error in RopeDipole::propagateInit: Tried to propagate a RopeDipoleEnd with mT <= 0                    | 
- |  49319   Error in Settings::parm: value is out of range                                                         | 
+ |  49323   Error in Settings::parm: value is out of range                                                         | 
  |  10718   Error in StringFragmentation::fragment: stuck in joining                                               | 
- |  86347   Error in StringFragmentation::fragmentToJunction: diquark too close to junction                        | 
- |   8984   Warning (MBIAS) in ColourReconnection::addJunctionIndices: skipping junction-junction connection       | 
+ |  86348   Error in StringFragmentation::fragmentToJunction: diquark too close to junction                        | 
+ |   9468   Warning (MBIAS) in ColourReconnection::addJunctionIndices: skipping junction-junction connection       | 
  |     17   Warning (MBIAS) in ColourReconnection::nextNew: too many reconnections, stopping before minimum reached | 
- | 246531   Warning (MBIAS) in JunctionSplitting::checkColours: made a gluon colour singlet; redoing colours       | 
- | 422684   Warning (MBIAS) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
- | 422684   Warning (MBIAS) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
- |     44   Warning (MBIAS) in MultipartonInteractions::init: maximum increased                                    | 
- |    222   Warning (MBIAS) in MultipartonInteractions::pTfirst: weight above unity                                | 
- |    839   Warning (MBIAS) in MultipartonInteractions::pTnext: weight above unity                                 | 
- |    905   Warning (MBIAS) in Pythia::check: energy-momentum not quite conserved                                  | 
- |   1411   Warning (MBIAS) in SimpleSpaceShower::pT2nextQCD: small daughter PDF                                   | 
- | 267658   Warning (MBIAS) in SimpleSpaceShower::pT2nextQCD: weight above unity                                   | 
- |    889   Warning (SASD) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
- |    889   Warning (SASD) in JunctionSplitting::splitJunPairs: parallel junction state not allowed                | 
- |     44   Warning (SASD) in MultipartonInteractions::init: maximum increased                                     | 
- |    138   Warning (SASD) in MultipartonInteractions::pTfirst: weight above unity                                 | 
- |      3   Warning (SASD) in MultipartonInteractions::pTnext: weight above unity                                  | 
- |   2393   Warning (SASD) in SimpleSpaceShower::pT2nextQCD: small daughter PDF                                    | 
- |   7795   Warning (SASD) in SimpleSpaceShower::pT2nextQCD: weight above unity                                    | 
- |   1403   Warning (SIGNN) in ColourReconnection::addJunctionIndices: skipping junction-junction connection       | 
- |  28844   Warning (SIGNN) in JunctionSplitting::checkColours: made a gluon colour singlet; redoing colours       | 
- |  60940   Warning (SIGNN) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
- |  60940   Warning (SIGNN) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
- |    125   Warning (SIGNN) in MultipartonInteractions::pTnext: weight above unity                                 | 
- |    134   Warning (SIGNN) in Pythia::check: energy-momentum not quite conserved                                  | 
- |    642   Warning (SIGNN) in SimpleSpaceShower::pT2nextQCD: weight above unity                                   | 
- |      7   Warning (SIGNN) in StringLength::getJuncLength: invalid system for junction reconnection               | 
- |    740   Warning (SIGNP) in ColourReconnection::addJunctionIndices: skipping junction-junction connection       | 
- |  29080   Warning (SIGNP) in JunctionSplitting::checkColours: made a gluon colour singlet; redoing colours       | 
- |  60752   Warning (SIGNP) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
- |  60752   Warning (SIGNP) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
- |    158   Warning (SIGNP) in MultipartonInteractions::pTnext: weight above unity                                 | 
- |    123   Warning (SIGNP) in Pythia::check: energy-momentum not quite conserved                                  | 
- |     14   Warning (SIGNP) in SimpleSpaceShower::pT2nextQCD: small daughter PDF                                   | 
- |    727   Warning (SIGNP) in SimpleSpaceShower::pT2nextQCD: weight above unity                                   | 
- |   1415   Warning (SIGPN) in ColourReconnection::addJunctionIndices: skipping junction-junction connection       | 
- |  28954   Warning (SIGPN) in JunctionSplitting::checkColours: made a gluon colour singlet; redoing colours       | 
- |  61240   Warning (SIGPN) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
- |  61240   Warning (SIGPN) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
- |    185   Warning (SIGPN) in MultipartonInteractions::pTnext: weight above unity                                 | 
- |    111   Warning (SIGPN) in Pythia::check: energy-momentum not quite conserved                                  | 
- |    694   Warning (SIGPN) in SimpleSpaceShower::pT2nextQCD: weight above unity                                   | 
- |   1722   Warning (SIGPP) in ColourReconnection::addJunctionIndices: skipping junction-junction connection       | 
- |  30335   Warning (SIGPP) in JunctionSplitting::checkColours: made a gluon colour singlet; redoing colours       | 
- |  61184   Warning (SIGPP) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
- |  61184   Warning (SIGPP) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
- |    143   Warning (SIGPP) in MultipartonInteractions::pTnext: weight above unity                                 | 
- |    133   Warning (SIGPP) in Pythia::check: energy-momentum not quite conserved                                  | 
- |    663   Warning (SIGPP) in SimpleSpaceShower::pT2nextQCD: weight above unity                                   | 
+ | 260661   Warning (MBIAS) in JunctionSplitting::checkColours: made a gluon colour singlet; redoing colours       | 
+ | 448069   Warning (MBIAS) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
+ | 448069   Warning (MBIAS) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
+ |     52   Warning (MBIAS) in MultipartonInteractions::init: maximum increased                                    | 
+ |    229   Warning (MBIAS) in MultipartonInteractions::pTfirst: weight above unity                                | 
+ |    863   Warning (MBIAS) in MultipartonInteractions::pTnext: weight above unity                                 | 
+ |    935   Warning (MBIAS) in Pythia::check: energy-momentum not quite conserved                                  | 
+ |   1481   Warning (MBIAS) in SimpleSpaceShower::pT2nextQCD: small daughter PDF                                   | 
+ | 283005   Warning (MBIAS) in SimpleSpaceShower::pT2nextQCD: weight above unity                                   | 
+ |    964   Warning (SASD) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
+ |    964   Warning (SASD) in JunctionSplitting::splitJunPairs: parallel junction state not allowed                | 
+ |     52   Warning (SASD) in MultipartonInteractions::init: maximum increased                                     | 
+ |    135   Warning (SASD) in MultipartonInteractions::pTfirst: weight above unity                                 | 
+ |      2   Warning (SASD) in MultipartonInteractions::pTnext: weight above unity                                  | 
+ |   2946   Warning (SASD) in SimpleSpaceShower::pT2nextQCD: small daughter PDF                                    | 
+ |   8186   Warning (SASD) in SimpleSpaceShower::pT2nextQCD: weight above unity                                    | 
+ |   1494   Warning (SIGNN) in ColourReconnection::addJunctionIndices: skipping junction-junction connection       | 
+ |  30557   Warning (SIGNN) in JunctionSplitting::checkColours: made a gluon colour singlet; redoing colours       | 
+ |  64379   Warning (SIGNN) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
+ |  64379   Warning (SIGNN) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
+ |    135   Warning (SIGNN) in MultipartonInteractions::pTnext: weight above unity                                 | 
+ |    144   Warning (SIGNN) in Pythia::check: energy-momentum not quite conserved                                  | 
+ |    682   Warning (SIGNN) in SimpleSpaceShower::pT2nextQCD: weight above unity                                   | 
+ |      6   Warning (SIGNN) in StringLength::getJuncLength: invalid system for junction reconnection               | 
+ |    775   Warning (SIGNP) in ColourReconnection::addJunctionIndices: skipping junction-junction connection       | 
+ |  30738   Warning (SIGNP) in JunctionSplitting::checkColours: made a gluon colour singlet; redoing colours       | 
+ |  63898   Warning (SIGNP) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
+ |  63898   Warning (SIGNP) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
+ |    167   Warning (SIGNP) in MultipartonInteractions::pTnext: weight above unity                                 | 
+ |    133   Warning (SIGNP) in Pythia::check: energy-momentum not quite conserved                                  | 
+ |     13   Warning (SIGNP) in SimpleSpaceShower::pT2nextQCD: small daughter PDF                                   | 
+ |    788   Warning (SIGNP) in SimpleSpaceShower::pT2nextQCD: weight above unity                                   | 
+ |   1485   Warning (SIGPN) in ColourReconnection::addJunctionIndices: skipping junction-junction connection       | 
+ |  30543   Warning (SIGPN) in JunctionSplitting::checkColours: made a gluon colour singlet; redoing colours       | 
+ |  64610   Warning (SIGPN) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
+ |  64610   Warning (SIGPN) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
+ |    206   Warning (SIGPN) in MultipartonInteractions::pTnext: weight above unity                                 | 
+ |    119   Warning (SIGPN) in Pythia::check: energy-momentum not quite conserved                                  | 
+ |    716   Warning (SIGPN) in SimpleSpaceShower::pT2nextQCD: weight above unity                                   | 
+ |   1808   Warning (SIGPP) in ColourReconnection::addJunctionIndices: skipping junction-junction connection       | 
+ |  32279   Warning (SIGPP) in JunctionSplitting::checkColours: made a gluon colour singlet; redoing colours       | 
+ |  64804   Warning (SIGPP) in JunctionSplitting::checkColours: not possible to split junctions; making new colours | 
+ |  64804   Warning (SIGPP) in JunctionSplitting::splitJunPairs: parallel junction state not allowed               | 
+ |    165   Warning (SIGPP) in MultipartonInteractions::pTnext: weight above unity                                 | 
+ |    131   Warning (SIGPP) in Pythia::check: energy-momentum not quite conserved                                  | 
+ |    701   Warning (SIGPP) in SimpleSpaceShower::pT2nextQCD: weight above unity                                   | 
  |    154   Warning in Angantyr::next: could not setup signal or ND collisions                                     | 
  |     11   Warning in HadronWidths::pickMasses: angular momentum and running widths not used                      | 
  |     10   Warning in JunctionSplitting::checkColours: not possible to split junctions; making new colours        | 
  |     10   Warning in JunctionSplitting::splitJunPairs: parallel junction state not allowed                       | 
  |    529   Warning in MiniStringFragmentation::ministring2two: random axis needed to break tie                    | 
- | 374734   Warning in PartonVertex::vertexHadrons: unidentified junction topology not handled                     | 
+ | 374755   Warning in PartonVertex::vertexHadrons: unidentified junction topology not handled                     | 
  |     56   Warning in Pythia::check: energy-momentum not quite conserved                                          | 
  |    230   Warning in Pythia::check: not quite matched particle energy/momentum/mass                              | 
- |  97081   Warning in Pythia::forceHadronLevel: hadronLevel failed; try again                                     | 
+ |  97082   Warning in Pythia::forceHadronLevel: hadronLevel failed; try again                                     | 
  |    283   Warning in StringFragmentation::collinearPair: JRF finding failure, use CoM instead                    | 
  |     90   Warning in StringFragmentation::collinearPair: soft massless endpoint encountered in junction system.  | 
  |    225   Warning in StringFragmentation::finalRegion: random axis needed to break tie                           | 
