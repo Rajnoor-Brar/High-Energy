@@ -202,7 +202,7 @@ namespace Lambda {
             RootObjects object{};
             object.basis = histogramSet.id;
             object.dir   = root.outFile->mkdir(histogramSet.directoryName);
-            object.count = new TH1I(
+            object.count = new TH1D(
                 (std::string(histogramSet.tag) + "CountHist").c_str(),
                 "Count of Reconstructed Candidates",
                 41,

@@ -36,7 +36,9 @@ int main(int argc, char* argv[]) {
         Record::NoEvents,
         Record::RenderStatus,
         Record::DontRenderBar,
-        Record::WriteRunStat
+        Record::WriteRunStat,
+        Record::NoParticleCounts,0,0,
+        rootParams.fileTitle.Data()
     );
 
     pythia.init();

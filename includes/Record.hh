@@ -359,7 +359,7 @@ namespace Record {
         std::cout << "\033[3F\033[2K";
 
             if (snapshot.phase == RunPhase::Starting) {
-                std::cout<< "\033[E\033[2K"<< "\t\033[34;1m Initializing... \033[0m\033[E\033[2K";
+                std::cout<< "\033[E\033[2K"<< "\t\033[34;1m Initializing "<<snapshot.eta<<"... \033[0m\033[E\033[2K";
                 //  << "\033[E\033[2K";
             } 
             else if (snapshot.phase == RunPhase::Finished){
@@ -435,10 +435,13 @@ namespace Record {
             bool writeRunStat      = false,
             bool hasParticleCounts = false,
             std::size_t protonCount = 0,
-            std::size_t pionCount   = 0
+            std::size_t pionCount   = 0,
+            std::string extraString = ""
         ) {
             RunSnapshot snapshot = makeSnapshot(logging, phase, eventIndex, protonCount, pionCount, hasParticleCounts);
-
+            if(phase == RunPhase::Starting){
+                snapshot.eta = extraString;
+            }
             std::lock_guard<std::mutex> lock(mutex_);
             latestSnapshot_ = std::move(snapshot);
 
