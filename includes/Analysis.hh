@@ -22,7 +22,7 @@ namespace Analysis {
     struct RootObjects {
         Basis basis{};
         TDirectory* dir{};
-        TH1I* count{};
+        TH1D* count{};
         Int_t validatedCount{};
         std::array<TH1D*, HistCount> hists{};
     };

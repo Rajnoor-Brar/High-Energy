@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <ctime>
 #include <fstream>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <mutex>
@@ -28,6 +29,7 @@
 #include "Config.hh"
 
 namespace Record {
+    inline constexpr std::size_t FatalStallMultiplier = 5;
     termios oldt;
 
     inline void disable_input_echo() {
@@ -92,6 +94,11 @@ namespace Record {
         std::size_t       protonCount = 0;
         std::size_t       pionCount = 0;
         bool              hasParticleCounts = false;
+        bool              fatalStall = false;
+        Config::uSeconds  stallDuration = Config::uSeconds(0);
+        Config::Seconds   stallThreshold = Config::Seconds(0);
+        std::size_t       stallMultiplier = FatalStallMultiplier;
+        std::string       fatalReason = "";
     };
 
     struct PendingActions {
@@ -122,10 +129,12 @@ namespace Record {
         std::optional<PendingActions> actions;
         std::optional<RunSnapshot>    actionSnapshot;
         std::optional<RunSnapshot>    periodicSnapshot;
+        std::optional<RunSnapshot>    fatalSnapshot;
         std::vector<ThreadSnapshot>   threadSnapshots;
         bool runStatDeadlineReached  = false;
         bool terminalDeadlineReached = false;
         bool shouldExit              = false;
+        std::function<void(const RunSnapshot&)> fatalHandler;
     };
 
     inline std::mutex& terminalMutex() {
@@ -305,6 +314,15 @@ namespace Record {
         stream << "Progress Bar Update Interval  : " << numberFormat(snapshot.barInterval, 0) << '\n';
         stream << "Check Interval                : " << numberFormat(snapshot.checkInterval, 0) << '\n';
 
+        if (snapshot.fatalStall) {
+            stream << "Fatal Stall                   : YES\n";
+            stream << "Fatal Reason                  : " << snapshot.fatalReason << '\n';
+            stream << "Stall Duration                : " << durationString(snapshot.stallDuration, true) << '\n';
+            stream << "Stall Threshold               : "
+                   << durationString(std::chrono::duration_cast<Config::uSeconds>(snapshot.stallThreshold), true) << '\n';
+            stream << "Fatal Multiplier              : " << snapshot.stallMultiplier << "x\n";
+        }
+
         if (snapshot.hasParticleCounts) {
             stream << "Proton Count                  : " << numberFormat(snapshot.protonCount, 0) << '\n';
             stream << "Pion Count                    : " << numberFormat(snapshot.pionCount, 0) << '\n';
@@ -338,11 +356,24 @@ namespace Record {
         );
     }
 
+    inline Config::uSeconds terminalIdleFor(const RunSnapshot& snapshot, const Config::TimePoint& now) {
+        return std::chrono::duration_cast<Config::uSeconds>(now - snapshot.lastUpdateTime);
+    }
+
     inline bool isTerminalStalled(const RunSnapshot& snapshot) {
         return snapshot.phase != RunPhase::Starting
             && snapshot.phase != RunPhase::Finished
             && terminalIdleFor(snapshot)
                 >= programStallThreshold;
+    }
+
+    inline bool isFatalStalled(const RunSnapshot& snapshot, const Config::TimePoint& now) {
+        if (snapshot.phase == RunPhase::Starting || snapshot.phase == RunPhase::Finished) {
+            return false;
+        }
+
+        const Config::Seconds fatalThreshold = programStallThreshold * FatalStallMultiplier;
+        return terminalIdleFor(snapshot, now) >= std::chrono::duration_cast<Config::uSeconds>(fatalThreshold);
     }
 
     inline void writeTextFile(const TString& path, const std::string& text) {
@@ -358,7 +389,16 @@ namespace Record {
 
         std::cout << "\033[3F\033[2K";
 
-            if (snapshot.phase == RunPhase::Starting) {
+            if (snapshot.fatalStall) {
+                std::cout << "\033[E\r\033[2K"
+                          << "\t\033[31;1m Fatal stall\033[0m after "
+                          << durationString(snapshot.stallDuration, true)
+                          << "\033[E\033[2K\t Last event: "
+                          << numberFormat(snapshot.eventIndex, eventWidth)
+                          << " / " << numberFormat(snapshot.nEvents, 0)
+                          << "\033[E\033[2K\t " << snapshot.fatalReason;
+            }
+            else if (snapshot.phase == RunPhase::Starting) {
                 std::cout<< "\033[E\033[2K"<< "\t\033[34;1m Initializing "<<snapshot.eta<<"... \033[0m\033[E\033[2K";
                 //  << "\033[E\033[2K";
             } 
@@ -403,6 +443,8 @@ namespace Record {
 
     class AsyncLogger {
       public:
+        using FatalStallHandler = std::function<void(const RunSnapshot&)>;
+
         AsyncLogger() = default;
         ~AsyncLogger() { stop();  }
 
@@ -417,6 +459,7 @@ namespace Record {
                 dirtyThreadWorkers_.clear();
                 threadSnapshots_.clear();
                 stopRequested_       = false;
+                fatalStallTriggered_ = false;
                 terminalInitialized_ = false;
                 progressBarVisible_  = false;
                 heartbeat_interval_    = logging.heartbeat_interval > Config::uSeconds(0) ? logging.heartbeat_interval : Config::uSeconds(1000);
@@ -491,6 +534,11 @@ namespace Record {
             stop();
         }
 
+        void setFatalStallHandler(FatalStallHandler handler) {
+            std::lock_guard<std::mutex> lock(mutex_);
+            fatalStallHandler_ = std::move(handler);
+        }
+
         void stop() {
             {
                 std::lock_guard<std::mutex> lock(mutex_);
@@ -514,7 +562,11 @@ namespace Record {
                 pendingActions_ = incoming;
         }
 
-        WorkBatch collectPendingWork(bool runStatDeadline, bool terminalDeadline) {
+        WorkBatch collectPendingWork(
+            const Config::TimePoint& now,
+            bool runStatDeadline,
+            bool terminalDeadline
+        ) {
             WorkBatch batch;
             batch.runStatDeadlineReached  = runStatDeadline;
             batch.terminalDeadlineReached = terminalDeadline;
@@ -527,6 +579,21 @@ namespace Record {
 
             if (latestSnapshot_.has_value() && (runStatDeadline || terminalDeadline))
                 batch.periodicSnapshot = *latestSnapshot_;
+
+            if (!fatalStallTriggered_
+                && latestSnapshot_.has_value()
+                && fatalStallHandler_
+                && (runStatDeadline || terminalDeadline)
+                && isFatalStalled(*latestSnapshot_, now)) {
+                batch.fatalSnapshot = *latestSnapshot_;
+                batch.fatalSnapshot->fatalStall = true;
+                batch.fatalSnapshot->fatalReason = "No progress update exceeded fatal stall threshold";
+                batch.fatalSnapshot->stallDuration = terminalIdleFor(*latestSnapshot_, now);
+                batch.fatalSnapshot->stallThreshold = programStallThreshold;
+                batch.fatalSnapshot->stallMultiplier = FatalStallMultiplier;
+                batch.fatalHandler = fatalStallHandler_;
+                fatalStallTriggered_ = true;
+            }
 
             if (runStatDeadline) {
                 batch.threadSnapshots.reserve(threadSnapshots_.size());
@@ -567,6 +634,16 @@ namespace Record {
                     heartbeatTerminal(*batch.periodicSnapshot);
             }
 
+            if (batch.fatalSnapshot.has_value()) {
+                flushRunStat(*batch.fatalSnapshot);
+                std::lock_guard<std::mutex> terminalLock(terminalMutex());
+                initializeTerminal();
+                renderStatus(*batch.fatalSnapshot);
+                if (progressBarVisible_) {
+                    renderProgressBar(batch.fatalSnapshot->progress);
+                }
+            }
+
             for (const auto& snapshot : batch.threadSnapshots) writeThreadStats(snapshot);
         }
 
@@ -590,13 +667,18 @@ namespace Record {
                 );
 
                 const auto now               = SteadyClock::now();
+                const auto wallNow           = std::chrono::system_clock::now();
                 const bool runStatDeadline   = now >= nextRunStatWrite;
                 const bool terminalDeadline  = now >= nextTerminalRefresh;
 
-                WorkBatch batch = collectPendingWork(runStatDeadline, terminalDeadline);
+                WorkBatch batch = collectPendingWork(wallNow, runStatDeadline, terminalDeadline);
                 lock.unlock();
 
                 dispatchWork(batch);
+
+                if (batch.fatalSnapshot.has_value() && batch.fatalHandler) {
+                    batch.fatalHandler(*batch.fatalSnapshot);
+                }
 
                 if (batch.shouldExit) break;
 
@@ -661,8 +743,10 @@ namespace Record {
         Config::uSeconds              heartbeat_interval_    = Config::uSeconds(1000);
         Config::Seconds               terminalRefreshInterval_ = Config::Seconds(60);
         bool                          stopRequested_       = false;
+        bool                          fatalStallTriggered_ = false;
         bool                          terminalInitialized_ = false;
         bool                          progressBarVisible_  = false;
+        FatalStallHandler             fatalStallHandler_;
     };
 
     template <typename PythiaT>
@@ -725,6 +809,57 @@ namespace Record {
     ) {
         const TString targetLogPath = logPath.Length() > 0 ? logPath : root.logName;
         writeTextFile(targetLogPath, buildLogText(pythia, root, logging, programLog));
+    }
+
+    inline std::string buildEmergencyLogText(
+        const Config::Root& root,
+        const Config::Log& logging,
+        const RunSnapshot& snapshot,
+        const std::string& programLog = {},
+        const std::string& reason = {}
+    ) {
+        std::ostringstream stream;
+
+        stream << "Emergency Shutdown            : fatal stall\n";
+        if (!reason.empty()) {
+            stream << "Emergency Detail              : " << reason << '\n';
+        }
+        stream << "Serial                        : " << std::setw(2) << std::setfill('0') << logging.serial << '\n';
+        stream << "Beam Energy                   : " << root.beamEnergy.Data() << '\n';
+        stream << "File Title                    : " << root.fileTitle.Data() << '\n';
+        stream << "Root Output                   : " << root.outName.Data() << '\n';
+        stream << "Main Log                      : " << root.logName.Data() << '\n';
+        stream << "RunStat Log                   : " << root.runStatName.Data() << '\n';
+        stream << "Last Event                    : " << numberFormat(snapshot.eventIndex, 0)
+               << " / " << numberFormat(snapshot.nEvents, 0) << '\n';
+        stream << "Real Event Count              : " << numberFormat(snapshot.nRealEvents, 0) << '\n';
+        stream << "Phase                         : " << phaseString(snapshot.phase) << '\n';
+        stream << "Elapsed                       : " << durationString(logging.elapsed, true) << '\n';
+        stream << "Last Update                   : " << timeString(snapshot.lastUpdateTime, false) << '\n';
+        stream << "Fatal Reason                  : " << snapshot.fatalReason << '\n';
+        stream << "Stall Duration                : " << durationString(snapshot.stallDuration, true) << '\n';
+        stream << "Stall Threshold               : "
+               << durationString(std::chrono::duration_cast<Config::uSeconds>(snapshot.stallThreshold), true) << '\n';
+        stream << "Fatal Multiplier              : " << snapshot.stallMultiplier << "x\n";
+
+        if (!programLog.empty()) {
+            stream << programLog;
+            if (programLog.back() != '\n') {
+                stream << '\n';
+            }
+        }
+
+        return stream.str();
+    }
+
+    inline void writeEmergencyLog(
+        const Config::Root& root,
+        const Config::Log& logging,
+        const RunSnapshot& snapshot,
+        const std::string& programLog = {},
+        const std::string& reason = {}
+    ) {
+        writeTextFile(root.logName, buildEmergencyLogText(root, logging, snapshot, programLog, reason));
     }
 
     template <typename PythiaT>

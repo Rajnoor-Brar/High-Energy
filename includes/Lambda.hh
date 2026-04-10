@@ -5,8 +5,10 @@
 #include <chrono>
 #include <cmath>
 #include <cstddef>
+#include <cstdlib>
 #include <iostream>
 #include <mutex>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -184,6 +186,32 @@ namespace Lambda {
         Record::AsyncLogger& asyncLogger
     );
     inline std::string logString(const Parameters& parameters);
+
+    inline std::optional<std::size_t> forcedStallEvent() {
+        const char* rawValue = std::getenv("LAMBDA_FORCE_STALL_AFTER_EVENT");
+        if (rawValue == nullptr || *rawValue == '\0') {
+            return std::nullopt;
+        }
+
+        try {
+            return static_cast<std::size_t>(std::stoull(rawValue));
+        } catch (...) {
+            return std::nullopt;
+        }
+    }
+
+    inline std::optional<std::chrono::milliseconds> forcedStallDuration() {
+        const char* rawValue = std::getenv("LAMBDA_FORCE_STALL_MS");
+        if (rawValue == nullptr || *rawValue == '\0') {
+            return std::nullopt;
+        }
+
+        try {
+            return std::chrono::milliseconds(std::stoll(rawValue));
+        } catch (...) {
+            return std::nullopt;
+        }
+    }
 
     inline void declareObjects(
         RootArray& objects,
@@ -384,6 +412,14 @@ namespace Lambda {
             protonList.size(),
             pionList.size()
         );
+
+        if (const auto stallEvent = forcedStallEvent()) {
+            if (stallEvent.value() == eventIndex) {
+                if (const auto stallDuration = forcedStallDuration()) {
+                    std::this_thread::sleep_for(*stallDuration);
+                }
+            }
+        }
 
         if (logging.checkInterval > 0 && eventIndex % logging.checkInterval == 0) {
             logging.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logging.start);

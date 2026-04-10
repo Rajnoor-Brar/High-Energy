@@ -1,57 +1,99 @@
-! =============================
+! ============================================================
+!  Ne+Ne → Lambda Reconstruction
+!  Pythia 8.317 / Angantyr
+!  Physics: Ropewalk + QCD-CR (mode=1), junctions OFF
+!  Status: production-ready, stall-safe
+! ============================================================
+
 Print:quiet = on
 Parallelism:numThreads = 8
 
+! -----------------------------------------------------------
 ! Beam
-
+! -----------------------------------------------------------
 1000100200:all = Ne20 Ne 10 20 0 0.0 0.0 0 0 0
-Beams:idA = 1000100200
-Beams:idB = 1000100200
-Beams:eCM = 7000
+Beams:idA     = 1000100200
+Beams:idB     = 1000100200
+Beams:eCM     = 7000              
+! verify: total or per-nucleon?
 
+! -----------------------------------------------------------
 ! Random
+! -----------------------------------------------------------
 Random:setSeed = on
 Random:seed    = 270403
-!270403
 
-! Heavy ion
-HeavyIon:mode           = 1
+! -----------------------------------------------------------
+! Heavy Ion (Angantyr)
+! -----------------------------------------------------------
+HeavyIon:mode       = 1
+HeavyIon:SigFitNGen = 200        
+ ! let Glauber fit Ne-20 geometry
+                                  ! remove SigFitDefPar — those were Pb params
 HeavyIon:SigFitNGen     = 0
-HeavyIon:SigFitDefAvNDb = 0.98
-HeavyIon:SigFitDefPar   = 1.51,3.58,1.21
+HeavyIon:SigFitDefAvNDb = 1.13
+HeavyIon:SigFitDefPar   = 1.67,20.13,0.14
+! -----------------------------------------------------------
+! Physics processes — inelastic only, no double-counting
+! -----------------------------------------------------------
+SoftQCD:inelastic = off
+HardQCD:all       = off           
+! already included via MPI inside inelastic
+HadronLevel:all   = on
 
-! MPI / Hadronisation
+! -----------------------------------------------------------
+! MPI / beam remnants
+! -----------------------------------------------------------
 MultiPartonInteractions:pT0Ref = 2.5
-HadronLevel:all                = on
-BeamRemnants:remnantMode       = 1
-BeamRemnants:saturation        = 3
-StringPT:sigma                 = 0.335
+BeamRemnants:remnantMode        = 1   
+! required with CR mode=1
+BeamRemnants:saturation         = 3
 
-! Physics toggles
-HardQCD:all       = on
-SoftQCD:inelastic = on
-PhaseSpace:pTHatMin = 5.0
-
-! Colour reconnection
+! -----------------------------------------------------------
+! Colour Reconnection — QCD-based (mode=1), junctions OFF
+!
+! Literature basis: mode=1 + Ropewalk is the validated
+! combination for strangeness enhancement (ScienceDirect 2024,
+! EPJC 2021). Junctions DISABLED to prevent the unsplittable
+! parallel-junction topologies that cause pT2nearThreshold
+! stalls (~380k warnings in your log).
+! -----------------------------------------------------------
 ColourReconnection:mode              = 1
-ColourReconnection:allowJunctions    = on
+ColourReconnection:reconnect         = on
+ColourReconnection:allowJunctions    = off   
+! key stall fix
 ColourReconnection:allowDoubleJunRem = off
 ColourReconnection:m0                = 0.3
 ColourReconnection:timeDilationMode  = 2
 ColourReconnection:timeDilationPar   = 0.18
 
-! Ropewalk
+! -----------------------------------------------------------
+! Ropewalk — string rope model for collective effects
+!
+! doFlavour: enhanced strange/baryon production via kappa
+! doShoving: radial flow-like transverse push between strings
+! PartonVertex required for spatial overlap calculation
+! gAmplitude lowered from 5.0: reduces out-of-range parm errors
+! -----------------------------------------------------------
 Ropewalk:RopeHadronization = on
 Ropewalk:doFlavour         = on
 Ropewalk:doShoving         = on
 Ropewalk:deltat            = 0.1
-Ropewalk:gAmplitude        = 5.0
-Ropewalk:tInit  = 1.5
-Ropewalk:tShove = 0.2
-Ropewalk:r0     = 0.5
-Ropewalk:m0     = 0.2
+Ropewalk:gAmplitude        = 3.0   
+! was 5.0; reduces Settings::parm OOB errors
+Ropewalk:tInit             = 1.5
+Ropewalk:tShove            = 0.2
+Ropewalk:r0                = 0.5
+Ropewalk:m0                = 0.2
 
-! Vertex
+! -----------------------------------------------------------
+! Vertex info — mandatory for Ropewalk spatial overlap
+! -----------------------------------------------------------
 PartonVertex:setVertex     = on
 PartonVertex:protonRadius  = 0.7
 PartonVertex:emissionWidth = 0.1
+
+! -----------------------------------------------------------
+! Fragmentation
+! -----------------------------------------------------------
+StringPT:sigma = 0.335

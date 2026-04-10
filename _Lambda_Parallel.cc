@@ -7,6 +7,7 @@
 #include "Config.hh"
 #include "Lambda.hh"
 #include "Record.hh"
+#include "RunFinalizer.hh"
 
 int main(int argc, char* argv[]) {
     Record::disable_input_echo();
@@ -27,6 +28,15 @@ int main(int argc, char* argv[]) {
     Lambda::declareObjects(histogramSets, analysisParams, rootParams);
 
     Record::AsyncLogger logger;
+    RunFinalizer::Controller finalizer(
+        pythia,
+        histogramSets,
+        rootParams,
+        logParams,
+        logger,
+        [&analysisParams]() { return Lambda::logString(analysisParams); }
+    );
+    finalizer.installFatalStallHandler();
 
     logParams.start = std::chrono::system_clock::now();
     logger.start(rootParams, logParams);
@@ -47,12 +57,7 @@ int main(int argc, char* argv[]) {
         Lambda::pythiaAnalysis(*worker, histogramSets, analysisParams, rootParams, logParams, logger);
     });
 
-    Analysis::wrapUp(histogramSets, rootParams.outFile, rootParams.histScale, logParams.nEvents);
-    logParams.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logParams.start);
-    logger.finish(logParams, logParams.iEvent.load());
-
-    Record::terminalReport(pythia, rootParams, logParams);
-    Record::outputLog(pythia, rootParams, logParams, Lambda::logString(analysisParams));
+    finalizer.normalShutdown();
 
     return 0;
 }

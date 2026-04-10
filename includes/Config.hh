@@ -1,10 +1,11 @@
 #pragma once
 
 #include <atomic>
-#include <unistd.h>
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <string>
+#include <unistd.h>
 
 #include "TFile.h"
 #include "TString.h"
@@ -33,6 +34,45 @@ namespace Config {
 
         TimePoint          start = TimePoint{};
         uSeconds           elapsed = uSeconds(0);
+
+        Log() = default;
+        Log(const Log& other)
+            : iEvent(other.iEvent.load()),
+              serial(other.serial),
+              srPadding(other.srPadding),
+              nEvents(other.nEvents),
+              nRealEvents(other.nRealEvents),
+              nDigits(other.nDigits),
+              printInterval(other.printInterval),
+              heartbeat_interval(other.heartbeat_interval),
+              terminal_refresh_interval(other.terminal_refresh_interval),
+              program_stall_threshold(other.program_stall_threshold),
+              barInterval(other.barInterval),
+              checkInterval(other.checkInterval),
+              start(other.start),
+              elapsed(other.elapsed) {}
+
+        Log& operator=(const Log& other) {
+            if (this == &other) {
+                return *this;
+            }
+
+            iEvent.store(other.iEvent.load());
+            serial                    = other.serial;
+            srPadding                 = other.srPadding;
+            nEvents                   = other.nEvents;
+            nRealEvents               = other.nRealEvents;
+            nDigits                   = other.nDigits;
+            printInterval             = other.printInterval;
+            heartbeat_interval        = other.heartbeat_interval;
+            terminal_refresh_interval = other.terminal_refresh_interval;
+            program_stall_threshold   = other.program_stall_threshold;
+            barInterval               = other.barInterval;
+            checkInterval             = other.checkInterval;
+            start                     = other.start;
+            elapsed                   = other.elapsed;
+            return *this;
+        }
     };
 
     struct Root {
@@ -89,6 +129,20 @@ inline std::string numberString(size_t value) {
     return result;
 }
 
+    inline void applyEnvironmentOverrides(Log& logging) {
+        if (const char* rawValue = std::getenv("LAMBDA_FORCE_HEARTBEAT_US")) {
+            logging.heartbeat_interval = uSeconds(std::stoll(rawValue));
+        }
+
+        if (const char* rawValue = std::getenv("LAMBDA_FORCE_TERMINAL_REFRESH_SECONDS")) {
+            logging.terminal_refresh_interval = Seconds(std::stoll(rawValue));
+        }
+
+        if (const char* rawValue = std::getenv("LAMBDA_FORCE_STALL_THRESHOLD_SECONDS")) {
+            logging.program_stall_threshold = Seconds(std::stoll(rawValue));
+        }
+    }
+
     inline void sanitiseLoggingConfig(Log& logging) {
         static int wsCol = [] {
             struct winsize windowSize{};
@@ -128,6 +182,7 @@ inline std::string numberString(size_t value) {
                 temp = logging.nEvents;
                 while (temp > 0) { ++nDigits; temp /= 10; }
     logging.nDigits                   = nDigits;
+    applyEnvironmentOverrides(logging);
     sanitiseLoggingConfig(logging);
 
     root.binCount  = config["logging"]["bin_count"].value_or(100);
