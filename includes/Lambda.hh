@@ -23,9 +23,9 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-#include "Analysis.hh"
-#include "Config.hh"
 #include "Record.hh"
+#include "Config.hh"
+#include "Monitor.hh"
 #include <toml++/toml.hpp>
 
 namespace Lambda {
@@ -40,7 +40,7 @@ namespace Lambda {
     constexpr std::size_t kRangeCount        = 3;
     inline constexpr auto kSlowEventThreshold = std::chrono::seconds(5);
 
-    using RootObjects = Analysis::RootObjects<HistogramSet, kQuantityCount>;
+    using RootObjects = Record::RootObjects<HistogramSet, kQuantityCount>;
     using RootArray   = std::vector<RootObjects>;
 
     struct Parameters {
@@ -183,7 +183,7 @@ namespace Lambda {
         const Parameters& parameters,
         Config::Root& root,
         Config::Log& logging,
-        Record::AsyncLogger& asyncLogger
+        Monitor::AsyncLogger& asyncLogger
     );
     inline std::string logString(const Parameters& parameters);
 
@@ -246,7 +246,7 @@ namespace Lambda {
                 const Lambda::Bounds range = quantity.range(histogramSet.rangeFor(quantity.id));
                 const std::string histName = std::string(histogramSet.tag) + "_" + quantity.histSuffix;
 
-                object.hists[Analysis::toIndex(quantity.id)] = new TH1D(
+                object.hists[Record::toIndex(quantity.id)] = new TH1D(
                     histName.c_str(),
                     quantity.histTitle,
                     root.binCount,
@@ -292,7 +292,7 @@ namespace Lambda {
         const    Parameters& parameters,
         Config::Root&        root,
         Config:: Log&        logging,
-        Record::AsyncLogger& asyncLogger
+        Monitor::AsyncLogger& asyncLogger
     ) {
         const std::size_t eventIndex = ++logging.iEvent;
         ++logging.nRealEvents;
@@ -307,7 +307,7 @@ namespace Lambda {
         std::size_t particle, iProton, iPion;
 
         if (eventIndex == 1) {
-            std::lock_guard<std::mutex> terminalLock(Record::terminalMutex());
+            std::lock_guard<std::mutex> terminalLock(Monitor::terminalMutex());
             pythia.info.list();
             asyncLogger.makeSpace();
         }
@@ -332,17 +332,17 @@ namespace Lambda {
             }
         }
 
-        Analysis::resetAllCounts(histogramSets);
+        Record::resetAllCounts(histogramSets);
 
         std::vector<char> pionTaken(pionList.size(), 0);
         logging.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logging.start);
         
         asyncLogger.publishThreadStats(
             workerIndex,
-            Record::ThreadPhase::Analysis,
+            Monitor::ThreadPhase::Analysis,
             eventIndex,
-            Record::NoCallbackCompleted,
-            Record::HasParticleCounts,
+            Monitor::NoCallbackCompleted,
+            Monitor::HasParticleCounts,
             protonList.size(),
             pionList.size()
         );
@@ -395,7 +395,7 @@ namespace Lambda {
             fill(histogramSets, HistogramSet::Selected, bestLambda);
         }
 
-        Analysis::countAll(histogramSets);
+        Record::countAll(histogramSets);
         logging.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logging.start);
 
         const bool shouldRenderStatus = (eventIndex % logging.printInterval == 0) || (eventIndex == 1) || (eventIndex == logging.nEvents);
@@ -403,12 +403,12 @@ namespace Lambda {
 
         asyncLogger.publish(
             logging,
-            Record::RunPhase::Analysis,
+            Monitor::RunPhase::Analysis,
             eventIndex,
             shouldRenderStatus,
             shouldRenderBar,
-            Record::DontWriteRunStat,
-            Record::HasParticleCounts,
+            Monitor::DontWriteRunStat,
+            Monitor::HasParticleCounts,
             protonList.size(),
             pionList.size()
         );
@@ -423,19 +423,19 @@ namespace Lambda {
 
         if (logging.checkInterval > 0 && eventIndex % logging.checkInterval == 0) {
             logging.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logging.start);
-            Analysis::checkpointWrite(histogramSets, root.checkpointOutName, root.histScale, eventIndex);
+            Record::checkpointWrite(histogramSets, root.checkpointOutName, root.histScale, eventIndex);
 
             logging.elapsed =
                 std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logging.start);
-            Record::outputLog(pythia, root, logging, logString(parameters), root.checkpointLogName);
+            Monitor::outputLog(pythia, root, logging, logString(parameters), root.checkpointLogName);
         }
 
 
         asyncLogger.publishThreadStats(
             workerIndex,
-            Record::ThreadPhase::Simulation,
+            Monitor::ThreadPhase::Simulation,
             eventIndex,
-            Record::CallbackCompleted
+            Monitor::CallbackCompleted
         );
     }
 

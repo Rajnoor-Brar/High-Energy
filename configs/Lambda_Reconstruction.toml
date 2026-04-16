@@ -3,6 +3,7 @@ serial = 3
 sr_Padding = 2
 event_count = 5_000 
 beam_energy = 7000 #GeV
+hist_limits = "Lambda_Limits"
 
 [logging]
 bin_count = 500
@@ -35,3 +36,4 @@ events = true
 [physics]
 delta_energy_gev = 0.15 #GeV
 delta_theta_rad = 0.1 #radians
+

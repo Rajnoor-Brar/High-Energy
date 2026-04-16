@@ -6,16 +6,16 @@
 #include <thread>
 
 #include "Config.hh"
-#include "Record.hh"
+#include "Monitor.hh"
 
 int main() {
     Config::Root root;
-    root.rootDirectory = "output/Record_FatalStall_Harness/";
-    root.logDirectory = "output/Record_FatalStall_Harness/logs/";
-    root.logName = "output/Record_FatalStall_Harness/logs/harness.log";
-    root.runStatName = "output/Record_FatalStall_Harness/logs/harness_runstat.log";
-    root.threadStatDirectory = "output/Record_FatalStall_Harness/logs/threads/";
-    root.fileTitle = "Record_FatalStall_Harness";
+    root.rootDirectory = "output/Monitor_FatalStall_Harness/";
+    root.logDirectory = "output/Monitor_FatalStall_Harness/logs/";
+    root.logName = "output/Monitor_FatalStall_Harness/logs/harness.log";
+    root.runStatName = "output/Monitor_FatalStall_Harness/logs/harness_runstat.log";
+    root.threadStatDirectory = "output/Monitor_FatalStall_Harness/logs/threads/";
+    root.fileTitle = "Monitor_FatalStall_Harness";
 
     Config::Log logging;
     logging.serial = 99;
@@ -30,8 +30,8 @@ int main() {
     std::size_t fatalCallbackCount = 0;
 
     {
-        Record::AsyncLogger logger;
-        logger.setFatalStallHandler([&](const Record::RunSnapshot&) {
+        Monitor::AsyncLogger logger;
+        logger.setFatalStallHandler([&](const Monitor::RunSnapshot&) {
             {
                 std::lock_guard<std::mutex> lock(mutex);
                 ++fatalCallbackCount;
@@ -40,8 +40,8 @@ int main() {
         });
 
         logger.start(root, logging);
-        logger.publish(logging, Record::RunPhase::Starting, 0, Record::DontRenderStatus, Record::DontRenderBar, Record::WriteRunStat);
-        logger.publish(logging, Record::RunPhase::Analysis, 1, Record::DontRenderStatus, Record::DontRenderBar, Record::WriteRunStat);
+        logger.publish(logging, Monitor::RunPhase::Starting, 0, Monitor::DontRenderStatus, Monitor::DontRenderBar, Monitor::WriteRunStat);
+        logger.publish(logging, Monitor::RunPhase::Analysis, 1, Monitor::DontRenderStatus, Monitor::DontRenderBar, Monitor::WriteRunStat);
 
         {
             std::unique_lock<std::mutex> lock(mutex);
@@ -65,29 +65,29 @@ int main() {
     }
 
     {
-        Record::AsyncLogger logger;
-        logger.setFatalStallHandler([&](const Record::RunSnapshot&) {
+        Monitor::AsyncLogger logger;
+        logger.setFatalStallHandler([&](const Monitor::RunSnapshot&) {
             std::lock_guard<std::mutex> lock(mutex);
             ++fatalCallbackCount;
         });
 
         logging.start = std::chrono::system_clock::now();
         logger.start(root, logging);
-        logger.publish(logging, Record::RunPhase::Starting, 0, Record::DontRenderStatus, Record::DontRenderBar, Record::WriteRunStat);
+        logger.publish(logging, Monitor::RunPhase::Starting, 0, Monitor::DontRenderStatus, Monitor::DontRenderBar, Monitor::WriteRunStat);
         std::this_thread::sleep_for(std::chrono::seconds(6));
         logger.stop();
     }
 
     {
-        Record::AsyncLogger logger;
-        logger.setFatalStallHandler([&](const Record::RunSnapshot&) {
+        Monitor::AsyncLogger logger;
+        logger.setFatalStallHandler([&](const Monitor::RunSnapshot&) {
             std::lock_guard<std::mutex> lock(mutex);
             ++fatalCallbackCount;
         });
 
         logging.start = std::chrono::system_clock::now();
         logger.start(root, logging);
-        logger.publish(logging, Record::RunPhase::Finished, logging.nEvents, Record::DontRenderStatus, Record::DontRenderBar, Record::WriteRunStat);
+        logger.publish(logging, Monitor::RunPhase::Finished, logging.nEvents, Monitor::DontRenderStatus, Monitor::DontRenderBar, Monitor::WriteRunStat);
         std::this_thread::sleep_for(std::chrono::seconds(6));
         logger.stop();
     }
@@ -97,6 +97,6 @@ int main() {
         return EXIT_FAILURE;
     }
 
-    std::cout << "Record fatal stall harness passed\n";
+    std::cout << "Monitor fatal stall harness passed\n";
     return EXIT_SUCCESS;
 }

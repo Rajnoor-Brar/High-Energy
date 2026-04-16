@@ -3,14 +3,13 @@
 #include "Pythia8/Pythia.h"
 #include "Pythia8/PythiaParallel.h"
 
-#include "Analysis.hh"
+#include "Record.hh"
 #include "Config.hh"
 #include "Lambda.hh"
-#include "Record.hh"
-#include "RunFinalizer.hh"
+#include "Monitor.hh"
 
 int main(int argc, char* argv[]) {
-    Record::disable_input_echo();
+    Monitor::disable_input_echo();
 
     Pythia8::PythiaParallel pythia;
     const std::string project    = "Lambda_Reconstruction";
@@ -27,8 +26,8 @@ int main(int argc, char* argv[]) {
     Lambda::RootArray histogramSets;
     Lambda::declareObjects(histogramSets, analysisParams, rootParams);
 
-    Record::AsyncLogger logger;
-    RunFinalizer::Controller finalizer(
+    Monitor::AsyncLogger logger;
+    Record::FinalizerController finalizer(
         pythia,
         histogramSets,
         rootParams,
@@ -42,12 +41,12 @@ int main(int argc, char* argv[]) {
     logger.start(rootParams, logParams);
     logger.publish(
         logParams,
-        Record::RunPhase::Starting,
-        Record::NoEvents,
-        Record::RenderStatus,
-        Record::DontRenderBar,
-        Record::WriteRunStat,
-        Record::NoParticleCounts,0,0,
+        Monitor::RunPhase::Starting,
+        Monitor::NoEvents,
+        Monitor::RenderStatus,
+        Monitor::DontRenderBar,
+        Monitor::WriteRunStat,
+        Monitor::NoParticleCounts,0,0,
         rootParams.fileTitle.Data()
     );
 

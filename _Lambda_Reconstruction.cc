@@ -2,11 +2,10 @@
 
 #include "Pythia8/Pythia.h"
 
-#include "Analysis.hh"
+#include "Record.hh"
 #include "Config.hh"
 #include "Lambda.hh"
-#include "Record.hh"
-#include "RunFinalizer.hh"
+#include "Monitor.hh"
 
 int main(int argc, char* argv[]) {
     Pythia8::Pythia pythia;
@@ -21,14 +20,13 @@ int main(int argc, char* argv[]) {
 
     Config::extractConfiguration(configPath, project, logParams, rootParams);
 
-
     Lambda::Parameters  analysisParams;
     Lambda::extractPhysics(configPath, analysisParams);
     Lambda::RootArray histogramSets;
     Lambda::declareObjects(histogramSets, analysisParams, rootParams);
 
-    Record::AsyncLogger asyncLogger;
-    RunFinalizer::Controller finalizer(
+    Monitor::AsyncLogger asyncLogger;
+    Record::FinalizerController finalizer(
         pythia,
         histogramSets,
         rootParams,
@@ -42,11 +40,11 @@ int main(int argc, char* argv[]) {
     asyncLogger.start(rootParams, logParams);
     asyncLogger.publish(
         logParams,
-        Record::RunPhase::Starting,
+        Monitor::RunPhase::Starting,
         0,
-        Record::RenderStatus,
-        Record::DontRenderBar,
-        Record::WriteRunStat
+        Monitor::RenderStatus,
+        Monitor::DontRenderBar,
+        Monitor::WriteRunStat
     );
 
     pythia.init();
