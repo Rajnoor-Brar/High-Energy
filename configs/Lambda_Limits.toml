@@ -1,26 +1,29 @@
 [Unvalidated]
-Mass               = "Large"
-Energy             = "Large"
-Momentum_Net       = "Large"
-Momentum_Transverse= "Large"
-Momentum_Z         = "Large"
-Pseudorapidity     = "Large"
+Mass               = [0, 5000]
+Energy             = [0, 500]
+Momentum_Net       = [0, 500]
+Momentum_Transverse= [0, 5]
+Momentum_Z         = [0, 500]
+Pseudorapidity     = [-15, 15]
+Multiplicity       = [0,5000]
 
 [Validated]
-Mass               = "Moderate"
-Energy             = "Moderate"
-Momentum_Net       = "Moderate"
-Momentum_Transverse= "Moderate"
-Momentum_Z         = "Moderate"
-Pseudorapidity     = "Moderate"
+Mass               = [1,1.3]
+Energy             = [0,100]
+Momentum_Net       = [0,100]
+Momentum_Transverse= [0,5]
+Momentum_Z         = [0,100]
+Pseudorapidity     = [-15,15]
+Multiplicity       = [0, 1000]
 
 [Selected]
-Mass               = "Small"
-Energy             = "Small"
-Momentum_Net       = "Small"
-Momentum_Transverse= "Small"
-Momentum_Z         = "Small"
-Pseudorapidity     = "Small"
+Mass               = [1,1.3]
+Energy             = [0,100]
+Momentum_Net       = [0,100]
+Momentum_Transverse= [0,5]
+Momentum_Z         = [0,100]
+Pseudorapidity     = [-15,15]
+Multiplicity       = [0,150]
 
 [Mass_Invariant]
 Minute   = [1.112, 1.118]

@@ -8,10 +8,13 @@
 #include "Monitor.hh"
 
 int main(int argc, char* argv[]) {
-    Pythia8::Pythia pythia;
-    const std::string project    = "Lambda_Reconstruction";
-    const std::string configPath = argc > 1 ? argv[1] : "configs/" + project + ".toml";
+    Monitor::disable_input_echo();
+    std::atexit(Monitor::restore_terminal);
 
+    const std::string project    = "Lambda_Test";
+    const std::string configPath = argc > 1 ? argv[1] : "configs/Lambda_Reconstruction.toml";
+
+    Pythia8::Pythia pythia;
     pythia.readFile("configs/Lambda_Reconstruction.cmnd");
     Config::Root        rootParams;
     Config::Log         logParams;
@@ -19,10 +22,10 @@ int main(int argc, char* argv[]) {
     rootParams.beamEnergy = pythia.settings.parm("Beams:eCM") > 0 ? Form("%.0f", pythia.settings.parm("Beams:eCM")) : "UnknownEnergy";
 
     Config::extractConfiguration(configPath, project, logParams, rootParams);
-
+    Config::openOutputFile(rootParams);
 
     Lambda::Parameters  analysisParams;
-    Lambda::extractPhysics(configPath, analysisParams);
+    Lambda::extractPhysics(configPath, analysisParams, rootParams);
     Lambda::RootArray histogramSets;
     Lambda::declareObjects(histogramSets, analysisParams, rootParams);
 
@@ -41,14 +44,6 @@ int main(int argc, char* argv[]) {
 
     logParams.start = std::chrono::system_clock::now();
     asyncLogger.start(rootParams, logParams);
-    asyncLogger.publish(
-        logParams,
-        Monitor::RunPhase::Starting,
-        0,
-        Monitor::RenderStatus,
-        Monitor::DontRenderBar,
-        Monitor::WriteRunStat
-    );
     pythia.next();
     for (std::size_t iEvent = 0; iEvent < logParams.nEvents; ++iEvent) {
         std::this_thread::sleep_for(std::chrono::milliseconds(5));

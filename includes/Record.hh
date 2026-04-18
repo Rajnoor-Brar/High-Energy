@@ -9,6 +9,7 @@
 #include <thread>
 #include <utility>
 #include <vector>
+#include <string>
 
 #include "Config.hh"
 #include "Monitor.hh"
@@ -16,173 +17,238 @@
 #include "TDirectory.h"
 #include "TH1.h"
 #include "TH1D.h"
-#include "TH1I.h"
+#include "TH2.h"
+#include "TGraph.h"
+#include "TProfile.h"
+#include "TTree.h"
+#include "Math/Vector4D.h"
 #include "TString.h"
 
 namespace Record {
+    using Lorentz = ROOT::Math::PxPyPzEVector;
+
+    struct NoBasis {};
+
     template <typename Enum>
     constexpr std::size_t toIndex(Enum value) {
         return static_cast<std::size_t>(value);
     }
 
-    template <typename Basis, std::size_t HistCount>
+    inline std::string quantityName(Config::Quantity quantity) {
+        switch (quantity) {
+            case Config::Quantity::Mass_Invariant:      return "Mass_Invariant";
+            case Config::Quantity::Mass_Transverse:     return "Mass_Transverse";
+            case Config::Quantity::Energy_Net:          return "Energy_Net";
+            case Config::Quantity::Energy_Transverse:   return "Energy_Transverse";
+            case Config::Quantity::Momentum_Net:        return "Momentum_Net";
+            case Config::Quantity::Momentum_Transverse: return "Momentum_Transverse";
+            case Config::Quantity::Momentum_X:          return "Momentum_X";
+            case Config::Quantity::Momentum_Y:          return "Momentum_Y";
+            case Config::Quantity::Momentum_Z:          return "Momentum_Z";
+            case Config::Quantity::Rapidity:            return "Rapidity";
+            case Config::Quantity::Pseudorapidity:      return "Pseudorapidity";
+            case Config::Quantity::Azimuthal_Angle:     return "Azimuthal_Angle";
+            case Config::Quantity::Multiplicity:        return "Multiplicity";
+        }
+
+        throw std::out_of_range("unknown quantity");
+    }
+
+    inline Double_t valueOf(const Lorentz& particle, Config::Quantity quantity) {
+        switch (quantity) {
+            case Config::Quantity::Mass_Invariant:      return particle.M();
+            case Config::Quantity::Mass_Transverse:     return particle.Mt();
+            case Config::Quantity::Energy_Net:          return particle.E();
+            case Config::Quantity::Energy_Transverse:   return std::sqrt(particle.Pt() * particle.Pt() + particle.M() * particle.M());
+            case Config::Quantity::Momentum_Net:        return particle.P();
+            case Config::Quantity::Momentum_Transverse: return particle.Pt();
+            case Config::Quantity::Momentum_X:          return particle.Px();
+            case Config::Quantity::Momentum_Y:          return particle.Py();
+            case Config::Quantity::Momentum_Z:          return particle.Pz();
+            case Config::Quantity::Rapidity:            return particle.Rapidity();
+            case Config::Quantity::Pseudorapidity:      return particle.Eta();
+            case Config::Quantity::Azimuthal_Angle:     return particle.Phi();
+            case Config::Quantity::Multiplicity:        return 1.0;
+        }
+
+        throw std::out_of_range("unknown quantity");
+    }
+
+    struct TH1Record {
+        TH1D* hist{};
+        Config::Quantity quantity{};
+    };
+    struct TH2Record {
+        TH2* hist{};
+        Config::Quantity quantityX{};
+        Config::Quantity quantityY{};
+    };
+
+    struct TreeRecord {
+        TTree* tree{};
+        std::vector<Config::Quantity> quantities{};
+        std::unique_ptr<std::vector<Double_t>> branchValues{std::make_unique<std::vector<Double_t>>()};
+    };
+
+    template <std::size_t N>
+    inline TreeRecord declareTree(
+        TDirectory* dir,
+        const std::string& name,
+        const std::string& title,
+        const std::array<Config::Quantity, N>& quantities
+    ) {
+        if (dir == nullptr)
+            throw std::invalid_argument("Tree directory must not be null");
+
+        TreeRecord record{};
+        record.quantities.assign(quantities.begin(), quantities.end());
+        record.branchValues = std::make_unique<std::vector<Double_t>>(record.quantities.size(), 0.0);
+
+        dir->cd();
+        record.tree = new TTree(name.c_str(), title.c_str());
+
+        for (std::size_t i = 0; i < record.quantities.size(); ++i) {
+            const std::string branchName = quantityName(record.quantities[i]);
+            const std::string branchType = branchName + "/D";
+            record.tree->Branch(branchName.c_str(), record.branchValues->data() + i, branchType.c_str());
+        }
+
+        return record;
+    }
+
+    template <typename Basis = NoBasis>
     struct RootObjects {
         Basis basis{};
         TDirectory* dir{};
         TH1D* count{};
-        Int_t validatedCount{};
-        std::array<TH1D*, HistCount> hists{};
+        Int_t candidateCount{};
+        std::vector<TH1Record> hists1D;
+        std::vector<TH2*> hists2D;
+        std::vector<TGraph*> graphs;
+        std::vector<TProfile*> profiles;
+        std::vector<TreeRecord> trees;
     };
 
-    template <typename Basis, std::size_t HistCount>
-    using RootArray = std::vector<RootObjects<Basis, HistCount>>;
+    template <typename Basis = NoBasis>
+    using RootArray = std::vector<RootObjects<Basis>>;
 
-    template <typename Basis, std::size_t HistCount>
-    inline void count(RootObjects<Basis, HistCount>& object) {
+    template <typename Basis>
+    inline void count(RootObjects<Basis>& object) {
         if (object.count != nullptr) {
-            object.count->Fill(object.validatedCount);
+            object.count->Fill(object.candidateCount);
         }
     }
 
-    template <typename Basis, std::size_t HistCount>
-    inline void countAll(RootArray<Basis, HistCount>& objects) {
+    template <typename Basis>
+    inline void countAll(RootArray<Basis>& objects) {
         for (auto& object : objects) {
             count(object);
         }
     }
 
-    template <typename Basis, std::size_t HistCount>
-    inline void resetCount(RootObjects<Basis, HistCount>& object) {
-        object.validatedCount = 0;
+    template <typename Basis>
+    inline void resetCount(RootObjects<Basis>& object) {
+        object.candidateCount = 0;
     }
 
-    template <typename Basis, std::size_t HistCount>
-    inline void resetAllCounts(RootArray<Basis, HistCount>& objects) {
+    template <typename Basis>
+    inline void resetAllCounts(RootArray<Basis>& objects) {
         for (auto& object : objects) {
             resetCount(object);
         }
     }
 
-    inline void scaleAndWrite(TH1* hist, Double_t histScale, std::size_t nEvents, bool width = true) {
-        if (hist == nullptr) {
-            return;
+    inline void fill(TH1Record& record, const Lorentz& particle) {
+        if (record.hist != nullptr) {
+            record.hist->Fill(valueOf(particle, record.quantity));
         }
+    }
 
-        std::unique_ptr<TH1> snapshot(static_cast<TH1*>(hist->Clone(hist->GetName())));
-        if (!snapshot) {
-            return;
+    inline void fill(TreeRecord& record, const Lorentz& particle) {
+        if (record.tree == nullptr || record.branchValues == nullptr) return;
+
+        for (std::size_t i = 0; i < record.quantities.size(); ++i) {
+            (*record.branchValues)[i] = valueOf(particle, record.quantities[i]);
         }
+        record.tree->Fill();
+    }
 
-        if (nEvents > 0) {
-            const Double_t scale = histScale / static_cast<Double_t>(nEvents);
-            if (width) {
-                snapshot->Scale(scale, "width");
-            } else {
-                snapshot->Scale(scale);
+    inline void scaleAndWrite(TObject* object, Double_t histScale, std::size_t nEvents, bool width = true) {
+        if (object == nullptr) return;
+
+        if (object->InheritsFrom(TH1::Class())) {
+            TH1* hist = static_cast<TH1*>(object);
+            std::unique_ptr<TH1> snapshot(static_cast<TH1*>(hist->Clone(hist->GetName())));
+            if (!snapshot) return;
+
+            if (nEvents > 0) {
+                const Double_t scale = histScale / static_cast<Double_t>(nEvents);
+                if (width && !object->InheritsFrom(TH2::Class())) snapshot->Scale(scale, "width");
+                else snapshot->Scale(scale);
             }
-        }
 
-        snapshot->Write("", TObject::kOverwrite);
-    }
-
-    inline void scaleAndWriteToDir(
-        TDirectory* dir,
-        TH1* hist,
-        Double_t histScale,
-        std::size_t nEvents,
-        bool width = true
-    ) {
-        if (dir == nullptr || hist == nullptr) {
+            snapshot->Write("", TObject::kOverwrite);
             return;
         }
 
+        object->Write("", TObject::kOverwrite);
+    }
+
+    inline void scaleAndWriteToDir(TDirectory* dir, TObject* object, Double_t histScale, std::size_t nEvents, bool width = true) {
+        if (dir == nullptr || object == nullptr) return;
         dir->cd();
-        scaleAndWrite(hist, histScale, nEvents, width);
+        scaleAndWrite(object, histScale, nEvents, width);
     }
 
-    template <typename Basis, std::size_t HistCount>
-    inline void write(RootObjects<Basis, HistCount>& object, Double_t histScale, std::size_t nEvents) {
-        if (object.dir == nullptr) {
-            return;
-        }
-
+    template <typename Basis>
+    inline void write(RootObjects<Basis>& object, Double_t histScale, std::size_t nEvents, bool checkpoint = false) {
+        if (object.dir == nullptr) return;
         object.dir->cd();
         scaleAndWrite(object.count, histScale, nEvents, false);
-
-        for (TH1D* hist : object.hists) {
-            scaleAndWrite(hist, histScale, nEvents, true);
+        for (auto& hist : object.hists1D) scaleAndWrite(hist.hist, histScale, nEvents, true);
+        for (TH2* hist : object.hists2D) scaleAndWrite(hist, histScale, nEvents, false);
+        for (TGraph* graph : object.graphs) scaleAndWrite(graph, histScale, nEvents, false);
+        for (TProfile* profile : object.profiles) scaleAndWrite(profile, histScale, nEvents, false);
+        if (!checkpoint) {
+            for (auto& tree : object.trees) scaleAndWrite(tree.tree, histScale, nEvents, false);
         }
     }
 
-    template <typename Basis, std::size_t HistCount>
-    inline void writeToDir(
-        RootObjects<Basis, HistCount>& object,
-        TDirectory* dir,
-        Double_t histScale,
-        std::size_t nEvents
-    ) {
-        if (dir == nullptr) {
-            return;
-        }
-
+    template <typename Basis>
+    inline void writeToDir(RootObjects<Basis>& object, TDirectory* dir, Double_t histScale, std::size_t nEvents, bool checkpoint = false) {
+        if (dir == nullptr) return;
         scaleAndWriteToDir(dir, object.count, histScale, nEvents, false);
-
-        for (TH1D* hist : object.hists) {
-            scaleAndWriteToDir(dir, hist, histScale, nEvents, true);
+        for (auto& hist : object.hists1D) scaleAndWriteToDir(dir, hist.hist, histScale, nEvents, true);
+        for (TH2* hist : object.hists2D) scaleAndWriteToDir(dir, hist, histScale, nEvents, false);
+        for (TGraph* graph : object.graphs) scaleAndWriteToDir(dir, graph, histScale, nEvents, false);
+        for (TProfile* profile : object.profiles) scaleAndWriteToDir(dir, profile, histScale, nEvents, false);
+        if (!checkpoint) {
+            for (auto& tree : object.trees) scaleAndWriteToDir(dir, tree.tree, histScale, nEvents, false);
         }
     }
 
-    template <typename Basis, std::size_t HistCount>
-    inline void writeAll(RootArray<Basis, HistCount>& objects, Double_t histScale, std::size_t nEvents) {
-        for (auto& object : objects) {
-            write(object, histScale, nEvents);
-        }
+    template <typename Basis>
+    inline void writeAll(RootArray<Basis>& objects, Double_t histScale, std::size_t nEvents) {
+        for (auto& object : objects) write(object, histScale, nEvents);
     }
 
-    template <typename Basis, std::size_t HistCount>
-    inline void checkpointWrite(
-        RootArray<Basis, HistCount>& objects,
-        const TString& mainOutName,
-        Double_t histScale,
-        std::size_t nEvents
-    ) {
-        std::string checkpointName = mainOutName.Data();
-        const std::string rootSuffix = ".root";
-        if (checkpointName.size() >= rootSuffix.size() &&
-            checkpointName.substr(checkpointName.size() - rootSuffix.size()) == rootSuffix) {
-            checkpointName.erase(checkpointName.size() - rootSuffix.size());
-        }
-        checkpointName += ".root";
-
-        TFile checkpointFile(checkpointName.c_str(), "RECREATE");
-        if (!checkpointFile.IsOpen()) {
-            return;
-        }
-
+    template <typename Basis>
+    inline void checkpointWrite(RootArray<Basis>& objects, const TString& checkpointOutName, Double_t histScale, std::size_t nEvents) {
+        TFile checkpointFile(checkpointOutName.Data(), "RECREATE");
+        if (!checkpointFile.IsOpen()) return;
         for (auto& object : objects) {
-            if (object.dir == nullptr) {
-                continue;
-            }
-
+            if (object.dir == nullptr) continue;
             TDirectory* checkpointDir = checkpointFile.mkdir(object.dir->GetName());
-            writeToDir(object, checkpointDir, histScale, nEvents);
+            writeToDir(object, checkpointDir, histScale, nEvents, true);
         }
-
         checkpointFile.Write("", TObject::kOverwrite);
         checkpointFile.Close();
     }
 
-    template <typename Basis, std::size_t HistCount>
-    inline void wrapUp(
-        RootArray<Basis, HistCount>& objects,
-        TFile* outFile,
-        Double_t histScale,
-        std::size_t nEvents
-    ) {
+    template <typename Basis>
+    inline void wrapUp(RootArray<Basis>& objects, TFile* outFile, Double_t histScale, std::size_t nEvents) {
         writeAll(objects, histScale, nEvents);
-        if (outFile != nullptr) {
-            outFile->Close();
-        }
+        if (outFile != nullptr) outFile->Close();
     }
 
     inline constexpr auto FatalGracePeriod = std::chrono::seconds(10);
@@ -190,32 +256,16 @@ namespace Record {
     template <typename PythiaT, typename RootArrayT, typename ProgramLogBuilder>
     class FinalizerController {
       public:
-        FinalizerController(
-            PythiaT& pythia,
-            RootArrayT& histogramSets,
-            Config::Root& root,
-            Config::Log& logging,
-            Monitor::AsyncLogger& logger,
-            ProgramLogBuilder programLogBuilder
-        )
-            : pythia_(pythia),
-              histogramSets_(histogramSets),
-              root_(root),
-              logging_(logging),
-              logger_(logger),
-              programLogBuilder_(std::move(programLogBuilder)) {}
+        FinalizerController(PythiaT& pythia, RootArrayT& histogramSets, Config::Root& root, Config::Log& logging, Monitor::AsyncLogger& logger, ProgramLogBuilder programLogBuilder)
+            : pythia_(pythia), histogramSets_(histogramSets), root_(root), logging_(logging), logger_(logger), programLogBuilder_(std::move(programLogBuilder)) {}
 
         void installFatalStallHandler() {
-            logger_.setFatalStallHandler([this](const Monitor::RunSnapshot& snapshot) {
-                fatalShutdown(snapshot);
-            });
+            logger_.setFatalStallHandler([this](const Monitor::RunSnapshot& snapshot) { fatalShutdown(snapshot); });
         }
 
         void normalShutdown() {
             wrapUp(histogramSets_, root_.outFile, root_.histScale, logging_.nEvents);
-            logging_.elapsed = std::chrono::duration_cast<Config::uSeconds>(
-                std::chrono::system_clock::now() - logging_.start
-            );
+            logging_.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logging_.start);
             logger_.finish(logging_, logging_.iEvent.load());
             Monitor::terminalReport(pythia_, root_, logging_);
             Monitor::outputLog(pythia_, root_, logging_, programLogBuilder_());
@@ -223,15 +273,9 @@ namespace Record {
 
       private:
         void fatalShutdown(const Monitor::RunSnapshot& snapshot) {
-            if (fatalShutdownStarted_.exchange(true)) {
-                return;
-            }
-
+            if (fatalShutdownStarted_.exchange(true)) return;
             Config::Log frozenLog = logging_;
-            frozenLog.elapsed = std::chrono::duration_cast<Config::uSeconds>(
-                std::chrono::system_clock::now() - logging_.start
-            );
-
+            frozenLog.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logging_.start);
             Monitor::RunSnapshot frozenSnapshot = snapshot;
             frozenSnapshot.elapsed = frozenLog.elapsed;
 
@@ -244,25 +288,14 @@ namespace Record {
                 Monitor::outputLog(pythia_, root_, frozenLog, programLog);
                 completed->store(true);
             }).detach();
-
             const auto deadline = std::chrono::steady_clock::now() + FatalGracePeriod;
             while (std::chrono::steady_clock::now() < deadline) {
-                if (completed->load()) {
-                    std::_Exit(EXIT_FAILURE);
-                }
+                if (completed->load()) std::_Exit(EXIT_FAILURE);
                 std::this_thread::sleep_for(std::chrono::milliseconds(50));
             }
-
-            Monitor::writeEmergencyLog(
-                root_,
-                frozenLog,
-                frozenSnapshot,
-                programLog,
-                "fatal-stall fallback after timed-out wrapUp/log attempt"
-            );
+            Monitor::writeEmergencyLog(root_, frozenLog, frozenSnapshot, programLog, "fatal-stall fallback after timed-out wrapUp/log attempt");
             std::_Exit(EXIT_FAILURE);
         }
-
         PythiaT& pythia_;
         RootArrayT& histogramSets_;
         Config::Root& root_;

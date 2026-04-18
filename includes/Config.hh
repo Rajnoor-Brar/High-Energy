@@ -2,14 +2,17 @@
 
 #include <atomic>
 #include <chrono>
-#include <cstdlib>
 #include <filesystem>
+#include <sstream>
+#include <stdexcept>
 #include <string>
+#include <optional>
 #include <unistd.h>
+#include <map>
+#include <array>
 
 #include "TFile.h"
 #include "TString.h"
-
 #include <sys/ioctl.h>
 #include <toml++/toml.hpp>
 
@@ -17,6 +20,35 @@ namespace Config {
     using TimePoint = std::chrono::system_clock::time_point;
     using uSeconds  = std::chrono::microseconds;
     using Seconds   = std::chrono::seconds;
+    struct Bounds {
+        Double_t low{};
+        Double_t high{};
+    };
+
+    enum class RangeSize : std::size_t {
+        Minute,
+        Small,
+        Moderate,
+        Large,
+        Extreme
+    };
+
+    enum class Quantity : std::size_t {
+        Mass_Invariant,
+        Mass_Transverse,
+        Energy_Net,
+        Energy_Transverse,
+        Momentum_Net,
+        Momentum_Transverse,
+        Momentum_X,
+        Momentum_Y,
+        Momentum_Z,
+        Rapidity,
+        Pseudorapidity,
+        Azimuthal_Angle,
+        Multiplicity
+    };
+    using LimitTable = std::map<Quantity, std::map<RangeSize, Bounds>>;
 
     struct Log {
         std::atomic<std::size_t> iEvent{0};
@@ -53,10 +85,7 @@ namespace Config {
               elapsed(other.elapsed) {}
 
         Log& operator=(const Log& other) {
-            if (this == &other) {
-                return *this;
-            }
-
+            if (this == &other) return *this;
             iEvent.store(other.iEvent.load());
             serial                    = other.serial;
             srPadding                 = other.srPadding;
@@ -77,9 +106,9 @@ namespace Config {
 
     struct Root {
         TFile*  outFile       = nullptr;
-        TString rootDirectory = "output/Lambda_Reconstruction/";
-        TString logDirectory  = "output/Lambda_Reconstruction/params/";
-        TString checkpointDirectory = "output/Lambda_Reconstruction/checkpoints/";
+        TString rootDirectory = "output/";
+        TString logDirectory  = "output/params/";
+        TString checkpointDirectory = "output/checkpoints/";
         TString beamEnergy    = "";
         TString outName       = "";
         TString logName       = "";
@@ -88,58 +117,110 @@ namespace Config {
         TString checkpointOutName = "";
         TString checkpointLogName = "";
         TString fileTitle     = "";
+        TString histLimitsFile = "";
+        LimitTable limits{};
         Int_t   binCount      = 100;
         Double_t histScale    = 100;
     };
 
-    #include <string>
-#include <sstream>
-#include <array>
-
-inline std::string numberString(size_t value) {
-    static constexpr std::array<const char*, 7> suffix = {
-        "", "k", "M", "B", "T", "P", "E"
-    };
-
-    if (value == 0) return "0";
-
-    std::stringstream ss;
-    std::string result;
-
-    size_t group = 0;
-
-    while (value > 0) {
-        size_t chunk = value % 1000;
-
-        if (chunk != 0) {
-            ss.str("");          
-            ss.clear();
-            ss << chunk << suffix[group];
-
-            if (!result.empty())
+    inline std::string numberString(size_t value) {
+        static constexpr std::array<const char*, 7> suffix = {"", "k", "M", "B", "T", "P", "E"};
+        if (value == 0) return "0";
+        std::stringstream ss;
+        std::string result;
+        size_t group = 0;
+        while (value > 0) {
+            size_t chunk = value % 1000;
+            if (chunk != 0) {
+                ss.str(""); ss.clear();
+                ss << chunk << suffix[group];
                 result = ss.str() + result;
-            else
-                result = ss.str();
+            }
+            value /= 1000;
+            ++group;
         }
-
-        value /= 1000;
-        ++group;
+        return result;
     }
 
-    return result;
-}
+    inline RangeSize stringToLevel(const std::string& levelStr) {
+        if (levelStr == "Minute")   return RangeSize::Minute;
+        if (levelStr == "Small")    return RangeSize::Small;
+        if (levelStr == "Moderate") return RangeSize::Moderate;
+        if (levelStr == "Large")    return RangeSize::Large;
+        if (levelStr == "Extreme")  return RangeSize::Extreme;
+        throw std::runtime_error("Unknown limit level: " + levelStr);
+    }
 
-    inline void applyEnvironmentOverrides(Log& logging) {
-        if (const char* rawValue = std::getenv("LAMBDA_FORCE_HEARTBEAT_US")) {
-            logging.heartbeat_interval = uSeconds(std::stoll(rawValue));
+    inline Quantity stringToQuantity(const std::string& qStr) {
+        if (qStr == "Mass_Invariant" || qStr == "Mass") return Quantity::Mass_Invariant;
+        if (qStr == "Mass_Transverse")     return Quantity::Mass_Transverse;
+        if (qStr == "Energy_Net" || qStr == "Energy")  return Quantity::Energy_Net;
+        if (qStr == "Energy_Transverse")   return Quantity::Energy_Transverse;
+        if (qStr == "Momentum_Net")        return Quantity::Momentum_Net;
+        if (qStr == "Momentum_Transverse") return Quantity::Momentum_Transverse;
+        if (qStr == "Momentum_X")          return Quantity::Momentum_X;
+        if (qStr == "Momentum_Y")          return Quantity::Momentum_Y;
+        if (qStr == "Momentum_Z")          return Quantity::Momentum_Z;
+        if (qStr == "Rapidity")            return Quantity::Rapidity;
+        if (qStr == "Pseudorapidity")      return Quantity::Pseudorapidity;
+        if (qStr == "Azimuthal_Angle")     return Quantity::Azimuthal_Angle;
+        if (qStr == "Multiplicity")        return Quantity::Multiplicity;
+        throw std::runtime_error("Unknown quantity: " + qStr);
+    }
+
+    inline std::optional<Quantity> tryStringToQuantity(const std::string& qStr) {
+        try {
+            return stringToQuantity(qStr);
+        } catch (const std::runtime_error&) {
+            return std::nullopt;
+        }
+    }
+
+    inline Bounds parseBoundsArray(const toml::array& boundsArray, const std::string& filePath, const std::string& quantityName, const std::string& levelName) {
+        if (boundsArray.size() != 2) {
+            throw std::runtime_error("Expected exactly 2 values for " + quantityName + "." + levelName + " in " + filePath);
         }
 
-        if (const char* rawValue = std::getenv("LAMBDA_FORCE_TERMINAL_REFRESH_SECONDS")) {
-            logging.terminal_refresh_interval = Seconds(std::stoll(rawValue));
+        const auto low = boundsArray[0].value<Double_t>();
+        const auto high = boundsArray[1].value<Double_t>();
+        if (!low || !high) {
+            throw std::runtime_error("Expected numeric bounds for " + quantityName + "." + levelName + " in " + filePath);
         }
 
-        if (const char* rawValue = std::getenv("LAMBDA_FORCE_STALL_THRESHOLD_SECONDS")) {
-            logging.program_stall_threshold = Seconds(std::stoll(rawValue));
+        return {*low, *high};
+    }
+
+    inline std::string resolveLimitsPath(const std::string& limitsName) {
+        if (limitsName.empty()) {
+            throw std::runtime_error("Histogram limits file name must not be empty");
+        }
+
+        if (limitsName.find('/') != std::string::npos) return limitsName;
+        if (limitsName.size() >= 5 && limitsName.substr(limitsName.size() - 5) == ".toml") return "configs/" + limitsName;
+        return "configs/" + limitsName + ".toml";
+    }
+
+    inline void loadLimitsFile(const std::string& filePath, LimitTable& limits) {
+        if (!std::filesystem::exists(filePath)) {
+            throw std::runtime_error("Limits file does not exist: " + filePath);
+        }
+
+        toml::table table = toml::parse_file(filePath);
+        for (auto&& [quantityKey, quantityValue] : table) {
+            if (!quantityValue.is_table()) continue;
+
+            const std::string quantityName = std::string(quantityKey.str());
+            const auto quantity = tryStringToQuantity(quantityName);
+            if (!quantity) continue;
+            toml::table& quantityTable = *quantityValue.as_table();
+
+            for (auto&& [levelKey, levelValue] : quantityTable) {
+                if (!levelValue.is_array()) continue;
+
+                const std::string levelName = std::string(levelKey.str());
+                const RangeSize level = stringToLevel(levelName);
+                limits[*quantity][level] = parseBoundsArray(*levelValue.as_array(), filePath, quantityName, levelName);
+            }
         }
     }
 
@@ -149,94 +230,143 @@ inline std::string numberString(size_t value) {
             ioctl(STDOUT_FILENO, TIOCGWINSZ, &windowSize);
             return static_cast<int>(windowSize.ws_col);
         }();
-
         const std::size_t progressDivisor = static_cast<std::size_t>(std::max(1, wsCol - 6));
         std::size_t interval = logging.nEvents / progressDivisor;
         interval > 1 ? logging.barInterval = interval : logging.barInterval = 1;
         logging.printInterval = std::max<std::size_t>(1, logging.printInterval);
     }
 
-    inline void extractConfiguration(
-    const std::string& configPath,
-    const std::string& project,
-    Log& logging,
-    Root& root
-) {
-    toml::table config = toml::parse_file(configPath);
+    inline void limitExtractor(const std::string& configPath, Root& root) {
+        root.limits.clear();
+        loadLimitsFile("configs/General_Limits.toml", root.limits);
 
-    std::size_t temp = 0, nDigits = 0;
-    double tempDouble = 0.0;
+        toml::table mainConfig = toml::parse_file(configPath);
+        const std::string limitsFileName = mainConfig["physics"]["limits_file"].value_or(
+            mainConfig["physics"]["hist_limits"].value_or(
+                mainConfig["run"]["hist_limits"].value_or("Lambda_Limits")
+            )
+        );
+        const std::string limitsFile = resolveLimitsPath(limitsFileName);
+        root.histLimitsFile = limitsFile;
+        loadLimitsFile(limitsFile, root.limits);
+    }
 
-    // --- Logging ---
-    logging.serial                    = config["run"]["serial"].value_or(0);
-    logging.srPadding                 = static_cast<std::size_t>(config["run"]["sr_Padding"].value_or(2));
-    logging.nEvents                   = static_cast<std::size_t>(config["run"]["event_count"].value_or(1000));
-    logging.printInterval             = static_cast<std::size_t>(config["logging"]["print_interval"].value_or(100));
-    logging.checkInterval             = static_cast<std::size_t>(config["logging"]["check_interval"].value_or(10000));
-                temp                  = static_cast<std::size_t>(config["logging"]["heartbeat_interval"].value_or(1000));
-    logging.heartbeat_interval        = uSeconds(temp);
-                tempDouble            = config["logging"]["terminal_refresh_interval"].value_or(2.0);
-    logging.terminal_refresh_interval = Seconds((int)(60 * tempDouble));
-                tempDouble            = config["logging"]["program_stall_threshold"].value_or(5.0);
-    logging.program_stall_threshold   = Seconds((int)(60 * tempDouble));
-                temp = logging.nEvents;
-                while (temp > 0) { ++nDigits; temp /= 10; }
-    logging.nDigits                   = nDigits;
-    applyEnvironmentOverrides(logging);
-    sanitiseLoggingConfig(logging);
+   inline void extractConfiguration(const std::string& configPath,
+                                 const std::string& project,
+                                 Log& logging,
+                                 Root& root)
+    {
+        limitExtractor(configPath, root);
+        toml::table config = toml::parse_file(configPath);
 
-    root.binCount  = config["logging"]["bin_count"].value_or(100);
-    root.histScale = config["logging"]["hist_scaling"].value_or(1.0);
+        std::size_t temp = 0;
+        double tempDouble = 0.0;
 
-    const bool logSubDir    = config["paths"]["logInSubDir"].value_or(true);
-    const bool checkSubDir  = config["paths"]["checkpointInSubDir"].value_or(true);
-    const bool serialSubDir = config["paths"]["serialDirectory"].value_or(true);
+        logging.serial         = config["run"]["serial"].value_or(0);
+        logging.srPadding      = static_cast<std::size_t>(config["run"]["sr_Padding"].value_or(2));
+        logging.nEvents        = static_cast<std::size_t>(config["run"]["event_count"].value_or(1000));
 
-    std::string baseRootDir   = config["paths"]["directory"].value_or("output/" + project + "/");
-    std::string logBasePath   = config["paths"]["output_log_directory"].value_or("params/");
-    std::string checkBasePath = config["paths"]["checkpoint_directory"].value_or("checkpoints/");
+        logging.printInterval  = static_cast<std::size_t>(config["logging"]["print_interval"].value_or(100));
+        logging.checkInterval  = static_cast<std::size_t>(config["logging"]["check_interval"].value_or(10000));
 
-    std::string serial = Form(("_%0" + std::to_string((int)logging.srPadding) + "d").c_str(), logging.serial);
-\
-    std::string rootDir = (serialSubDir) ? (baseRootDir+serial+ "/") : baseRootDir;
-    root.rootDirectory = rootDir;
+        temp = static_cast<std::size_t>(config["logging"]["heartbeat_interval"].value_or(1000));
+        logging.heartbeat_interval = uSeconds(temp);
 
-    root.logDirectory        = (logSubDir)   ? rootDir + logBasePath   : logBasePath;
-    root.checkpointDirectory = (checkSubDir) ? rootDir + checkBasePath : checkBasePath;
+        tempDouble = config["logging"]["terminal_refresh_interval"].value_or(2.0);
+        logging.terminal_refresh_interval = Seconds(static_cast<int>(60 * tempDouble));
 
+        tempDouble = config["logging"]["program_stall_threshold"].value_or(5.0);
+        logging.program_stall_threshold = Seconds(static_cast<int>(60 * tempDouble));
 
-    const std::string filePrefix = config["file"]["prefix"].value_or("Unspecified");
-    const bool fileSerial = config["file"]["serial"].value_or(true);
-    const bool fileEnergy = config["file"]["energy"].value_or(true);
-    const bool fileEvents = config["file"]["events"].value_or(true);
+        temp = logging.nEvents;
+        std::size_t nDigits = 0;
+        while (temp > 0) {
+            ++nDigits;
+            temp /= 10;
+        }
+        logging.nDigits = nDigits;
 
-    std::string fileTitle = filePrefix;
+        sanitiseLoggingConfig(logging);
 
-    if (fileSerial) fileTitle += serial;
-    if (fileEnergy) fileTitle += "_" + std::string(root.beamEnergy.Data()) + "GeV";
-    if (fileEvents) fileTitle += "_" + numberString(logging.nEvents);
-    std::string threadDir = std::string("threads_")+(fileEnergy ? ("_" + std::string(root.beamEnergy.Data()) + "GeV") : "") + (fileEvents ? ("_" + numberString(logging.nEvents)) : "");
-    root.fileTitle = fileTitle;
+        // --- ROOT histogram settings ---
+        root.binCount  = config["logging"]["bin_count"].value_or(100);
+        root.histScale = config["logging"]["hist_scaling"].value_or(1.0);
 
-    root.outName             = Form("%s%s.root"           , root.rootDirectory.Data(), fileTitle.c_str());
-    root.logName             = Form("%s%s.log"            , root.logDirectory.Data(), fileTitle.c_str());
-    root.runStatName         = Form("%s%s_runstat.log"    , root.logDirectory.Data(), fileTitle.c_str());
-    root.threadStatDirectory = Form("%s%s/"               , root.logDirectory.Data(), threadDir.c_str());
-    root.checkpointOutName   = Form("%s%s_checkpoint.root", root.checkpointDirectory.Data(), fileTitle.c_str());
-    root.checkpointLogName   = Form("%s%s_checkpoint.log" , root.checkpointDirectory.Data(), fileTitle.c_str());
+        const bool logSubDir    = config["paths"]["logInSubDir"].value_or(true);
+        const bool checkSubDir  = config["paths"]["checkpointsInSubDir"].value_or(true);
+        const bool serialSubDir = config["paths"]["serialDirectory"].value_or(true);
 
-    auto makeDirectory = [](const TString& file) {
-        std::filesystem::create_directories(std::filesystem::path(file.Data()).parent_path());
-    };
+        std::string baseRootDir = config["paths"]["directory"]
+                                    .value_or("output/" + project + "/");
 
-    makeDirectory(root.outName);
-    makeDirectory(root.logName);
-    makeDirectory(root.runStatName);
-    makeDirectory(root.checkpointOutName);
-    makeDirectory(root.checkpointLogName);
-    std::filesystem::create_directories(root.threadStatDirectory.Data());
+        std::string logBasePath   = config["paths"]["output_log_directory"].value_or("params/");
+        std::string checkBasePath = config["paths"]["checkpoint_directory"].value_or("checkpoints/");
 
-    // --- File ---
-    root.outFile = new TFile(root.outName, "RECREATE");
-}
+        std::string serialStr = Form(("_%0" + std::to_string((int)logging.srPadding) + "d").c_str(),
+                                    logging.serial);
+
+        std::string rootDir = (serialSubDir)
+                                ? (baseRootDir + serialStr + "/")
+                                : baseRootDir;
+
+        root.rootDirectory       = rootDir;
+        root.logDirectory        = (logSubDir)   ? rootDir + logBasePath   : logBasePath;
+        root.checkpointDirectory = (checkSubDir) ? rootDir + checkBasePath : checkBasePath;
+
+        const std::string filePrefix = config["file"]["prefix"].value_or("Unspecified");
+        const bool fileSerial = config["file"]["serial"].value_or(true);
+        const bool fileEnergy = config["file"]["energy"].value_or(true);
+        const bool fileEvents = config["file"]["events"].value_or(true);
+
+        std::string fileTitle = filePrefix;
+
+        if (fileSerial)
+            fileTitle += serialStr;
+
+        if (fileEnergy)
+            fileTitle += "_" + std::string(root.beamEnergy.Data()) + "GeV";
+
+        if (fileEvents)
+            fileTitle += "_" + numberString(logging.nEvents);
+
+        std::string threadDir =
+            std::string("threads_") +
+            (fileEnergy ? ("_" + std::string(root.beamEnergy.Data()) + "GeV") : "") +
+            (fileEvents ? ("_" + numberString(logging.nEvents)) : "");
+
+        root.fileTitle = fileTitle;
+
+        root.outName            = Form("%s%s.root", root.rootDirectory.Data(), fileTitle.c_str());
+        root.logName            = Form("%s%s.log", root.logDirectory.Data(), fileTitle.c_str());
+        root.runStatName        = Form("%s%s_runstat.log", root.logDirectory.Data(), fileTitle.c_str());
+        root.threadStatDirectory= Form("%s%s/", root.logDirectory.Data(), threadDir.c_str());
+
+        root.checkpointOutName  = Form("%s%s_checkpoint.root", root.checkpointDirectory.Data(), fileTitle.c_str());
+        root.checkpointLogName  = Form("%s%s_checkpoint.log", root.checkpointDirectory.Data(), fileTitle.c_str());
+
+        auto makeDir = [](const TString& file) {
+            std::filesystem::create_directories( std::filesystem::path(file.Data()).parent_path() );
+        };
+
+        makeDir(root.outName);
+        makeDir(root.logName);
+        makeDir(root.runStatName);
+        makeDir(root.checkpointOutName);
+        makeDir(root.checkpointLogName);
+
+        std::filesystem::create_directories(root.threadStatDirectory.Data());
+    }
+
+    inline void openOutputFile(Root& root) {
+        if (root.outFile != nullptr) {
+            root.outFile->Close();
+            delete root.outFile;
+            root.outFile = nullptr;
+        }
+
+        root.outFile = new TFile(root.outName, "RECREATE");
+        if (root.outFile == nullptr || root.outFile->IsZombie()) {
+            throw std::runtime_error("Failed to create ROOT output file: " + std::string(root.outName.Data()));
+        }
+    }
 }
