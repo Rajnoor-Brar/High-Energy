@@ -33,11 +33,38 @@ namespace Lambda {
     using RootObjects = Record::RootObjects<HistogramSet>;
     using RootArray   = std::vector<RootObjects>;
 
+    struct DataObjects {
+        TTree* protons{};
+        TTree* pions{};
+        // unique_ptr keeps branch addresses stable when DataObjects is moved
+        std::unique_ptr<std::array<Double_t, 4>> protonBranches{std::make_unique<std::array<Double_t, 4>>()};
+        std::unique_ptr<std::array<Double_t, 4>> pionBranches{std::make_unique<std::array<Double_t, 4>>()};
+    };
+
+    inline void declareDataObjects(DataObjects& data, Config::Root& root) {
+        if (root.outFile == nullptr)
+            throw std::invalid_argument("root.outFile must not be null");
+
+        root.outFile->cd();
+        data.protons = new TTree("Protons", "Final state protons");
+        data.pions   = new TTree("Pions",   "Final state #pi^{-}");
+
+        auto declareBranches = [](TTree* tree, std::array<Double_t, 4>& b) {
+            tree->Branch("Energy", &b[0], "Energy/D");
+            tree->Branch("pX",     &b[1], "pX/D");
+            tree->Branch("pY",     &b[2], "pY/D");
+            tree->Branch("pZ",     &b[3], "pZ/D");
+        };
+        declareBranches(data.protons, *data.protonBranches);
+        declareBranches(data.pions,   *data.pionBranches);
+    }
+
+    inline constexpr Double_t kLambdaMass = 1.115;
+    inline constexpr Double_t kProtonMass = 0.938;
+    inline constexpr Double_t kPionMass   = 0.140;
+    inline constexpr Double_t kMassDiff   = 0.037;
+
     struct Parameters {
-        Double_t lambdaMass          = 1.115;
-        Double_t protonMass          = 0.938;
-        Double_t pionMass            = 0.140;
-        Double_t massDiff            = 0.037;
         Double_t massTolerance       = 0.1;
         Double_t ThetaTolerance      = 0.1;
         Double_t cosThetaTolerance   = 0.0;
@@ -53,7 +80,7 @@ namespace Lambda {
         Config::Quantity::Pseudorapidity
     };
 
-    inline constexpr std::array<HistogramSet, 1> jungle = {
+    inline constexpr std::array<HistogramSet, 1> kTreeEnabledSets = {
         HistogramSet::Selected
     };
 
@@ -69,8 +96,8 @@ namespace Lambda {
         {HistogramSet::Selected, "Selected", "Selected"}
     }};
 
-    inline bool plantedInJungle(HistogramSet set) {
-        return std::find(jungle.begin(), jungle.end(), set) != jungle.end();
+    inline bool hasTree(HistogramSet set) {
+        return std::find(kTreeEnabledSets.begin(), kTreeEnabledSets.end(), set) != kTreeEnabledSets.end();
     }
 
     inline std::string quantityAlias(Config::Quantity quantity) {
@@ -142,7 +169,7 @@ namespace Lambda {
     }
 
     inline bool massAccepted(const Lorentz& lambda, const Parameters& parameters) {
-        return (lambda.M() > (parameters.lambdaMass - parameters.massTolerance)) && (lambda.M() < (parameters.lambdaMass + parameters.massTolerance));
+        return (lambda.M() > (kLambdaMass - parameters.massTolerance)) && (lambda.M() < (kLambdaMass + parameters.massTolerance));
     }
 
     inline bool thetaAccepted(Double_t theta, const Parameters& parameters) {
@@ -205,7 +232,7 @@ namespace Lambda {
                 );
             }
 
-            if (plantedInJungle(histogramSet.id)) {
+            if (hasTree(histogramSet.id)) {
                 const std::string treeName = std::string(histogramSet.tag) + "_Candidates";
                 object.trees.push_back(
                     Record::declareTree(
@@ -301,7 +328,7 @@ namespace Lambda {
 
                 fill(histogramSets, HistogramSet::Validated, lambda);
 
-                const Double_t currentMassDelta = std::abs(lambda.M() - parameters.lambdaMass);
+                const Double_t currentMassDelta = std::abs(lambda.M() - kLambdaMass);
 
                 if (!hasCandidate || currentMassDelta < leastMassDelta) {
                     hasCandidate     = true;
@@ -333,11 +360,60 @@ namespace Lambda {
         asyncLogger.publishThreadStats( workerIndex, Monitor::ThreadPhase::Simulation, eventIndex, Monitor::CallbackCompleted );
     }
 
+    inline void pythiaGenerator(
+        Pythia8::Pythia&       pythia,
+        DataObjects&           data,
+        std::mutex&            treeMutex,
+        Config::Log&           logging,
+        Monitor::AsyncLogger&  asyncLogger)
+    {
+        const std::size_t eventIndex = ++logging.iEvent;
+        ++logging.nRealEvents;
+        const int workerIndex = pythia.mode("Parallelism:index");
+
+        asyncLogger.publishThreadStats(workerIndex, Monitor::ThreadPhase::Analysis, eventIndex, Monitor::NoCallbackCompleted);
+
+        // Collect final-state protons and π⁻ per-thread before taking the lock
+        std::vector<std::array<Double_t, 4>> protons, pions;
+        for (int i = 0; i < pythia.event.size(); ++i) {
+            const auto& p = pythia.event[i];
+            if (!p.isFinal()) continue;
+            if      (p.id() ==  2212) protons.push_back({p.e(), p.px(), p.py(), p.pz()});
+            else if (p.id() == -211)  pions.push_back(  {p.e(), p.px(), p.py(), p.pz()});
+        }
+
+        // TTree::Fill is not thread-safe — serialise fills, keep the lock scope tight
+        {
+            std::lock_guard<std::mutex> lock(treeMutex);
+            auto& pb = *data.protonBranches;
+            for (const auto& v : protons) { pb = v; data.protons->Fill(); }
+            auto& ib = *data.pionBranches;
+            for (const auto& v : pions)   { ib = v; data.pions->Fill(); }
+        }
+
+        logging.elapsed = std::chrono::duration_cast<Config::uSeconds>(
+            std::chrono::system_clock::now() - logging.start);
+
+        const bool shouldRenderStatus = (eventIndex % logging.printInterval == 0) || eventIndex == 1 || eventIndex == logging.nEvents;
+        const bool shouldRenderBar    = (eventIndex % logging.barInterval == 0)   || eventIndex == 1 || eventIndex == logging.nEvents;
+
+        asyncLogger.publish(logging, Monitor::RunPhase::Analysis, eventIndex, shouldRenderStatus, shouldRenderBar, Monitor::DontWriteRunStat);
+        asyncLogger.publishThreadStats(workerIndex, Monitor::ThreadPhase::Simulation, eventIndex, Monitor::CallbackCompleted);
+    }
+
+    inline std::string dataLogString() {
+        std::ostringstream stream;
+        stream << "Proton PDG ID                 : 2212\n";
+        stream << "Pion PDG ID                   : -211 (pi-)\n";
+        stream << "Selection                     : isFinal() only\n";
+        return stream.str();
+    }
+
     inline void extractPhysics(const std::string& configPath, Parameters& parameters, const Config::Root& root) {
         toml::table config = toml::parse_file(configPath);
 
-        parameters.massTolerance      = config["physics"]["delta_mass_gev"].value_or(0.1);
-        parameters.ThetaTolerance     = config["physics"]["delta_theta_rad"].value_or(0.1);
+        parameters.massTolerance      = config["lambda"]["delta_mass_gev"].value_or(0.1);
+        parameters.ThetaTolerance     = config["lambda"]["delta_theta_rad"].value_or(0.1);
         parameters.cosThetaTolerance  = std::cos(parameters.ThetaTolerance);
 
         if (!std::filesystem::exists(root.histLimitsFile.Data())) {
@@ -385,10 +461,10 @@ namespace Lambda {
 
     inline std::string logString(const Parameters& parameters) {
         std::ostringstream stream;
-        stream << "Lambda Mass                   : " << parameters.lambdaMass << '\n';
-        stream << "Proton Mass                   : " << parameters.protonMass << '\n';
-        stream << "Pion Mass                     : " << parameters.pionMass << '\n';
-        stream << "Mass Difference               : " << parameters.massDiff << '\n';
+        stream << "Lambda Mass                   : " << kLambdaMass << '\n';
+        stream << "Proton Mass                   : " << kProtonMass << '\n';
+        stream << "Pion Mass                     : " << kPionMass << '\n';
+        stream << "Mass Difference               : " << kMassDiff << '\n';
         stream << "Mass Tolerance                : " << parameters.massTolerance << '\n';
         stream << "Theta Tolerance               : " << parameters.ThetaTolerance << '\n';
         return stream.str();

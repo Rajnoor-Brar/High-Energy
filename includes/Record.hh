@@ -34,44 +34,36 @@ namespace Record {
         return static_cast<std::size_t>(value);
     }
 
-    inline std::string quantityName(Config::Quantity quantity) {
-        switch (quantity) {
-            case Config::Quantity::Mass_Invariant:      return "Mass_Invariant";
-            case Config::Quantity::Mass_Transverse:     return "Mass_Transverse";
-            case Config::Quantity::Energy_Net:          return "Energy_Net";
-            case Config::Quantity::Energy_Transverse:   return "Energy_Transverse";
-            case Config::Quantity::Momentum_Net:        return "Momentum_Net";
-            case Config::Quantity::Momentum_Transverse: return "Momentum_Transverse";
-            case Config::Quantity::Momentum_X:          return "Momentum_X";
-            case Config::Quantity::Momentum_Y:          return "Momentum_Y";
-            case Config::Quantity::Momentum_Z:          return "Momentum_Z";
-            case Config::Quantity::Rapidity:            return "Rapidity";
-            case Config::Quantity::Pseudorapidity:      return "Pseudorapidity";
-            case Config::Quantity::Azimuthal_Angle:     return "Azimuthal_Angle";
-            case Config::Quantity::Multiplicity:        return "Multiplicity";
-        }
+    struct QuantityTraits {
+        const char* name;
+        Double_t (*extract)(const Lorentz&);
+    };
 
-        throw std::out_of_range("unknown quantity");
+    static constexpr std::array<QuantityTraits, 13> kQuantityTraits = {{
+        {"Mass_Invariant",      [](const Lorentz& p) -> Double_t { return p.M(); }},
+        {"Mass_Transverse",     [](const Lorentz& p) -> Double_t { return p.Mt(); }},
+        {"Energy_Net",          [](const Lorentz& p) -> Double_t { return p.E(); }},
+        {"Energy_Transverse",   [](const Lorentz& p) -> Double_t { return std::sqrt(p.Pt() * p.Pt() + p.M() * p.M()); }},
+        {"Momentum_Net",        [](const Lorentz& p) -> Double_t { return p.P(); }},
+        {"Momentum_Transverse", [](const Lorentz& p) -> Double_t { return p.Pt(); }},
+        {"Momentum_X",          [](const Lorentz& p) -> Double_t { return p.Px(); }},
+        {"Momentum_Y",          [](const Lorentz& p) -> Double_t { return p.Py(); }},
+        {"Momentum_Z",          [](const Lorentz& p) -> Double_t { return p.Pz(); }},
+        {"Rapidity",            [](const Lorentz& p) -> Double_t { return p.Rapidity(); }},
+        {"Pseudorapidity",      [](const Lorentz& p) -> Double_t { return p.Eta(); }},
+        {"Azimuthal_Angle",     [](const Lorentz& p) -> Double_t { return p.Phi(); }},
+        {"Multiplicity",        [](const Lorentz&  ) -> Double_t { return 1.0; }},
+    }};
+
+    static_assert(kQuantityTraits.size() == static_cast<std::size_t>(Config::Quantity::Multiplicity) + 1,
+                  "kQuantityTraits size out of sync with Config::Quantity enum");
+
+    inline std::string quantityName(Config::Quantity quantity) {
+        return kQuantityTraits[toIndex(quantity)].name;
     }
 
     inline Double_t valueOf(const Lorentz& particle, Config::Quantity quantity) {
-        switch (quantity) {
-            case Config::Quantity::Mass_Invariant:      return particle.M();
-            case Config::Quantity::Mass_Transverse:     return particle.Mt();
-            case Config::Quantity::Energy_Net:          return particle.E();
-            case Config::Quantity::Energy_Transverse:   return std::sqrt(particle.Pt() * particle.Pt() + particle.M() * particle.M());
-            case Config::Quantity::Momentum_Net:        return particle.P();
-            case Config::Quantity::Momentum_Transverse: return particle.Pt();
-            case Config::Quantity::Momentum_X:          return particle.Px();
-            case Config::Quantity::Momentum_Y:          return particle.Py();
-            case Config::Quantity::Momentum_Z:          return particle.Pz();
-            case Config::Quantity::Rapidity:            return particle.Rapidity();
-            case Config::Quantity::Pseudorapidity:      return particle.Eta();
-            case Config::Quantity::Azimuthal_Angle:     return particle.Phi();
-            case Config::Quantity::Multiplicity:        return 1.0;
-        }
-
-        throw std::out_of_range("unknown quantity");
+        return kQuantityTraits[toIndex(quantity)].extract(particle);
     }
 
     struct TH1Record {
