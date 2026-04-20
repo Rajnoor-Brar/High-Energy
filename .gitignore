@@ -4,3 +4,4 @@ dump
 examples
 archive/*
 legacy/
+/.claude

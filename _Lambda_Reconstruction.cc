@@ -46,10 +46,7 @@ int main(int argc, char* argv[]) {
     pythia.init();
     
     for (std::size_t iEvent = 0; iEvent < logParams.nEvents; ++iEvent) {
-        if (!pythia.next()) {
-            continue;
-        }
-
+        if (!pythia.next()) continue;
         Lambda::pythiaAnalysis(pythia, histogramSets, analysisParams, rootParams, logParams, asyncLogger);
     }
 
