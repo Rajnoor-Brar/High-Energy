@@ -1,8 +1,9 @@
 [run]
-serial = 97
+serial = 1
 sr_Padding = 2
 event_count = 10000
 beam_energy = 7000 #GeV
+
 [logging]
 bin_count = 500
 hist_scaling = 1.0
@@ -16,7 +17,7 @@ program_stall_threshold = 5 #minutes
 
 [paths]
 # paths to save root and log file
-directory = "output/Lambda_Reconstruction/"
+# directory = "output/Lambda_Data/"
 output_log_directory = "logs/"
 checkpoint_directory = "checkpoints/"
 

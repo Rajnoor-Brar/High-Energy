@@ -36,6 +36,7 @@ namespace Lambda {
     struct DataObjects {
         TTree* protons{};
         TTree* pions{};
+        Int_t eventIndex{};
         // unique_ptr keeps branch addresses stable when DataObjects is moved
         std::unique_ptr<std::array<Double_t, 4>> protonBranches{std::make_unique<std::array<Double_t, 4>>()};
         std::unique_ptr<std::array<Double_t, 4>> pionBranches{std::make_unique<std::array<Double_t, 4>>()};
@@ -49,14 +50,15 @@ namespace Lambda {
         data.protons = new TTree("Protons", "Final state protons");
         data.pions   = new TTree("Pions",   "Final state #pi^{-}");
 
-        auto declareBranches = [](TTree* tree, std::array<Double_t, 4>& b) {
+        auto declareBranches = [](Int_t& eventIndex, TTree* tree, std::array<Double_t, 4>& b) {
+            tree->Branch("Index",   &eventIndex, "Index/I");
             tree->Branch("Energy", &b[0], "Energy/D");
             tree->Branch("pX",     &b[1], "pX/D");
             tree->Branch("pY",     &b[2], "pY/D");
             tree->Branch("pZ",     &b[3], "pZ/D");
         };
-        declareBranches(data.protons, *data.protonBranches);
-        declareBranches(data.pions,   *data.pionBranches);
+        declareBranches(data.eventIndex, data.protons, *data.protonBranches);
+        declareBranches(data.eventIndex, data.pions,   *data.pionBranches);
     }
 
     inline constexpr Double_t kLambdaMass = 1.115;
@@ -373,6 +375,11 @@ namespace Lambda {
 
         asyncLogger.publishThreadStats(workerIndex, Monitor::ThreadPhase::Analysis, eventIndex, Monitor::NoCallbackCompleted);
 
+        if (eventIndex == 1) {
+            std::lock_guard<std::mutex> terminalLock(Monitor::terminalMutex());
+            pythia.info.list();
+            std::cout << "\n\n\n" << std::endl;
+        }
         // Collect final-state protons and π⁻ per-thread before taking the lock
         std::vector<std::array<Double_t, 4>> protons, pions;
         for (int i = 0; i < pythia.event.size(); ++i) {
@@ -385,6 +392,7 @@ namespace Lambda {
         // TTree::Fill is not thread-safe — serialise fills, keep the lock scope tight
         {
             std::lock_guard<std::mutex> lock(treeMutex);
+            data.eventIndex = static_cast<Int_t>(eventIndex);
             auto& pb = *data.protonBranches;
             for (const auto& v : protons) { pb = v; data.protons->Fill(); }
             auto& ib = *data.pionBranches;
