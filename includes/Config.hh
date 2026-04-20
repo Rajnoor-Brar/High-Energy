@@ -151,7 +151,7 @@ namespace Config {
         throw std::runtime_error("Unknown limit level: " + levelStr);
     }
 
-    inline Quantity stringToQuantity(const std::string& qStr) {
+    inline std::optional<Quantity> tryStringToQuantity(const std::string& qStr) {
         if (qStr == "Mass_Invariant" || qStr == "Mass") return Quantity::Mass_Invariant;
         if (qStr == "Mass_Transverse")     return Quantity::Mass_Transverse;
         if (qStr == "Energy_Net" || qStr == "Energy")  return Quantity::Energy_Net;
@@ -165,15 +165,12 @@ namespace Config {
         if (qStr == "Pseudorapidity")      return Quantity::Pseudorapidity;
         if (qStr == "Azimuthal_Angle")     return Quantity::Azimuthal_Angle;
         if (qStr == "Multiplicity")        return Quantity::Multiplicity;
-        throw std::runtime_error("Unknown quantity: " + qStr);
+        return std::nullopt;
     }
 
-    inline std::optional<Quantity> tryStringToQuantity(const std::string& qStr) {
-        try {
-            return stringToQuantity(qStr);
-        } catch (const std::runtime_error&) {
-            return std::nullopt;
-        }
+    inline Quantity stringToQuantity(const std::string& qStr) {
+        if (auto q = tryStringToQuantity(qStr)) return *q;
+        throw std::runtime_error("Unknown quantity: " + qStr);
     }
 
     inline Bounds parseBoundsArray(const toml::array& boundsArray, const std::string& filePath, const std::string& quantityName, const std::string& levelName) {
@@ -241,11 +238,7 @@ namespace Config {
         loadLimitsFile("configs/General_Limits.toml", root.limits);
 
         toml::table mainConfig = toml::parse_file(configPath);
-        const std::string limitsFileName = mainConfig["physics"]["limits_file"].value_or(
-            mainConfig["physics"]["hist_limits"].value_or(
-                mainConfig["run"]["hist_limits"].value_or("Lambda_Limits")
-            )
-        );
+        const std::string limitsFileName = mainConfig["lambda"]["hist_limits"].value_or("Lambda_Limits");
         const std::string limitsFile = resolveLimitsPath(limitsFileName);
         root.histLimitsFile = limitsFile;
         loadLimitsFile(limitsFile, root.limits);
@@ -278,13 +271,7 @@ namespace Config {
         tempDouble = config["logging"]["program_stall_threshold"].value_or(5.0);
         logging.program_stall_threshold = Seconds(static_cast<int>(60 * tempDouble));
 
-        temp = logging.nEvents;
-        std::size_t nDigits = 0;
-        while (temp > 0) {
-            ++nDigits;
-            temp /= 10;
-        }
-        logging.nDigits = nDigits;
+        logging.nDigits = std::to_string(logging.nEvents).size();
 
         sanitiseLoggingConfig(logging);
 
@@ -348,11 +335,9 @@ namespace Config {
             std::filesystem::create_directories( std::filesystem::path(file.Data()).parent_path() );
         };
 
-        makeDir(root.outName);
-        makeDir(root.logName);
-        makeDir(root.runStatName);
-        makeDir(root.checkpointOutName);
-        makeDir(root.checkpointLogName);
+        for (const TString* path : {&root.outName, &root.logName, &root.runStatName,
+                                     &root.checkpointOutName, &root.checkpointLogName})
+            makeDir(*path);
 
         std::filesystem::create_directories(root.threadStatDirectory.Data());
     }

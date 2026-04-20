@@ -457,13 +457,14 @@ namespace Monitor {
             }
             else if (snapshot.phase == RunPhase::Starting) {
                 std::cout<< "\033[E\033[2K"<< "\t\033[34;1m Initializing "<<snapshot.eta<<"... \033[0m\033[E\033[2K";
-            } 
+            }
             else if (snapshot.phase == RunPhase::Finished){
                 std::cout << "\033[E\r\033[2K" << "\t\033[32;1m Finished\033[0m"
                 << "\033[E\033[2K";
             }
             else{
-                const bool stalled = isTerminalStalled(snapshot, std::chrono::system_clock::now());
+                const auto now = std::chrono::system_clock::now();
+                const bool stalled = isTerminalStalled(snapshot, now);
                 std::cout << "\t Events processed : " << "\033[32;1m"
                   << numberFormat(snapshot.eventIndex, eventWidth) << "\033[0m"
                   << " out of " << numberFormat(snapshot.nEvents, 0) << "  |  "
@@ -472,7 +473,7 @@ namespace Monitor {
                   << "\033[E\033[2K\t"
                   << (stalled
                           ? std::string("\033[31;1mStalled for ")
-                                + durationString(terminalIdleFor(snapshot, std::chrono::system_clock::now()))
+                                + durationString(terminalIdleFor(snapshot, now))
                                 + "\033[0m"
                           : "");
             }
