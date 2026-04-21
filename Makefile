@@ -1,7 +1,7 @@
 SHELL := /bin/sh
 CXX ?= g++
 
-BASE_CXXFLAGS := -O2 -march=native -std=c++17 -I./includes
+BASE_CXXFLAGS := -O2 -march=native -std=c++17 -I./utils -I./modules
 TOML_FLAGS   := $(shell pkg-config --cflags --libs tomlplusplus)
 
 ROOT_FLAGS   := $(shell root-config --cflags --ldflags --glibs)

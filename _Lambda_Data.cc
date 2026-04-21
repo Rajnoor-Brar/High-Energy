@@ -14,7 +14,7 @@ int main(int argc, char* argv[]) {
     std::atexit(Monitor::restore_terminal);
 
     const std::string project    = "Lambda_Data";
-    const std::string configPath = argc > 1 ? argv[1] : "configs/Lambda_Reconstruction.toml";
+    const std::string configPath = argc > 1 ? argv[1] : "configs/Lambda_Generation.toml";
 
     Pythia8::PythiaParallel pythia;
     pythia.readFile("configs/Lambda_Reconstruction.cmnd");
