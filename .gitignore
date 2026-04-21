@@ -5,3 +5,5 @@ examples
 archive/*
 legacy/
 /.claude
+*.DS_Store
+output/Lambda_Reconstruction/.DS_Store
