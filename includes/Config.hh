@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <string>
 #include <optional>
+#include <thread>
 #include <unistd.h>
 #include <map>
 #include <array>
@@ -57,6 +58,7 @@ namespace Config {
         std::size_t              nEvents = 100;
         std::size_t              nRealEvents = 0;
         std::size_t              nDigits = 0;
+        std::size_t              nThreads = 0;
         std::size_t              printInterval = 10;
         uSeconds                 heartbeat_interval = uSeconds(1000);
         Seconds                  terminal_refresh_interval = Seconds(300);
@@ -75,6 +77,7 @@ namespace Config {
               nEvents(other.nEvents),
               nRealEvents(other.nRealEvents),
               nDigits(other.nDigits),
+              nThreads(other.nThreads),
               printInterval(other.printInterval),
               heartbeat_interval(other.heartbeat_interval),
               terminal_refresh_interval(other.terminal_refresh_interval),
@@ -92,6 +95,7 @@ namespace Config {
             nEvents                   = other.nEvents;
             nRealEvents               = other.nRealEvents;
             nDigits                   = other.nDigits;
+            nThreads                  = other.nThreads;
             printInterval             = other.printInterval;
             heartbeat_interval        = other.heartbeat_interval;
             terminal_refresh_interval = other.terminal_refresh_interval;
@@ -122,6 +126,14 @@ namespace Config {
         Int_t   binCount      = 100;
         Double_t histScale    = 100;
     };
+
+    // Resolves a requested thread count to a usable value:
+    // 0 → hardware_concurrency() - 2 (clamped to >= 1); otherwise returned as-is.
+    inline std::size_t resolveThreadCount(std::size_t requested) {
+        if (requested > 0) return requested;
+        const unsigned hw = std::thread::hardware_concurrency();
+        return hw > 2 ? static_cast<std::size_t>(hw - 2) : 1;
+    }
 
     inline std::string numberString(size_t value) {
         static constexpr std::array<const char*, 7> suffix = {"", "k", "M", "B", "T", "P", "E"};
@@ -258,6 +270,7 @@ namespace Config {
         logging.serial         = config["run"]["serial"].value_or(0);
         logging.srPadding      = static_cast<std::size_t>(config["run"]["sr_Padding"].value_or(2));
         logging.nEvents        = static_cast<std::size_t>(config["run"]["event_count"].value_or(1000));
+        logging.nThreads       = static_cast<std::size_t>(config["run"]["nThreads"].value_or(0));
 
         logging.printInterval  = static_cast<std::size_t>(config["logging"]["print_interval"].value_or(100));
         logging.checkInterval  = static_cast<std::size_t>(config["logging"]["check_interval"].value_or(10000));

@@ -39,6 +39,8 @@ namespace Lambda {
         // unique_ptr keeps branch addresses stable when DataObjects is moved
         std::unique_ptr<std::array<Double_t, 4>> protonBranches{std::make_unique<std::array<Double_t, 4>>()};
         std::unique_ptr<std::array<Double_t, 4>> pionBranches{std::make_unique<std::array<Double_t, 4>>()};
+        std::unique_ptr<Int_t> protonEventIndex{std::make_unique<Int_t>(0)};
+        std::unique_ptr<Int_t> pionEventIndex{std::make_unique<Int_t>(0)};
     };
 
     inline void declareDataObjects(DataObjects& data, Config::Root& root) {
@@ -49,14 +51,15 @@ namespace Lambda {
         data.protons = new TTree("Protons", "Final state protons");
         data.pions   = new TTree("Pions",   "Final state #pi^{-}");
 
-        auto declareBranches = [](TTree* tree, std::array<Double_t, 4>& b) {
-            tree->Branch("Energy", &b[0], "Energy/D");
-            tree->Branch("pX",     &b[1], "pX/D");
-            tree->Branch("pY",     &b[2], "pY/D");
-            tree->Branch("pZ",     &b[3], "pZ/D");
+        auto declareBranches = [](TTree* tree, std::array<Double_t, 4>& b, Int_t& idx) {
+            tree->Branch("event_index", &idx, "event_index/I");
+            tree->Branch("Energy",      &b[0], "Energy/D");
+            tree->Branch("pX",          &b[1], "pX/D");
+            tree->Branch("pY",          &b[2], "pY/D");
+            tree->Branch("pZ",          &b[3], "pZ/D");
         };
-        declareBranches(data.protons, *data.protonBranches);
-        declareBranches(data.pions,   *data.pionBranches);
+        declareBranches(data.protons, *data.protonBranches, *data.protonEventIndex);
+        declareBranches(data.pions,   *data.pionBranches,   *data.pionEventIndex);
     }
 
     inline constexpr Double_t kLambdaMass = 1.115;
@@ -104,7 +107,7 @@ namespace Lambda {
         switch (quantity) {
             case Config::Quantity::Mass_Invariant: return "Mass";
             case Config::Quantity::Energy_Net:     return "Energy";
-            default:                               return Record::quantityName(quantity);
+            default:                               return Analysis::quantityName(quantity);
         }
     }
 
@@ -123,7 +126,7 @@ namespace Lambda {
     inline const Config::Bounds& levelBounds(const Config::Root& root, Config::Quantity quantity, Config::RangeSize level) {
         const auto quantityIt = root.limits.find(quantity);
         if (quantityIt == root.limits.end()) {
-            throw std::runtime_error("No configured limits available for quantity " + Record::quantityName(quantity));
+            throw std::runtime_error("No configured limits available for quantity " + Analysis::quantityName(quantity));
         }
 
         const auto levelIt = quantityIt->second.find(level);
@@ -210,12 +213,12 @@ namespace Lambda {
                 if (!parameters.setLimits.count(histogramSet.id) ||
                     !parameters.setLimits.at(histogramSet.id).count(quantity)) {
                     throw std::runtime_error(
-                        "No limit defined for set " + std::string(histogramSet.tag) + " and quantity " + Record::quantityName(quantity)
+                        "No limit defined for set " + std::string(histogramSet.tag) + " and quantity " + Analysis::quantityName(quantity)
                     );
                 }
 
                 const Config::Bounds bounds = parameters.setLimits.at(histogramSet.id).at(quantity);
-                const std::string quantityName = Record::quantityName(quantity);
+                const std::string quantityName = Analysis::quantityName(quantity);
                 const std::string histName = std::string(histogramSet.tag) + "_" + quantityName + "_Hist";
 
                 object.hists1D.push_back(
@@ -383,11 +386,14 @@ namespace Lambda {
         }
 
         // TTree::Fill is not thread-safe — serialise fills, keep the lock scope tight
+        const Int_t eventIdx = static_cast<Int_t>(eventIndex);
         {
             std::lock_guard<std::mutex> lock(treeMutex);
             auto& pb = *data.protonBranches;
+            *data.protonEventIndex = eventIdx;
             for (const auto& v : protons) { pb = v; data.protons->Fill(); }
             auto& ib = *data.pionBranches;
+            *data.pionEventIndex = eventIdx;
             for (const auto& v : pions)   { ib = v; data.pions->Fill(); }
         }
 
@@ -437,7 +443,7 @@ namespace Lambda {
 
             for (const Config::Quantity quantity : toResolve) {
                 std::optional<Config::Bounds> resolved;
-                const std::string primaryKey = Record::quantityName(quantity);
+                const std::string primaryKey = Analysis::quantityName(quantity);
                 const std::string aliasKey = quantityAlias(quantity);
 
                 if (toml::node* node = subTbl.get(primaryKey)) {

@@ -13,6 +13,7 @@
 
 #include "Config.hh"
 #include "Monitor.hh"
+#include "Analysis.hh"
 #include "TFile.h"
 #include "TDirectory.h"
 #include "TH1.h"
@@ -21,50 +22,12 @@
 #include "TGraph.h"
 #include "TProfile.h"
 #include "TTree.h"
-#include "Math/Vector4D.h"
 #include "TString.h"
 
 namespace Record {
-    using Lorentz = ROOT::Math::PxPyPzEVector;
+    using Lorentz = Analysis::Lorentz;
 
     struct NoBasis {};
-
-    template <typename Enum>
-    constexpr std::size_t toIndex(Enum value) {
-        return static_cast<std::size_t>(value);
-    }
-
-    struct QuantityTraits {
-        const char* name;
-        Double_t (*extract)(const Lorentz&);
-    };
-
-    static constexpr std::array<QuantityTraits, 13> kQuantityTraits = {{
-        {"Mass_Invariant",      [](const Lorentz& p) -> Double_t { return p.M(); }},
-        {"Mass_Transverse",     [](const Lorentz& p) -> Double_t { return p.Mt(); }},
-        {"Energy_Net",          [](const Lorentz& p) -> Double_t { return p.E(); }},
-        {"Energy_Transverse",   [](const Lorentz& p) -> Double_t { return std::sqrt(p.Pt() * p.Pt() + p.M() * p.M()); }},
-        {"Momentum_Net",        [](const Lorentz& p) -> Double_t { return p.P(); }},
-        {"Momentum_Transverse", [](const Lorentz& p) -> Double_t { return p.Pt(); }},
-        {"Momentum_X",          [](const Lorentz& p) -> Double_t { return p.Px(); }},
-        {"Momentum_Y",          [](const Lorentz& p) -> Double_t { return p.Py(); }},
-        {"Momentum_Z",          [](const Lorentz& p) -> Double_t { return p.Pz(); }},
-        {"Rapidity",            [](const Lorentz& p) -> Double_t { return p.Rapidity(); }},
-        {"Pseudorapidity",      [](const Lorentz& p) -> Double_t { return p.Eta(); }},
-        {"Azimuthal_Angle",     [](const Lorentz& p) -> Double_t { return p.Phi(); }},
-        {"Multiplicity",        [](const Lorentz&  ) -> Double_t { return 1.0; }},
-    }};
-
-    static_assert(kQuantityTraits.size() == static_cast<std::size_t>(Config::Quantity::Multiplicity) + 1,
-                  "kQuantityTraits size out of sync with Config::Quantity enum");
-
-    inline std::string quantityName(Config::Quantity quantity) {
-        return kQuantityTraits[toIndex(quantity)].name;
-    }
-
-    inline Double_t valueOf(const Lorentz& particle, Config::Quantity quantity) {
-        return kQuantityTraits[toIndex(quantity)].extract(particle);
-    }
 
     struct TH1Record {
         TH1D* hist{};
@@ -100,7 +63,7 @@ namespace Record {
         record.tree = new TTree(name.c_str(), title.c_str());
 
         for (std::size_t i = 0; i < record.quantities.size(); ++i) {
-            const std::string branchName = quantityName(record.quantities[i]);
+            const std::string branchName = Analysis::quantityName(record.quantities[i]);
             const std::string branchType = branchName + "/D";
             record.tree->Branch(branchName.c_str(), record.branchValues->data() + i, branchType.c_str());
         }
@@ -152,7 +115,7 @@ namespace Record {
 
     inline void fill(TH1Record& record, const Lorentz& particle) {
         if (record.hist != nullptr) {
-            record.hist->Fill(valueOf(particle, record.quantity));
+            record.hist->Fill(Analysis::valueOf(particle, record.quantity));
         }
     }
 
@@ -160,7 +123,7 @@ namespace Record {
         if (record.tree == nullptr || record.branchValues == nullptr) return;
 
         for (std::size_t i = 0; i < record.quantities.size(); ++i) {
-            (*record.branchValues)[i] = valueOf(particle, record.quantities[i]);
+            (*record.branchValues)[i] = Analysis::valueOf(particle, record.quantities[i]);
         }
         record.tree->Fill();
     }

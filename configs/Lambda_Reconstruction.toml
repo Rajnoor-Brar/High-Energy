@@ -3,6 +3,7 @@ serial = 97
 sr_Padding = 2
 event_count = 10000
 beam_energy = 7000 #GeV
+nThreads = 0 # 0 = auto (hardware_concurrency - 2). Overrides .cmnd Parallelism:numThreads if > 0.
 [logging]
 bin_count = 500
 hist_scaling = 1.0
