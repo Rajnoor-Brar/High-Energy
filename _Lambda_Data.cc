@@ -24,6 +24,11 @@ int main(int argc, char* argv[]) {
     Config::extractConfiguration(configPath, project, logParams, rootParams);
     Config::openOutputFile(rootParams);
 
+    if (logParams.nThreads > 0) {
+        const std::size_t nThreads = Config::resolveThreadCount(logParams.nThreads);
+        pythia.readString("Parallelism:numThreads = " + std::to_string(nThreads));
+    }
+
     Lambda::DataObjects dataObjects;
     Lambda::declareDataObjects(dataObjects, rootParams);
     std::mutex treeMutex;
