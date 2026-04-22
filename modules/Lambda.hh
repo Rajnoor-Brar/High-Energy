@@ -377,6 +377,15 @@ namespace Lambda {
         }
     }
 
+    // Schema declaration — owned by the physics module, consumed by any binary
+    // that reads the Lambda ROOT data format.
+    inline std::vector<Explore::CollectionSpec> inputSchema() {
+        return {
+            {"protons", "Protons", Explore::CartesianSpec{"pX", "pY", "pZ", "Energy"}, {"event_index"}, {}},
+            {"pions",   "Pions",   Explore::CartesianSpec{"pX", "pY", "pZ", "Energy"}, {"event_index"}, {}},
+        };
+    }
+
     inline void analyzeEvent(const Explore::Event& ev,
                               int threadId,
                               RootArray& histogramSets,
@@ -389,8 +398,46 @@ namespace Lambda {
 
         asyncLogger.publishThreadStats(threadId, Monitor::ThreadPhase::Analysis, eventIndex, Monitor::NoCallbackCompleted);
 
-        const Candidates candidates = reconstructCandidates(ev.protons, ev.pions, parameters);
+        // Reconstruction math — thread-local, no lock required
+        std::vector<Lorentz> unvalidated, validated, selected;
+        std::vector<bool> pionTaken(ev.pions.size(), false);
 
+        for (std::size_t iProton = 0; iProton < ev.protons.size(); ++iProton) {
+            const Lorentz& proton = ev.protons[iProton];
+            bool hasCandidate     = false;
+            std::size_t bestIdx   = 0;
+            Double_t leastDelta   = 0.0;
+            Lorentz bestLambda;
+
+            for (std::size_t iPion = 0; iPion < ev.pions.size(); ++iPion) {
+                const Lorentz& pion = ev.pions[iPion];
+                const Lorentz lambda = proton + pion;
+
+                unvalidated.push_back(lambda);
+
+                if (pionTaken[iPion]) continue;
+
+                const Double_t theta = cosTheta(proton, pion, lambda);
+                if (!(massAccepted(lambda, parameters) && thetaAccepted(theta, parameters))) continue;
+
+                validated.push_back(lambda);
+
+                const Double_t delta = std::abs(lambda.M() - kLambdaMass);
+                if (!hasCandidate || delta < leastDelta) {
+                    hasCandidate = true;
+                    leastDelta   = delta;
+                    bestIdx      = iPion;
+                    bestLambda   = lambda;
+                }
+            }
+
+            if (hasCandidate) {
+                pionTaken[bestIdx] = true;
+                selected.push_back(bestLambda);
+            }
+        }
+
+        // Lock only for shared histogram and logging state
         {
             std::lock_guard<std::mutex> lock(histMutex);
             ++logging.nRealEvents;
