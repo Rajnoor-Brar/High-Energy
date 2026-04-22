@@ -364,6 +364,15 @@ namespace Lambda {
         asyncLogger.publishThreadStats( workerIndex, Monitor::ThreadPhase::Simulation, eventIndex, Monitor::CallbackCompleted );
     }
 
+    // Schema declaration — owned by the physics module, consumed by any binary
+    // that reads the Lambda ROOT data format.
+    inline std::vector<Explore::CollectionSpec> inputSchema() {
+        return {
+            {"protons", "Protons", Explore::CartesianSpec{"pX", "pY", "pZ", "Energy"}, {"event_index"}, {}},
+            {"pions",   "Pions",   Explore::CartesianSpec{"pX", "pY", "pZ", "Energy"}, {"event_index"}, {}},
+        };
+    }
+
     inline void analyzeEvent(const Explore::Event& ev,
                               int threadId,
                               RootArray& histogramSets,
@@ -377,18 +386,21 @@ namespace Lambda {
         asyncLogger.publishThreadStats(threadId, Monitor::ThreadPhase::Analysis, eventIndex, Monitor::NoCallbackCompleted);
 
         // Reconstruction math — thread-local, no lock required
-        std::vector<Lorentz> unvalidated, validated, selected;
-        std::vector<bool> pionTaken(ev.pions.size(), false);
+        const auto& protons = ev["protons"];
+        const auto& pions   = ev["pions"];
 
-        for (std::size_t iProton = 0; iProton < ev.protons.size(); ++iProton) {
-            const Lorentz& proton = ev.protons[iProton];
+        std::vector<Lorentz> unvalidated, validated, selected;
+        std::vector<bool> pionTaken(pions.size(), false);
+
+        for (std::size_t iProton = 0; iProton < protons.size(); ++iProton) {
+            const Lorentz& proton = protons[iProton];
             bool hasCandidate     = false;
             std::size_t bestIdx   = 0;
             Double_t leastDelta   = 0.0;
             Lorentz bestLambda;
 
-            for (std::size_t iPion = 0; iPion < ev.pions.size(); ++iPion) {
-                const Lorentz& pion = ev.pions[iPion];
+            for (std::size_t iPion = 0; iPion < pions.size(); ++iPion) {
+                const Lorentz& pion = pions[iPion];
                 const Lorentz lambda = proton + pion;
 
                 unvalidated.push_back(lambda);
