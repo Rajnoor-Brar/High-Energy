@@ -394,16 +394,21 @@ namespace Explore {
             }
         }
 
-        // Collect distinct event keys in [lo, hi] without consuming the stream cursor
-        void collectKeys(Long64_t lo, Long64_t hi, std::set<Long64_t>& out) {
+        // Return the min and max event key present in [lo, hi] without consuming the cursor.
+        // Returns false if the tree is empty or no entries fall within [lo, hi].
+        bool keyRange(Long64_t lo, Long64_t hi, Long64_t& outMin, Long64_t& outMax) {
             const Long64_t saved = cursor_;
+            bool found = false;
             for (Long64_t i = 0; i < totalEntries_; ++i) {
                 tree_->GetEntry(i);
                 const Long64_t v = idxValue();
-                if (v >= lo && v <= hi) out.insert(v);
+                if (v < lo || v > hi) continue;
+                if (!found) { outMin = outMax = v; found = true; }
+                else        { outMin = std::min(outMin, v); outMax = std::max(outMax, v); }
             }
             cursor_ = saved;
             if (cursor_ < totalEntries_) tree_->GetEntry(cursor_);
+            return found;
         }
 
       private:
@@ -616,7 +621,27 @@ namespace Explore {
                 for (const auto& cs : collections)
                     flatReaders_.push_back(std::make_unique<FlatReader>(
                         file_, cs, filepath, minBound, maxBound));
-                nEvents_ = computeFlatCount();
+
+                // Compute the dense key range [denseLo_, denseHi_] as the union of
+                // per-reader min/max. Every integer key in this range will be emitted
+                // as an event (with empty particle vectors when no reader has data).
+                Long64_t gMin = std::numeric_limits<Long64_t>::max();
+                Long64_t gMax = std::numeric_limits<Long64_t>::min();
+                bool anyKeys = false;
+                for (auto& r : flatReaders_) {
+                    Long64_t lo, hi;
+                    if (r->keyRange(minBound, maxBound, lo, hi)) {
+                        gMin = std::min(gMin, lo);
+                        gMax = std::max(gMax, hi);
+                        anyKeys = true;
+                    }
+                }
+                if (anyKeys) {
+                    denseLo_ = gMin;
+                    denseHi_ = gMax;
+                    nextKey_  = denseLo_;
+                    nEvents_  = static_cast<std::size_t>(denseHi_ - denseLo_ + 1);
+                }
             }
         }
 
@@ -637,24 +662,20 @@ namespace Explore {
 
       private:
         bool nextFlat() {
-            // Two-pointer merge: pick min current key across all non-exhausted readers
-            bool any = false;
-            EventKey minKey;
-            for (auto& r : flatReaders_) {
-                if (r->exhausted() || r->beyondMax()) continue;
-                const EventKey k = r->currentKey();
-                if (!any || k < minKey) { minKey = k; any = true; }
-            }
-            if (!any) return false;
-            if (minKey.components[0] > maxBound_) return false;
+            // Dense iteration: emit every integer key in [denseLo_, denseHi_].
+            // Readers with data at the current key are drained; others contribute
+            // empty-but-present labels via ensureLabel. This ensures events with
+            // zero particles across all readers are still delivered to the caller.
+            if (nextKey_ > denseHi_) return false;
+            const Long64_t K = nextKey_++;
 
-            current_.index = minKey.components[0];
-            // Every declared label gets an entry (possibly empty) for this event,
-            // so downstream code can index Event by label even when a reader has
-            // no rows at this key (or is already exhausted).
+            current_.index = K;
             for (auto& r : flatReaders_) r->ensureLabel(current_);
+
+            const EventKey key{{K}};
             for (auto& r : flatReaders_)
-                if (!r->exhausted()) r->drain(minKey, current_);
+                if (!r->exhausted() && r->currentKey().components[0] == K)
+                    r->drain(key, current_);
 
             ++index_;
             return true;
@@ -669,13 +690,6 @@ namespace Explore {
             return true;
         }
 
-        std::size_t computeFlatCount() {
-            std::set<Long64_t> keys;
-            for (auto& r : flatReaders_)
-                r->collectKeys(minBound_, maxBound_, keys);
-            return keys.size();
-        }
-
         std::string   filepath_;
         TFile*        file_     = nullptr;
         bool          isVec_   = false;
@@ -684,6 +698,11 @@ namespace Explore {
         Event         current_;
         std::size_t   index_   = 0;
         std::size_t   nEvents_ = 0;
+
+        // Dense flat-iteration state
+        Long64_t      denseLo_  = 0;
+        Long64_t      denseHi_  = -1;   // denseHi_ < denseLo_ → empty range
+        Long64_t      nextKey_  = 0;
 
         std::vector<std::unique_ptr<FlatReader>> flatReaders_;
         std::vector<std::unique_ptr<VecReader>>  vecReaders_;
