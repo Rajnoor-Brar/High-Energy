@@ -71,7 +71,8 @@ int main(int argc, char* argv[]) {
             Lambda::analyzeEvent(ev, threadId, histogramSets, physParams,
                                  logParams, asyncLogger, histMutex);
         },
-        Config::resolveThreadCount(logParams.nThreads));
+        Config::resolveThreadCount(logParams.nThreads)
+    );
 
     finalizer.normalShutdown();
 

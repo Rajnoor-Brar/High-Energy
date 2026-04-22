@@ -381,8 +381,8 @@ namespace Lambda {
     // that reads the Lambda ROOT data format.
     inline std::vector<Explore::CollectionSpec> inputSchema() {
         return {
-            {"protons", "Protons", Explore::CartesianSpec{"pX", "pY", "pZ", "Energy"}, {"event_index"}, {}},
-            {"pions",   "Pions",   Explore::CartesianSpec{"pX", "pY", "pZ", "Energy"}, {"event_index"}, {}},
+            {"Protons", "Protons", Explore::CartesianSpec{"pX", "pY", "pZ", "Energy"}, {"event_index"}, {}},
+            {"Pions",   "Pions",   Explore::CartesianSpec{"pX", "pY", "pZ", "Energy"}, {"event_index"}, {}},
         };
     }
 
@@ -400,17 +400,17 @@ namespace Lambda {
 
         // Reconstruction math — thread-local, no lock required
         std::vector<Lorentz> unvalidated, validated, selected;
-        std::vector<bool> pionTaken(ev.pions.size(), false);
+        std::vector<bool> pionTaken(ev["Pions"].size(), false);
 
-        for (std::size_t iProton = 0; iProton < ev.protons.size(); ++iProton) {
-            const Lorentz& proton = ev.protons[iProton];
+        for (std::size_t iProton = 0; iProton < ev["Protons"].size(); ++iProton) {
+            const Lorentz& proton = ev["Protons"][iProton];
             bool hasCandidate     = false;
             std::size_t bestIdx   = 0;
             Double_t leastDelta   = 0.0;
             Lorentz bestLambda;
 
-            for (std::size_t iPion = 0; iPion < ev.pions.size(); ++iPion) {
-                const Lorentz& pion = ev.pions[iPion];
+            for (std::size_t iPion = 0; iPion < ev["Pions"].size(); ++iPion) {
+                const Lorentz& pion = ev["Pions"][iPion];
                 const Lorentz lambda = proton + pion;
 
                 unvalidated.push_back(lambda);
@@ -441,6 +441,12 @@ namespace Lambda {
         {
             std::lock_guard<std::mutex> lock(histMutex);
             ++logging.nRealEvents;
+
+            Candidates candidates;
+            candidates.unvalidated = std::move(unvalidated);
+            candidates.validated   = std::move(validated);
+            candidates.selected    = std::move(selected);
+
             fillCandidates(histogramSets, candidates);
             logging.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logging.start);
         }

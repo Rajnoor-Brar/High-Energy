@@ -1,10 +1,10 @@
 [run]
-serial     = 1
+serial     = 3
 sr_Padding = 2
-nThreads   = 0   # 0 = auto (hardware_concurrency - 2)
+nThreads   = 1   # 0 = auto (hardware_concurrency - 2)
 
 [input]
-root_file = "output/Lambda_Generation/_01/Lambda_Recons_7000GeV_10k.root"
+root_file = "output/Lambda_Reconstruction/_97/Lambda_Recons_7000GeV_10k.root"
 
 [logging]
 bin_count                 = 500

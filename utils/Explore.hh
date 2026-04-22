@@ -249,7 +249,7 @@ namespace Explore {
             if (ids.empty() || n == 0) return parts;
             const std::size_t chunk = (ids.size() + n - 1) / n;
             for (std::size_t i = 0; i < ids.size(); i += chunk) {
-                const std::size_t j = std::min(ids.size(), i + chunk) - 1;
+                const std::size_t j = std::min(ids.size()-1, i + chunk) - 1;
                 parts.push_back({ids[i], ids[j]});
             }
             return parts;
