@@ -357,9 +357,22 @@ namespace Explore {
         FlatReader(const FlatReader&)            = delete;
         FlatReader& operator=(const FlatReader&) = delete;
 
+        const std::string& label() const { return label_; }
+
         EventKey currentKey() const { return EventKey{{idxValue()}}; }
         bool exhausted()       const { return cursor_ >= totalEntries_; }
         bool beyondMax()       const { return !exhausted() && idxValue() > maxKey_; }
+
+        // Ensure map entries exist for this reader's label on the current event,
+        // regardless of whether drain() will be called. Keeps Event shape stable
+        // when readers have asymmetric event-key coverage.
+        void ensureLabel(Event& ev) const {
+            ev.particles[label_];
+            auto& auxMap = ev.aux[label_];
+            for (std::size_t i = 0; i < auxNames_.size(); ++i)
+                if (auxMap.find(auxNames_[i]) == auxMap.end())
+                    auxMap[auxNames_[i]] = makeAuxCol(auxTypes_[i]);
+        }
 
         void drain(const EventKey& key, Event& ev) {
             const Long64_t target = key.components[0];
@@ -422,7 +435,7 @@ namespace Explore {
             }
         }
 
-        AuxColumn makeAuxCol(BranchType t) {
+        static AuxColumn makeAuxCol(BranchType t) {
             AuxColumn col;
             switch (t) {
                 case BranchType::Float:
@@ -636,6 +649,10 @@ namespace Explore {
             if (minKey.components[0] > maxBound_) return false;
 
             current_.index = minKey.components[0];
+            // Every declared label gets an entry (possibly empty) for this event,
+            // so downstream code can index Event by label even when a reader has
+            // no rows at this key (or is already exhausted).
+            for (auto& r : flatReaders_) r->ensureLabel(current_);
             for (auto& r : flatReaders_)
                 if (!r->exhausted()) r->drain(minKey, current_);
 
