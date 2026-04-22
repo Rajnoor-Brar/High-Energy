@@ -269,23 +269,85 @@ namespace Lambda {
         if (RootObjects* object = find(objects, set)) fill(*object, particle);
     }
 
-   inline void pythiaAnalysis(Pythia8::Pythia& pythia,
-                           RootArray& histogramSets,
-                           const Parameters& parameters,
-                           Config::Root& root,
-                           Config::Log& logging,
-                           Monitor::AsyncLogger& asyncLogger)
+    struct Candidates {
+        std::vector<Lorentz> unvalidated;
+        std::vector<Lorentz> validated;
+        std::vector<Lorentz> selected;
+    };
+
+    inline Candidates reconstructCandidates(const std::vector<Lorentz>& protons,
+                                             const std::vector<Lorentz>& pions,
+                                             const Parameters& parameters)
+    {
+        Candidates result;
+        std::vector<bool> pionTaken(pions.size(), false);
+
+        for (std::size_t iProton = 0; iProton < protons.size(); ++iProton) {
+            const Lorentz& proton = protons[iProton];
+            bool hasCandidate   = false;
+            std::size_t bestIdx = 0;
+            Double_t leastDelta = 0.0;
+            Lorentz bestLambda;
+
+            for (std::size_t iPion = 0; iPion < pions.size(); ++iPion) {
+                const Lorentz& pion = pions[iPion];
+                const Lorentz lambda = proton + pion;
+
+                result.unvalidated.push_back(lambda);
+
+                if (pionTaken[iPion]) continue;
+
+                const Double_t theta = cosTheta(proton, pion, lambda);
+                if (!(massAccepted(lambda, parameters) && thetaAccepted(theta, parameters))) continue;
+
+                result.validated.push_back(lambda);
+
+                const Double_t delta = std::abs(lambda.M() - kLambdaMass);
+                if (!hasCandidate || delta < leastDelta) {
+                    hasCandidate = true;
+                    leastDelta   = delta;
+                    bestIdx      = iPion;
+                    bestLambda   = lambda;
+                }
+            }
+
+            if (hasCandidate) {
+                pionTaken[bestIdx] = true;
+                result.selected.push_back(bestLambda);
+            }
+        }
+        return result;
+    }
+
+    inline void fillCandidates(RootArray& histogramSets, const Candidates& c) {
+        Record::resetAllCounts(histogramSets);
+        for (const auto& l : c.unvalidated) fill(histogramSets, HistogramSet::Unvalidated, l);
+        for (const auto& l : c.validated)   fill(histogramSets, HistogramSet::Validated,   l);
+        for (const auto& l : c.selected)    fill(histogramSets, HistogramSet::Selected,     l);
+        Record::countAll(histogramSets);
+    }
+
+    inline void publishProgress(Monitor::AsyncLogger& asyncLogger,
+                                 const Config::Log& logging,
+                                 std::size_t eventIndex,
+                                 int workerIndex)
+    {
+        const bool renderStatus = (eventIndex % logging.printInterval == 0) || (eventIndex == 1) || (eventIndex == logging.nEvents);
+        const bool renderBar    = (eventIndex % logging.barInterval == 0)   || (eventIndex == 1) || (eventIndex == logging.nEvents);
+        asyncLogger.publish(logging, Monitor::RunPhase::Analysis, eventIndex, renderStatus, renderBar, Monitor::DontWriteRunStat);
+        asyncLogger.publishThreadStats(workerIndex, Monitor::ThreadPhase::Simulation, eventIndex, Monitor::CallbackCompleted);
+    }
+
+    inline void pythiaAnalysis(Pythia8::Pythia& pythia,
+                                RootArray& histogramSets,
+                                const Parameters& parameters,
+                                Config::Root& root,
+                                Config::Log& logging,
+                                Monitor::AsyncLogger& asyncLogger)
     {
         const std::size_t eventIndex = ++logging.iEvent;
         ++logging.nRealEvents;
-
         const int workerIndex = pythia.mode("Parallelism:index");
-
-        Lorentz lambda, proton, pion;
-        std::vector<Lorentz> protonList, pionList;
-
-        protonList.reserve(pythia.event.size());
-        pionList.reserve(pythia.event.size());
 
         if (eventIndex == 1) {
             std::lock_guard<std::mutex> terminalLock(Monitor::terminalMutex());
@@ -293,75 +355,26 @@ namespace Lambda {
             std::cout << "\n\n\n" << std::endl;
         }
 
-        for (std::size_t i = 0; i < pythia.event.size(); ++i) {
+        std::vector<Lorentz> protonList, pionList;
+        protonList.reserve(pythia.event.size());
+        pionList.reserve(pythia.event.size());
+        for (std::size_t i = 0; i < static_cast<std::size_t>(pythia.event.size()); ++i) {
             const auto& p = pythia.event[i];
-
-            if (p.id() == 2212)
-                protonList.emplace_back(p.px(), p.py(), p.pz(), p.e());
-            else if (p.id() == -211)
-                pionList.emplace_back(p.px(), p.py(), p.pz(), p.e());
+            if (p.id() == 2212)      protonList.emplace_back(p.px(), p.py(), p.pz(), p.e());
+            else if (p.id() == -211) pionList.emplace_back(p.px(), p.py(), p.pz(), p.e());
         }
 
-        Record::resetAllCounts(histogramSets);
-        logging.elapsed = std::chrono::duration_cast<Config::uSeconds>( std::chrono::system_clock::now() - logging.start);
+        asyncLogger.publishThreadStats(workerIndex, Monitor::ThreadPhase::Analysis, eventIndex, Monitor::NoCallbackCompleted);
 
-        asyncLogger.publishThreadStats( workerIndex, Monitor::ThreadPhase::Analysis, eventIndex, Monitor::NoCallbackCompleted );
+        fillCandidates(histogramSets, reconstructCandidates(protonList, pionList, parameters));
 
-        std::vector<bool> pionTaken(pionList.size(), false);
-
-        for (std::size_t iProton = 0; iProton < protonList.size(); ++iProton) {
-            bool hasCandidate = false;
-            std::size_t bestPionIndex = 0;
-            Double_t leastMassDelta = 0.0;
-            Lorentz bestLambda;
-
-            proton = protonList[iProton];
-
-            for (std::size_t iPion = 0; iPion < pionList.size(); ++iPion) {
-
-                pion = pionList[iPion];
-                lambda = proton + pion;
-
-                fill(histogramSets, HistogramSet::Unvalidated, lambda);
-
-                if (pionTaken[iPion]) continue;
-
-                const Double_t theta = cosTheta(proton, pion, lambda);
-
-                if (!(massAccepted(lambda, parameters) && thetaAccepted(theta, parameters))) continue;
-
-                fill(histogramSets, HistogramSet::Validated, lambda);
-
-                const Double_t currentMassDelta = std::abs(lambda.M() - kLambdaMass);
-
-                if (!hasCandidate || currentMassDelta < leastMassDelta) {
-                    hasCandidate     = true;
-                    leastMassDelta   = currentMassDelta;
-                    bestPionIndex    = iPion;
-                    bestLambda       = lambda;
-                }
-            }
-
-            if (hasCandidate) {
-                pionTaken[bestPionIndex] = true;
-                fill(histogramSets, HistogramSet::Selected, bestLambda);
-            }
-        }
-
-        Record::countAll(histogramSets);
-        logging.elapsed = std::chrono::duration_cast<Config::uSeconds>( std::chrono::system_clock::now() - logging.start );
-
-        const bool shouldRenderStatus = (eventIndex % logging.printInterval == 0) || (eventIndex == 1) || (eventIndex == logging.nEvents);
-        const bool shouldRenderBar    = (eventIndex % logging.barInterval == 0)   || (eventIndex == 1) || (eventIndex == logging.nEvents);
-
-        asyncLogger.publish( logging, Monitor::RunPhase::Analysis, eventIndex, shouldRenderStatus, shouldRenderBar, Monitor::DontWriteRunStat );
+        logging.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logging.start);
+        publishProgress(asyncLogger, logging, eventIndex, workerIndex);
 
         if (logging.checkInterval > 0 && eventIndex % logging.checkInterval == 0) {
-            Record::checkpointWrite( histogramSets, root.checkpointOutName, root.histScale, eventIndex );
-            Monitor::outputLog( pythia, root, logging, logString(parameters), root.checkpointLogName );
+            Record::checkpointWrite(histogramSets, root.checkpointOutName, root.histScale, eventIndex);
+            Monitor::outputLog(pythia, root, logging, logString(parameters), root.checkpointLogName);
         }
-
-        asyncLogger.publishThreadStats( workerIndex, Monitor::ThreadPhase::Simulation, eventIndex, Monitor::CallbackCompleted );
     }
 
     inline void analyzeEvent(const Explore::Event& ev,
@@ -376,63 +389,16 @@ namespace Lambda {
 
         asyncLogger.publishThreadStats(threadId, Monitor::ThreadPhase::Analysis, eventIndex, Monitor::NoCallbackCompleted);
 
-        // Reconstruction math — thread-local, no lock required
-        std::vector<Lorentz> unvalidated, validated, selected;
-        std::vector<bool> pionTaken(ev.pions.size(), false);
+        const Candidates candidates = reconstructCandidates(ev.protons, ev.pions, parameters);
 
-        for (std::size_t iProton = 0; iProton < ev.protons.size(); ++iProton) {
-            const Lorentz& proton = ev.protons[iProton];
-            bool hasCandidate     = false;
-            std::size_t bestIdx   = 0;
-            Double_t leastDelta   = 0.0;
-            Lorentz bestLambda;
-
-            for (std::size_t iPion = 0; iPion < ev.pions.size(); ++iPion) {
-                const Lorentz& pion = ev.pions[iPion];
-                const Lorentz lambda = proton + pion;
-
-                unvalidated.push_back(lambda);
-
-                if (pionTaken[iPion]) continue;
-
-                const Double_t theta = cosTheta(proton, pion, lambda);
-                if (!(massAccepted(lambda, parameters) && thetaAccepted(theta, parameters))) continue;
-
-                validated.push_back(lambda);
-
-                const Double_t delta = std::abs(lambda.M() - kLambdaMass);
-                if (!hasCandidate || delta < leastDelta) {
-                    hasCandidate = true;
-                    leastDelta   = delta;
-                    bestIdx      = iPion;
-                    bestLambda   = lambda;
-                }
-            }
-
-            if (hasCandidate) {
-                pionTaken[bestIdx] = true;
-                selected.push_back(bestLambda);
-            }
-        }
-
-        // Lock only for shared histogram and logging state
         {
             std::lock_guard<std::mutex> lock(histMutex);
             ++logging.nRealEvents;
-            Record::resetAllCounts(histogramSets);
-            for (const auto& l : unvalidated) fill(histogramSets, HistogramSet::Unvalidated, l);
-            for (const auto& l : validated)   fill(histogramSets, HistogramSet::Validated,   l);
-            for (const auto& l : selected)    fill(histogramSets, HistogramSet::Selected,     l);
-            Record::countAll(histogramSets);
-            logging.elapsed = std::chrono::duration_cast<Config::uSeconds>(
-                std::chrono::system_clock::now() - logging.start);
+            fillCandidates(histogramSets, candidates);
+            logging.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logging.start);
         }
 
-        const bool renderStatus = (eventIndex % logging.printInterval == 0) || (eventIndex == 1) || (eventIndex == logging.nEvents);
-        const bool renderBar    = (eventIndex % logging.barInterval == 0)   || (eventIndex == 1) || (eventIndex == logging.nEvents);
-
-        asyncLogger.publish(logging, Monitor::RunPhase::Analysis, eventIndex, renderStatus, renderBar, Monitor::DontWriteRunStat);
-        asyncLogger.publishThreadStats(threadId, Monitor::ThreadPhase::Simulation, eventIndex, Monitor::CallbackCompleted);
+        publishProgress(asyncLogger, logging, eventIndex, threadId);
     }
 
     inline void pythiaGenerator(
