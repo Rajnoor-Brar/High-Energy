@@ -19,12 +19,13 @@ namespace Analysis {
         return static_cast<std::size_t>(value);
     }
 
-    struct QuantityTraits {
+    // ── Per-particle traits ───────────────────────────────────────────────────
+    struct ParticleTraits {
         const char* name;
         Double_t (*extract)(const Lorentz&);
     };
 
-    static constexpr std::array<QuantityTraits, 13> kQuantityTraits = {{
+    static constexpr std::array<ParticleTraits, 12> kParticleTraits = {{
         {"Mass_Invariant",      [](const Lorentz& p) -> Double_t { return p.M(); }},
         {"Mass_Transverse",     [](const Lorentz& p) -> Double_t { return p.Mt(); }},
         {"Energy_Net",          [](const Lorentz& p) -> Double_t { return p.E(); }},
@@ -37,18 +38,46 @@ namespace Analysis {
         {"Rapidity",            [](const Lorentz& p) -> Double_t { return p.Rapidity(); }},
         {"Pseudorapidity",      [](const Lorentz& p) -> Double_t { return p.Eta(); }},
         {"Azimuthal_Angle",     [](const Lorentz& p) -> Double_t { return p.Phi(); }},
-        {"Multiplicity",        [](const Lorentz&  ) -> Double_t { return 1.0; }},
     }};
 
-    static_assert(kQuantityTraits.size() == static_cast<std::size_t>(Config::Quantity::Multiplicity) + 1,
-                  "kQuantityTraits size out of sync with Config::Quantity enum");
+    static_assert(kParticleTraits.size() ==
+                  static_cast<std::size_t>(Config::ParticleProperty::Azimuthal_Angle) + 1,
+                  "kParticleTraits size out of sync with Config::ParticleProperty enum");
 
-    inline std::string quantityName(Config::Quantity quantity) {
-        return kQuantityTraits[toIndex(quantity)].name;
+    // ── Per-event traits ──────────────────────────────────────────────────────
+    struct EventTraits {
+        const char* name;
+        Double_t (*extract)(const std::vector<Lorentz>&);
+    };
+
+    static constexpr std::array<EventTraits, 1> kEventTraits = {{
+        {"Multiplicity", [](const std::vector<Lorentz>& v) -> Double_t {
+            return static_cast<Double_t>(v.size()); }},
+    }};
+
+    static_assert(kEventTraits.size() ==
+                  static_cast<std::size_t>(Config::EventProperty::Multiplicity) + 1,
+                  "kEventTraits size out of sync with Config::EventProperty enum");
+
+    // ── Accessors ─────────────────────────────────────────────────────────────
+    inline std::string particlePropertyName(Config::ParticleProperty p) {
+        return kParticleTraits[toIndex(p)].name;
     }
 
-    inline Double_t valueOf(const Lorentz& particle, Config::Quantity quantity) {
-        return kQuantityTraits[toIndex(quantity)].extract(particle);
+    inline std::string eventPropertyName(Config::EventProperty p) {
+        return kEventTraits[toIndex(p)].name;
+    }
+
+    inline Double_t valueOf(const Lorentz& particle, Config::ParticleProperty p) {
+        return kParticleTraits[toIndex(p)].extract(particle);
+    }
+
+    inline Double_t multiplicityOf(const std::vector<Lorentz>& particles) {
+        return static_cast<Double_t>(particles.size());
+    }
+
+    inline Double_t valueOf(const std::vector<Lorentz>& particles, Config::EventProperty p) {
+        return kEventTraits[toIndex(p)].extract(particles);
     }
 
     inline Lorentz fromComponents(Double_t E, Double_t px, Double_t py, Double_t pz) {

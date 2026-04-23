@@ -29,20 +29,27 @@ namespace Record {
 
     struct NoBasis {};
 
+    // Per-particle histogram/tree records keyed by ParticleProperty
     struct TH1Record {
-        TH1D* hist{};
-        Config::Quantity quantity{};
+        TH1D*                    hist{};
+        Config::ParticleProperty property{};
     };
     struct TH2Record {
-        TH2* hist{};
-        Config::Quantity quantityX{};
-        Config::Quantity quantityY{};
+        TH2*                     hist{};
+        Config::ParticleProperty propertyX{};
+        Config::ParticleProperty propertyY{};
     };
 
     struct TreeRecord {
         TTree* tree{};
-        std::vector<Config::Quantity> quantities{};
-        std::unique_ptr<std::vector<Double_t>> branchValues{std::make_unique<std::vector<Double_t>>()};
+        std::vector<Config::ParticleProperty>   properties{};
+        std::unique_ptr<std::vector<Double_t>>  branchValues{std::make_unique<std::vector<Double_t>>()};
+    };
+
+    // Per-event histogram record keyed by EventProperty
+    struct EventTH1Record {
+        TH1D*                 hist{};
+        Config::EventProperty property{};
     };
 
     template <std::size_t N>
@@ -50,20 +57,20 @@ namespace Record {
         TDirectory* dir,
         const std::string& name,
         const std::string& title,
-        const std::array<Config::Quantity, N>& quantities
+        const std::array<Config::ParticleProperty, N>& properties
     ) {
         if (dir == nullptr)
             throw std::invalid_argument("Tree directory must not be null");
 
         TreeRecord record{};
-        record.quantities.assign(quantities.begin(), quantities.end());
-        record.branchValues = std::make_unique<std::vector<Double_t>>(record.quantities.size(), 0.0);
+        record.properties.assign(properties.begin(), properties.end());
+        record.branchValues = std::make_unique<std::vector<Double_t>>(record.properties.size(), 0.0);
 
         dir->cd();
         record.tree = new TTree(name.c_str(), title.c_str());
 
-        for (std::size_t i = 0; i < record.quantities.size(); ++i) {
-            const std::string branchName = Analysis::quantityName(record.quantities[i]);
+        for (std::size_t i = 0; i < record.properties.size(); ++i) {
+            const std::string branchName = Analysis::particlePropertyName(record.properties[i]);
             const std::string branchType = branchName + "/D";
             record.tree->Branch(branchName.c_str(), record.branchValues->data() + i, branchType.c_str());
         }
@@ -77,11 +84,12 @@ namespace Record {
         TDirectory* dir{};
         TH1D* count{};
         Int_t candidateCount{};
-        std::vector<TH1Record> hists1D;
-        std::vector<TH2*> hists2D;
-        std::vector<TGraph*> graphs;
-        std::vector<TProfile*> profiles;
-        std::vector<TreeRecord> trees;
+        std::vector<TH1Record>      hists1D;
+        std::vector<EventTH1Record> eventHists1D;   // per-event observables
+        std::vector<TH2*>           hists2D;
+        std::vector<TGraph*>        graphs;
+        std::vector<TProfile*>      profiles;
+        std::vector<TreeRecord>     trees;
     };
 
     template <typename Basis = NoBasis>
@@ -114,17 +122,19 @@ namespace Record {
     }
 
     inline void fill(TH1Record& record, const Lorentz& particle) {
-        if (record.hist != nullptr) {
-            record.hist->Fill(Analysis::valueOf(particle, record.quantity));
-        }
+        if (record.hist != nullptr)
+            record.hist->Fill(Analysis::valueOf(particle, record.property));
+    }
+
+    inline void fill(EventTH1Record& record, const std::vector<Lorentz>& particles) {
+        if (record.hist != nullptr)
+            record.hist->Fill(Analysis::valueOf(particles, record.property));
     }
 
     inline void fill(TreeRecord& record, const Lorentz& particle) {
         if (record.tree == nullptr || record.branchValues == nullptr) return;
-
-        for (std::size_t i = 0; i < record.quantities.size(); ++i) {
-            (*record.branchValues)[i] = Analysis::valueOf(particle, record.quantities[i]);
-        }
+        for (std::size_t i = 0; i < record.properties.size(); ++i)
+            (*record.branchValues)[i] = Analysis::valueOf(particle, record.properties[i]);
         record.tree->Fill();
     }
 
@@ -160,10 +170,11 @@ namespace Record {
         if (object.dir == nullptr) return;
         object.dir->cd();
         scaleAndWrite(object.count, histScale, nEvents, false);
-        for (auto& hist : object.hists1D) scaleAndWrite(hist.hist, histScale, nEvents, true);
-        for (TH2* hist : object.hists2D) scaleAndWrite(hist, histScale, nEvents, false);
-        for (TGraph* graph : object.graphs) scaleAndWrite(graph, histScale, nEvents, false);
-        for (TProfile* profile : object.profiles) scaleAndWrite(profile, histScale, nEvents, false);
+        for (auto& hist : object.hists1D)      scaleAndWrite(hist.hist,  histScale, nEvents, true);
+        for (auto& hist : object.eventHists1D) scaleAndWrite(hist.hist,  histScale, nEvents, false);
+        for (TH2* hist : object.hists2D)       scaleAndWrite(hist,       histScale, nEvents, false);
+        for (TGraph* graph : object.graphs)    scaleAndWrite(graph,      histScale, nEvents, false);
+        for (TProfile* p : object.profiles)    scaleAndWrite(p,          histScale, nEvents, false);
         if (!checkpoint) {
             for (auto& tree : object.trees) scaleAndWrite(tree.tree, histScale, nEvents, false);
         }
@@ -173,10 +184,11 @@ namespace Record {
     inline void writeToDir(RootObjects<Basis>& object, TDirectory* dir, Double_t histScale, std::size_t nEvents, bool checkpoint = false) {
         if (dir == nullptr) return;
         scaleAndWriteToDir(dir, object.count, histScale, nEvents, false);
-        for (auto& hist : object.hists1D) scaleAndWriteToDir(dir, hist.hist, histScale, nEvents, true);
-        for (TH2* hist : object.hists2D) scaleAndWriteToDir(dir, hist, histScale, nEvents, false);
-        for (TGraph* graph : object.graphs) scaleAndWriteToDir(dir, graph, histScale, nEvents, false);
-        for (TProfile* profile : object.profiles) scaleAndWriteToDir(dir, profile, histScale, nEvents, false);
+        for (auto& hist : object.hists1D)      scaleAndWriteToDir(dir, hist.hist,  histScale, nEvents, true);
+        for (auto& hist : object.eventHists1D) scaleAndWriteToDir(dir, hist.hist,  histScale, nEvents, false);
+        for (TH2* hist : object.hists2D)       scaleAndWriteToDir(dir, hist,       histScale, nEvents, false);
+        for (TGraph* graph : object.graphs)    scaleAndWriteToDir(dir, graph,      histScale, nEvents, false);
+        for (TProfile* p : object.profiles)    scaleAndWriteToDir(dir, p,          histScale, nEvents, false);
         if (!checkpoint) {
             for (auto& tree : object.trees) scaleAndWriteToDir(dir, tree.tree, histScale, nEvents, false);
         }
