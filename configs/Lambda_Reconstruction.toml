@@ -29,6 +29,29 @@ energy = false
 events = false
 
 [lambda]
-hist_limits    = "Lambda_Limits"
-delta_mass_gev = 0.15  #GeV
-delta_theta_rad = 0.1  #radians
+hist_limits     = "Lambda_Limits"
+delta_mass_gev  = 0.15   #GeV
+delta_theta_rad = 0.1    #radians
+
+# ── Input schema (all keys optional — defaults reproduce current branch names) ──
+# [input]
+# index_branch = "event_index"
+# energy       = "Energy"
+# px           = "pX"
+# py           = "pY"
+# pz           = "pZ"
+#
+# [input.protons]
+# tree_name = "Protons"
+# [input.pions]
+# tree_name = "Pions"
+
+# ── Candidate types (optional — defaults: protons + pions both enabled) ────────
+# [candidates.protons]
+# enabled    = true
+# write_tree = true
+# pid_abs    = 2212
+# [candidates.pions]
+# enabled    = true
+# write_tree = true
+# pid_abs    = 211

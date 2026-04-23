@@ -34,7 +34,8 @@ namespace Config {
         Extreme
     };
 
-    enum class Quantity : std::size_t {
+    // Per-particle kinematic properties (12 entries — no event-level quantities)
+    enum class ParticleProperty : std::size_t {
         Mass_Invariant,
         Mass_Transverse,
         Energy_Net,
@@ -47,9 +48,15 @@ namespace Config {
         Rapidity,
         Pseudorapidity,
         Azimuthal_Angle,
-        Multiplicity
     };
-    using LimitTable = std::map<Quantity, std::map<RangeSize, Bounds>>;
+
+    // Per-event observables (initially just Multiplicity; room to grow)
+    enum class EventProperty : std::size_t {
+        Multiplicity,
+    };
+
+    using ParticleLimits = std::map<ParticleProperty, std::map<RangeSize, Bounds>>;
+    using EventLimits    = std::map<EventProperty,    std::map<RangeSize, Bounds>>;
 
     struct Log {
         std::atomic<std::size_t> iEvent{0};
@@ -122,7 +129,8 @@ namespace Config {
         TString checkpointLogName = "";
         TString fileTitle     = "";
         TString histLimitsFile = "";
-        LimitTable limits{};
+        ParticleLimits particleLimits{};
+        EventLimits    eventLimits{};
         Int_t   binCount      = 100;
         Double_t histScale    = 100;
     };
@@ -163,26 +171,33 @@ namespace Config {
         throw std::runtime_error("Unknown limit level: " + levelStr);
     }
 
-    inline std::optional<Quantity> tryStringToQuantity(const std::string& qStr) {
-        if (qStr == "Mass_Invariant" || qStr == "Mass") return Quantity::Mass_Invariant;
-        if (qStr == "Mass_Transverse")     return Quantity::Mass_Transverse;
-        if (qStr == "Energy_Net" || qStr == "Energy")  return Quantity::Energy_Net;
-        if (qStr == "Energy_Transverse")   return Quantity::Energy_Transverse;
-        if (qStr == "Momentum_Net")        return Quantity::Momentum_Net;
-        if (qStr == "Momentum_Transverse") return Quantity::Momentum_Transverse;
-        if (qStr == "Momentum_X")          return Quantity::Momentum_X;
-        if (qStr == "Momentum_Y")          return Quantity::Momentum_Y;
-        if (qStr == "Momentum_Z")          return Quantity::Momentum_Z;
-        if (qStr == "Rapidity")            return Quantity::Rapidity;
-        if (qStr == "Pseudorapidity")      return Quantity::Pseudorapidity;
-        if (qStr == "Azimuthal_Angle")     return Quantity::Azimuthal_Angle;
-        if (qStr == "Multiplicity")        return Quantity::Multiplicity;
+    inline std::optional<ParticleProperty> tryStringToParticleProperty(const std::string& s) {
+        if (s == "Mass_Invariant" || s == "Mass") return ParticleProperty::Mass_Invariant;
+        if (s == "Mass_Transverse")               return ParticleProperty::Mass_Transverse;
+        if (s == "Energy_Net"     || s == "Energy") return ParticleProperty::Energy_Net;
+        if (s == "Energy_Transverse")             return ParticleProperty::Energy_Transverse;
+        if (s == "Momentum_Net")                  return ParticleProperty::Momentum_Net;
+        if (s == "Momentum_Transverse")           return ParticleProperty::Momentum_Transverse;
+        if (s == "Momentum_X")                    return ParticleProperty::Momentum_X;
+        if (s == "Momentum_Y")                    return ParticleProperty::Momentum_Y;
+        if (s == "Momentum_Z")                    return ParticleProperty::Momentum_Z;
+        if (s == "Rapidity")                      return ParticleProperty::Rapidity;
+        if (s == "Pseudorapidity")                return ParticleProperty::Pseudorapidity;
+        if (s == "Azimuthal_Angle")               return ParticleProperty::Azimuthal_Angle;
         return std::nullopt;
     }
+    inline ParticleProperty stringToParticleProperty(const std::string& s) {
+        if (auto p = tryStringToParticleProperty(s)) return *p;
+        throw std::runtime_error("Unknown particle property: " + s);
+    }
 
-    inline Quantity stringToQuantity(const std::string& qStr) {
-        if (auto q = tryStringToQuantity(qStr)) return *q;
-        throw std::runtime_error("Unknown quantity: " + qStr);
+    inline std::optional<EventProperty> tryStringToEventProperty(const std::string& s) {
+        if (s == "Multiplicity") return EventProperty::Multiplicity;
+        return std::nullopt;
+    }
+    inline EventProperty stringToEventProperty(const std::string& s) {
+        if (auto p = tryStringToEventProperty(s)) return *p;
+        throw std::runtime_error("Unknown event property: " + s);
     }
 
     inline Bounds parseBoundsArray(const toml::array& boundsArray, const std::string& filePath, const std::string& quantityName, const std::string& levelName) {
@@ -209,7 +224,9 @@ namespace Config {
         return "configs/" + limitsName + ".toml";
     }
 
-    inline void loadLimitsFile(const std::string& filePath, LimitTable& limits) {
+    inline void loadLimitsFile(const std::string& filePath,
+                               ParticleLimits& particleLimits,
+                               EventLimits&    eventLimits) {
         if (!std::filesystem::exists(filePath)) {
             throw std::runtime_error("Limits file does not exist: " + filePath);
         }
@@ -218,18 +235,25 @@ namespace Config {
         for (auto&& [quantityKey, quantityValue] : table) {
             if (!quantityValue.is_table()) continue;
 
-            const std::string quantityName = std::string(quantityKey.str());
-            const auto quantity = tryStringToQuantity(quantityName);
-            if (!quantity) continue;
+            const std::string qname = std::string(quantityKey.str());
             toml::table& quantityTable = *quantityValue.as_table();
 
-            for (auto&& [levelKey, levelValue] : quantityTable) {
-                if (!levelValue.is_array()) continue;
-
-                const std::string levelName = std::string(levelKey.str());
-                const RangeSize level = stringToLevel(levelName);
-                limits[*quantity][level] = parseBoundsArray(*levelValue.as_array(), filePath, quantityName, levelName);
+            if (auto pp = tryStringToParticleProperty(qname)) {
+                for (auto&& [levelKey, levelValue] : quantityTable) {
+                    if (!levelValue.is_array()) continue;
+                    const std::string levelName = std::string(levelKey.str());
+                    particleLimits[*pp][stringToLevel(levelName)] =
+                        parseBoundsArray(*levelValue.as_array(), filePath, qname, levelName);
+                }
+            } else if (auto ep = tryStringToEventProperty(qname)) {
+                for (auto&& [levelKey, levelValue] : quantityTable) {
+                    if (!levelValue.is_array()) continue;
+                    const std::string levelName = std::string(levelKey.str());
+                    eventLimits[*ep][stringToLevel(levelName)] =
+                        parseBoundsArray(*levelValue.as_array(), filePath, qname, levelName);
+                }
             }
+            // else: unknown key — silently skip for forward-compatibility
         }
     }
 
@@ -246,14 +270,15 @@ namespace Config {
     }
 
     inline void limitExtractor(const std::string& configPath, Root& root) {
-        root.limits.clear();
-        loadLimitsFile("configs/General_Limits.toml", root.limits);
+        root.particleLimits.clear();
+        root.eventLimits.clear();
+        loadLimitsFile("configs/General_Limits.toml", root.particleLimits, root.eventLimits);
 
         toml::table mainConfig = toml::parse_file(configPath);
         const std::string limitsFileName = mainConfig["lambda"]["hist_limits"].value_or("Lambda_Limits");
         const std::string limitsFile = resolveLimitsPath(limitsFileName);
         root.histLimitsFile = limitsFile;
-        loadLimitsFile(limitsFile, root.limits);
+        loadLimitsFile(limitsFile, root.particleLimits, root.eventLimits);
     }
 
    inline void extractConfiguration(const std::string& configPath,

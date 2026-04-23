@@ -59,14 +59,14 @@ int main(int argc, char* argv[]) {
     finalizer.installFatalStallHandler();
 
     // Scan the input file to know total event count before streaming starts.
-    logParams.nEvents = Explore::EventStream(inputPath, Lambda::inputSchema()).nEvents();
+    logParams.nEvents = Explore::EventStream(inputPath, Lambda::inputSchema(physParams)).nEvents();
 
     logParams.start = std::chrono::system_clock::now();
     asyncLogger.start(rootParams, logParams);
 
     std::mutex histMutex;
     Explore::runParallel(inputPath,
-        Lambda::inputSchema(),
+        Lambda::inputSchema(physParams),
         [&](const Explore::Event& ev, int threadId) {
             Lambda::analyzeEvent(ev, threadId, histogramSets, physParams,
                                  logParams, asyncLogger, histMutex);
