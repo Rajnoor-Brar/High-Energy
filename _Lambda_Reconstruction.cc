@@ -7,6 +7,7 @@
 #include "Explore.hh"
 #include "Record.hh"
 #include "Config.hh"
+#include "Meta.hh"
 #include "Lambda.hh"
 #include "Monitor.hh"
 
@@ -32,10 +33,13 @@ int main(int argc, char* argv[]) {
 
     const std::string inputPath = [&]{
         const auto cfg = toml::parse_file(configPath);
-        return cfg["input"]["root_file"].value_or(std::string{});
+        // Try new [events].input_file first, then old [input].root_file
+        std::string p = cfg["events"]["input_file"].value_or(std::string{});
+        if (p.empty()) p = cfg["input"]["root_file"].value_or(std::string{});
+        return p;
     }();
     if (inputPath.empty())
-        throw std::runtime_error("Lambda_Reconstruction: [input].root_file not set in " + configPath);
+        throw std::runtime_error("Lambda_Reconstruction: [events].input_file not set in " + configPath);
 
     Config::openOutputFile(rootParams);
 
@@ -74,6 +78,11 @@ int main(int argc, char* argv[]) {
         Config::resolveThreadCount(logParams.nThreads)
     );
 
+    {
+        Meta::Record metaRec = Meta::capture("Lambda_Reconstruction", configPath, logParams, rootParams);
+        metaRec.dataset.parent_files = {inputPath};
+        finalizer.setMeta(std::move(metaRec));
+    }
     finalizer.normalShutdown();
 
     return 0;

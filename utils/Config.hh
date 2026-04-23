@@ -256,41 +256,91 @@ namespace Config {
         loadLimitsFile(limitsFile, root.limits);
     }
 
+    // Reads configs/Monitor.toml (silently skips if absent) and populates
+    // the Log and Root structs with default monitoring values.
+    inline void loadMonitorDefaults(Log& logging, Root& root) {
+        const std::string monitorPath = "configs/Monitor.toml";
+        if (!std::filesystem::exists(monitorPath)) return;
+        try {
+            toml::table mon = toml::parse_file(monitorPath);
+            logging.printInterval  = static_cast<std::size_t>(mon["monitor"]["print_interval"].value_or(100));
+            logging.checkInterval  = static_cast<std::size_t>(mon["monitor"]["check_interval"].value_or(10000));
+            std::size_t hb = static_cast<std::size_t>(mon["monitor"]["heartbeat_interval"].value_or(1000));
+            logging.heartbeat_interval = uSeconds(hb);
+            double tr = mon["monitor"]["terminal_refresh_interval"].value_or(2.0);
+            logging.terminal_refresh_interval = Seconds(static_cast<int>(60 * tr));
+            double ps = mon["monitor"]["program_stall_threshold"].value_or(5.0);
+            logging.program_stall_threshold = Seconds(static_cast<int>(60 * ps));
+            root.binCount  = mon["monitor"]["bin_count"].value_or(100);
+            root.histScale = mon["monitor"]["hist_scaling"].value_or(1.0);
+        } catch (...) {}
+    }
+
    inline void extractConfiguration(const std::string& configPath,
                                  const std::string& project,
                                  Log& logging,
                                  Root& root)
     {
+        // Load Monitor.toml defaults first; per-config [log] section overrides below.
+        loadMonitorDefaults(logging, root);
+
         limitExtractor(configPath, root);
         toml::table config = toml::parse_file(configPath);
 
         std::size_t temp = 0;
         double tempDouble = 0.0;
 
-        logging.serial         = config["run"]["serial"].value_or(0);
-        logging.srPadding      = static_cast<std::size_t>(config["run"]["sr_Padding"].value_or(2));
-        logging.nEvents        = static_cast<std::size_t>(config["run"]["event_count"].value_or(1000));
-        logging.nThreads       = static_cast<std::size_t>(config["run"]["nThreads"].value_or(0));
+        // [record] section (new); fall back to [run] for backward compat.
+        const bool hasRecord = config.contains("record");
+        logging.serial    = hasRecord ? config["record"]["serial"].value_or(0)
+                                      : config["run"]["serial"].value_or(0);
+        logging.srPadding = static_cast<std::size_t>(
+            hasRecord ? config["record"]["sr_padding"].value_or(2)
+                      : config["run"]["sr_Padding"].value_or(2));
 
-        logging.printInterval  = static_cast<std::size_t>(config["logging"]["print_interval"].value_or(100));
-        logging.checkInterval  = static_cast<std::size_t>(config["logging"]["check_interval"].value_or(10000));
+        // [events] section (new); fall back to [run] for backward compat.
+        const bool hasEvents = config.contains("events");
+        logging.nEvents  = static_cast<std::size_t>(
+            hasEvents ? config["events"]["event_count"].value_or(1000)
+                      : config["run"]["event_count"].value_or(1000));
+        logging.nThreads = static_cast<std::size_t>(
+            hasEvents ? config["events"]["nThreads"].value_or(0)
+                      : config["run"]["nThreads"].value_or(0));
 
-        temp = static_cast<std::size_t>(config["logging"]["heartbeat_interval"].value_or(1000));
-        logging.heartbeat_interval = uSeconds(temp);
+        // [log] section (new); fall back to [logging] for backward compat.
+        // These override whatever loadMonitorDefaults() set.
+        const bool hasLog     = config.contains("log");
+        const bool hasLogging = config.contains("logging");
+        const std::string logKey = hasLog ? "log" : (hasLogging ? "logging" : "");
 
-        tempDouble = config["logging"]["terminal_refresh_interval"].value_or(2.0);
-        logging.terminal_refresh_interval = Seconds(static_cast<int>(60 * tempDouble));
+        if (!logKey.empty()) {
+            logging.printInterval = static_cast<std::size_t>(
+                config[logKey]["print_interval"].value_or(
+                    static_cast<int64_t>(logging.printInterval)));
+            logging.checkInterval = static_cast<std::size_t>(
+                config[logKey]["check_interval"].value_or(
+                    static_cast<int64_t>(logging.checkInterval)));
 
-        tempDouble = config["logging"]["program_stall_threshold"].value_or(5.0);
-        logging.program_stall_threshold = Seconds(static_cast<int>(60 * tempDouble));
+            temp = static_cast<std::size_t>(
+                config[logKey]["heartbeat_interval"].value_or(
+                    static_cast<int64_t>(logging.heartbeat_interval.count())));
+            logging.heartbeat_interval = uSeconds(temp);
+
+            tempDouble = config[logKey]["terminal_refresh_interval"].value_or(
+                static_cast<double>(logging.terminal_refresh_interval.count()) / 60.0);
+            logging.terminal_refresh_interval = Seconds(static_cast<int>(60 * tempDouble));
+
+            tempDouble = config[logKey]["program_stall_threshold"].value_or(
+                static_cast<double>(logging.program_stall_threshold.count()) / 60.0);
+            logging.program_stall_threshold = Seconds(static_cast<int>(60 * tempDouble));
+
+            root.binCount  = config[logKey]["bin_count"].value_or(root.binCount);
+            root.histScale = config[logKey]["hist_scaling"].value_or(root.histScale);
+        }
 
         logging.nDigits = std::to_string(logging.nEvents).size();
 
         sanitiseLoggingConfig(logging);
-
-        // --- ROOT histogram settings ---
-        root.binCount  = config["logging"]["bin_count"].value_or(100);
-        root.histScale = config["logging"]["hist_scaling"].value_or(1.0);
 
         const bool logSubDir    = config["paths"]["logInSubDir"].value_or(true);
         const bool checkSubDir  = config["paths"]["checkpointsInSubDir"].value_or(true);

@@ -6,6 +6,7 @@
 
 #include "Record.hh"
 #include "Config.hh"
+#include "Meta.hh"
 #include "Lambda.hh"
 #include "Monitor.hh"
 
@@ -44,6 +45,10 @@ int main(int argc, char* argv[]) {
         Lambda::pythiaGenerator(*worker, dataObjects, treeMutex, logParams, logger);
     });
 
+    {
+        Meta::Record metaRec = Meta::capture("Lambda_Data", configPath, logParams, rootParams);
+        Meta::writeAbout(rootParams.outFile, metaRec);
+    }
     rootParams.outFile->Write("", TObject::kOverwrite);
     rootParams.outFile->Close();
 

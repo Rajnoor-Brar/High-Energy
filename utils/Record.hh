@@ -12,6 +12,7 @@
 #include <string>
 
 #include "Config.hh"
+#include "Meta.hh"
 #include "Monitor.hh"
 #include "Analysis.hh"
 #include "TFile.h"
@@ -218,9 +219,21 @@ namespace Record {
             logger_.setFatalStallHandler([this](const Monitor::RunSnapshot& snapshot) { fatalShutdown(snapshot); });
         }
 
+        void setMeta(Meta::Record meta) { meta_ = std::move(meta); }
+
         void normalShutdown() {
-            wrapUp(histogramSets_, root_.outFile, root_.histScale, logging_.nEvents);
-            logging_.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logging_.start);
+            // Write all histograms/trees
+            writeAll(histogramSets_, root_.histScale, logging_.nEvents);
+            // Write metadata before closing
+            if (meta_.has_value() && root_.outFile != nullptr)
+                Meta::writeAbout(root_.outFile, *meta_);
+            // Now close
+            if (root_.outFile != nullptr) {
+                root_.outFile->Write("", TObject::kOverwrite);
+                root_.outFile->Close();
+            }
+            logging_.elapsed = std::chrono::duration_cast<Config::uSeconds>(
+                std::chrono::system_clock::now() - logging_.start);
             logger_.finish(logging_, logging_.iEvent.load());
             Monitor::terminalReport(pythia_, root_, logging_);
             Monitor::outputLog(pythia_, root_, logging_, programLogBuilder_());
@@ -258,5 +271,6 @@ namespace Record {
         Monitor::AsyncLogger& logger_;
         ProgramLogBuilder programLogBuilder_;
         std::atomic<bool> fatalShutdownStarted_{false};
+        std::optional<Meta::Record> meta_;
     };
 }

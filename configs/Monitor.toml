@@ -1,0 +1,12 @@
+# Default monitoring / logging parameters.
+# Values here are overridden by a [log] (or legacy [logging]) section
+# in the per-analysis config file.
+
+[monitor]
+print_interval             = 100       # events between progress prints
+check_interval             = 10000     # events between stall-checks
+heartbeat_interval         = 1000      # milliseconds between heartbeats
+terminal_refresh_interval  = 2         # minutes between terminal redraws
+program_stall_threshold    = 5         # minutes before stall is declared fatal
+bin_count                  = 100       # default histogram bin count
+hist_scaling               = 1.0       # default histogram y-axis scale factor

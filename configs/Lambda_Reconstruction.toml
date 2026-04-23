@@ -1,18 +1,10 @@
-[run]
-serial     = 3
-sr_Padding = 2
-nThreads   = 1   # 0 = auto (hardware_concurrency - 2)
+[events]
+nThreads   = 0   # 0 = auto (hardware_concurrency - 2)
+input_file = "output/Lambda_Reconstruction/_1/Lambda_Gen_7000GeV_10k.root"
 
-[input]
-root_file = "output/Lambda_Reconstruction/_97/Lambda_Recons_7000GeV_10k.root"
-
-[logging]
-bin_count                 = 500
-hist_scaling              = 1.0
-print_interval            = 500    #events
-heartbeat_interval        = 2000   #milliseconds
-terminal_refresh_interval = 2      #minutes
-program_stall_threshold   = 5      #minutes
+[record]
+serial     = 1
+sr_padding = 2
 
 [paths]
 directory            = "output/Lambda_Reconstruction/"
@@ -29,6 +21,13 @@ energy = false
 events = false
 
 [lambda]
-hist_limits    = "Lambda_Limits"
-delta_mass_gev = 0.15  #GeV
-delta_theta_rad = 0.1  #radians
+hist_limits     = "Lambda_Limits"
+delta_mass_gev  = 0.15
+delta_theta_rad = 0.1
+
+[metadata]
+dataset_name = "Lambda_MC_pp"
+data_type    = "MC"
+run_period   = ""
+campaign     = ""
+notes        = ""
