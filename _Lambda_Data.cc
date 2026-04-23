@@ -44,6 +44,13 @@ int main(int argc, char* argv[]) {
         Lambda::pythiaGenerator(*worker, dataObjects, treeMutex, logParams, logger);
     });
 
+    // Part 6b: persist a TTreeIndex on event_index so downstream readers can
+    // seek to partition boundaries in O(log N) instead of O(N) per worker.
+    // Cost: seconds even for 10M rows. Falls through harmlessly if the tree
+    // is empty or the branch is missing.
+    if (dataObjects.protons) dataObjects.protons->BuildIndex("event_index");
+    if (dataObjects.pions)   dataObjects.pions->BuildIndex("event_index");
+
     rootParams.outFile->Write("", TObject::kOverwrite);
     rootParams.outFile->Close();
 

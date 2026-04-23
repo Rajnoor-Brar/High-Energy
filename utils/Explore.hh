@@ -20,7 +20,9 @@
 #include "Config.hh"
 #include "TBranch.h"
 #include "TFile.h"
+#include "TObjArray.h"
 #include "TTree.h"
+#include "TTreeIndex.h"
 #include "TTreeReader.h"
 #include "TTreeReaderArray.h"
 #include "TROOT.h"
@@ -255,6 +257,35 @@ namespace Explore {
             return parts;
         }
 
+        // Part 6a helper: read the event-index value at entry 0 of the first
+        // flat collection. Used to partition the hinted range from the correct
+        // origin — writers may use 0-based or 1-based event indices, and the
+        // hint is a *count*, not an explicit range. Returns 0 on failure
+        // (conservative default for 0-based writers).
+        inline Long64_t probeFirstKey(const std::string& filepath,
+                                       const std::vector<CollectionSpec>& collections) {
+            std::unique_ptr<TFile> f(TFile::Open(filepath.c_str(), "READ"));
+            if (!f || f->IsZombie()) return 0;
+            for (const auto& cs : collections) {
+                if (cs.indexBranches.empty()) continue;
+                TTree* t = dynamic_cast<TTree*>(f->Get(cs.tree.c_str()));
+                if (!t || t->GetEntries() == 0) continue;
+                const std::string& name = cs.indexBranches[0];
+                TBranch* br = t->GetBranch(name.c_str());
+                if (!br) continue;
+                t->SetBranchStatus("*", 0);
+                t->SetBranchStatus(name.c_str(), 1);
+                const BranchType bt = detectType(br);
+                Long64_t v64 = 0; Int_t v32 = 0;
+                if (bt == BranchType::Int64) t->SetBranchAddress(name.c_str(), &v64);
+                else                         t->SetBranchAddress(name.c_str(), &v32);
+                t->GetEntry(0);
+                t->ResetBranchAddresses();
+                return (bt == BranchType::Int64) ? v64 : static_cast<Long64_t>(v32);
+            }
+            return 0;
+        }
+
         // Scan one tree's index branch and insert distinct keys into 'out'
         inline void scanIndexBranch(TFile* file,
                                      const std::string& treeName,
@@ -317,17 +348,17 @@ namespace Explore {
             tree_->SetBranchStatus("*", 0);
 
             // Index branch (v1: single key, Int32 or Int64)
-            const std::string& idxName = spec.indexBranches[0];
-            TBranch* idxBr = detail::requireBranch(tree_, idxName, filepath);
+            idxName_ = spec.indexBranches[0];
+            TBranch* idxBr = detail::requireBranch(tree_, idxName_, filepath);
             const BranchType it = detail::detectType(idxBr);
             if (it != BranchType::Int32 && it != BranchType::Int64 && it != BranchType::UInt32)
                 throw std::runtime_error(
-                    "[Explore] Index branch '" + idxName + "' in tree '" + spec.tree +
+                    "[Explore] Index branch '" + idxName_ + "' in tree '" + spec.tree +
                     "' of file '" + filepath + "': must be Int_t, UInt_t, or Long64_t");
             idxIsLong_ = (it == BranchType::Int64);
-            tree_->SetBranchStatus(idxName.c_str(), 1);
-            if (idxIsLong_) tree_->SetBranchAddress(idxName.c_str(), &idxL_);
-            else            tree_->SetBranchAddress(idxName.c_str(), &idxI_);
+            tree_->SetBranchStatus(idxName_.c_str(), 1);
+            if (idxIsLong_) tree_->SetBranchAddress(idxName_.c_str(), &idxL_);
+            else            tree_->SetBranchAddress(idxName_.c_str(), &idxI_);
 
             // Kinematic branches
             const auto knames = detail::coordNames(spec.coords);
@@ -344,10 +375,32 @@ namespace Explore {
                 bindAux(bspec);
             }
 
+            // Part 6c: TTreeCache — configure a 10 MB read-ahead buffer over all
+            // active branches. Amortises disk reads across the sequential scan and
+            // materially improves throughput on large trees.
+            tree_->SetCacheSize(10 * 1024 * 1024);
+            tree_->AddBranchToCache("*", kTRUE);
+            tree_->StopCacheLearningPhase();
+
             totalEntries_ = tree_->GetEntries();
+
+            // Part 6b: prefer an O(log N) TTreeIndex lookup when available. Falls
+            // back to a linear seek when the tree has no index or the exact key is
+            // missing (sparse writers).
+            if (auto* idx = dynamic_cast<TTreeIndex*>(tree_->GetTreeIndex())) {
+                (void)idx;
+                Long64_t entry = tree_->GetEntryNumberWithIndex(minKey_, 0);
+                if (entry >= 0 && entry < totalEntries_) {
+                    cursor_ = entry;
+                    tree_->GetEntry(cursor_);
+                    return;
+                }
+                // Key not present — fall through to linear seek below.
+            }
+
             if (totalEntries_ > 0) tree_->GetEntry(cursor_);
 
-            // Advance past minKey
+            // Advance past minKey (linear fallback).
             while (cursor_ < totalEntries_ && idxValue() < minKey_) {
                 ++cursor_;
                 if (cursor_ < totalEntries_) tree_->GetEntry(cursor_);
@@ -396,8 +449,26 @@ namespace Explore {
 
         // Return the min and max event key present in [lo, hi] without consuming the cursor.
         // Returns false if the tree is empty or no entries fall within [lo, hi].
+        // Part 6c: temporarily disables non-index branches so GetEntry() only reads
+        // the index column — 5–10× faster on trees with heavy kinematic payloads.
         bool keyRange(Long64_t lo, Long64_t hi, Long64_t& outMin, Long64_t& outMax) {
-            const Long64_t saved = cursor_;
+            // Save status of every branch we're about to toggle off.
+            std::vector<std::pair<TBranch*, bool>> saved;
+            if (TObjArray* branches = tree_->GetListOfBranches()) {
+                const int n = branches->GetEntries();
+                saved.reserve(static_cast<std::size_t>(n));
+                for (int i = 0; i < n; ++i) {
+                    TBranch* b = static_cast<TBranch*>(branches->At(i));
+                    if (b == nullptr) continue;
+                    const std::string bname = b->GetName();
+                    if (bname == idxName_) continue;
+                    const bool wasActive = !b->TestBit(kDoNotProcess);
+                    saved.emplace_back(b, wasActive);
+                    tree_->SetBranchStatus(bname.c_str(), 0);
+                }
+            }
+
+            const Long64_t savedCursor = cursor_;
             bool found = false;
             for (Long64_t i = 0; i < totalEntries_; ++i) {
                 tree_->GetEntry(i);
@@ -406,7 +477,13 @@ namespace Explore {
                 if (!found) { outMin = outMax = v; found = true; }
                 else        { outMin = std::min(outMin, v); outMax = std::max(outMax, v); }
             }
-            cursor_ = saved;
+
+            // Restore branch status before reloading the cursor row so subsequent
+            // drain() calls see the full event payload again.
+            for (auto& [b, wasActive] : saved)
+                tree_->SetBranchStatus(b->GetName(), wasActive ? 1 : 0);
+
+            cursor_ = savedCursor;
             if (cursor_ < totalEntries_) tree_->GetEntry(cursor_);
             return found;
         }
@@ -476,6 +553,7 @@ namespace Explore {
         std::string              filepath_;
         CoordSpec                coords_;
         TTree*                   tree_         = nullptr;
+        std::string              idxName_;    // remembered for keyRange() index-only scans
         Long64_t                 cursor_       = 0;
         Long64_t                 totalEntries_ = 0;
         Long64_t                 minKey_;
@@ -589,7 +667,8 @@ namespace Explore {
                     const std::vector<CollectionSpec>& collections,
                     const std::vector<ScalarSpec>&     scalars = {},
                     Long64_t minBound = std::numeric_limits<Long64_t>::min(),
-                    Long64_t maxBound = std::numeric_limits<Long64_t>::max())
+                    Long64_t maxBound = std::numeric_limits<Long64_t>::max(),
+                    std::size_t nEventsHint = 0)   // Part 6a: when > 0, skip keyRange scan
             : filepath_(filepath), minBound_(minBound), maxBound_(maxBound)
         {
             if (collections.empty())
@@ -622,25 +701,49 @@ namespace Explore {
                     flatReaders_.push_back(std::make_unique<FlatReader>(
                         file_, cs, filepath, minBound, maxBound));
 
-                // Compute the dense key range [denseLo_, denseHi_] as the union of
-                // per-reader min/max. Every integer key in this range will be emitted
-                // as an event (with empty particle vectors when no reader has data).
-                Long64_t gMin = std::numeric_limits<Long64_t>::max();
-                Long64_t gMax = std::numeric_limits<Long64_t>::min();
-                bool anyKeys = false;
-                for (auto& r : flatReaders_) {
-                    Long64_t lo, hi;
-                    if (r->keyRange(minBound, maxBound, lo, hi)) {
-                        gMin = std::min(gMin, lo);
-                        gMax = std::max(gMax, hi);
-                        anyKeys = true;
+                if (nEventsHint > 0) {
+                    // Part 6a: trust the caller's event-count hint. Readers' ctors
+                    // have already advanced each cursor to the first key >= minBound,
+                    // so currentKey() gives us the true starting key without
+                    // committing to a 0-based or 1-based convention. Skips all
+                    // per-reader keyRange scans — the single largest pre-analysis
+                    // cost on 10M-event files.
+                    Long64_t gLo = std::numeric_limits<Long64_t>::max();
+                    for (auto& r : flatReaders_) {
+                        if (!r->exhausted())
+                            gLo = std::min(gLo, r->currentKey().components[0]);
                     }
-                }
-                if (anyKeys) {
-                    denseLo_ = gMin;
-                    denseHi_ = gMax;
-                    nextKey_  = denseLo_;
-                    nEvents_  = static_cast<std::size_t>(denseHi_ - denseLo_ + 1);
+                    if (gLo != std::numeric_limits<Long64_t>::max()) {
+                        const Long64_t lastKey = gLo + static_cast<Long64_t>(nEventsHint) - 1;
+                        denseLo_ = std::max<Long64_t>(gLo, minBound);
+                        denseHi_ = std::min<Long64_t>(lastKey, maxBound);
+                        if (denseHi_ >= denseLo_) {
+                            nextKey_ = denseLo_;
+                            nEvents_ = static_cast<std::size_t>(denseHi_ - denseLo_ + 1);
+                        }
+                    }
+                } else {
+                    // Fallback: compute the dense key range [denseLo_, denseHi_] as
+                    // the union of per-reader min/max. Every integer key in this range
+                    // will be emitted as an event (with empty particle vectors when no
+                    // reader has data).
+                    Long64_t gMin = std::numeric_limits<Long64_t>::max();
+                    Long64_t gMax = std::numeric_limits<Long64_t>::min();
+                    bool anyKeys = false;
+                    for (auto& r : flatReaders_) {
+                        Long64_t lo, hi;
+                        if (r->keyRange(minBound, maxBound, lo, hi)) {
+                            gMin = std::min(gMin, lo);
+                            gMax = std::max(gMax, hi);
+                            anyKeys = true;
+                        }
+                    }
+                    if (anyKeys) {
+                        denseLo_ = gMin;
+                        denseHi_ = gMax;
+                        nextKey_  = denseLo_;
+                        nEvents_  = static_cast<std::size_t>(denseHi_ - denseLo_ + 1);
+                    }
                 }
             }
         }
@@ -716,7 +819,8 @@ namespace Explore {
                              const std::vector<CollectionSpec>& collections,
                              const std::vector<ScalarSpec>&     scalars,
                              Callback&& callback,
-                             std::size_t nThreads = 0)
+                             std::size_t nThreads = 0,
+                             std::size_t nEventsHint = 0)   // Part 6a: skip scanIndexBranch when > 0
     {
         detail::enableRootThreadSafety();
 
@@ -767,19 +871,37 @@ namespace Explore {
         // FlatReader parallel: partition by event-key
         const std::size_t threads = nThreads > 0 ? nThreads : Config::resolveThreadCount(0);
 
-        TFile* sf = TFile::Open(filepath.c_str(), "READ");
-        if (!sf || sf->IsZombie())
-            throw std::runtime_error("[Explore] Failed to open file '" + filepath + "'");
+        std::vector<detail::Partition> parts;
 
-        std::set<Long64_t> keySet;
-        for (const auto& cs : collections)
-            if (!cs.indexBranches.empty())
-                detail::scanIndexBranch(sf, cs.tree, cs.indexBranches[0], keySet, filepath);
-        sf->Close(); delete sf;
+        if (nEventsHint > 0) {
+            // Part 6a: skip the full index scan; partition the dense hinted range.
+            // Probe the first key so partitions cover the right window regardless
+            // of whether the writer is 0-based ([0..N-1]) or 1-based ([1..N]).
+            // Each worker passes the hint to its own EventStream — eliminates one
+            // keyRange scan per worker in addition to the top-level scanIndexBranch.
+            const Long64_t total = static_cast<Long64_t>(nEventsHint);
+            if (total <= 0) return;
+            const Long64_t firstKey = detail::probeFirstKey(filepath, collections);
+            const Long64_t lastKey  = firstKey + total - 1;
+            const Long64_t chunk    = (total + static_cast<Long64_t>(threads) - 1)
+                                    / static_cast<Long64_t>(threads);
+            for (Long64_t start = firstKey; start <= lastKey; start += chunk)
+                parts.push_back({start, std::min(lastKey, start + chunk - 1)});
+        } else {
+            TFile* sf = TFile::Open(filepath.c_str(), "READ");
+            if (!sf || sf->IsZombie())
+                throw std::runtime_error("[Explore] Failed to open file '" + filepath + "'");
 
-        const std::vector<Long64_t> keys(keySet.begin(), keySet.end());
-        if (keys.empty()) return;
-        const auto parts = detail::partitionEvents(keys, threads);
+            std::set<Long64_t> keySet;
+            for (const auto& cs : collections)
+                if (!cs.indexBranches.empty())
+                    detail::scanIndexBranch(sf, cs.tree, cs.indexBranches[0], keySet, filepath);
+            sf->Close(); delete sf;
+
+            const std::vector<Long64_t> keys(keySet.begin(), keySet.end());
+            if (keys.empty()) return;
+            parts = detail::partitionEvents(keys, threads);
+        }
 
         std::vector<std::thread>       workers;
         std::vector<std::exception_ptr> errors(parts.size());
@@ -788,7 +910,8 @@ namespace Explore {
             workers.emplace_back([&, t]{
                 try {
                     EventStream stream(filepath, collections, scalars,
-                                       parts[t].firstEvent, parts[t].lastEvent);
+                                       parts[t].firstEvent, parts[t].lastEvent,
+                                       nEventsHint);
                     while (stream.next()) callback(stream.event(), static_cast<int>(t));
                 } catch (...) { errors[t] = std::current_exception(); }
             });
@@ -802,9 +925,10 @@ namespace Explore {
     inline void runParallel(const std::string& filepath,
                              const std::vector<CollectionSpec>& collections,
                              Callback&& callback,
-                             std::size_t nThreads = 0)
+                             std::size_t nThreads = 0,
+                             std::size_t nEventsHint = 0)
     {
-        runParallel(filepath, collections, {}, std::forward<Callback>(callback), nThreads);
+        runParallel(filepath, collections, {}, std::forward<Callback>(callback), nThreads, nEventsHint);
     }
 
     // [MEMORY WARNING] Loads all events into RAM — unsafe for large files

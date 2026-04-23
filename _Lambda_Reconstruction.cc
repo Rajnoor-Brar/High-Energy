@@ -1,4 +1,5 @@
 #include <chrono>
+#include <cstdint>
 #include <mutex>
 #include <string>
 
@@ -9,6 +10,10 @@
 #include "Config.hh"
 #include "Lambda.hh"
 #include "Monitor.hh"
+
+#include "TFile.h"
+#include "TDirectory.h"
+#include "TParameter.h"
 
 namespace {
     // Minimal stand-in so FinalizerController (which templates on PythiaT)
@@ -58,8 +63,34 @@ int main(int argc, char* argv[]) {
     );
     finalizer.installFatalStallHandler();
 
-    // Scan the input file to know total event count before streaming starts.
-    logParams.nEvents = Explore::EventStream(inputPath, Lambda::inputSchema(physParams)).nEvents();
+    // Part 6a: resolve event count from metadata before falling back to a scan.
+    // Three tiers: [events].event_count in the reconstruction TOML → legacy
+    // [run].event_count → About/events/n_events_total in the input ROOT file →
+    // full scan (existing behavior, preserved bit-for-bit).
+    const std::size_t nEventsHint = [&]() -> std::size_t {
+        try {
+            const auto cfg = toml::parse_file(configPath);
+            if (auto v = cfg["events"]["event_count"].value<int64_t>(); v && *v > 0)
+                return static_cast<std::size_t>(*v);
+            if (auto v = cfg["run"]["event_count"].value<int64_t>();    v && *v > 0)
+                return static_cast<std::size_t>(*v);
+        } catch (...) { /* fall through to ROOT metadata */ }
+
+        std::unique_ptr<TFile> f(TFile::Open(inputPath.c_str(), "READ"));
+        if (!f || f->IsZombie()) return 0;
+        if (auto* dir = f->GetDirectory("About/events")) {
+            if (auto* par = dynamic_cast<TParameter<Long64_t>*>(dir->Get("n_events_total")))
+                if (par->GetVal() > 0) return static_cast<std::size_t>(par->GetVal());
+        }
+        return 0;
+    }();
+
+    if (nEventsHint > 0) {
+        logParams.nEvents = nEventsHint;
+    } else {
+        // Scan fallback — also exercises the (now index-only) keyRange path.
+        logParams.nEvents = Explore::EventStream(inputPath, Lambda::inputSchema(physParams)).nEvents();
+    }
 
     logParams.start = std::chrono::system_clock::now();
     asyncLogger.start(rootParams, logParams);
@@ -71,7 +102,8 @@ int main(int argc, char* argv[]) {
             Lambda::analyzeEvent(ev, threadId, histogramSets, physParams,
                                  logParams, asyncLogger, histMutex);
         },
-        Config::resolveThreadCount(logParams.nThreads));
+        Config::resolveThreadCount(logParams.nThreads),
+        nEventsHint);
 
     finalizer.normalShutdown();
 
