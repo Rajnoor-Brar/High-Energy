@@ -14,6 +14,7 @@
 #include "Config.hh"
 #include "Monitor.hh"
 #include "Analysis.hh"
+#include "Extract.hh"
 #include "TFile.h"
 #include "TDirectory.h"
 #include "TH1.h"
@@ -50,6 +51,25 @@ namespace Record {
     struct EventTH1Record {
         TH1D*                 hist{};
         Config::EventProperty property{};
+    };
+
+    // ── Part 5: extractor-flavored records ──────────────────────────────────
+    // An extractor returns a vector<Double_t> per event. Each element becomes
+    // one Fill() call. This is strictly additive to the enum-keyed records
+    // above — existing TH1Record / EventTH1Record sites are unchanged.
+    struct ExtractHist1D {
+        TH1D*       hist{};
+        Extract::Fn extractor{};
+    };
+
+    // For 2D: two parallel extractors. If they return vectors of equal length,
+    // zip fills (i,i). If lengths differ, cross-product fill (i,j) for each
+    // pair. The common small-size case lets callers pair `constant(v)` with
+    // a per-particle extractor to slot values onto a shared axis.
+    struct ExtractHist2D {
+        TH2*        hist{};
+        Extract::Fn extractorX{};
+        Extract::Fn extractorY{};
     };
 
     template <std::size_t N>
@@ -90,6 +110,9 @@ namespace Record {
         std::vector<TGraph*>        graphs;
         std::vector<TProfile*>      profiles;
         std::vector<TreeRecord>     trees;
+        // Part 5 — extractor-driven records (strictly additive)
+        std::vector<ExtractHist1D>  extractHists1D;
+        std::vector<ExtractHist2D>  extractHists2D;
     };
 
     template <typename Basis = NoBasis>
@@ -138,6 +161,30 @@ namespace Record {
         record.tree->Fill();
     }
 
+    // ── Part 5: extractor fills ─────────────────────────────────────────────
+    inline void fill(ExtractHist1D& record, const Extract::Event& ev) {
+        if (record.hist == nullptr || !record.extractor) return;
+        const Extract::Scalars values = record.extractor(ev);
+        for (Double_t v : values) record.hist->Fill(v);
+    }
+
+    inline void fill(ExtractHist2D& record, const Extract::Event& ev) {
+        if (record.hist == nullptr || !record.extractorX || !record.extractorY) return;
+        const Extract::Scalars xs = record.extractorX(ev);
+        const Extract::Scalars ys = record.extractorY(ev);
+        if (xs.empty() || ys.empty()) return;
+        if (xs.size() == ys.size()) {
+            // Zip
+            for (std::size_t i = 0; i < xs.size(); ++i)
+                record.hist->Fill(xs[i], ys[i]);
+        } else {
+            // Cross-product (useful when one side is a constant or event-scalar)
+            for (Double_t x : xs)
+                for (Double_t y : ys)
+                    record.hist->Fill(x, y);
+        }
+    }
+
     inline void scaleAndWrite(TObject* object, Double_t histScale, std::size_t nEvents, bool width = true) {
         if (object == nullptr) return;
 
@@ -170,11 +217,13 @@ namespace Record {
         if (object.dir == nullptr) return;
         object.dir->cd();
         scaleAndWrite(object.count, histScale, nEvents, false);
-        for (auto& hist : object.hists1D)      scaleAndWrite(hist.hist,  histScale, nEvents, true);
-        for (auto& hist : object.eventHists1D) scaleAndWrite(hist.hist,  histScale, nEvents, false);
-        for (TH2* hist : object.hists2D)       scaleAndWrite(hist,       histScale, nEvents, false);
-        for (TGraph* graph : object.graphs)    scaleAndWrite(graph,      histScale, nEvents, false);
-        for (TProfile* p : object.profiles)    scaleAndWrite(p,          histScale, nEvents, false);
+        for (auto& hist : object.hists1D)        scaleAndWrite(hist.hist,  histScale, nEvents, true);
+        for (auto& hist : object.eventHists1D)   scaleAndWrite(hist.hist,  histScale, nEvents, false);
+        for (TH2* hist : object.hists2D)         scaleAndWrite(hist,       histScale, nEvents, false);
+        for (auto& hist : object.extractHists1D) scaleAndWrite(hist.hist,  histScale, nEvents, false);
+        for (auto& hist : object.extractHists2D) scaleAndWrite(hist.hist,  histScale, nEvents, false);
+        for (TGraph* graph : object.graphs)      scaleAndWrite(graph,      histScale, nEvents, false);
+        for (TProfile* p : object.profiles)      scaleAndWrite(p,          histScale, nEvents, false);
         if (!checkpoint) {
             for (auto& tree : object.trees) scaleAndWrite(tree.tree, histScale, nEvents, false);
         }
@@ -184,11 +233,13 @@ namespace Record {
     inline void writeToDir(RootObjects<Basis>& object, TDirectory* dir, Double_t histScale, std::size_t nEvents, bool checkpoint = false) {
         if (dir == nullptr) return;
         scaleAndWriteToDir(dir, object.count, histScale, nEvents, false);
-        for (auto& hist : object.hists1D)      scaleAndWriteToDir(dir, hist.hist,  histScale, nEvents, true);
-        for (auto& hist : object.eventHists1D) scaleAndWriteToDir(dir, hist.hist,  histScale, nEvents, false);
-        for (TH2* hist : object.hists2D)       scaleAndWriteToDir(dir, hist,       histScale, nEvents, false);
-        for (TGraph* graph : object.graphs)    scaleAndWriteToDir(dir, graph,      histScale, nEvents, false);
-        for (TProfile* p : object.profiles)    scaleAndWriteToDir(dir, p,          histScale, nEvents, false);
+        for (auto& hist : object.hists1D)        scaleAndWriteToDir(dir, hist.hist,  histScale, nEvents, true);
+        for (auto& hist : object.eventHists1D)   scaleAndWriteToDir(dir, hist.hist,  histScale, nEvents, false);
+        for (TH2* hist : object.hists2D)         scaleAndWriteToDir(dir, hist,       histScale, nEvents, false);
+        for (auto& hist : object.extractHists1D) scaleAndWriteToDir(dir, hist.hist,  histScale, nEvents, false);
+        for (auto& hist : object.extractHists2D) scaleAndWriteToDir(dir, hist.hist,  histScale, nEvents, false);
+        for (TGraph* graph : object.graphs)      scaleAndWriteToDir(dir, graph,      histScale, nEvents, false);
+        for (TProfile* p : object.profiles)      scaleAndWriteToDir(dir, p,          histScale, nEvents, false);
         if (!checkpoint) {
             for (auto& tree : object.trees) scaleAndWriteToDir(dir, tree.tree, histScale, nEvents, false);
         }
