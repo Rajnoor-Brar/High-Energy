@@ -11,6 +11,8 @@
             "cppStandard": "c++17",
             "intelliSenseMode": "macos-clang-arm64",
             "compilerArgs": [
+                "-I./modules",
+                "-I./utils",
                 "-I/Users/Rajnoor/Directory/HEP/install/pythia8/include",
                 "-I/Users/Rajnoor/Directory/HEP/install/root/include",
                 "-L/Users/Rajnoor/Directory/HEP/install/pythia8/lib",

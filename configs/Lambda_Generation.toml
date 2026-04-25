@@ -4,7 +4,7 @@ beam_energy  = 7000   # GeV
 nThreads     = 0      # 0 = auto (hardware_concurrency - 2). Overrides .cmnd Parallelism:numThreads if > 0.
 
 [record]
-serial     = 97
+serial     = 99
 sr_padding = 2
 
 [log]

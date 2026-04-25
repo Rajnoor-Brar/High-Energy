@@ -1,9 +1,10 @@
 [events]
-nThreads   = 0   # 0 = auto (hardware_concurrency - 2)
-input_file = "output/Lambda_Reconstruction/_1/Lambda_Gen_7000GeV_10k.root"
+nThreads   = 8   # 0 = auto (hardware_concurrency - 2)
+input_file = "output/Lambda_Data/_08/Lambda_Recons_7000GeV_10M.root"
+event_count = 1000000
 
 [record]
-serial     = 1
+serial     = 9
 sr_padding = 2
 
 [paths]
@@ -17,8 +18,8 @@ checkpointsInSubDir  = true
 [file]
 prefix = "Lambda_Recons"
 serial = false
-energy = false
-events = false
+energy = true
+events = true
 
 [lambda]
 hist_limits     = "Lambda_Limits"

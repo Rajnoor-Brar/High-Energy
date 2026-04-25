@@ -70,7 +70,7 @@ namespace Lambda {
 
     // ── Part 4: Input branch configuration ───────────────────────────────────
     struct InputConfig {
-        std::string indexBranch = "event_index";
+        std::string indexBranch = "Index";
         std::string energy      = "Energy";
         std::string px          = "pX";
         std::string py          = "pY";
@@ -97,8 +97,8 @@ namespace Lambda {
         // Part 4
         InputConfig                input;
         std::vector<CandidateConfig> candidates = {
-            {"protons", true, true, 2212},
-            {"pions",   true, true,  211}
+            {"Protons", true, true, 2212},
+            {"Pions",   true, true,  -211}
         };
     };
 
@@ -111,8 +111,8 @@ namespace Lambda {
         Config::ParticleProperty::Pseudorapidity
     };
 
-    inline constexpr std::array<HistogramSet, 1> kTreeEnabledSets = {
-        HistogramSet::Selected
+    inline constexpr std::array<HistogramSet, 0> kTreeEnabledSets = {
+        // HistogramSet::Selected
     };
 
     struct HistogramSetAttributes {
@@ -122,9 +122,9 @@ namespace Lambda {
     };
 
     static constexpr std::array<HistogramSetAttributes, kHistogramSetCount> kHistogramSetMap{{
-        {HistogramSet::Unvalidated, "Unvalidated", "Unvalidated"},
-        {HistogramSet::Validated, "Validated", "Validated"},
-        {HistogramSet::Selected, "Selected", "Selected"}
+        {HistogramSet::Unvalidated, "Unvalidated", "Unvalidate"},
+        {HistogramSet::Validated, "Validated", "Validate"},
+        {HistogramSet::Selected, "Selected", "Selecte"}
     }};
 
     inline bool hasTree(HistogramSet set) {
@@ -245,7 +245,7 @@ namespace Lambda {
 
             object.basis = histogramSet.id;
             object.dir   = root.outFile->mkdir(histogramSet.directoryName);
-
+            object.dir->cd();
             // ── Multiplicity (event-level) ────────────────────────────────────
             if (!parameters.setEventLimits.count(histogramSet.id) ||
                 !parameters.setEventLimits.at(histogramSet.id).count(Config::EventProperty::Multiplicity)) {
@@ -260,8 +260,7 @@ namespace Lambda {
                 "Count of Reconstructed Candidates",
                 static_cast<int>(mBounds.high - mBounds.low + 1),
                 mBounds.low - 0.5,
-                mBounds.high + 0.5
-            );
+                mBounds.high + 0.5            );
 
             // ── Per-particle kinematic histograms ─────────────────────────────
             for (const auto& prop : Recorded_ParticleProperties) {
@@ -327,12 +326,22 @@ namespace Lambda {
         std::vector<Lorentz> selected;
     };
 
+    struct Lambda{
+        Lorentz particle;
+        std::size_t protonIndex;
+        std::size_t pionIndex;
+        Double_t massDiff;
+    };
+
     inline Candidates reconstructCandidates(const std::vector<Lorentz>& protons,
                                              const std::vector<Lorentz>& pions,
                                              const Parameters& parameters)
     {
         Candidates result;
+        std::size_t candidateTarget = protons.size() - 20, candidateCount = 0;
         std::vector<bool> pionTaken(pions.size(), false);
+        std::vector<bool> protonsTaken(protons.size(), false);
+        std::vector<Lambda> candidates;
 
         for (std::size_t iProton = 0; iProton < protons.size(); ++iProton) {
             const Lorentz& proton = protons[iProton];
@@ -350,24 +359,40 @@ namespace Lambda {
                 if (pionTaken[iPion]) continue;
 
                 const Double_t theta = cosTheta(proton, pion, lambda);
+
                 if (!(massAccepted(lambda, parameters) && thetaAccepted(theta, parameters))) continue;
 
                 result.validated.push_back(lambda);
 
                 const Double_t delta = std::abs(lambda.M() - kLambdaMass);
-                if (!hasCandidate || delta < leastDelta) {
-                    hasCandidate = true;
-                    leastDelta   = delta;
-                    bestIdx      = iPion;
-                    bestLambda   = lambda;
-                }
+
+                const Lambda candidate{lambda, iProton, iPion, delta};
+                candidates.push_back(candidate);
+                // if (!hasCandidate || delta < leastDelta) {
+                //     hasCandidate = true;
+                //     leastDelta   = delta;
+                //     bestIdx      = iPion;
+                //     bestLambda   = lambda;
+                // }
             }
 
-            if (hasCandidate) {
-                pionTaken[bestIdx] = true;
-                result.selected.push_back(bestLambda);
+            // if (hasCandidate) {
+            //     pionTaken[bestIdx] = true;
+            //     result.selected.push_back(bestLambda);
+            // }
+        }
+
+        std::sort(candidates.begin(), candidates.end(), [](const Lambda& a, const Lambda& b) { return a.massDiff < b.massDiff; });
+
+        for (const auto& candidate : candidates) {
+            if (!protonsTaken[candidate.protonIndex] && !pionTaken[candidate.pionIndex]) {
+                protonsTaken[candidate.protonIndex] = true;
+                pionTaken[candidate.pionIndex]       = true;
+                result.selected.push_back(candidate.particle);
+                if(++candidateCount >= candidateTarget){break;}
             }
         }
+
         return result;
     }
 
@@ -475,56 +500,15 @@ namespace Lambda {
 
         asyncLogger.publishThreadStats(threadId, Monitor::ThreadPhase::Analysis, eventIndex, Monitor::NoCallbackCompleted);
 
-        // Reconstruction math — thread-local, no lock required
-        std::vector<Lorentz> unvalidated, validated, selected;
         std::vector<bool> pionTaken(ev["Pions"].size(), false);
+        std::vector<Lorentz> protonList = ev["Protons"], pionList = ev["Pions"];
 
-        for (std::size_t iProton = 0; iProton < ev["Protons"].size(); ++iProton) {
-            const Lorentz& proton = ev["Protons"][iProton];
-            bool hasCandidate     = false;
-            std::size_t bestIdx   = 0;
-            Double_t leastDelta   = 0.0;
-            Lorentz bestLambda;
-
-            for (std::size_t iPion = 0; iPion < ev["Pions"].size(); ++iPion) {
-                const Lorentz& pion = ev["Pions"][iPion];
-                const Lorentz lambda = proton + pion;
-
-                unvalidated.push_back(lambda);
-
-                if (pionTaken[iPion]) continue;
-
-                const Double_t theta = cosTheta(proton, pion, lambda);
-                if (!(massAccepted(lambda, parameters) && thetaAccepted(theta, parameters))) continue;
-
-                validated.push_back(lambda);
-
-                const Double_t delta = std::abs(lambda.M() - kLambdaMass);
-                if (!hasCandidate || delta < leastDelta) {
-                    hasCandidate = true;
-                    leastDelta   = delta;
-                    bestIdx      = iPion;
-                    bestLambda   = lambda;
-                }
-            }
-
-            if (hasCandidate) {
-                pionTaken[bestIdx] = true;
-                selected.push_back(bestLambda);
-            }
-        }
-
-        // Lock only for shared histogram and logging state
         {
             std::lock_guard<std::mutex> lock(histMutex);
             ++logging.nRealEvents;
 
-            Candidates candidates;
-            candidates.unvalidated = std::move(unvalidated);
-            candidates.validated   = std::move(validated);
-            candidates.selected    = std::move(selected);
+            fillCandidates(histogramSets, reconstructCandidates(protonList, pionList, parameters));
 
-            fillCandidates(histogramSets, candidates);
             logging.elapsed = std::chrono::duration_cast<Config::uSeconds>(std::chrono::system_clock::now() - logging.start);
         }
 

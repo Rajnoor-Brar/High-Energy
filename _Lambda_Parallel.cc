@@ -12,7 +12,7 @@ int main(int argc, char* argv[]) {
     Monitor::disable_input_echo();
     std::atexit(Monitor::restore_terminal);
 
-    const std::string project    = "Lambda_Reconstruction";
+    const std::string project    = "Lambda_Generation";
     const std::string configPath = argc > 1 ? argv[1] : "configs/" + project + ".toml";
 
     Pythia8::PythiaParallel pythia;
