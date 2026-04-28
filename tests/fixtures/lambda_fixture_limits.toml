@@ -1,0 +1,75 @@
+# Histogram limits for the smoke-test fixture.
+# Copied verbatim from configs/Lambda_Limits.toml so the fixture is
+# self-contained and unaffected by changes to the production limits file.
+
+[Unvalidated]
+default = "Moderate"
+Mass               = [1, 2]
+Energy             = [0, 10]
+Momentum_Net       = [0, 10]
+Momentum_Transverse= [0, 5]
+Momentum_Z         = [0, 10]
+Pseudorapidity     = [-15, 15]
+Multiplicity       = [0, 5000]
+
+[Validated]
+default = "Moderate"
+Mass               = [1, 2]
+Energy             = [0, 100]
+Momentum_Net       = [0, 100]
+Momentum_Transverse= [0, 5]
+Momentum_Z         = [0, 100]
+Pseudorapidity     = [-15, 15]
+Multiplicity       = [0, 1000]
+
+[Selected]
+default = "Moderate"
+Mass               = [1, 1.3]
+Energy             = [0, 100]
+Momentum_Net       = [0, 100]
+Momentum_Transverse= [0, 5]
+Momentum_Z         = [0, 100]
+Pseudorapidity     = [-15, 15]
+Multiplicity       = [0, 150]
+
+[Mass_Invariant]
+Minute   = [1.112, 1.118]
+Small    = [1.108, 1.122]
+Moderate = [1.08,  1.15]
+Large    = [0.9,   1.3]
+Extreme  = [0.5,   2.0]
+
+[Energy_Net]
+Minute   = [1.11,  1.12]
+Small    = [1.05,  1.20]
+Moderate = [0.9,   1.8]
+Large    = [0.8,   3.0]
+Extreme  = [0.5,   6.0]
+
+[Momentum_Net]
+Minute   = [0.0, 1.0]
+Small    = [0.0, 1.5]
+Moderate = [0.0, 3.0]
+Large    = [0.0, 5.0]
+Extreme  = [0.0, 10.0]
+
+[Momentum_Transverse]
+Minute   = [0.0, 0.7]
+Small    = [0.0, 1.2]
+Moderate = [0.0, 2.0]
+Large    = [0.0, 3.5]
+Extreme  = [0.0, 6.0]
+
+[Momentum_Z]
+Minute   = [-1.0,  1.0]
+Small    = [-2.0,  2.0]
+Moderate = [-3.0,  3.0]
+Large    = [-5.0,  5.0]
+Extreme  = [-10.0, 10.0]
+
+[Pseudorapidity]
+Minute   = [-1.0, 1.0]
+Small    = [-1.5, 1.5]
+Moderate = [-2.5, 2.5]
+Large    = [-4.0, 4.0]
+Extreme  = [-6.0, 6.0]

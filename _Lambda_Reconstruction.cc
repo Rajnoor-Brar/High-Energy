@@ -1,29 +1,14 @@
 #include <chrono>
-#include <cstdint>
 #include <mutex>
 #include <string>
 
 #include <toml++/toml.hpp>
 
-#include "Explore.hh"
+#include "Probe.hh"
 #include "Record.hh"
 #include "Config.hh"
-#include "Meta.hh"
 #include "Lambda.hh"
 #include "Monitor.hh"
-
-#include "TFile.h"
-#include "TDirectory.h"
-#include "TParameter.h"
-
-namespace {
-    // Minimal stand-in so FinalizerController (which templates on PythiaT)
-    // can call stat() / settings.listChanged() without a real Pythia instance.
-    struct NoPythia {
-        void stat() const {}
-        struct { void listChanged() const {} } settings;
-    };
-}
 
 int main(int argc, char* argv[]) {
     Monitor::disable_input_echo();
@@ -36,13 +21,8 @@ int main(int argc, char* argv[]) {
     Config::Log  logParams;
     Config::extractConfiguration(configPath, project, logParams, rootParams);
 
-    const std::string inputPath = [&]{
-        const auto cfg = toml::parse_file(configPath);
-        // Try new [events].input_file first, then old [input].root_file
-        std::string p = cfg["events"]["input_file"].value_or(std::string{});
-        if (p.empty()) p = cfg["input"]["root_file"].value_or(std::string{});
-        return p;
-    }();
+    // inputPath is populated by readInputSection inside extractConfiguration.
+    const std::string inputPath = rootParams.inputPath;
     if (inputPath.empty())
         throw std::runtime_error("Lambda_Reconstruction: [events].input_file not set in " + configPath);
 
@@ -56,9 +36,7 @@ int main(int argc, char* argv[]) {
 
     Monitor::AsyncLogger asyncLogger;
 
-    NoPythia dummy;
     Record::FinalizerController finalizer(
-        dummy,
         histogramSets,
         rootParams,
         logParams,
@@ -67,47 +45,40 @@ int main(int argc, char* argv[]) {
     );
     finalizer.installFatalStallHandler();
 
-    // Part 6a: resolve event count from metadata before falling back to a scan.
-    // Three tiers: [events].event_count in the reconstruction TOML → legacy
-    // [run].event_count → About/events/n_events_total in the input ROOT file →
-    // full scan (existing behavior, preserved bit-for-bit).
+    // Three-tier event-count resolution (single TOML parse after extractConfiguration):
+    //  1. [events].event_count  /  legacy [run].event_count  → explicit user setting
+    //  2. About/events/n_events_total in the input ROOT file → Probe::resolveEventCount
+    //  3. Full index-key scan via EventStream::nEvents()      → fallback
+    //
+    // readEventsSection stores 1000 as a default, so we must re-check the raw TOML
+    // to distinguish "not specified" from "explicitly set to 1000".
     const std::size_t nEventsHint = [&]() -> std::size_t {
-        try {
-            const auto cfg = toml::parse_file(configPath);
-            if (auto v = cfg["events"]["event_count"].value<int64_t>(); v && *v > 0)
-                return static_cast<std::size_t>(*v);
-            if (auto v = cfg["run"]["event_count"].value<int64_t>();    v && *v > 0)
-                return static_cast<std::size_t>(*v);
-        } catch (...) { /* fall through to ROOT metadata */ }
-
-        std::unique_ptr<TFile> f(TFile::Open(inputPath.c_str(), "READ"));
-        if (!f || f->IsZombie()) return 0;
-        if (auto* dir = f->GetDirectory("About/events")) {
-            if (auto* par = dynamic_cast<TParameter<Long64_t>*>(dir->Get("n_events_total")))
-                if (par->GetVal() > 0) return static_cast<std::size_t>(par->GetVal());
-        }
-        return 0;
+        const auto cfg = toml::parse_file(configPath);
+        if (auto v = cfg["events"]["event_count"].value<int64_t>(); v && *v > 0)
+            return static_cast<std::size_t>(*v);
+        if (auto v = cfg["run"]["event_count"].value<int64_t>();    v && *v > 0)
+            return static_cast<std::size_t>(*v);
+        return Probe::resolveEventCount(inputPath);  // falls back to 0 on failure
     }();
 
     if (nEventsHint > 0) {
         logParams.nEvents = nEventsHint;
     } else {
         // Scan fallback — also exercises the (now index-only) keyRange path.
-        logParams.nEvents = Explore::EventStream(inputPath, Lambda::inputSchema(physParams)).nEvents();
+        logParams.nEvents = Probe::EventStream(inputPath, Lambda::inputSchema(physParams)).nEvents();
     }
 
     logParams.start = std::chrono::system_clock::now();
     asyncLogger.start(rootParams, logParams);
 
+    Lambda::AnalysisContext ctx{histogramSets, physParams, logParams, asyncLogger};
     std::mutex histMutex;
-    Explore::runParallel(inputPath,
+    Probe::runParallel(inputPath,
         Lambda::inputSchema(physParams),
-        [&](const Explore::Event& ev, int threadId) {
-            Lambda::analyzeEvent(ev, threadId, histogramSets, physParams,
-                                 logParams, asyncLogger, histMutex);
+        [&](const Probe::Event& ev, int threadId) {
+            Lambda::rootAnalysis(ev, threadId, histMutex, ctx);
         },
-        Config::resolveThreadCount(logParams.nThreads),
-        nEventsHint);
+        Config::resolveThreadCount(logParams.nThreads), nEventsHint);
 
     {
         Meta::Record metaRec = Meta::capture("Lambda_Reconstruction", configPath, logParams, rootParams);

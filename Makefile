@@ -19,7 +19,24 @@ all:
 %: %.exe
 	@true
 
+# ── Test targets ─────────────────────────────────────────────────────────────
+# Tests that need the full driver stack (ROOT + Pythia8 + toml++)
+TEST_EXES := tests/test_reconstructCandidates.exe tests/test_rootAnalysis_smoke.exe
+
+tests/%.exe: tests/%.cc
+	@$(CXX) $< -o $@ $(ROOT_FLAGS) $(PYTHIA_FLAGS) $(TOML_FLAGS) $(BASE_CXXFLAGS)
+	@echo "$< --> $@"
+
+# Fixture generator — ROOT only, no Pythia8
+tests/fixtures/%.exe: tests/fixtures/%.cc
+	@$(CXX) $< -o $@ $(ROOT_FLAGS) $(TOML_FLAGS) $(BASE_CXXFLAGS)
+	@echo "$< --> $@"
+
+.PHONY: test
+test: $(TEST_EXES)
+	@sh tests/run_all.sh
+
 .PHONY: clean
 clean:
-	@rm -f *.exe
+	@rm -f *.exe tests/*.exe tests/fixtures/*.exe
 	@echo "Executables removed"

@@ -6,7 +6,6 @@
 
 #include "Record.hh"
 #include "Config.hh"
-#include "Meta.hh"
 #include "Lambda.hh"
 #include "Monitor.hh"
 
@@ -41,14 +40,11 @@ int main(int argc, char* argv[]) {
 
     pythia.init();
 
+    Lambda::GenerationContext ctx{dataObjects, treeMutex, logParams, logger};
     pythia.run(static_cast<long>(logParams.nEvents), [&](Pythia8::Pythia* worker) {
-        Lambda::pythiaGenerator(*worker, dataObjects, treeMutex, logParams, logger);
+        Lambda::dataGenerator(*worker, ctx);
     });
 
-    // Part 6b: persist a TTreeIndex on event_index so downstream readers can
-    // seek to partition boundaries in O(log N) instead of O(N) per worker.
-    // Cost: seconds even for 10M rows. Falls through harmlessly if the tree
-    // is empty or the branch is missing.
     if (dataObjects.protons) dataObjects.protons->BuildIndex("event_index");
     if (dataObjects.pions)   dataObjects.pions->BuildIndex("event_index");
 
@@ -58,8 +54,10 @@ int main(int argc, char* argv[]) {
     logParams.elapsed = std::chrono::duration_cast<Config::uSeconds>(
         std::chrono::system_clock::now() - logParams.start);
     logger.finish(logParams, logParams.iEvent.load());
-    Monitor::terminalReport(pythia, rootParams, logParams);
-    Monitor::outputLog(pythia, rootParams, logParams, Lambda::dataLogString());
+    Monitor::terminalReport(rootParams, logParams, [&pythia]() { pythia.stat(); });
+    Monitor::outputLog(rootParams, logParams, Lambda::dataLogString(), {},
+                       [&pythia]() { pythia.stat(); },
+                       [&pythia]() { pythia.settings.listChanged(); });
 
     return 0;
 }

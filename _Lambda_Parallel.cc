@@ -30,12 +30,13 @@ int main(int argc, char* argv[]) {
 
     Monitor::AsyncLogger logger;
     Record::FinalizerController finalizer(
-        pythia,
         histogramSets,
         rootParams,
         logParams,
         logger,
-        [&analysisParams]() { return Lambda::logString(analysisParams); }
+        [&analysisParams]() { return Lambda::logString(analysisParams); },
+        [&pythia]() { pythia.stat(); },
+        [&pythia]() { pythia.settings.listChanged(); }
     );
     finalizer.installFatalStallHandler();
 
@@ -44,8 +45,9 @@ int main(int argc, char* argv[]) {
 
     pythia.init();
 
+    Lambda::AnalysisContext ctx{histogramSets, analysisParams, logParams, logger};
     pythia.run(static_cast<long>(logParams.nEvents), [&](Pythia8::Pythia* worker) {
-        Lambda::pythiaAnalysis(*worker, histogramSets, analysisParams, rootParams, logParams, logger);
+        Lambda::pythiaAnalysis(*worker, rootParams, ctx);
     });
 
     finalizer.normalShutdown();

@@ -1,48 +1,49 @@
 [events]
-event_count  = 10000
-beam_energy  = 7000   # GeV
-nThreads     = 0      # 0 = auto (hardware_concurrency - 2). Overrides .cmnd Parallelism:numThreads if > 0.
+pythia      = true
+event_count = 10000
+nThreads    = 0      # 0 = auto (hardware_concurrency - 2)
+
+[pythia]
+beam_energy = 7000   # GeV
+cmnd_file   = "configs/Lambda_Reconstruction.cmnd"
+seed        = 270403
 
 [record]
 serial     = 99
 sr_padding = 2
-
-[log]
-bin_count  = 500
+bin_count    = 500
 hist_scaling = 1.0
 
-print_interval            = 50       # events
-check_interval            = 100_000  # events
-
-heartbeat_interval        = 2000     # milliseconds
-terminal_refresh_interval = 2        # minutes
-program_stall_threshold   = 5        # minutes
-
-[paths]
-# paths to save root and log file
+[record.paths]
 directory            = "output/Lambda_Reconstruction/"
 output_log_directory = "logs/"
 checkpoint_directory = "checkpoints/"
+serialDirectory      = true
+logInSubDir          = true
+checkpointsInSubDir  = true
 
-serialDirectory     = true   # directory/_{serial} is made mainDirectory
-logInSubDir         = true   # if true, output_log_directory is subdirectory in mainDirectory
-checkpointsInSubDir = true
-
-[file]
-# file name parameters
+[record.file]
 prefix = "Lambda_Gen"
 serial = false
 energy = true
 events = true
 
-[lambda]
-hist_limits     = "Lambda_Limits"
-delta_mass_gev  = 0.15   # GeV
-delta_theta_rad = 0.1    # radians
-
-[metadata]
+[record.metadata]
 dataset_name = "Lambda_MC_pp"
 data_type    = "MC"
 run_period   = ""
 campaign     = ""
 notes        = ""
+
+[lambda]
+hist_limits       = "Lambda_Limits"
+delta_mass_gev    = 0.15   # GeV
+delta_theta_rad   = 0.1    # radians
+reserved_protons  = 20     # baseline beam protons per event (2 × Z; for Ne–Ne: 2 × 10 = 20)
+
+[monitor]
+print_interval            = 50       # events
+check_interval            = 100000   # events
+heartbeat_interval        = 2000     # milliseconds
+terminal_refresh_interval = 2        # minutes
+program_stall_threshold   = 5        # minutes

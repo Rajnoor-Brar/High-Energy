@@ -10,6 +10,7 @@
 		"workbench.preferredDarkColorTheme": "Xcode Default (Dark)",
 		"workbench.colorCustomizations": {
 		
-		}
+		},
+		"C_Cpp.default.compilerPath": ""
 	}
 }

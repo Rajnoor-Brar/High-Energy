@@ -31,12 +31,13 @@ int main(int argc, char* argv[]) {
 
     Monitor::AsyncLogger asyncLogger;
     Record::FinalizerController finalizer(
-        pythia,
         histogramSets,
         rootParams,
         logParams,
         asyncLogger,
-        [&analysisParams]() { return Lambda::logString(analysisParams); }
+        [&analysisParams]() { return Lambda::logString(analysisParams); },
+        [&pythia]() { pythia.stat(); },
+        [&pythia]() { pythia.settings.listChanged(); }
     );
     finalizer.installFatalStallHandler();
 
@@ -45,9 +46,11 @@ int main(int argc, char* argv[]) {
     logParams.start = std::chrono::system_clock::now();
     asyncLogger.start(rootParams, logParams);
     pythia.next();
+
+    Lambda::AnalysisContext ctx{histogramSets, analysisParams, logParams, asyncLogger};
     for (std::size_t iEvent = 0; iEvent < logParams.nEvents; ++iEvent) {
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
-        Lambda::pythiaAnalysis(pythia, histogramSets, analysisParams, rootParams, logParams, asyncLogger);
+        Lambda::pythiaAnalysis(pythia, rootParams, ctx);
     }
 
     finalizer.normalShutdown();

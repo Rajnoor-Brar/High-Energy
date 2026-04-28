@@ -1,0 +1,42 @@
+# Minimal config used by test_rootAnalysis_smoke — wraps the 50-event fixture.
+# All mandatory TOML keys are present; limits point at the fixture limits file
+# so the test is fully self-contained inside tests/fixtures/.
+
+[events]
+pythia      = false
+event_count = 50
+
+[probe]
+input_file = "tests/fixtures/lambda_fixture.root"
+
+[record]
+serial     = 0
+sr_padding = 1
+hist_scaling = 1.0
+
+[record.paths]
+directory            = "outputs/test/"
+output_log_directory = "logs/"
+checkpoint_directory = "checkpoints/"
+serialDirectory      = false
+logInSubDir          = false
+checkpointsInSubDir  = false
+
+[record.file]
+prefix = "fixture_smoke"
+serial = false
+energy = false
+events = false
+
+[input]
+index_branch = "event_index"
+energy       = "Energy"
+px           = "pX"
+py           = "pY"
+pz           = "pZ"
+
+[lambda]
+hist_limits      = "tests/fixtures/lambda_fixture_limits.toml"
+delta_mass_gev   = 0.1
+delta_theta_rad  = 0.1
+reserved_protons = 0

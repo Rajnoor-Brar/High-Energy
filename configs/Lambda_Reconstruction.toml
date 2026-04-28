@@ -1,13 +1,16 @@
 [events]
-nThreads   = 8   # 0 = auto (hardware_concurrency - 2)
-input_file = "output/Lambda_Data/_08/Lambda_Recons_7000GeV_10M.root"
+pythia      = false
 event_count = 1000000
+nThreads    = 8      # 0 = auto (hardware_concurrency - 2)
+
+[probe]
+input_file = "output/Lambda_Data/_08/Lambda_Recons_7000GeV_10M.root"
 
 [record]
 serial     = 9
 sr_padding = 2
 
-[paths]
+[record.paths]
 directory            = "output/Lambda_Reconstruction/"
 output_log_directory = "logs/"
 checkpoint_directory = "checkpoints/"
@@ -15,20 +18,21 @@ serialDirectory      = true
 logInSubDir          = true
 checkpointsInSubDir  = true
 
-[file]
+[record.file]
 prefix = "Lambda_Recons"
 serial = false
 energy = true
 events = true
 
-[lambda]
-hist_limits     = "Lambda_Limits"
-delta_mass_gev  = 0.15
-delta_theta_rad = 0.1
-
-[metadata]
+[record.metadata]
 dataset_name = "Lambda_MC_pp"
 data_type    = "MC"
 run_period   = ""
 campaign     = ""
 notes        = ""
+
+[lambda]
+hist_limits       = "Lambda_Limits"
+delta_mass_gev    = 0.15
+delta_theta_rad   = 0.1
+reserved_protons  = 20   # baseline beam protons per event (2 × Z; for Ne–Ne: 2 × 10 = 20)
