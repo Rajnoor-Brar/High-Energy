@@ -11,7 +11,6 @@
 #include "TString.h"
 #include "Config.hh"
 #include "Utility.hh"
-#include "Monitor/Format.hh"
 #include "Monitor/Snapshot.hh"
 #include "Monitor/Render.hh"
 
@@ -24,7 +23,7 @@ namespace Monitor {
         AsyncLogger() = default;
         ~AsyncLogger() { stop(); }
 
-        void start(const Config::Root& root, const Config::Log& logging) {
+        void start(const Config::Register& root, const Config::Watch& logging) {
             stop();
             {
                 std::lock_guard<std::mutex> lock(mutex_);
@@ -54,7 +53,7 @@ namespace Monitor {
         }
 
         void publish(
-            const Config::Log& logging,
+            const Config::Watch& logging,
             RunPhase           phase,
             bool               writeRunStat      = false,
             bool               forceRenderStatus = false,
@@ -64,9 +63,9 @@ namespace Monitor {
 
             const std::size_t eventIndex = logging.iEvent;
             const bool edgeEvent    = eventIndex == 1 || eventIndex == logging.nEvents;
-            const bool renderStatus = (logging.printInterval > 0 && eventIndex % logging.printInterval == 0)
+            const bool renderStatus = (logging.print_interval > 0 && eventIndex % logging.print_interval == 0)
                                       || edgeEvent || forceRenderStatus;
-            const bool renderBar    = (logging.barInterval   > 0 && eventIndex % logging.barInterval   == 0)
+            const bool renderBar    = (logging.bar_interval  > 0 && eventIndex % logging.bar_interval  == 0)
                                       || edgeEvent || forceRenderBar;
 
             std::lock_guard<std::mutex> lock(mutex_);
@@ -100,7 +99,7 @@ namespace Monitor {
             condition_.notify_one();
         }
 
-        void finish(const Config::Log& logging, std::size_t /*eventIndex*/) {
+        void finish(const Config::Watch& logging, std::size_t /*eventIndex*/) {
             RunSnapshot snapshot = makeSnapshot(logging, RunPhase::Finished);
             {
                 std::lock_guard<std::mutex> lock(mutex_);

@@ -32,15 +32,17 @@ namespace Config {
         }();
         const std::size_t progressDivisor = static_cast<std::size_t>(std::max(1, wsCol - 6));
         std::size_t interval = watch.nEvents / progressDivisor;
-        interval > 1 ? watch.barInterval = interval : watch.barInterval = 1;
-        watch.printInterval = std::max<std::size_t>(1, watch.printInterval);
+        interval > 1 ? watch.bar_interval = interval : watch.bar_interval = 1;
+        watch.print_interval = std::max<std::size_t>(1, watch.print_interval);
     }
 
     // ── Section helpers ──────────────────────────────────────────────────────
 
     inline void readEventsSection(const toml::table& config, Events& events, Watch& watch) {
         const bool hasEvents = config.contains("events");
-        events.isPythia   = hasEvents ? config["events"]["pythia"].value_or(true) : true;
+        auto pythia = config["events"]["pythia"];
+        auto probe   = config["events"]["probe"];
+        events.isPythia = pythia ? pythia.value_or(true) : (probe ? !probe.value_or(true) : true);
         events.eventCount = static_cast<std::size_t>(
             hasEvents ? config["events"]["event_count"].value_or(1000)
                       : config["run"]["event_count"].value_or(1000));
@@ -49,29 +51,15 @@ namespace Config {
                       : config["run"]["nThreads"].value_or(0));
 
         watch.nEvents  = events.eventCount;
-        watch.nThreads = events.nThreads;
+        watch.n_threads = events.nThreads;
     }
 
-    // Populates reg.inputPath from [events].input_file (preferred) or the
-    // legacy [input].root_file key.  Emits a one-time deprecation notice to
-    // stderr when the legacy key is the only one present.
-    inline void readInputSection(const toml::table& config, Register& reg) {
-        std::string path = config["events"]["input_file"].value_or(std::string{});
-        if (!path.empty()) { reg.inputPath = path; return; }
-
-        path = config["input"]["root_file"].value_or(std::string{});
-        if (!path.empty()) {
-            std::cerr << "[Config] deprecated key [input].root_file — "
-                         "please migrate to [events].input_file\n";
-            reg.inputPath = path;
-        }
-    }
 
     inline void readRecordSection(const toml::table& config, Watch& watch, Register& reg) {
         const bool hasRecord = config.contains("record");
         watch.serial    = hasRecord ? config["record"]["serial"].value_or(0)
                                     : config["run"]["serial"].value_or(0);
-        watch.srPadding = static_cast<std::size_t>(
+        watch.sr_padding = static_cast<std::size_t>(
             hasRecord ? config["record"]["sr_padding"].value_or(2)
                       : config["run"]["sr_Padding"].value_or(2));
 
@@ -88,10 +76,10 @@ namespace Config {
         else if (config.contains("logging")) logKey = "logging";
         if (logKey.empty()) return;
 
-        watch.printInterval = static_cast<std::size_t>(
-            config[logKey]["print_interval"].value_or(static_cast<int64_t>(watch.printInterval)));
-        watch.checkInterval = static_cast<std::size_t>(
-            config[logKey]["check_interval"].value_or(static_cast<int64_t>(watch.checkInterval)));
+        watch.print_interval = static_cast<std::size_t>(
+            config[logKey]["print_interval"].value_or(static_cast<int64_t>(watch.print_interval)));
+        watch.check_interval = static_cast<std::size_t>(
+            config[logKey]["check_interval"].value_or(static_cast<int64_t>(watch.check_interval)));
 
         std::size_t hb = static_cast<std::size_t>(
             config[logKey]["heartbeat_interval"].value_or(static_cast<int64_t>(watch.heartbeat_interval.count())));
@@ -142,7 +130,7 @@ namespace Config {
         const std::string checkBasePath = pathStr("checkpoint_directory", "checkpoints/");
 
         const std::string serialStr = Form(
-            ("_%0" + std::to_string((int)watch.srPadding) + "d").c_str(), watch.serial);
+            ("_%0" + std::to_string((int)watch.sr_padding) + "d").c_str(), watch.serial);
         const std::string rootDir = serialSubDir ? (baseRootDir + serialStr + "/") : baseRootDir;
 
         reg.rootDirectory       = rootDir;
@@ -197,7 +185,7 @@ namespace Config {
         probe.particles.clear();
         for (const auto& entry : *arr) {
             const auto* row = entry.as_array();
-            if (!row || row->size() < 4) continue;
+            if (!row || row->size() < 5) continue;
             ProbeParticle p;
             p.label    = (*row)[0].value_or(std::string{});
             p.spec     = (*row)[1].value_or(0);

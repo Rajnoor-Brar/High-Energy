@@ -12,7 +12,7 @@
 
 namespace Probe {
 
-    using Lorentz = Physics::Lorentz;
+    using Physics::Lorentz;
 
     // ── Coordinate specs ─────────────────────────────────────────────────────
     struct CartesianSpec  { std::string px, py, pz, E; };

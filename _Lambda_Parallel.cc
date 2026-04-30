@@ -17,9 +17,9 @@ int main(int argc, char* argv[]) {
 
     Pythia8::PythiaParallel pythia;
     pythia.readFile("configs/Lambda_Reconstruction.cmnd");
-    Config::Root     rootParams;
+    Config::Register rootParams;
                      rootParams.beamEnergy = pythia.settings.parm("Beams:eCM") > 0 ? Form("%.0f", pythia.settings.parm("Beams:eCM")) : "UnknownEnergy";
-    Config::Log      logParams;
+    Config::Watch    logParams;
     Config::extractConfiguration(configPath, project, logParams, rootParams);
     Config::openOutputFile(rootParams);
 

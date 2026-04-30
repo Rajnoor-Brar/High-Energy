@@ -21,6 +21,8 @@
 
 namespace Record {
 
+    using Physics::Lorentz;
+
     template <std::size_t N>
     inline TreeRecord declareTree(
         TDirectory* dir,
@@ -82,16 +84,16 @@ namespace Record {
         record.tree->Fill();
     }
 
-    inline void fill(ExtractHist1D& record, const Extract::Event& ev) {
+    inline void fill(ExtractHist1D& record, const Record::Extract::Event& ev) {
         if (record.hist == nullptr || !record.extractor) return;
-        const Extract::Scalars values = record.extractor(ev);
+        const Record::Extract::Scalars values = record.extractor(ev);
         for (Double_t v : values) record.hist->Fill(v);
     }
 
-    inline void fill(ExtractHist2D& record, const Extract::Event& ev) {
+    inline void fill(ExtractHist2D& record, const Record::Extract::Event& ev) {
         if (record.hist == nullptr || !record.extractorX || !record.extractorY) return;
-        const Extract::Scalars xs = record.extractorX(ev);
-        const Extract::Scalars ys = record.extractorY(ev);
+        const Record::Extract::Scalars xs = record.extractorX(ev);
+        const Record::Extract::Scalars ys = record.extractorY(ev);
         if (xs.empty() || ys.empty()) return;
         if (xs.size() == ys.size()) {
             for (std::size_t i = 0; i < xs.size(); ++i) record.hist->Fill(xs[i], ys[i]);

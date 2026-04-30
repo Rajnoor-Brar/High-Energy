@@ -16,8 +16,6 @@
 
 namespace Record {
 
-    using Lorentz = Physics::Lorentz;
-
     struct NoBasis {};
 
     struct TH1Record {
@@ -40,12 +38,12 @@ namespace Record {
     };
     struct ExtractHist1D {
         TH1D*       hist{};
-        Extract::Fn extractor{};
+        Record::Extract::Fn extractor{};
     };
     struct ExtractHist2D {
         TH2*        hist{};
-        Extract::Fn extractorX{};
-        Extract::Fn extractorY{};
+        Record::Extract::Fn extractorX{};
+        Record::Extract::Fn extractorY{};
     };
 
     template <typename Basis = NoBasis>

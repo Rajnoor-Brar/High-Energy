@@ -2,7 +2,7 @@
 
 // ── Part 5: event-centric extractor layer ────────────────────────────────────
 //
-// An `Extract::Fn` maps a `Probe::Event` → a `std::vector<Double_t>`. Each
+// A `Record::Extract::Fn` maps a `Probe::Event` → a `std::vector<Double_t>`. Each
 // element produced represents one fill into a downstream ROOT object.
 
 #include <algorithm>
@@ -18,9 +18,8 @@
 #include "Math/Vector4D.h"
 #include "RtypesCore.h"
 
-namespace Extract {
+namespace Record::Extract {
     using Event   = Probe::Event;
-    using Lorentz = Physics::Lorentz;
     using Scalars = std::vector<Double_t>;
     using Fn      = std::function<Scalars(const Event&)>;
 
@@ -180,4 +179,4 @@ namespace Extract {
             return { static_cast<Double_t>(n) };
         };
     }
-}
+} // namespace Record::Extract

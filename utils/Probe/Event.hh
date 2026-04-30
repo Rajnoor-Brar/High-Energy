@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "Probe/Schema.hh"
+#include "Probe/BranchControl.hh"
 #include "Probe/FlatReader.hh"
 #include "Probe/VecReader.hh"
 

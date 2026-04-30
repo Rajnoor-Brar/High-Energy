@@ -8,9 +8,19 @@
 #include "Config.hh"
 #include "Utility.hh"
 #include "Monitor/Types.hh"
-#include "Monitor/Format.hh"
 
 namespace Monitor {
+
+    inline std::string updatedETA(std::size_t iEvent, std::size_t nEvents, Config::uSeconds duration, bool highlightClock = true) {
+        using SysClock = std::chrono::system_clock;
+        if (nEvents < iEvent || iEvent == 0) return "--";
+        const double remainder = (nEvents - iEvent) / static_cast<double>(iEvent);
+        const auto waitTime    = std::chrono::duration_cast<Config::uSeconds>(remainder * duration);
+        std::ostringstream eta;
+        eta << Utility::timeString(SysClock::to_time_t(SysClock::now() + waitTime), highlightClock)
+            << " in " << Utility::durationString(waitTime);
+        return eta.str();
+    }
 
     inline const char* phaseString(RunPhase phase) {
         switch (phase) {
@@ -38,11 +48,11 @@ namespace Monitor {
         }
     }
 
-    inline RunSnapshot makeSnapshot(const Config::Log& logging, RunPhase phase) {
+    inline RunSnapshot makeSnapshot(const Config::Watch& logging, RunPhase phase) {
         RunSnapshot snapshot;
         snapshot.eventIndex    = logging.iEvent;
         snapshot.nEvents       = logging.nEvents;
-        snapshot.nRealEvents   = logging.nRealEvents;
+        snapshot.nRealEvents   = logging.n_real_events;
         snapshot.elapsed       = logging.elapsed;
         snapshot.eta           = updatedETA(logging.iEvent, logging.nEvents, logging.elapsed, false);
         snapshot.progress      = logging.nEvents > 0

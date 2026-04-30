@@ -41,16 +41,18 @@ namespace Record {
     class FinalizerController {
       public:
         FinalizerController(RootArrayT& histogramSets,
-                            Config::Root& root, Config::Log& logging,
+                            Config::Register& root, Config::Watch& logging,
                             Monitor::AsyncLogger& logger,
                             ProgramLogBuilder programLogBuilder,
                             std::function<void()> printStats = {},
-                            std::function<void()> listChangedSettings = {})
+                            std::function<void()> listChangedSettings = {},
+                            std::function<void()> preCloseHook = {})
             : histogramSets_(histogramSets),
               root_(root), logging_(logging), logger_(logger),
               programLogBuilder_(std::move(programLogBuilder)),
               printStats_(std::move(printStats)),
-              listChangedSettings_(std::move(listChangedSettings)) {}
+              listChangedSettings_(std::move(listChangedSettings)),
+              preCloseHook_(std::move(preCloseHook)) {}
 
         void installFatalStallHandler() {
             logger_.setFatalStallHandler([this](const Monitor::RunSnapshot& snapshot) {
@@ -58,13 +60,14 @@ namespace Record {
             });
         }
 
-        void setMeta(Meta::Record meta) { meta_ = std::move(meta); }
+        void setMeta(Record::Meta::Record meta) { meta_ = std::move(meta); }
 
         void normalShutdown() {
             writeAll(histogramSets_, root_.histScale, logging_.nEvents);
             if (meta_.has_value() && root_.outFile != nullptr)
-                Meta::writeAbout(root_.outFile, *meta_);
+                Record::Meta::writeAbout(root_.outFile, *meta_);
             if (root_.outFile != nullptr) {
+                if (preCloseHook_) preCloseHook_();
                 root_.outFile->Write("", TObject::kOverwrite);
                 root_.outFile->Close();
             }
@@ -78,7 +81,7 @@ namespace Record {
       private:
         void fatalShutdown(const Monitor::RunSnapshot& snapshot) {
             if (fatalShutdownStarted_.exchange(true)) return;
-            auto frozenLog = std::shared_ptr<Config::Log>(logging_.freeze());
+            auto frozenLog = std::shared_ptr<Config::Watch>(logging_.freeze());
             frozenLog->elapsed = std::chrono::duration_cast<Config::uSeconds>(
                 std::chrono::system_clock::now() - logging_.start);
             Monitor::RunSnapshot frozenSnapshot = snapshot;
@@ -105,13 +108,14 @@ namespace Record {
         }
 
         RootArrayT&           histogramSets_;
-        Config::Root&         root_;
-        Config::Log&          logging_;
+        Config::Register&     root_;
+        Config::Watch&        logging_;
         Monitor::AsyncLogger& logger_;
         ProgramLogBuilder     programLogBuilder_;
         std::function<void()> printStats_;
         std::function<void()> listChangedSettings_;
+        std::function<void()> preCloseHook_;
         std::atomic<bool>     fatalShutdownStarted_{false};
-        std::optional<Meta::Record> meta_;
+        std::optional<Record::Meta::Record> meta_;
     };
 }

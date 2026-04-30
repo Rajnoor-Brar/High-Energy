@@ -21,7 +21,7 @@ namespace Probe {
                              std::size_t nThreads = 0,
                              std::size_t nEventsHint = 0)
     {
-        detail::enableRootThreadSafety();
+        BranchControl::enableRootThreadSafety();
 
         bool anyFlat = false, anyVec = false;
         for (const auto& cs : collections) {
@@ -43,7 +43,7 @@ namespace Probe {
             if (total == 0) return;
 
             const Long64_t chunk = (total + static_cast<Long64_t>(threads) - 1) / static_cast<Long64_t>(threads);
-            std::vector<detail::Partition> parts;
+            std::vector<BranchControl::Partition> parts;
             for (Long64_t start = 0; start < total; start += chunk)
                 parts.push_back({start, std::min(total - 1, start + chunk - 1)});
 
@@ -65,12 +65,12 @@ namespace Probe {
         }
 
         const std::size_t threads = nThreads > 0 ? nThreads : Config::resolveThreadCount(0);
-        std::vector<detail::Partition> parts;
+        std::vector<BranchControl::Partition> parts;
 
         if (nEventsHint > 0) {
             const Long64_t total    = static_cast<Long64_t>(nEventsHint);
             if (total <= 0) return;
-            const Long64_t firstKey = detail::probeFirstKey(filepath, collections);
+            const Long64_t firstKey = BranchControl::probeFirstKey(filepath, collections);
             const Long64_t lastKey  = firstKey + total - 1;
             const Long64_t chunk    = (total + static_cast<Long64_t>(threads) - 1)
                                     / static_cast<Long64_t>(threads);
@@ -84,12 +84,12 @@ namespace Probe {
             std::set<Long64_t> keySet;
             for (const auto& cs : collections)
                 if (!cs.indexBranches.empty())
-                    detail::scanIndexBranch(sf, cs.tree, cs.indexBranches[0], keySet, filepath);
+                    BranchControl::scanIndexBranch(sf, cs.tree, cs.indexBranches[0], keySet, filepath);
             sf->Close(); delete sf;
 
             const std::vector<Long64_t> keys(keySet.begin(), keySet.end());
             if (keys.empty()) return;
-            parts = detail::partitionEvents(keys, threads);
+            parts = BranchControl::partitionEvents(keys, threads);
         }
 
         std::vector<std::thread>        workers;
@@ -126,7 +126,7 @@ namespace Probe {
                                                const std::vector<ScalarSpec>&     scalars = {},
                                                std::size_t nThreads = 0)
     {
-        detail::enableRootThreadSafety();
+        BranchControl::enableRootThreadSafety();
         std::vector<Event> out;
         std::mutex mtx;
         runParallel(filepath, collections, scalars,

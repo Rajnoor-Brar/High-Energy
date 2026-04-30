@@ -26,11 +26,10 @@ namespace Config {
         toml::table config = toml::parse_file(configPath);
 
         readEventsSection(config, events, watch);
-        readInputSection (config, reg);
         readRecordSection(config, watch, reg);
         readLogSection   (config, watch, reg);
 
-        watch.nDigits = std::to_string(watch.nEvents).size();
+        watch.n_digits = std::to_string(watch.nEvents).size();
         sanitiseLoggingConfig(watch);
 
         readPathsAndFile(config, project, watch, reg);
@@ -49,15 +48,15 @@ namespace Config {
     template<typename PythiaT>
     inline void configurePythia(const std::string& configPath,
                                 const std::string& project,
-                                Events&   events,
                                 Watch&    watch,
                                 Register& reg,
                                 PythiaT&  pythia)
     {
-        configuration(configPath, project, events, watch, reg);
+
+        PythiaConfig py;
+        configuration(configPath, project, py.eventConfig, watch, reg);
 
         toml::table config = toml::parse_file(configPath);
-        PythiaConfig py;
         readPythiaSection(config, py);
 
         if (!py.cmndFile.empty()) pythia.readFile(py.cmndFile);
@@ -71,12 +70,11 @@ namespace Config {
 
     inline void configureProbe(const std::string& configPath,
                                const std::string& project,
-                               Events&      events,
                                Watch&       watch,
                                Register&    reg,
                                ProbeConfig& probe)
     {
-        configuration(configPath, project, events, watch, reg);
+        configuration(configPath, project, probe.eventConfig, watch, reg);
 
         toml::table config = toml::parse_file(configPath);
         readProbeSection(config, probe);

@@ -18,14 +18,14 @@ int main(int argc, char* argv[]) {
 
     Pythia8::PythiaParallel pythia;
     pythia.readFile("configs/Lambda_Reconstruction.cmnd");
-    Config::Root rootParams;
-                 rootParams.beamEnergy = pythia.settings.parm("Beams:eCM") > 0 ? Form("%.0f", pythia.settings.parm("Beams:eCM")) : "UnknownEnergy";
-    Config::Log  logParams;
+    Config::Register rootParams;
+                     rootParams.beamEnergy = pythia.settings.parm("Beams:eCM") > 0 ? Form("%.0f", pythia.settings.parm("Beams:eCM")) : "UnknownEnergy";
+    Config::Watch    logParams;
     Config::extractConfiguration(configPath, project, logParams, rootParams);
     Config::openOutputFile(rootParams);
 
-    if (logParams.nThreads > 0) {
-        const std::size_t nThreads = Config::resolveThreadCount(logParams.nThreads);
+    if (logParams.n_threads > 0) {
+        const std::size_t nThreads = Config::resolveThreadCount(logParams.n_threads);
         pythia.readString("Parallelism:numThreads = " + std::to_string(nThreads));
     }
 
@@ -45,19 +45,21 @@ int main(int argc, char* argv[]) {
         Lambda::dataGenerator(*worker, ctx);
     });
 
-    if (dataObjects.protons) dataObjects.protons->BuildIndex("event_index");
-    if (dataObjects.pions)   dataObjects.pions->BuildIndex("event_index");
-
-    rootParams.outFile->Write("", TObject::kOverwrite);
-    rootParams.outFile->Close();
-
-    logParams.elapsed = std::chrono::duration_cast<Config::uSeconds>(
-        std::chrono::system_clock::now() - logParams.start);
-    logger.finish(logParams, logParams.iEvent.load());
-    Monitor::terminalReport(rootParams, logParams, [&pythia]() { pythia.stat(); });
-    Monitor::outputLog(rootParams, logParams, Lambda::dataLogString(), {},
-                       [&pythia]() { pythia.stat(); },
-                       [&pythia]() { pythia.settings.listChanged(); });
+    Lambda::RootArray emptyObjects;
+    Record::FinalizerController finalizer(
+        emptyObjects,
+        rootParams,
+        logParams,
+        logger,
+        []() { return Lambda::dataLogString(); },
+        [&pythia]() { pythia.stat(); },
+        [&pythia]() { pythia.settings.listChanged(); },
+        [&dataObjects]() {
+            if (dataObjects.protons) dataObjects.protons->BuildIndex("event_index");
+            if (dataObjects.pions)   dataObjects.pions->BuildIndex("event_index");
+        }
+    );
+    finalizer.normalShutdown();
 
     return 0;
 }

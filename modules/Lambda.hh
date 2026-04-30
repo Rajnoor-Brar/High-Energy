@@ -7,11 +7,21 @@
 #include "Lambda/TypeAid.hh"
 #include "Lambda/ParamAid.hh"
 #include "Lambda/Parameters.hh"
+#include "Lambda/Loaders.hh"
+#include "Lambda/Declare.hh"
 #include "Lambda/Reconstruction.hh"
 #include "Lambda/Recording.hh"
 #include "Lambda/Context.hh"
 
 namespace Lambda{
+
+    inline std::string dataLogString() {
+        std::ostringstream stream;
+        stream << "Proton PDG ID                 : 2212\n";
+        stream << "Pion PDG ID                   : -211 (pi-)\n";
+        stream << "Selection                     : isFinal() only\n";
+        return stream.str();
+    }
 
     inline std::string logString(const Parameters& parameters) {
         std::ostringstream stream;
@@ -20,7 +30,7 @@ namespace Lambda{
         stream << "Pion Mass                     : " << kPionMass << '\n';
         stream << "Mass Difference               : " << kMassDiff << '\n';
         stream << "Mass Tolerance                : " << parameters.massTolerance << '\n';
-        stream << "Theta Tolerance               : " << parameters.ThetaTolerance << '\n';
+        stream << "Theta Tolerance               : " << parameters.thetaTolerance << '\n';
         stream << "Reserved Protons              : " << parameters.reservedProtons << '\n';
         return stream.str();
     }
@@ -30,7 +40,7 @@ namespace Lambda{
     // root is kept as a separate parameter because it holds the checkpoint
     // output paths, which are specific to this handler.
     inline void pythiaAnalysis(Pythia8::Pythia& pythia,
-                               Config::Root& root,
+                               Config::Register& root,
                                AnalysisContext& ctx)
     {
         const std::size_t eventIndex = ++ctx.logging.iEvent;
@@ -52,7 +62,7 @@ namespace Lambda{
         ctx.asyncLogger.publish(ctx.logging, Monitor::RunPhase::Analysis, Monitor::DontWriteRunStat);
         ctx.asyncLogger.publishThreadStats(workerIndex, Monitor::ThreadPhase::Simulation, eventIndex, Monitor::CallbackCompleted);
 
-        if (ctx.logging.checkInterval > 0 && eventIndex % ctx.logging.checkInterval == 0) {
+        if (ctx.logging.check_interval > 0 && eventIndex % ctx.logging.check_interval == 0) {
             Record::checkpointWrite(ctx.histograms, root.checkpointOutName, root.histScale, eventIndex);
             Monitor::outputLog(root, ctx.logging, logString(ctx.parameters), root.checkpointLogName,
                                [&pythia]() { pythia.stat(); },

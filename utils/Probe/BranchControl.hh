@@ -8,6 +8,8 @@
 #include <set>
 #include <stdexcept>
 #include <string>
+#include <algorithm>
+#include <type_traits>
 #include <vector>
 
 #include "Probe/Types.hh"
@@ -22,8 +24,8 @@
 
 namespace Probe {
 
-    // ── Internal utilities ───────────────────────────────────────────────────
-    namespace detail {
+    // ── Branch-control utilities ─────────────────────────────────────────────
+    namespace BranchControl {
 
         struct Partition { Long64_t firstEvent; Long64_t lastEvent; };
 
@@ -210,6 +212,6 @@ namespace Probe {
             tree->ResetBranchAddresses();
         }
 
-    } // namespace detail
+    } // namespace BranchControl
 
 } // namespace Probe

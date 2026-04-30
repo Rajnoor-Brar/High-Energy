@@ -16,8 +16,8 @@ int main(int argc, char* argv[]) {
 
     Pythia8::Pythia pythia;
     pythia.readFile("configs/Lambda_Reconstruction.cmnd");
-    Config::Root        rootParams;
-    Config::Log         logParams;
+    Config::Register    rootParams;
+    Config::Watch       logParams;
 
     rootParams.beamEnergy = pythia.settings.parm("Beams:eCM") > 0 ? Form("%.0f", pythia.settings.parm("Beams:eCM")) : "UnknownEnergy";
 

@@ -4,14 +4,6 @@
 #include "Types.hh"
 
 namespace Lambda{
-    inline std::string dataLogString() {
-        std::ostringstream stream;
-        stream << "Proton PDG ID                 : 2212\n";
-        stream << "Pion PDG ID                   : -211 (pi-)\n";
-        stream << "Selection                     : isFinal() only\n";
-        return stream.str();
-    }
-
     struct Particle{
         Lorentz     lorentz;
         std::size_t protonIndex{};

@@ -1,13 +1,19 @@
 [events]
-pythia      = false
+probe      = true   # true = use probe input file; false = generate events with Pythia
+# pythia     = false  # true = generate events with Pythia; false = use probe input file.
+#if used with probe, this is given preference over probe
 event_count = 1000000
 nThreads    = 8      # 0 = auto (hardware_concurrency - 2)
 
 [probe]
 input_file = "output/Lambda_Data/_08/Lambda_Recons_7000GeV_10M.root"
+event_particles  = [
+                        ["protons",0,"Protons",["pX","pY","pZ","Energy"],"D","Index"],
+                        ["pions",0,"Pions",["pX","pY","pZ","Energy"],"D","Index"]
+                    ]
 
 [record]
-serial     = 9
+serial     = 11
 sr_padding = 2
 
 [record.paths]

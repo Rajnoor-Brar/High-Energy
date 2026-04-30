@@ -17,15 +17,11 @@ int main(int argc, char* argv[]) {
     const std::string project    = "Lambda_Reconstruction";
     const std::string configPath = argc > 1 ? argv[1] : "configs/" + project + ".toml";
 
-    Config::Root rootParams;
-    Config::Log  logParams;
-    Config::extractConfiguration(configPath, project, logParams, rootParams);
+    Config::Register rootParams;
+    Config::Watch    logParams;
+    Config::ProbeConfig probeConfig;
 
-    // inputPath is populated by readInputSection inside extractConfiguration.
-    const std::string inputPath = rootParams.inputPath;
-    if (inputPath.empty())
-        throw std::runtime_error("Lambda_Reconstruction: [events].input_file not set in " + configPath);
-
+    Config::configureProbe(configPath, project, logParams, rootParams, probeConfig);
     Config::openOutputFile(rootParams);
 
     Lambda::Parameters physParams;
@@ -45,27 +41,11 @@ int main(int argc, char* argv[]) {
     );
     finalizer.installFatalStallHandler();
 
-    // Three-tier event-count resolution (single TOML parse after extractConfiguration):
-    //  1. [events].event_count  /  legacy [run].event_count  → explicit user setting
-    //  2. About/events/n_events_total in the input ROOT file → Probe::resolveEventCount
-    //  3. Full index-key scan via EventStream::nEvents()      → fallback
-    //
-    // readEventsSection stores 1000 as a default, so we must re-check the raw TOML
-    // to distinguish "not specified" from "explicitly set to 1000".
-    const std::size_t nEventsHint = [&]() -> std::size_t {
-        const auto cfg = toml::parse_file(configPath);
-        if (auto v = cfg["events"]["event_count"].value<int64_t>(); v && *v > 0)
-            return static_cast<std::size_t>(*v);
-        if (auto v = cfg["run"]["event_count"].value<int64_t>();    v && *v > 0)
-            return static_cast<std::size_t>(*v);
-        return Probe::resolveEventCount(inputPath);  // falls back to 0 on failure
-    }();
-
-    if (nEventsHint > 0) {
-        logParams.nEvents = nEventsHint;
-    } else {
-        // Scan fallback — also exercises the (now index-only) keyRange path.
-        logParams.nEvents = Probe::EventStream(inputPath, Lambda::inputSchema(physParams)).nEvents();
+    if(probeConfig.eventConfig.eventCount == 0){
+        probeConfig.eventConfig.eventCount = logParams.nEvents = Probe::resolveEventCount(probeConfig.inputFile);
+    }
+    if(probeConfig.eventConfig.eventCount == 0){
+        probeConfig.eventConfig.eventCount = logParams.nEvents = Probe::EventStream(probeConfig.inputFile, Lambda::inputSchema(physParams)).nEvents();
     }
 
     logParams.start = std::chrono::system_clock::now();
@@ -73,19 +53,19 @@ int main(int argc, char* argv[]) {
 
     Lambda::AnalysisContext ctx{histogramSets, physParams, logParams, asyncLogger};
     std::mutex histMutex;
-    Probe::runParallel(inputPath,
+    Probe::runParallel(probeConfig.inputFile,
         Lambda::inputSchema(physParams),
         [&](const Probe::Event& ev, int threadId) {
             Lambda::rootAnalysis(ev, threadId, histMutex, ctx);
         },
-        Config::resolveThreadCount(logParams.nThreads), nEventsHint);
+        Config::resolveThreadCount(logParams.n_threads), probeConfig.eventConfig.eventCount);
 
     {
-        Meta::Record metaRec = Meta::capture("Lambda_Reconstruction", configPath, logParams, rootParams);
-        metaRec.dataset.parent_files = {inputPath};
+        Record::Meta::Record metaRec = Record::Meta::capture("Lambda_Reconstruction", configPath, logParams, rootParams);
+        metaRec.dataset.parent_files = {probeConfig.inputFile};
         finalizer.setMeta(std::move(metaRec));
     }
     finalizer.normalShutdown();
-
+ 
     return 0;
 }

@@ -3,7 +3,7 @@
 #include <mutex>
 
 #include "Types.hh"
-#include "Config.hh"    // Config::Log / Config::Root aliases
+#include "Config.hh"    // Config::Watch / Config::Register
 #include "Monitor.hh"   // Monitor::AsyncLogger
 
 // ── Lambda handler context bundles ───────────────────────────────────────────
@@ -22,7 +22,7 @@ namespace Lambda {
     struct AnalysisContext {
         RootArray&            histograms;   // histogram sets (shared across threads)
         const Parameters&     parameters;  // physics cuts (read-only)
-        Config::Log&          logging;     // live event counters
+        Config::Watch&        logging;     // live event counters
         Monitor::AsyncLogger& asyncLogger; // progress publisher
     };
 
@@ -30,7 +30,7 @@ namespace Lambda {
     struct GenerationContext {
         DataObjects&          data;        // TTree branches (shared across threads)
         std::mutex&           treeMutex;   // serialises TTree::Fill calls
-        Config::Log&          logging;     // live event counters
+        Config::Watch&        logging;     // live event counters
         Monitor::AsyncLogger& asyncLogger; // progress publisher
     };
 

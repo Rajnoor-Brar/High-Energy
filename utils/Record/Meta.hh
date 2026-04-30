@@ -18,7 +18,7 @@
 #include "TUUID.h"
 #include <toml++/toml.hpp>
 
-namespace Meta {
+namespace Record::Meta {
 
     struct Dataset {
         std::string name;
@@ -112,8 +112,8 @@ namespace Meta {
 
     inline Record capture(const std::string& analysisName,
                           const std::string& configPath,
-                          const Config::Log&  log,
-                          const Config::Root& root)
+                          const Config::Watch&    log,
+                          const Config::Register& root)
     {
         Record r;
 
@@ -159,9 +159,9 @@ namespace Meta {
         r.processing.config_snapshot = readFile(configPath);
 
         r.events.n_events_total      = log.nEvents;
-        r.events.n_events_processed  = log.nRealEvents;
-        r.events.sum_weights         = static_cast<Double_t>(log.nRealEvents);
-        r.events.sum_weights_squared = static_cast<Double_t>(log.nRealEvents);
+        r.events.n_events_processed  = log.n_real_events;
+        r.events.sum_weights         = static_cast<Double_t>(log.n_real_events);
+        r.events.sum_weights_squared = static_cast<Double_t>(log.n_real_events);
 
         try {
             r.physics.center_of_mass_energy_gev =
@@ -247,4 +247,4 @@ namespace Meta {
         file->cd();
         about->Write("", TObject::kOverwrite);
     }
-}
+} // namespace Record::Meta

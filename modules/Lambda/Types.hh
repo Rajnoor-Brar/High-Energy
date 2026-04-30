@@ -15,8 +15,8 @@ namespace Lambda{
     enum class HistogramSet : std::size_t { Unvalidated, Validated, Selected };
     constexpr std::size_t kHistogramSetCount = 3;
 
-    using Lorentz = Record::Lorentz;
     using std::string;
+    using Physics::Lorentz;
 
     using RootObjects = Record::RootObjects<HistogramSet>;
     using RootArray   = std::vector<RootObjects>;
@@ -46,7 +46,7 @@ namespace Lambda{
 
     struct Parameters {
         Double_t    massTolerance     = 0.1;
-        Double_t    ThetaTolerance    = 0.1;
+        Double_t    thetaTolerance    = 0.1; // retained for config/log visibility; cuts use cosThetaTolerance
         Double_t    cosThetaTolerance = 0.0;
         std::size_t reservedProtons   = 20;   // baseline beam protons per event (e.g. 2 × Z for symmetric A–A)
         std::map<HistogramSet, std::map<Physics::ParticleProperty, Config::Bounds>> setParticleLimits;

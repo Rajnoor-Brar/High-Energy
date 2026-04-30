@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "Probe/Schema.hh"
+#include "Probe/BranchControl.hh"
 #include "TTreeReader.h"
 #include "TTreeReaderArray.h"
 
@@ -37,14 +37,14 @@ namespace Probe {
             }
 
             tree->SetBranchStatus("*", 0);
-            const auto knames = detail::coordNames(spec.coords);
+            const auto knames = BranchControl::coordNames(spec.coords);
             for (int i = 0; i < 4; ++i) {
-                detail::requireBranch(tree, knames[i], filepath);
+                BranchControl::requireBranch(tree, knames[i], filepath);
                 tree->SetBranchStatus(knames[i].c_str(), 1);
                 kinArrays_[i] = std::make_unique<TTreeReaderArray<float>>(reader_, knames[i].c_str());
             }
             for (const auto& bspec : spec.auxBranches) {
-                detail::requireBranch(tree, bspec.name, filepath);
+                BranchControl::requireBranch(tree, bspec.name, filepath);
                 tree->SetBranchStatus(bspec.name.c_str(), 1);
                 auxNames_.push_back(bspec.name);
                 auxArrays_.push_back(std::make_unique<TTreeReaderArray<float>>(reader_, bspec.name.c_str()));
@@ -72,7 +72,7 @@ namespace Probe {
             pvec.clear();
             pvec.reserve(nParts);
             for (std::size_t i = 0; i < nParts; ++i)
-                pvec.emplace_back(detail::makeLorentz(coords_,
+                pvec.emplace_back(BranchControl::makeLorentz(coords_,
                     (*kinArrays_[0])[i], (*kinArrays_[1])[i],
                     (*kinArrays_[2])[i], (*kinArrays_[3])[i]));
 

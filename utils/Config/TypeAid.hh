@@ -28,12 +28,12 @@ namespace Config {
     }
 
     // ── Watch::recordEvent (out-of-line) ─────────────────────────────────────
-    // Increments nRealEvents and updates elapsed under the per-Watch mutex.
+    // Increments n_real_events and updates elapsed under the per-Watch mutex.
     // Replaces the three function-static `stateMutex` blocks that previously
     // lived in Lambda::pythiaAnalysis / rootAnalysis / dataGenerator.
     inline void Watch::recordEvent(TimePoint now) {
         std::lock_guard<std::mutex> lock(eventMutex_);
-        ++nRealEvents;
+        ++n_real_events;
         elapsed = std::chrono::duration_cast<uSeconds>(now - start);
     }
 
@@ -46,17 +46,17 @@ namespace Config {
         std::lock_guard<std::mutex> lock(eventMutex_);
         out->iEvent.store(iEvent.load());
         out->serial                    = serial;
-        out->srPadding                 = srPadding;
+        out->sr_padding                = sr_padding;
         out->nEvents                   = nEvents;
-        out->nRealEvents               = nRealEvents;
-        out->nDigits                   = nDigits;
-        out->nThreads                  = nThreads;
-        out->printInterval             = printInterval;
+        out->n_real_events             = n_real_events;
+        out->n_digits                  = n_digits;
+        out->n_threads                 = n_threads;
+        out->print_interval            = print_interval;
         out->heartbeat_interval        = heartbeat_interval;
         out->terminal_refresh_interval = terminal_refresh_interval;
         out->program_stall_threshold   = program_stall_threshold;
-        out->barInterval               = barInterval;
-        out->checkInterval             = checkInterval;
+        out->bar_interval              = bar_interval;
+        out->check_interval            = check_interval;
         out->start                     = start;
         out->elapsed                   = elapsed;
         return out;

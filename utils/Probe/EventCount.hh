@@ -11,7 +11,7 @@ namespace Probe {
 
     // ── resolveEventCount ─────────────────────────────────────────────────────
     // Reads About/events/n_events_total from a ROOT file written by
-    // _Lambda_Data (via Meta::writeAbout).  Returns 0 when the file cannot be
+    // _Lambda_Data (via Record::Meta::writeAbout). Returns 0 when the file cannot be
     // opened, the directory is missing, the parameter is absent, or the stored
     // value is non-positive.
     //

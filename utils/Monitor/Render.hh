@@ -14,7 +14,6 @@
 #include "Config.hh"
 #include "TString.h"
 #include "Utility.hh"
-#include "Monitor/Format.hh"
 #include "Monitor/Snapshot.hh"
 
 namespace Monitor {
@@ -56,8 +55,8 @@ namespace Monitor {
                   << "\033[J\r" << std::flush;
     }
 
-    inline std::string buildLogText(const Config::Root& root,
-                                    const Config::Log& logging,
+    inline std::string buildLogText(const Config::Register& root,
+                                    const Config::Watch& logging,
                                     const std::string& programLog = {},
                                     const std::function<void()>& printStats = {},
                                     const std::function<void()>& listChangedSettings = {})
@@ -68,14 +67,14 @@ namespace Monitor {
         logStream << "Serial                        : " << std::setw(2) << std::setfill('0') << logging.serial << '\n';
         logStream << "Beam Energy                   : " << root.beamEnergy.Data() << '\n';
         logStream << "Event Count                   : " << Utility::numberFormat(logging.nEvents, 0) << '\n';
-        logStream << "Real Event Count              : " << Utility::numberFormat(logging.nRealEvents, 0) << '\n';
+        logStream << "Real Event Count              : " << Utility::numberFormat(logging.n_real_events, 0) << '\n';
         logStream << "Last Run                      : " << Utility::timeString(localStart, false) << '\n';
         logStream << "Time Taken                    : " << Utility::durationString(logging.elapsed) << '\n';
         logStream << "Time Taken / 1000 Events      : " << Utility::durationString((1000 * logging.elapsed) / logging.nEvents, true) << '\n';
         logStream << "Histogram Scale               : " << root.histScale << '\n';
         logStream << "Status Snapshot Interval (ms) : " << Utility::numberFormat(logging.heartbeat_interval.count(), 0) << '\n';
-        logStream << "Progress Bar Update Interval  : " << Utility::numberFormat(logging.barInterval, 0) << '\n';
-        logStream << "Check Interval                : " << Utility::numberFormat(logging.checkInterval, 0) << '\n';
+        logStream << "Progress Bar Update Interval  : " << Utility::numberFormat(logging.bar_interval, 0) << '\n';
+        logStream << "Check Interval                : " << Utility::numberFormat(logging.check_interval, 0) << '\n';
 
         if (!programLog.empty()) {
             logStream << programLog;
@@ -97,8 +96,8 @@ namespace Monitor {
         return logStream.str();
     }
 
-    inline void outputLog(const Config::Root& root,
-                          const Config::Log& logging,
+    inline void outputLog(const Config::Register& root,
+                          const Config::Watch& logging,
                           const std::string& programLog = {},
                           const TString& logPath = "",
                           const std::function<void()>& printStats = {},
@@ -108,8 +107,8 @@ namespace Monitor {
         writeTextFile(targetLogPath, buildLogText(root, logging, programLog, printStats, listChangedSettings));
     }
 
-    inline std::string buildEmergencyLogText(const Config::Root& root,
-                                              const Config::Log& logging,
+    inline std::string buildEmergencyLogText(const Config::Register& root,
+                                             const Config::Watch& logging,
                                               const RunSnapshot& snapshot,
                                               const std::string& programLog = {},
                                               const std::string& reason = {})
@@ -141,8 +140,8 @@ namespace Monitor {
         return stream.str();
     }
 
-    inline void writeEmergencyLog(const Config::Root& root,
-                                   const Config::Log& logging,
+    inline void writeEmergencyLog(const Config::Register& root,
+                                  const Config::Watch& logging,
                                    const RunSnapshot& snapshot,
                                    const std::string& programLog = {},
                                    const std::string& reason = {})
@@ -150,7 +149,7 @@ namespace Monitor {
         writeTextFile(root.logName, buildEmergencyLogText(root, logging, snapshot, programLog, reason));
     }
 
-    inline void terminalReport(const Config::Root& root, Config::Log& logging,
+    inline void terminalReport(const Config::Register& root, Config::Watch& logging,
                                const std::function<void()>& printStats = {}, bool stats = false) {
         std::lock_guard<std::mutex> terminalLock(terminalMutex());
         std::cout << "\n\n\n";

@@ -53,20 +53,24 @@ namespace Config {
         Double_t    beamEnergy = 0.0;
         std::string cmndFile;
         int         seed       = 0;
+        Events      eventConfig;
     };
 
     // ── [probe] ──────────────────────────────────────────────────────────────
     // event_particles entry: [label, spec, tree_name, [branch_list]]
     struct ProbeParticle {
-        std::string              label;
+        std::string              label="";
         int                      spec = 0;
-        std::string              treeName;
-        std::vector<std::string> branches;
+        std::string              treeName="";
+        std::vector<std::string> momentaBranches;
+        std::string              branchType; // "float" or "double"
+        std::string              indexBranch="";        
     };
 
     struct ProbeConfig {
         std::string                inputFile;
         std::vector<ProbeParticle> particles;
+        Events      eventConfig;
     };
 
     // ── Monitor's running state (was Log) ────────────────────────────────────
@@ -76,17 +80,17 @@ namespace Config {
     struct Watch {
         std::atomic<std::size_t> iEvent{0};
         Int_t                    serial = 0;
-        std::size_t              srPadding = 2;
+        std::size_t              sr_padding = 2;
         std::size_t              nEvents = 100;
-        std::size_t              nRealEvents = 0;
-        std::size_t              nDigits = 0;
-        std::size_t              nThreads = 0;
-        std::size_t              printInterval = 10;
+        std::size_t              n_real_events = 0;
+        std::size_t              n_digits = 0;
+        std::size_t              n_threads = 0;
+        std::size_t              print_interval = 10;
         uSeconds                 heartbeat_interval = uSeconds(1000);
         Seconds                  terminal_refresh_interval = Seconds(300);
         Seconds                  program_stall_threshold = Seconds(300);
-        std::size_t              barInterval = 50;
-        std::size_t              checkInterval = 10000;
+        std::size_t              bar_interval = 50;
+        std::size_t              check_interval = 10000;
         TimePoint                start = TimePoint{};
         uSeconds                 elapsed = uSeconds(0);
 
@@ -97,7 +101,7 @@ namespace Config {
         Watch& operator=(Watch&&)       = delete;
 
         // Thread-safe per-event accounting (defined in TypeAid.hh).
-        // Increments nRealEvents and records elapsed time under eventMutex_.
+        // Increments n_real_events and records elapsed time under eventMutex_.
         void recordEvent(TimePoint now);
 
         // Returns a heap-allocated point-in-time snapshot (defined in TypeAid.hh).
@@ -130,10 +134,4 @@ namespace Config {
         Double_t histScale          = 100;
     };
 
-    // ── Backwards-compat aliases ─────────────────────────────────────────────
-    // Existing call sites use Config::Log / Config::Root; new code should use
-    // Watch / Register. These aliases let the rename land without churning
-    // every reference in Monitor/Record/Lambda at once.
-    using Log  = Watch;
-    using Root = Register;
 }

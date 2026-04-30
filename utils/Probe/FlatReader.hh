@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "Probe/Schema.hh"
+#include "Probe/BranchControl.hh"
 #include "TObjArray.h"
 #include "TTreeIndex.h"
 
@@ -26,8 +26,8 @@ namespace Probe {
             tree_->SetBranchStatus("*", 0);
 
             idxName_ = spec.indexBranches[0];
-            TBranch* idxBr = detail::requireBranch(tree_, idxName_, filepath);
-            const BranchType it = detail::detectType(idxBr);
+            TBranch* idxBr = BranchControl::requireBranch(tree_, idxName_, filepath);
+            const BranchType it = BranchControl::detectType(idxBr);
             if (it != BranchType::Int32 && it != BranchType::Int64 && it != BranchType::UInt32)
                 throw std::runtime_error(
                     "[Probe] Index branch '" + idxName_ + "' in tree '" + spec.tree +
@@ -37,13 +37,13 @@ namespace Probe {
             if (idxIsLong_) tree_->SetBranchAddress(idxName_.c_str(), &idxL_);
             else            tree_->SetBranchAddress(idxName_.c_str(), &idxI_);
 
-            const auto knames = detail::coordNames(spec.coords);
+            const auto knames = BranchControl::coordNames(spec.coords);
             for (int i = 0; i < 4; ++i)
                 kinBuf_[i].bind(tree_, knames[i], filepath);
 
             for (const auto& bspec : spec.auxBranches) {
-                TBranch* br = detail::requireBranch(tree_, bspec.name, filepath);
-                detail::requireType(br, bspec.type, filepath);
+                TBranch* br = BranchControl::requireBranch(tree_, bspec.name, filepath);
+                BranchControl::requireType(br, bspec.type, filepath);
                 tree_->SetBranchStatus(bspec.name.c_str(), 1);
                 auxNames_.push_back(bspec.name);
                 auxTypes_.push_back(bspec.type);
@@ -101,7 +101,7 @@ namespace Probe {
                     auxMap[auxNames_[i]] = makeAuxCol(auxTypes_[i]);
 
             while (cursor_ < totalEntries_ && idxValue() == target) {
-                pvec.emplace_back(detail::makeLorentz(coords_,
+                pvec.emplace_back(BranchControl::makeLorentz(coords_,
                     kinBuf_[0].value(), kinBuf_[1].value(),
                     kinBuf_[2].value(), kinBuf_[3].value()));
                 appendAux(auxMap);
@@ -217,7 +217,7 @@ namespace Probe {
         bool                     idxIsLong_   = false;
         Int_t                    idxI_         = 0;
         Long64_t                 idxL_         = 0;
-        detail::KinBuf           kinBuf_[4];
+        BranchControl::KinBuf    kinBuf_[4];
         std::vector<std::string> auxNames_;
         std::vector<BranchType>  auxTypes_;
         std::vector<AuxBuf>      auxBufs_;

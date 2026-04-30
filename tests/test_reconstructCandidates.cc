@@ -46,7 +46,7 @@ int main() {
     const std::vector<Lambda::Lorentz> protons = {goodProton, beamProton1, beamProton2};
     const std::vector<Lambda::Lorentz> pions   = {goodPion,   fastPion1,   fastPion2};
 
-    // Parameters: wide mass window (±100 MeV), cosThetaTolerance = cos(0.1 rad)
+    // Parameters: wide mass window (±100 MeV), thetaTolerance = 0.1 rad
     // so the theta window is (-1.995, -0.005) — all back-to-back pairs pass.
     Lambda::Parameters params;
     params.massTolerance     = 0.1;    // ±100 MeV window around kLambdaMass

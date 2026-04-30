@@ -4,7 +4,7 @@
 // per event), runs Lambda::rootAnalysis on 4 threads, and asserts:
 //
 //  S1  All 50 events were dispatched (iEvent == 50).
-//  S2  All 50 events were counted as real (nRealEvents == 50).
+//  S2  All 50 events were counted as real (n_real_events == 50).
 //  S3  Unvalidated histogram has non-zero entries (proton+pion pairs filled).
 //  S4  Validated histogram has non-zero entries (some signal pairs survived).
 //  S5  Unvalidated entries exceed Validated entries (mass cut rejected noise).
@@ -53,8 +53,8 @@ int main() {
     }
 
     // ── Configure ─────────────────────────────────────────────────────────────
-    Config::Root rootParams;
-    Config::Log  logParams;
+    Config::Register rootParams;
+    Config::Watch    logParams;
     Config::extractConfiguration(kFixtureToml, "fixture_smoke", logParams, rootParams);
     rootParams.beamEnergy = "0";
 
@@ -94,8 +94,8 @@ int main() {
     TEST_EQ(logParams.iEvent.load(), std::size_t(kNEvents));
     TEST_PASS("S1  iEvent == 50 (all events dispatched)");
 
-    TEST_EQ(logParams.nRealEvents, std::size_t(kNEvents));
-    TEST_PASS("S2  nRealEvents == 50");
+    TEST_EQ(logParams.n_real_events, std::size_t(kNEvents));
+    TEST_PASS("S2  n_real_events == 50");
 
     // ── S3/S4/S5: histogram sanity ────────────────────────────────────────────
     // findObjects uses the enum index → RootArray ordering established by

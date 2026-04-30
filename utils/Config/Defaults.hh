@@ -67,10 +67,10 @@ namespace Config {
         }
     }
 
-    inline void limitExtractor(const std::string& configPath, Root& root) { // to be renamed defaultLimits()
+    inline void limitExtractor(const std::string& configPath, Register& root) { // to be renamed defaultLimits()
         root.particleLimits.clear();
         root.eventLimits.clear();
-        loadLimitsFile("configs/General_Limits.toml", root.particleLimits, root.eventLimits);
+        loadLimitsFile("configs/defaults/Limits.toml", root.particleLimits, root.eventLimits);
 
         TomlTable mainConfig = toml::parse_file(configPath);
         const std::string limitsFileName = mainConfig["lambda"]["hist_limits"].value_or("Lambda_Limits");
@@ -80,14 +80,14 @@ namespace Config {
     }
 
     // Reads configs/Monitor.toml (silently skips if absent) and populates
-    // the Log and Root structs with default monitoring values.
-    inline void loadMonitorDefaults(Log& logging, Root& root) {
-        const std::string monitorPath = "configs/Monitor.toml";
+    // the Watch and Register structs with default monitoring values.
+    inline void loadMonitorDefaults(Watch& logging, Register& root) {
+        const std::string monitorPath = "configs/defaults/Monitor.toml";
         if (!fs::exists(monitorPath)) return;
         try {
             TomlTable mon = toml::parse_file(monitorPath);
-            logging.printInterval  = static_cast<std::size_t>(mon["monitor"]["print_interval"].value_or(100));
-            logging.checkInterval  = static_cast<std::size_t>(mon["monitor"]["check_interval"].value_or(10000));
+            logging.print_interval = static_cast<std::size_t>(mon["monitor"]["print_interval"].value_or(100));
+            logging.check_interval = static_cast<std::size_t>(mon["monitor"]["check_interval"].value_or(10000));
             std::size_t hb = static_cast<std::size_t>(mon["monitor"]["heartbeat_interval"].value_or(1000));
             logging.heartbeat_interval = uSeconds(hb);
             double tr = mon["monitor"]["terminal_refresh_interval"].value_or(2.0);
