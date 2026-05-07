@@ -4,8 +4,6 @@
 #include <filesystem>
 #include <string>
 #include <thread>
-#include <unistd.h>
-#include <sys/ioctl.h>
 
 #include "TString.h"
 #include <toml++/toml.hpp>
@@ -13,6 +11,7 @@
 #include "Types.hh"
 #include "Utility.hh"
 #include "Defaults.hh"
+#include "Probe/ConfigAid.hh"
 
 namespace fs = std::filesystem;
 
@@ -24,44 +23,33 @@ namespace Config {
         return hw > 2 ? static_cast<std::size_t>(hw - 2) : 1;
     }
 
-    inline void sanitiseLoggingConfig(Watch& watch) {
-        static int wsCol = [] {
-            struct winsize windowSize{};
-            ioctl(STDOUT_FILENO, TIOCGWINSZ, &windowSize);
-            return static_cast<int>(windowSize.ws_col);
-        }();
-        const std::size_t progressDivisor = static_cast<std::size_t>(std::max(1, wsCol - 6));
-        std::size_t interval = watch.nEvents / progressDivisor;
-        interval > 1 ? watch.bar_interval = interval : watch.bar_interval = 1;
-        watch.print_interval = std::max<std::size_t>(1, watch.print_interval);
-    }
-
     // ── Section helpers ──────────────────────────────────────────────────────
 
     inline void readEventsSection(const toml::table& config, Events& events, Watch& watch) {
         const bool hasEvents = config.contains("events");
-        auto pythia = config["events"]["pythia"];
-        auto probe   = config["events"]["probe"];
-        events.isPythia = pythia ? pythia.value_or(true) : (probe ? !probe.value_or(true) : true);
-        events.eventCount = static_cast<std::size_t>(
-            hasEvents ? config["events"]["event_count"].value_or(1000)
-                      : config["run"]["event_count"].value_or(1000));
+        const auto evNode = hasEvents ? config["events"]["event_count"]
+                                      : config["run"]["event_count"];
+        if (evNode) {
+            events.eventCount = static_cast<std::size_t>(evNode.value_or<int64_t>(1000));
+            events.userEvents = true;
+        } else {
+            events.eventCount = 1000;
+            events.userEvents = false;
+        }
         events.nThreads   = static_cast<std::size_t>(
             hasEvents ? config["events"]["nThreads"].value_or(0)
                       : config["run"]["nThreads"].value_or(0));
 
-        watch.nEvents  = events.eventCount;
+        watch.nEvents   = events.eventCount;
         watch.n_threads = events.nThreads;
     }
 
 
-    inline void readRecordSection(const toml::table& config, Watch& watch, Register& reg) {
+    inline void readRecordSection(const toml::table& config, Watch& /*watch*/, Register& reg) {
         const bool hasRecord = config.contains("record");
-        watch.serial    = hasRecord ? config["record"]["serial"].value_or(0)
-                                    : config["run"]["serial"].value_or(0);
-        watch.sr_padding = static_cast<std::size_t>(
-            hasRecord ? config["record"]["sr_padding"].value_or(2)
-                      : config["run"]["sr_Padding"].value_or(2));
+        reg.serial = hasRecord ? config["record"]["serial"].value_or(0)
+                               : config["run"]["serial"].value_or(0);
+        // sr_padding is a local in readPathsAndFile — not stored on Watch.
 
         if (hasRecord) {
             reg.binCount  = config["record"]["bin_count"].value_or(reg.binCount);
@@ -69,29 +57,12 @@ namespace Config {
         }
     }
 
-    inline void readLogSection(const toml::table& config, Watch& watch, Register& reg) {
+    inline void readLogSection(const toml::table& config, Watch& /*watch*/, Register& reg) {
         std::string logKey;
         if      (config.contains("monitor")) logKey = "monitor";
         else if (config.contains("log"))     logKey = "log";
         else if (config.contains("logging")) logKey = "logging";
         if (logKey.empty()) return;
-
-        watch.print_interval = static_cast<std::size_t>(
-            config[logKey]["print_interval"].value_or(static_cast<int64_t>(watch.print_interval)));
-        watch.check_interval = static_cast<std::size_t>(
-            config[logKey]["check_interval"].value_or(static_cast<int64_t>(watch.check_interval)));
-
-        std::size_t hb = static_cast<std::size_t>(
-            config[logKey]["heartbeat_interval"].value_or(static_cast<int64_t>(watch.heartbeat_interval.count())));
-        watch.heartbeat_interval = uSeconds(hb);
-
-        double tr = config[logKey]["terminal_refresh_interval"].value_or(
-            static_cast<double>(watch.terminal_refresh_interval.count()) / 60.0);
-        watch.terminal_refresh_interval = Seconds(static_cast<int>(60 * tr));
-
-        double ps = config[logKey]["program_stall_threshold"].value_or(
-            static_cast<double>(watch.program_stall_threshold.count()) / 60.0);
-        watch.program_stall_threshold = Seconds(static_cast<int>(60 * ps));
 
         reg.binCount  = config[logKey]["bin_count"].value_or(reg.binCount);
         reg.histScale = config[logKey]["hist_scaling"].value_or(reg.histScale);
@@ -129,8 +100,13 @@ namespace Config {
         const std::string logBasePath   = pathStr("output_log_directory", "params/");
         const std::string checkBasePath = pathStr("checkpoint_directory", "checkpoints/");
 
+        const bool hasRecord2 = config.contains("record");
+        const std::size_t sr_padding = static_cast<std::size_t>(
+            hasRecord2 ? config["record"]["sr_padding"].value_or(2)
+                       : config["run"]["sr_Padding"].value_or(2));
+
         const std::string serialStr = Form(
-            ("_%0" + std::to_string((int)watch.sr_padding) + "d").c_str(), watch.serial);
+            ("_%0" + std::to_string((int)sr_padding) + "d").c_str(), (int)reg.serial);
         const std::string rootDir = serialSubDir ? (baseRootDir + serialStr + "/") : baseRootDir;
 
         reg.rootDirectory       = rootDir;
@@ -178,23 +154,7 @@ namespace Config {
 
     inline void readProbeSection(const toml::table& config, ProbeConfig& probe) {
         if (!config.contains("probe")) return;
-        probe.inputFile = config["probe"]["input_file"].value_or(probe.inputFile);
-
-        const auto* arr = config["probe"]["event_particles"].as_array();
-        if (!arr) return;
-        probe.particles.clear();
-        for (const auto& entry : *arr) {
-            const auto* row = entry.as_array();
-            if (!row || row->size() < 5) continue;
-            ProbeParticle p;
-            p.label    = (*row)[0].value_or(std::string{});
-            p.spec     = (*row)[1].value_or(0);
-            p.treeName = (*row)[2].value_or(std::string{});
-            if (const auto* branchArr = (*row)[3].as_array()) {
-                for (const auto& b : *branchArr)
-                    p.branches.push_back(b.value_or(std::string{}));
-            }
-            probe.particles.push_back(std::move(p));
-        }
+        probe.inputFile   = config["probe"]["input_file"].value_or(probe.inputFile);
+        probe.collections = Probe::parseCollectionsFromToml(config);
     }
 }

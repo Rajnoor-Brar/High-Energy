@@ -28,37 +28,27 @@ namespace Config {
     }
 
     // ── Watch::recordEvent (out-of-line) ─────────────────────────────────────
-    // Increments n_real_events and updates elapsed under the per-Watch mutex.
-    // Replaces the three function-static `stateMutex` blocks that previously
-    // lived in Lambda::pythiaAnalysis / rootAnalysis / dataGenerator.
+    // Lock-free: n_real_events and elapsed are both std::atomic.
     inline void Watch::recordEvent(TimePoint now) {
-        std::lock_guard<std::mutex> lock(eventMutex_);
-        ++n_real_events;
-        elapsed = std::chrono::duration_cast<uSeconds>(now - start);
+        n_real_events.fetch_add(1, std::memory_order_relaxed);
+        elapsed.store(std::chrono::duration_cast<uSeconds>(now - start),
+                      std::memory_order_relaxed);
     }
 
     // ── Watch::freeze (out-of-line) ───────────────────────────────────────────
-    // Returns a heap-allocated point-in-time snapshot. The atomic counter is
-    // loaded once under the eventMutex_; the result is completely independent
-    // of *this and safe to read off-thread or pass to a shared_ptr.
+    // Returns a heap-allocated point-in-time snapshot.  All atomic fields are
+    // loaded with relaxed ordering (display-only use; no synchronisation needed).
     inline std::unique_ptr<Watch> Watch::freeze() const {
         auto out = std::make_unique<Watch>();
-        std::lock_guard<std::mutex> lock(eventMutex_);
-        out->iEvent.store(iEvent.load());
-        out->serial                    = serial;
-        out->sr_padding                = sr_padding;
-        out->nEvents                   = nEvents;
-        out->n_real_events             = n_real_events;
-        out->n_digits                  = n_digits;
-        out->n_threads                 = n_threads;
-        out->print_interval            = print_interval;
-        out->heartbeat_interval        = heartbeat_interval;
-        out->terminal_refresh_interval = terminal_refresh_interval;
-        out->program_stall_threshold   = program_stall_threshold;
-        out->bar_interval              = bar_interval;
-        out->check_interval            = check_interval;
-        out->start                     = start;
-        out->elapsed                   = elapsed;
+        out->iEvent.store(iEvent.load(std::memory_order_relaxed),
+                          std::memory_order_relaxed);
+        out->nEvents       = nEvents;
+        out->n_real_events.store(n_real_events.load(std::memory_order_relaxed),
+                                 std::memory_order_relaxed);
+        out->n_threads     = n_threads;
+        out->start         = start;
+        out->elapsed.store(elapsed.load(std::memory_order_relaxed),
+                           std::memory_order_relaxed);
         return out;
     }
 }

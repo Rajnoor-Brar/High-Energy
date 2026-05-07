@@ -2,7 +2,7 @@
 
 #include "Pythia8/Pythia.h"
 #include "Types.hh"
-
+#include "Monitor/Timer.hh"
 namespace Lambda{
     struct Particle{
         Lorentz     lorentz;
@@ -44,6 +44,7 @@ namespace Lambda{
     }
 
     inline Candidates reconstructCandidates(const std::vector<Lorentz>& protons, const std::vector<Lorentz>& pions, const Parameters& parameters){
+        // BlockTimer timer("Candidate Reconstruction");
         Candidates result;
         const std::size_t candidateTarget = protons.size() > parameters.reservedProtons
             ? protons.size() - parameters.reservedProtons : 0;

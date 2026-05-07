@@ -33,6 +33,7 @@ namespace Lambda {
     }
 
     inline void fillCandidates(RootArray& histogramSets, const Candidates& candidates) {
+        // BlockTimer timer("Candidate Filling");
         Record::resetAllCounts(histogramSets);
         for (const auto& particle : candidates.unvalidated)
             fill(histogramSets, HistogramSet::Unvalidated, particle);

@@ -70,8 +70,17 @@ namespace Config {
     inline void limitExtractor(const std::string& configPath, Register& root) { // to be renamed defaultLimits()
         root.particleLimits.clear();
         root.eventLimits.clear();
-        loadLimitsFile("configs/defaults/Limits.toml", root.particleLimits, root.eventLimits);
 
+        // Pass 1: global defaults file (optional — silently skipped if absent).
+        // Provides fallback bounds for all properties without requiring every
+        // project to ship its own defaults block.
+        const std::string defaultLimitsPath = "configs/defaults/Limits.toml";
+        if (fs::exists(defaultLimitsPath)) {
+            loadLimitsFile(defaultLimitsPath, root.particleLimits, root.eventLimits);
+        }
+
+        // Pass 2: project-specific limits (required — throws if absent).
+        // Keys present here override the defaults loaded in Pass 1.
         TomlTable mainConfig = toml::parse_file(configPath);
         const std::string limitsFileName = mainConfig["lambda"]["hist_limits"].value_or("Lambda_Limits");
         const std::string limitsFile = resolveLimitsPath(limitsFileName);
@@ -79,21 +88,14 @@ namespace Config {
         loadLimitsFile(limitsFile, root.particleLimits, root.eventLimits);
     }
 
-    // Reads configs/Monitor.toml (silently skips if absent) and populates
-    // the Watch and Register structs with default monitoring values.
-    inline void loadMonitorDefaults(Watch& logging, Register& root) {
+    // Reads configs/defaults/Monitor.toml (silently skips if absent).
+    // Pacing fields (print_interval, heartbeat_interval, etc.) moved to
+    // PacingInfo / Monitor::configureMonitor (W8). Only Register fields remain.
+    inline void loadMonitorDefaults(Watch& /*logging*/, Register& root) {
         const std::string monitorPath = "configs/defaults/Monitor.toml";
         if (!fs::exists(monitorPath)) return;
         try {
             TomlTable mon = toml::parse_file(monitorPath);
-            logging.print_interval = static_cast<std::size_t>(mon["monitor"]["print_interval"].value_or(100));
-            logging.check_interval = static_cast<std::size_t>(mon["monitor"]["check_interval"].value_or(10000));
-            std::size_t hb = static_cast<std::size_t>(mon["monitor"]["heartbeat_interval"].value_or(1000));
-            logging.heartbeat_interval = uSeconds(hb);
-            double tr = mon["monitor"]["terminal_refresh_interval"].value_or(2.0);
-            logging.terminal_refresh_interval = Seconds(static_cast<int>(60 * tr));
-            double ps = mon["monitor"]["program_stall_threshold"].value_or(5.0);
-            logging.program_stall_threshold = Seconds(static_cast<int>(60 * ps));
             root.binCount  = mon["monitor"]["bin_count"].value_or(100);
             root.histScale = mon["monitor"]["hist_scaling"].value_or(1.0);
         } catch (...) {}

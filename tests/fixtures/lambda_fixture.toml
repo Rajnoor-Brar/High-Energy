@@ -8,6 +8,10 @@ event_count = 50
 
 [probe]
 input_file = "tests/fixtures/lambda_fixture.root"
+event_particles  = [
+    ["protons", 0, "Protons", [["pX","D"], ["pY","D"], ["pZ","D"], ["Energy","D"]], [["event_index","I"]]],
+    ["pions", 0, "Pions", [["pX","D"], ["pY","D"], ["pZ","D"], ["Energy","D"]], [["event_index","I"]]]
+]
 
 [record]
 serial     = 0
@@ -27,13 +31,6 @@ prefix = "fixture_smoke"
 serial = false
 energy = false
 events = false
-
-[input]
-index_branch = "event_index"
-energy       = "Energy"
-px           = "pX"
-py           = "pY"
-pz           = "pZ"
 
 [lambda]
 hist_limits      = "tests/fixtures/lambda_fixture_limits.toml"

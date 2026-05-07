@@ -4,7 +4,6 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
-#include <variant>
 #include <vector>
 
 #include "Physics.hh"
@@ -13,12 +12,6 @@
 namespace Probe {
 
     using Physics::Lorentz;
-
-    // ── Coordinate specs ─────────────────────────────────────────────────────
-    struct CartesianSpec  { std::string px, py, pz, E; };
-    struct PtEtaPhiESpec  { std::string pt, eta, phi, E; };
-    struct PtEtaPhiMSpec  { std::string pt, eta, phi, M; };
-    using CoordSpec = std::variant<CartesianSpec, PtEtaPhiESpec, PtEtaPhiMSpec>;
 
     enum class BranchType         { Float, Double, Int32, UInt32, Int64, UInt64, Bool, Other };
     enum class MissingBranchPolicy{ Error };
@@ -29,20 +22,21 @@ namespace Probe {
         MissingBranchPolicy  policy = MissingBranchPolicy::Error;
     };
 
-    struct CollectionSpec {
+    // ── Coordinate specs ─────────────────────────────────────────────────────
+    struct CartesianSpec  { std::vector<BranchSpec> branches; };
+    struct PtEtaPhiESpec  { std::vector<BranchSpec> branches; };
+    struct PtEtaPhiMSpec  { std::vector<BranchSpec> branches; };
+    using CoordSpec = std::variant<CartesianSpec, PtEtaPhiESpec, PtEtaPhiMSpec>;
+
+    struct ParticleSpec {
         std::string              label;
         std::string              tree;
         CoordSpec                coords;
-        std::vector<std::string> indexBranches;
+        std::vector<BranchSpec>  indexBranches;
         std::vector<BranchSpec>  auxBranches;
     };
 
-    struct ScalarSpec {
-        std::string name;
-        std::string tree;
-        std::string branch;
-        BranchType  type;
-    };
+    using CollectionSpec = ParticleSpec;
 
     struct AuxColumn {
         std::variant<
@@ -60,8 +54,6 @@ namespace Probe {
         void clear() { std::visit([](auto& v){ v.clear(); }, data); }
     };
 
-    using ScalarValue = std::variant<int64_t, uint64_t, double, bool>;
-
     struct EventKey {
         std::vector<Long64_t> components;
         bool operator< (const EventKey& o) const { return components <  o.components; }
@@ -74,7 +66,6 @@ namespace Probe {
         Long64_t index{-1};
         std::unordered_map<std::string, std::vector<Lorentz>>                        particles;
         std::unordered_map<std::string, std::unordered_map<std::string, AuxColumn>>  aux;
-        std::unordered_map<std::string, ScalarValue>                                 scalars;
 
         const std::vector<Lorentz>& operator[](const std::string& label) const {
             auto it = particles.find(label);
@@ -95,14 +86,6 @@ namespace Probe {
             if (ci == li->second.end())
                 throw std::runtime_error("[Probe] Event: unknown column '" + col + "' in '" + label + "'");
             return ci->second.as<T>();
-        }
-        template<typename T>
-        T scalar(const std::string& name) const {
-            auto it = scalars.find(name);
-            if (it == scalars.end())
-                throw std::runtime_error("[Probe] Event: unknown scalar '" + name + "'");
-            if (const auto* p = std::get_if<T>(&it->second)) return *p;
-            throw std::runtime_error("[Probe] Event: scalar '" + name + "' type mismatch");
         }
     };
 

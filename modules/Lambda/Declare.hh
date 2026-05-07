@@ -9,69 +9,45 @@
 #include "TH1D.h"
 #include "TTree.h"
 
-#include "ParamAid.hh"
+#include "Record/Writer.hh"
 #include "Parameters.hh"
 
 namespace Lambda {
 
-    inline SpecsArray inputSchema(const Parameters& params) {
-        SpecsArray schema;
-        const InputConfig& input = params.input;
-        for (const auto& candidate : params.candidates) {
-            if (!candidate.enabled) continue;
-            schema.push_back({
-                candidate.label,
-                resolveTreeName(input, candidate),
-                Probe::CartesianSpec{input.px, input.py, input.pz, input.energy},
-                {input.indexBranch},
-                {}
-            });
-        }
-        return schema;
-    }
+    // ── declareDataObjects ───────────────────────────────────────────────────
+    // Restored from b522cfd (deleted by f1fe646 mid Pipeline-A migration).
+    // Creates the Protons / Pions output trees with the branch layout that
+    // [probe].event_particles in Lambda_Reconstruction.toml expects:
+    //   event_index/I, Energy/D, pX/D, pY/D, pZ/D
+    inline void declareDataObjects(DataObjects& data, Record::Writer& writer) {
+        TFile* outFile = writer.file();
+        if (outFile == nullptr)
+            throw std::invalid_argument("writer.file() must not be null");
 
-    inline SpecsArray inputSchema() {return inputSchema(Parameters{}); }
-
-    inline void declareDataObjects(DataObjects& data, Config::Register& root) {
-        if (root.outFile == nullptr)
-            throw std::invalid_argument("root.outFile must not be null");
-
-        root.outFile->cd();
+        outFile->cd();
         data.protons = new TTree("Protons", "Final state protons");
         data.pions   = new TTree("Pions",   "Final state #pi^{-}");
 
         auto declareBranches = [](TTree* tree, std::array<Double_t, 4>& branches, Int_t& idx) {
-            tree->Branch("event_index", &idx, "event_index/I");
-            tree->Branch("Energy",      &branches[0], "Energy/D");
-            tree->Branch("pX",          &branches[1], "pX/D");
-            tree->Branch("pY",          &branches[2], "pY/D");
-            tree->Branch("pZ",          &branches[3], "pZ/D");
+            tree->Branch("event_index", &idx,           "event_index/I");
+            tree->Branch("Energy",      &branches[0],   "Energy/D");
+            tree->Branch("pX",          &branches[1],   "pX/D");
+            tree->Branch("pY",          &branches[2],   "pY/D");
+            tree->Branch("pZ",          &branches[3],   "pZ/D");
         };
         declareBranches(data.protons, *data.protonBranches, *data.protonEventIndex);
         declareBranches(data.pions,   *data.pionBranches,   *data.pionEventIndex);
     }
 
-    inline bool shouldWriteTree(HistogramSet set, const Parameters& parameters) {
-        const bool treeEnabled = std::find(
-            kTreeEnabledSets.begin(),
-            kTreeEnabledSets.end(),
-            set) != kTreeEnabledSets.end();
-        if (!treeEnabled) return false;
-
-        return std::any_of(
-            parameters.candidates.begin(),
-            parameters.candidates.end(),
-            [](const CandidateConfig& candidate) {
-                return candidate.enabled && candidate.writeTree;
-            });
-    }
-
     inline void declareObjects(RootArray& objects,
                                const Parameters& parameters,
-                               Config::Register& root)
+                               Record::Writer& writer)
     {
-        if (root.outFile == nullptr)
-            throw std::invalid_argument("root.outFile must not be null");
+        TFile* outFile = writer.file();
+        if (outFile == nullptr)
+            throw std::invalid_argument("writer.file() must not be null");
+
+        const Record::HistConfig& hist = writer.histConfig();
 
         objects.clear();
         objects.reserve(kHistogramSetCount);
@@ -80,7 +56,7 @@ namespace Lambda {
             RootObjects object{};
 
             object.basis = histogramSet.id;
-            object.dir   = root.outFile->mkdir(histogramSet.directoryName);
+            object.dir   = outFile->mkdir(histogramSet.directoryName);
             object.dir->cd();
 
             if (!parameters.setEventLimits.count(histogramSet.id) ||
@@ -114,23 +90,26 @@ namespace Lambda {
                 object.hists1D.push_back(Record::TH1Record{
                     new TH1D(histName.c_str(),
                              (propName + " Distribution").c_str(),
-                             root.binCount,
+                             hist.binCount,
                              bounds.low,
                              bounds.high),
                     prop
                 });
             }
 
-            if (shouldWriteTree(histogramSet.id, parameters)) {
-                const std::string treeName = std::string(histogramSet.tag) + "_Candidates";
-                object.trees.push_back(
-                    Record::declareTree(
-                        object.dir,
-                        treeName,
-                        std::string(histogramSet.tag) + " candidate quantities",
-                        Recorded_ParticleProperties
-                    )
-                );
+            // Declare candidate TTree if this set appears in parameters.writeTree.
+            const bool enableTree = std::find(
+                parameters.writeTree.begin(),
+                parameters.writeTree.end(),
+                histogramSet.id) != parameters.writeTree.end();
+
+            if (enableTree) {
+                object.trees.push_back(Record::declareTree(
+                    object.dir,
+                    std::string(histogramSet.tag) + "_candidates",
+                    "Reconstructed " + std::string(histogramSet.tag) + " candidates",
+                    Recorded_ParticleProperties
+                ));
             }
 
             objects.push_back(std::move(object));

@@ -7,6 +7,7 @@
 #include "Config.hh"
 #include "Lambda.hh"
 #include "Monitor.hh"
+#include "Config/Configure.hh"
 
 int main(int argc, char* argv[]) {
     Monitor::disable_input_echo();
@@ -16,41 +17,32 @@ int main(int argc, char* argv[]) {
     const std::string configPath = argc > 1 ? argv[1] : "configs/" + project + ".toml";
 
     Pythia8::PythiaParallel pythia;
-    pythia.readFile("configs/Lambda_Reconstruction.cmnd");
-    Config::Register rootParams;
-                     rootParams.beamEnergy = pythia.settings.parm("Beams:eCM") > 0 ? Form("%.0f", pythia.settings.parm("Beams:eCM")) : "UnknownEnergy";
-    Config::Watch    logParams;
-    Config::extractConfiguration(configPath, project, logParams, rootParams);
-    Config::openOutputFile(rootParams);
+
+    Record::Writer       writer;
+    Monitor::AsyncLogger logger;
+
+    Config::configure(configPath, project, pythia, writer, logger);
 
     Lambda::Parameters analysisParams;
-    Lambda::extractPhysics(configPath, analysisParams, rootParams);
-    Lambda::RootArray histogramSets;
-    Lambda::declareObjects(histogramSets, analysisParams, rootParams);
+    Lambda::RootArray  histogramSets;
+    Lambda::configure(analysisParams, histogramSets, writer, configPath);
 
-    Monitor::AsyncLogger logger;
-    Record::FinalizerController finalizer(
-        histogramSets,
-        rootParams,
-        logParams,
-        logger,
-        [&analysisParams]() { return Lambda::logString(analysisParams); },
-        [&pythia]() { pythia.stat(); },
-        [&pythia]() { pythia.settings.listChanged(); }
-    );
-    finalizer.installFatalStallHandler();
+    writer.bind(logger, logger.watch(),
+                [&analysisParams]() { return Lambda::logString(analysisParams); },
+                [&pythia]() { pythia.stat(); },
+                [&pythia]() { pythia.settings.listChanged(); });
+    writer.installFatalStallHandler(histogramSets);
 
-    logParams.start = std::chrono::system_clock::now();
-    logger.start(rootParams, logParams);
-
+    logger.watch().start = std::chrono::system_clock::now();
+    logger.start(writer);
     pythia.init();
 
-    Lambda::AnalysisContext ctx{histogramSets, analysisParams, logParams, logger};
-    pythia.run(static_cast<long>(logParams.nEvents), [&](Pythia8::Pythia* worker) {
-        Lambda::pythiaAnalysis(*worker, rootParams, ctx);
+    Lambda::AnalysisContext ctx{histogramSets, analysisParams, logger.watch(), logger, writer};
+    pythia.run(static_cast<long>(logger.watch().nEvents), [&](Pythia8::Pythia* worker) {
+        Lambda::pythiaAnalysis(*worker, ctx);
     });
 
-    finalizer.normalShutdown();
+    writer.shutdown(histogramSets);
 
     return 0;
 }

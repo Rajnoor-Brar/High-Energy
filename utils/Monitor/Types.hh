@@ -7,6 +7,15 @@
 
 namespace Monitor {
 
+    struct PacingInfo {
+        std::size_t      printInterval   = 10;
+        std::size_t      barInterval     = 50;
+        std::size_t      checkInterval   = 10000;
+        Config::uSeconds heartbeatMs     = Config::uSeconds(1000);
+        Config::Seconds  terminalRefresh = Config::Seconds(300);
+        Config::Seconds  stallThreshold  = Config::Seconds(300);
+    };
+
     inline constexpr std::size_t FatalStallMultiplier = 5;
 
     constexpr bool RenderStatus    = true;

@@ -36,8 +36,14 @@ Drivers (top-level `_*.cc`) and their default configs:
 
 Run as `./_Lambda_Data.exe [config.toml]` — config arg optional; defaults exist.
 
-> **Build is currently broken** (P0 in [docs/REVIEW.md](../docs/REVIEW.md)):
-> missing `utils/Physics/TypeAid.hh`. Fix before other work.
+> **Build status (2026-05-03):** ✗ drivers and `make test` do **not**
+> build. `Config::extractConfiguration` is referenced in 4 call sites
+> but never defined in `utils/Config.hh`, and `namespace Config { ... }`
+> in that file is missing its closing `}`. Both blockers are tracked as
+> ROADMAP **P1 (pre-flight)** and must land before any W-item below is
+> verifiable. The earlier W7 fix to `_Lambda_Data.exe`
+> (`declareDataObjects` restored, BuildIndex via `preCloseHook`) is still
+> in tree and will resume passing once P1 lands.
 
 ## Architecture: namespace + facade pattern
 
@@ -61,31 +67,73 @@ Physics → Config → Probe → Record → Lambda. See
 ## Data flow
 
 1. **`_Lambda_Data`** loads Pythia8 from `configs/Lambda_Reconstruction.cmnd`,
-   declares ROOT TTree branches via `Lambda::declareDataObjects`, then runs
-   `Lambda::dataGenerator` per event in parallel and writes a ROOT file with
-   proton/pion branches plus an event index.
-2. **`_Lambda_Reconstruction`** opens that ROOT file via `Probe::runParallel`,
-   pulls physics parameters with `Lambda::extractPhysics`, declares histograms
-   with `Lambda::declareObjects`, applies `Lambda::rootAnalysis` per event, and
-   finalizes through `Record::FinalizerController`.
+   declares ROOT TTree branches (proton/pion + event index), runs
+   `Lambda::dataGenerator` per event in parallel via `PythiaParallel::run`,
+   and writes a ROOT file. *Currently broken — see REVIEW §1.*
+2. **`_Lambda_Reconstruction`** uses `Config::configureProbe` to load
+   `[probe].event_particles` into a `Config::ProbeConfig`, converts that to
+   `Probe::CollectionSpec` via `Probe::toCollectionSpecs`, then drives
+   `Probe::runParallel` over the input ROOT file. Per event it calls
+   `Lambda::rootAnalysis`, which asks the `Probe::Event` for collections by
+   the explicit string labels `parameters.protonLabel` / `pionLabel` (read
+   from `[lambda].proton_label` / `pion_label`). Finalisation goes through
+   `Record::FinalizerController`.
+3. **`_Lambda_Parallel`** does both at once: `PythiaParallel::run` +
+   `Lambda::pythiaAnalysis` per event (no intermediate ROOT file).
 
 ## Config system
 
-`Config::extractConfiguration()` in [utils/Config.hh](../utils/Config.hh) is
-the entry point. Three-tier resolution:
+Configure entry points:
 
-1. Defaults from `configs/defaults/*.toml`
-2. Limits from `*_Limits.toml` (e.g. `Lambda_Limits.toml`) enforce bounds
+- `Config::configuration(path, project, watch, reg)` (`utils/Config.hh`) — base
+  TOML→Watch+Register parse. `Register` is now a transitional working buffer
+  consumed by `Record::configureWriter`; consumers outside `Config` see the
+  Writer, not the Register.
+- `Config::configurePythia(path, project, watch, reg, pythia)` — adds `[pythia]`.
+- `Config::configureProbe(path, project, watch, reg, probe)` — adds `[probe]`
+  parsing into a `Config::ProbeConfig`. Used by the reconstruction driver.
+- `Record::configureWriter(writer, project, path, watch, reg, probeFile?)`
+  (`utils/Record/Writer.hh`) — opens the output `TFile`, populates
+  `Record::Paths` + `Record::HistConfig` + `Record::Meta::Record` (priority:
+  defaults → TOML → Probe extraction). Drivers call this after
+  `configureProbe`/`extractConfiguration`.
+- `Config::extractConfiguration` — *currently missing*. Drivers call it but
+  it is not defined; ROADMAP P1.1 adds the alias. Will become redundant
+  once W2's `Config::configure` facade lands.
+
+Driver-facing types after the W7 refactor: `Config::Watch` (live counters /
+pacing), `Record::Writer` (output TFile + paths + hist config + meta).
+`Config::Register` is internal scaffolding — drivers construct it but only
+pass it to Config readers + `configureWriter`; never read it themselves.
+
+Three-tier resolution inside `configuration()`:
+
+1. Defaults from `configs/defaults/Monitor.toml`
+2. Limits from `configs/General_Limits.toml` (required) then
+   `[lambda].hist_limits` (e.g. `Lambda_Limits.toml`)
 3. User TOML overrides
 
-Standard sections: `[events]`, `[probe]`, `[record]`, `[lambda]`, `[pythia]`,
-`[log]`. An async monitor thread (`utils/Monitor/`) renders progress and
-detects stalls; configured via `configs/Monitor.toml`.
+Standard sections: `[events]`, `[probe]` (with the new nested
+`event_particles` form — see MAP.md), `[record]`, `[record.paths]`,
+`[record.file]`, `[lambda]`, `[pythia]`, `[monitor]`/`[log]`. An async
+monitor thread (`utils/Monitor/`) renders progress and detects stalls.
+
+The central per-run state is `Config::Watch` (atomic `iEvent`, `mutex`,
+non-copyable, non-movable; per-event accounting via `Watch::recordEvent(now)`,
+snapshots via `Watch::freeze() → unique_ptr<Watch>`). The legacy
+`Config::Log` / `Config::Root` aliases are gone — use `Config::Watch` /
+`Config::Register` directly.
 
 ## Reference docs
 
-- [docs/MAP.md](../docs/MAP.md) — full file map, line counts, namespace dependency diagram
-- [docs/REVIEW.md](../docs/REVIEW.md) — current backlog (P0 build fix, P1 redundancy items)
+- [docs/MAP.md](../docs/MAP.md) — full file map, line counts, namespace dependency graph
+- [docs/Architecture.md](../docs/Architecture.md) — strategic plan-of-plans (W1–W10)
+- [docs/ROADMAP.md](../docs/ROADMAP.md) — active execution plan; opens with P1 build-unblock
+- [docs/REVIEW.md](../docs/REVIEW.md) — open backlog of additions/removals/restructures
+- [docs/DataFlow.md](../docs/DataFlow.md) — TOML key inventory, end-to-end flow
+- [docs/Gemini/](../docs/Gemini/) — parallel-agent observations (PROPOSAL.md,
+  ConfigReport.md, DataPath.md, Plan_ProbePArticle.md). Treat as proposals,
+  not as ground truth.
 - [bots/BOT.md](BOT.md) — process directives, directory layout, code-design rules
 - [bots/lessons.md](lessons.md) — accumulated pitfalls (lower priority than BOT.md / user instructions)
 

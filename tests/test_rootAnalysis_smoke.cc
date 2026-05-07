@@ -21,16 +21,16 @@
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
-#include <mutex>
 #include <string>
 
 #include "test_assert.hh"
 
 #include "Config.hh"
+#include "Record.hh"
 #include "Lambda.hh"
 #include "Monitor.hh"
 #include "Probe.hh"
-#include "Record.hh"
+#include "Config/Configure.hh"
 
 namespace {
     constexpr int    kNEvents   = 50;
@@ -53,53 +53,40 @@ int main() {
     }
 
     // ── Configure ─────────────────────────────────────────────────────────────
-    Config::Register rootParams;
-    Config::Watch    logParams;
-    Config::extractConfiguration(kFixtureToml, "fixture_smoke", logParams, rootParams);
-    rootParams.beamEnergy = "0";
+    Probe::ProbeParallel probe;
+    Record::Writer       writer;
+    Monitor::AsyncLogger asyncLogger;
 
-    Config::openOutputFile(rootParams);
+    Config::configure(kFixtureToml, "fixture_smoke", probe, writer, asyncLogger);
+    probe.nThreads = static_cast<std::size_t>(kNThreads);
 
     Lambda::Parameters physParams;
-    Lambda::extractPhysics(kFixtureToml, physParams, rootParams);
+    Lambda::RootArray  histogramSets;
+    Lambda::configure(physParams, histogramSets, writer, kFixtureToml);
 
-    Lambda::RootArray histogramSets;
-    Lambda::declareObjects(histogramSets, physParams, rootParams);
+    writer.bind(asyncLogger, asyncLogger.watch(),
+                [&physParams]() { return Lambda::logString(physParams); });
 
-    Monitor::AsyncLogger asyncLogger;
-    Record::FinalizerController finalizer(
-        histogramSets, rootParams, logParams, asyncLogger,
-        [&physParams]() { return Lambda::logString(physParams); }
-    );
-
-    logParams.start = std::chrono::system_clock::now();
-    asyncLogger.start(rootParams, logParams);
+    asyncLogger.watch().start = std::chrono::system_clock::now();
+    asyncLogger.start(writer);
 
     // ── Run parallel reconstruction ───────────────────────────────────────────
-    Lambda::AnalysisContext ctx{histogramSets, physParams, logParams, asyncLogger};
-    std::mutex histMutex;
-    Probe::runParallel(
-        kFixtureRoot,
-        Lambda::inputSchema(physParams),
-        [&](const Probe::Event& ev, int threadId) {
-            Lambda::rootAnalysis(ev, threadId, histMutex, ctx);
-        },
-        kNThreads,
-        static_cast<std::size_t>(kNEvents)
-    );
+    Lambda::AnalysisContext ctx{histogramSets, physParams, asyncLogger.watch(), asyncLogger, writer};
+
+    probe.run([&](const Probe::Event& ev, int threadId) {
+        Lambda::rootAnalysis(ev, threadId, ctx);
+    });
 
     // ── S1/S2: counters checked before ROOT file close ───────────────────────
-    // normalShutdown() calls outFile->Close() which invalidates all histogram
-    // pointers. Read everything we need BEFORE the shutdown.
-    TEST_EQ(logParams.iEvent.load(), std::size_t(kNEvents));
+    // shutdown() calls outFile->Close() which invalidates histogram pointers.
+    // Read everything we need BEFORE the shutdown.
+    TEST_EQ(asyncLogger.watch().iEvent.load(), std::size_t(kNEvents));
     TEST_PASS("S1  iEvent == 50 (all events dispatched)");
 
-    TEST_EQ(logParams.n_real_events, std::size_t(kNEvents));
+    TEST_EQ(asyncLogger.watch().n_real_events.load(), std::size_t(kNEvents));
     TEST_PASS("S2  n_real_events == 50");
 
     // ── S3/S4/S5: histogram sanity ────────────────────────────────────────────
-    // findObjects uses the enum index → RootArray ordering established by
-    // declareObjects; same ordering as kHistogramSetMap.
     const Lambda::RootObjects* unval =
         Lambda::findObjects(histogramSets, Lambda::HistogramSet::Unvalidated);
     const Lambda::RootObjects* val =
@@ -110,26 +97,22 @@ int main() {
     TEST_TRUE(!unval->hists1D.empty());
     TEST_TRUE(!val->hists1D.empty());
 
-    // Snapshot entry counts before normalShutdown() closes the file.
     const double unvalEntries = unval->hists1D[0].hist->GetEntries();
     const double valEntries   = val  ->hists1D[0].hist->GetEntries();
 
-    // S3: unvalidated got filled (50 events × 4p × 5pi = 1000 combinations)
     TEST_LT(0.0, unvalEntries);
     TEST_PASS("S3  Unvalidated mass histogram has entries");
 
-    // S4: validated got filled (50 events × 1 signal pair = 50 entries)
     TEST_LT(0.0, valEntries);
     TEST_PASS("S4  Validated mass histogram has entries");
 
-    // S5: unvalidated > validated (mass cut rejects background)
     TEST_LT(valEntries, unvalEntries);
     TEST_PASS("S5  Unvalidated entries > Validated entries (cuts working)");
 
     std::cout << "  (unvalidated=" << unvalEntries
               << ", validated=" << valEntries << ")\n";
 
-    finalizer.normalShutdown();
+    writer.shutdown(histogramSets);
 
     std::cout << "ALL TESTS PASSED\n";
     return 0;

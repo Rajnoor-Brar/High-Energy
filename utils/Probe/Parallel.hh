@@ -16,7 +16,6 @@ namespace Probe {
     template<typename Callback>
     inline void runParallel(const std::string& filepath,
                              const std::vector<CollectionSpec>& collections,
-                             const std::vector<ScalarSpec>&     scalars,
                              Callback&& callback,
                              std::size_t nThreads = 0,
                              std::size_t nEventsHint = 0)
@@ -53,7 +52,7 @@ namespace Probe {
             for (std::size_t t = 0; t < parts.size(); ++t) {
                 workers.emplace_back([&, t]{
                     try {
-                        EventStream stream(filepath, collections, scalars,
+                        EventStream stream(filepath, collections,
                                            parts[t].firstEvent, parts[t].lastEvent);
                         while (stream.next()) callback(stream.event(), static_cast<int>(t));
                     } catch (...) { errors[t] = std::current_exception(); }
@@ -84,7 +83,7 @@ namespace Probe {
             std::set<Long64_t> keySet;
             for (const auto& cs : collections)
                 if (!cs.indexBranches.empty())
-                    BranchControl::scanIndexBranch(sf, cs.tree, cs.indexBranches[0], keySet, filepath);
+                    BranchControl::scanIndexBranch(sf, cs.tree, cs.indexBranches[0].name, keySet, filepath);
             sf->Close(); delete sf;
 
             const std::vector<Long64_t> keys(keySet.begin(), keySet.end());
@@ -98,7 +97,7 @@ namespace Probe {
         for (std::size_t t = 0; t < parts.size(); ++t) {
             workers.emplace_back([&, t]{
                 try {
-                    EventStream stream(filepath, collections, scalars,
+                    EventStream stream(filepath, collections,
                                        parts[t].firstEvent, parts[t].lastEvent,
                                        nEventsHint);
                     while (stream.next()) callback(stream.event(), static_cast<int>(t));
@@ -109,27 +108,15 @@ namespace Probe {
         for (auto& e : errors)  if (e) std::rethrow_exception(e);
     }
 
-    // Convenience overload — no scalars
-    template<typename Callback>
-    inline void runParallel(const std::string& filepath,
-                             const std::vector<CollectionSpec>& collections,
-                             Callback&& callback,
-                             std::size_t nThreads = 0,
-                             std::size_t nEventsHint = 0)
-    {
-        runParallel(filepath, collections, {}, std::forward<Callback>(callback), nThreads, nEventsHint);
-    }
-
     // [MEMORY WARNING] Loads all events into RAM — unsafe for large files
     inline std::vector<Event> readAllParallel(const std::string& filepath,
                                                const std::vector<CollectionSpec>& collections,
-                                               const std::vector<ScalarSpec>&     scalars = {},
                                                std::size_t nThreads = 0)
     {
         BranchControl::enableRootThreadSafety();
         std::vector<Event> out;
         std::mutex mtx;
-        runParallel(filepath, collections, scalars,
+        runParallel(filepath, collections,
             [&](const Event& ev, int) {
                 std::lock_guard<std::mutex> lk(mtx);
                 out.push_back(ev);

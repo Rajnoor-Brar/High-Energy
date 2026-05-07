@@ -1,9 +1,22 @@
 #pragma once
 
+// ── Config.hh ────────────────────────────────────────────────────────────────
+// Dependency direction rules for the utils layer:
+//
+//   Config → Probe / Record / Monitor   ✓ allowed (Config owns runtime types)
+//   Probe / Record / Monitor → Config   ✓ allowed (they read config state)
+//   utils → Lambda module               ✗ disallowed (modules depend on utils)
+//
+// When a Config-owned type would duplicate a runtime type
+// (e.g. the old ProbeParticle ≈ Probe::CollectionSpec), prefer to import
+// the runtime type into Config rather than duplicate it.
+//
+// Config/Configure.hh is excluded from this header (circular via Probe.hh);
+// drivers include it explicitly.
+
 #include <stdexcept>
 #include <string>
 
-#include "TFile.h"
 #include <toml++/toml.hpp>
 
 #include "Config/Types.hh"
@@ -28,10 +41,6 @@ namespace Config {
         readEventsSection(config, events, watch);
         readRecordSection(config, watch, reg);
         readLogSection   (config, watch, reg);
-
-        watch.n_digits = std::to_string(watch.nEvents).size();
-        sanitiseLoggingConfig(watch);
-
         readPathsAndFile(config, project, watch, reg);
     }
 
@@ -42,6 +51,14 @@ namespace Config {
     {
         Events events;
         configuration(configPath, project, events, watch, reg);
+    }
+
+    inline void extractConfiguration(const std::string& configPath,
+                                     const std::string& project,
+                                     Watch&    watch,
+                                     Register& reg)
+    {
+        configuration(configPath, project, watch, reg);
     }
 
     // PythiaT accepts both Pythia8::Pythia and Pythia8::PythiaParallel.
@@ -80,22 +97,4 @@ namespace Config {
         readProbeSection(config, probe);
     }
 
-    inline void openOutputFile(Register& reg) {
-        if (reg.outFile != nullptr) {
-            reg.outFile->Close();
-            delete reg.outFile;
-            reg.outFile = nullptr;
-        }
-        reg.outFile = new TFile(reg.outName, "RECREATE");
-        if (reg.outFile == nullptr || reg.outFile->IsZombie())
-            throw std::runtime_error("Failed to create ROOT output file: " + std::string(reg.outName.Data()));
-    }
-
-    inline void extractConfiguration(const std::string& configPath,
-                                     const std::string& project,
-                                     Watch&    watch,
-                                     Register& reg)
-    {
-        configuration(configPath, project, watch, reg);
-    }
-}
+} // namespace Config

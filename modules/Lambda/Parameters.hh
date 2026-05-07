@@ -8,6 +8,7 @@
 #include <toml++/toml.hpp>
 
 #include "Config.hh"
+#include "Record/Configs.hh"
 #include "Types.hh"
 #include "TypeAid.hh"
 
@@ -20,10 +21,6 @@ namespace Lambda {
         Physics::ParticleProperty::Momentum_Transverse,
         Physics::ParticleProperty::Momentum_Z,
         Physics::ParticleProperty::Pseudorapidity
-    };
-
-    inline constexpr std::array<HistogramSet, 0> kTreeEnabledSets = {
-        // HistogramSet::Selected
     };
 
     inline std::optional<Config::Bounds> explicitBounds(const toml::node& node) {
@@ -41,9 +38,9 @@ namespace Lambda {
         return Config::Bounds{*low, *high};
     }
 
-    inline const Config::Bounds& levelBounds(const Config::Register& root, Physics::ParticleProperty property, Config::RangeSize level) {
-        const auto quantityIt = root.particleLimits.find(property);
-        if (quantityIt == root.particleLimits.end()) {
+    inline const Config::Bounds& levelBounds(const Record::HistConfig& hist, Physics::ParticleProperty property, Config::RangeSize level) {
+        const auto quantityIt = hist.particleLimits.find(property);
+        if (quantityIt == hist.particleLimits.end()) {
             throw std::runtime_error( "No configured limits for particle property " + Physics::particlePropertyName(property));
         }
 
@@ -54,9 +51,9 @@ namespace Lambda {
         return levelIt->second;
     }
 
-    inline const Config::Bounds& levelBounds(const Config::Register& root, Physics::EventProperty property, Config::RangeSize level) {
-        const auto quantityIt = root.eventLimits.find(property);
-        if (quantityIt == root.eventLimits.end()) {
+    inline const Config::Bounds& levelBounds(const Record::HistConfig& hist, Physics::EventProperty property, Config::RangeSize level) {
+        const auto quantityIt = hist.eventLimits.find(property);
+        if (quantityIt == hist.eventLimits.end()) {
             throw std::runtime_error( "No configured limits for event property " + Physics::eventPropertyName(property));
         }
 
@@ -68,14 +65,14 @@ namespace Lambda {
     }
 
     template <typename Property>
-    inline std::optional<Config::Bounds> boundsFromNode(const toml::node& node, const Config::Register& root, Property property) {
+    inline std::optional<Config::Bounds> boundsFromNode(const toml::node& node, const Record::HistConfig& hist, Property property) {
         if (const auto bounds = explicitBounds(node)) return bounds;
         if (!node.is_string()) return std::nullopt;
-        return levelBounds( root, property, Config::stringToLevel(node.value<string>().value_or("")));
+        return levelBounds( hist, property, Config::stringToLevel(node.value<string>().value_or("")));
     }
 
     template <typename Property>
-    inline Config::Bounds resolveBounds(const toml::table& table, const Config::Register& root, Property property, Config::RangeSize defaultLevel) {
+    inline Config::Bounds resolveBounds(const toml::table& table, const Record::HistConfig& hist, Property property, Config::RangeSize defaultLevel) {
         std::optional<Config::Bounds> resolved;
         const string primaryKey = [&]() {
             if constexpr (std::is_same_v<Property, Physics::ParticleProperty>)
@@ -85,13 +82,13 @@ namespace Lambda {
         }();
         const string aliasKey   = propertyAlias(property);
 
-        if (const toml::node* node = table.get(primaryKey)) resolved = boundsFromNode(*node, root, property);
+        if (const toml::node* node = table.get(primaryKey)) resolved = boundsFromNode(*node, hist, property);
 
         if (!resolved && aliasKey != primaryKey) {
-            if (const toml::node* node = table.get(aliasKey)) resolved = boundsFromNode(*node, root, property);
+            if (const toml::node* node = table.get(aliasKey)) resolved = boundsFromNode(*node, hist, property);
         }
 
-        if (!resolved) resolved = levelBounds(root, property, defaultLevel);
+        if (!resolved) resolved = levelBounds(hist, property, defaultLevel);
 
         return *resolved;
     }

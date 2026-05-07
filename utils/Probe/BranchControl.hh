@@ -14,7 +14,6 @@
 
 #include "Probe/Types.hh"
 #include "Physics.hh"
-#include "Config.hh"
 #include "TBranch.h"
 #include "TFile.h"
 #include "TTree.h"
@@ -48,19 +47,27 @@ namespace Probe {
             return "unknown";
         }
 
+        inline BranchType detectType(char c) {
+            switch (c) {
+                case 'F': return BranchType::Float;
+                case 'D': return BranchType::Double;
+                case 'I': return BranchType::Int32;
+                case 'i': return BranchType::UInt32;
+                case 'L': return BranchType::Int64;
+                case 'l': return BranchType::UInt64;
+                case 'O': return BranchType::Bool;
+                default:  return BranchType::Other;
+            }
+        }
+
+        inline BranchType detectType(const std::string& s) {
+            return s.empty() ? BranchType::Other : detectType(s[0]);
+        }
+
         inline BranchType detectType(TBranch* br) {
             const std::string title = br->GetTitle();
             if (title.size() >= 2 && title[title.size() - 2] == '/') {
-                switch (title.back()) {
-                    case 'F': return BranchType::Float;
-                    case 'D': return BranchType::Double;
-                    case 'I': return BranchType::Int32;
-                    case 'i': return BranchType::UInt32;
-                    case 'L': return BranchType::Int64;
-                    case 'l': return BranchType::UInt64;
-                    case 'O': return BranchType::Bool;
-                    default:  break;
-                }
+                return detectType(title.back());
             }
             return BranchType::Other;
         }
@@ -110,13 +117,7 @@ namespace Probe {
 
         inline std::vector<std::string> coordNames(const CoordSpec& cs) {
             return std::visit([](const auto& s) -> std::vector<std::string> {
-                using T = std::decay_t<decltype(s)>;
-                if constexpr      (std::is_same_v<T, CartesianSpec>)
-                    return { s.px, s.py, s.pz, s.E };
-                else if constexpr (std::is_same_v<T, PtEtaPhiESpec>)
-                    return { s.pt, s.eta, s.phi, s.E };
-                else
-                    return { s.pt, s.eta, s.phi, s.M };
+                return { s.branches[0].name, s.branches[1].name, s.branches[2].name, s.branches[3].name };
             }, cs);
         }
 
@@ -155,7 +156,7 @@ namespace Probe {
                 if (cs.indexBranches.empty()) continue;
                 TTree* t = dynamic_cast<TTree*>(f->Get(cs.tree.c_str()));
                 if (!t || t->GetEntries() == 0) continue;
-                const std::string& name = cs.indexBranches[0];
+                const std::string& name = cs.indexBranches[0].name;
                 TBranch* br = t->GetBranch(name.c_str());
                 if (!br) continue;
                 t->SetBranchStatus("*", 0);

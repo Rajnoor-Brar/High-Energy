@@ -52,9 +52,10 @@ namespace Monitor {
         RunSnapshot snapshot;
         snapshot.eventIndex    = logging.iEvent;
         snapshot.nEvents       = logging.nEvents;
-        snapshot.nRealEvents   = logging.n_real_events;
-        snapshot.elapsed       = logging.elapsed;
-        snapshot.eta           = updatedETA(logging.iEvent, logging.nEvents, logging.elapsed, false);
+        snapshot.nRealEvents   = logging.n_real_events.load(std::memory_order_relaxed);
+        snapshot.elapsed       = logging.elapsed.load(std::memory_order_relaxed);
+        snapshot.eta           = updatedETA(logging.iEvent, logging.nEvents,
+                                            logging.elapsed.load(std::memory_order_relaxed), false);
         snapshot.progress      = logging.nEvents > 0
             ? static_cast<double>(logging.iEvent) / static_cast<double>(logging.nEvents)
             : 0.0;

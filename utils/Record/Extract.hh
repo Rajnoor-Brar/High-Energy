@@ -120,16 +120,6 @@ namespace Record::Extract {
         };
     }
 
-    inline Fn scalar(std::string name) {
-        return [n = std::move(name)](const Event& ev) -> Scalars {
-            const auto it = ev.scalars.find(n);
-            if (it == ev.scalars.end()) return {};
-            Double_t v = 0.0;
-            std::visit([&](auto value) { v = static_cast<Double_t>(value); }, it->second);
-            return { v };
-        };
-    }
-
     inline Fn constant(Double_t value) {
         return [value](const Event&) -> Scalars { return { value }; };
     }

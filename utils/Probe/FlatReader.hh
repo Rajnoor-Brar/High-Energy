@@ -25,13 +25,18 @@ namespace Probe {
 
             tree_->SetBranchStatus("*", 0);
 
-            idxName_ = spec.indexBranches[0];
+            idxName_ = spec.indexBranches[0].name;
             TBranch* idxBr = BranchControl::requireBranch(tree_, idxName_, filepath);
             const BranchType it = BranchControl::detectType(idxBr);
             if (it != BranchType::Int32 && it != BranchType::Int64 && it != BranchType::UInt32)
                 throw std::runtime_error(
                     "[Probe] Index branch '" + idxName_ + "' in tree '" + spec.tree +
                     "' of file '" + filepath + "': must be Int_t, UInt_t, or Long64_t");
+            if (spec.indexBranches[0].type != BranchType::Other && it != spec.indexBranches[0].type)
+                throw std::runtime_error(
+                    "[Probe] Type mismatch: index branch '" + idxName_ + "' declared as " + 
+                    BranchControl::branchTypeStr(spec.indexBranches[0].type) + 
+                    ", actual " + BranchControl::branchTypeStr(it));
             idxIsLong_ = (it == BranchType::Int64);
             tree_->SetBranchStatus(idxName_.c_str(), 1);
             if (idxIsLong_) tree_->SetBranchAddress(idxName_.c_str(), &idxL_);

@@ -10,6 +10,7 @@
 
 #include "TString.h"
 #include "Config.hh"
+#include "Record/Writer.hh"
 #include "Utility.hh"
 #include "Monitor/Snapshot.hh"
 #include "Monitor/Render.hh"
@@ -23,12 +24,25 @@ namespace Monitor {
         AsyncLogger() = default;
         ~AsyncLogger() { stop(); }
 
-        void start(const Config::Register& root, const Config::Watch& logging) {
+        Config::Watch&       watch()       { return watch_; }
+        const Config::Watch& watch() const { return watch_; }
+
+        const PacingInfo& pacingInfo()    const { return pacing_; }
+        std::size_t       checkInterval() const { return pacing_.checkInterval; }
+
+        void configurePacing(PacingInfo pacing) { pacing_ = std::move(pacing); }
+
+        void start(const Record::Writer& writer) {
+            start(writer, watch_);
+        }
+
+        void start(const Record::Writer& writer, const Config::Watch& logging) {
             stop();
             {
                 std::lock_guard<std::mutex> lock(mutex_);
-                runStatPath_             = root.runStatName;
-                threadStatDirectory_     = root.threadStatDirectory;
+                const Record::Paths& paths = writer.paths();
+                runStatPath_             = paths.runStatName;
+                threadStatDirectory_     = paths.threadStatDirectory;
                 pendingActions_.reset();
                 latestSnapshot_.reset();
                 threadSnapshots_.clear();
@@ -37,14 +51,14 @@ namespace Monitor {
                 fatalStallTriggered_     = false;
                 terminalInitialized_     = false;
                 progressBarVisible_      = false;
-                heartbeat_interval_      = logging.heartbeat_interval        > Config::uSeconds(0)
-                                            ? logging.heartbeat_interval        : Config::uSeconds(1000);
-                terminalRefreshInterval_ = logging.terminal_refresh_interval > Config::Seconds(0)
-                                            ? logging.terminal_refresh_interval : Config::Seconds(60);
-                programStallThreshold_   = logging.program_stall_threshold   > Config::Seconds(0)
-                                            ? logging.program_stall_threshold   : Config::Seconds(300);
+                heartbeat_interval_      = pacing_.heartbeatMs     > Config::uSeconds(0)
+                                            ? pacing_.heartbeatMs     : Config::uSeconds(1000);
+                terminalRefreshInterval_ = pacing_.terminalRefresh > Config::Seconds(0)
+                                            ? pacing_.terminalRefresh : Config::Seconds(60);
+                programStallThreshold_   = pacing_.stallThreshold  > Config::Seconds(0)
+                                            ? pacing_.stallThreshold  : Config::Seconds(300);
                 RunSnapshot snapshot = makeSnapshot(logging, RunPhase::Starting);
-                snapshot.eta         = root.fileTitle.Data();
+                snapshot.eta         = paths.fileTitle.Data();
                 latestSnapshot_      = std::move(snapshot);
                 pendingActions_      = PendingActions{RenderStatus, DontRenderBar, WriteRunStat};
             }
@@ -63,9 +77,9 @@ namespace Monitor {
 
             const std::size_t eventIndex = logging.iEvent;
             const bool edgeEvent    = eventIndex == 1 || eventIndex == logging.nEvents;
-            const bool renderStatus = (logging.print_interval > 0 && eventIndex % logging.print_interval == 0)
+            const bool renderStatus = (pacing_.printInterval > 0 && eventIndex % pacing_.printInterval == 0)
                                       || edgeEvent || forceRenderStatus;
-            const bool renderBar    = (logging.bar_interval  > 0 && eventIndex % logging.bar_interval  == 0)
+            const bool renderBar    = (pacing_.barInterval   > 0 && eventIndex % pacing_.barInterval   == 0)
                                       || edgeEvent || forceRenderBar;
 
             std::lock_guard<std::mutex> lock(mutex_);
@@ -322,6 +336,9 @@ namespace Monitor {
             if (pendingActions_.has_value()) pendingActions_->merge(incoming);
             else                             pendingActions_ = incoming;
         }
+
+        Config::Watch                 watch_;
+        PacingInfo                    pacing_;
 
         TString                       runStatPath_             = "";
         TString                       threadStatDirectory_     = "";

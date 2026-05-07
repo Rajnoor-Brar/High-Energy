@@ -16,7 +16,6 @@ namespace Probe {
       public:
         EventStream(const std::string& filepath,
                     const std::vector<CollectionSpec>& collections,
-                    const std::vector<ScalarSpec>&     scalars = {},
                     Long64_t minBound = std::numeric_limits<Long64_t>::min(),
                     Long64_t maxBound = std::numeric_limits<Long64_t>::max(),
                     std::size_t nEventsHint = 0)

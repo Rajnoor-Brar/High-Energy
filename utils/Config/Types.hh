@@ -4,7 +4,6 @@
 #include <chrono>
 #include <map>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <vector>
 
@@ -12,6 +11,7 @@
 #include "TString.h"
 
 #include "Physics/Types.hh"
+#include "Probe/Types.hh"
 
 namespace Config {
 
@@ -40,12 +40,12 @@ namespace Config {
     using EventLimits    = std::map<Physics::EventProperty,    LevelBounds>;
 
     // ── [events] ─────────────────────────────────────────────────────────────
-    // Run-mode toggle plus shared event-loop sizing. The driver picks which
-    // configure*() entry point to call based on Events::isPythia.
+    // Shared event-loop sizing. Driver selects the appropriate configure*()
+    // overload directly (Probe or Pythia pipeline).
     struct Events {
-        bool        isPythia    = true;
         std::size_t nThreads    = 0;     // 0 → resolveThreadCount() picks
         std::size_t eventCount  = 1000;
+        bool        userEvents  = false; // true when event_count was explicit in TOML
     };
 
     // ── [pythia] ─────────────────────────────────────────────────────────────
@@ -57,42 +57,30 @@ namespace Config {
     };
 
     // ── [probe] ──────────────────────────────────────────────────────────────
-    // event_particles entry: [label, spec, tree_name, [branch_list]]
-    struct ProbeParticle {
-        std::string              label="";
-        int                      spec = 0;
-        std::string              treeName="";
-        std::vector<std::string> momentaBranches;
-        std::string              branchType; // "float" or "double"
-        std::string              indexBranch="";        
-    };
-
+    // ProbeConfig holds the parsed [probe] section.  Collections are stored as
+    // Probe::CollectionSpec directly — no intermediate ProbeParticle type.
+    // Populated by Config::configureProbe via Probe::parseCollectionsFromToml.
     struct ProbeConfig {
-        std::string                inputFile;
-        std::vector<ProbeParticle> particles;
-        Events      eventConfig;
+        std::string                           inputFile;
+        std::vector<Probe::CollectionSpec>    collections;
+        Events                                eventConfig;
     };
 
-    // ── Monitor's running state (was Log) ────────────────────────────────────
-    // Holds the live counters / pacing intervals the AsyncLogger watches.
-    // Not copyable or movable (contains std::mutex + std::atomic).
+    // ── Monitor's live run counters ───────────────────────────────────────────
+    // Holds hot-path counters the event loop and AsyncLogger share.
+    // Not copyable or movable (contains std::atomic members).
     // Use freeze() for an intentional point-in-time snapshot.
+    //
+    // n_real_events and elapsed are both std::atomic; recordEvent() is
+    // lock-free.  Configuration-identity fields (serial, sr_padding,
+    // n_digits) were removed in W9 — they live in Record::Paths / Register.
     struct Watch {
         std::atomic<std::size_t> iEvent{0};
-        Int_t                    serial = 0;
-        std::size_t              sr_padding = 2;
-        std::size_t              nEvents = 100;
-        std::size_t              n_real_events = 0;
-        std::size_t              n_digits = 0;
+        std::size_t              nEvents   = 100;
+        std::atomic<std::size_t> n_real_events{0};
         std::size_t              n_threads = 0;
-        std::size_t              print_interval = 10;
-        uSeconds                 heartbeat_interval = uSeconds(1000);
-        Seconds                  terminal_refresh_interval = Seconds(300);
-        Seconds                  program_stall_threshold = Seconds(300);
-        std::size_t              bar_interval = 50;
-        std::size_t              check_interval = 10000;
-        TimePoint                start = TimePoint{};
-        uSeconds                 elapsed = uSeconds(0);
+        TimePoint                start     = TimePoint{};
+        std::atomic<uSeconds>    elapsed{uSeconds(0)};
 
         Watch() = default;
         Watch(const Watch&)             = delete;
@@ -100,22 +88,23 @@ namespace Config {
         Watch(Watch&&)                  = delete;
         Watch& operator=(Watch&&)       = delete;
 
-        // Thread-safe per-event accounting (defined in TypeAid.hh).
-        // Increments n_real_events and records elapsed time under eventMutex_.
+        // Lock-free per-event accounting (defined in TypeAid.hh).
+        // Increments n_real_events and records elapsed time atomically.
         void recordEvent(TimePoint now);
 
         // Returns a heap-allocated point-in-time snapshot (defined in TypeAid.hh).
         // The returned Watch is completely independent of *this.
         std::unique_ptr<Watch> freeze() const;
-
-      private:
-        mutable std::mutex eventMutex_;
     };
 
-    // ── Record output (was Root) ─────────────────────────────────────────────
+    // ── Record output staging buffer ─────────────────────────────────────────
+    // Transitional working buffer for Config readers; consumed by
+    // Record::configureWriter which mirrors fields into the Writer.
+    // serial was added in W9 (moved from Watch).
+    // Full Register deletion is the W9 endpoint; the residual paths/limits
+    // live here only because Config::Reader.hh writes into them during parsing.
     struct Register {
-        TFile*      outFile         = nullptr;
-        std::string inputPath;          // [events].input_file / legacy [input].root_file
+        Int_t   serial              = 0;
         TString rootDirectory       = "output/";
         TString logDirectory        = "output/params/";
         TString checkpointDirectory = "output/checkpoints/";
@@ -130,7 +119,7 @@ namespace Config {
         TString histLimitsFile      = "";
         ParticleLimits particleLimits{};
         EventLimits    eventLimits{};
-        Int_t   binCount            = 100;
+        Int_t    binCount           = 100;
         Double_t histScale          = 100;
     };
 

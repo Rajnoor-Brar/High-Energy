@@ -5,13 +5,13 @@
 
 #include "Lambda/Types.hh"
 #include "Lambda/TypeAid.hh"
-#include "Lambda/ParamAid.hh"
 #include "Lambda/Parameters.hh"
 #include "Lambda/Loaders.hh"
 #include "Lambda/Declare.hh"
 #include "Lambda/Reconstruction.hh"
 #include "Lambda/Recording.hh"
 #include "Lambda/Context.hh"
+#include "Monitor/Timer.hh"
 
 namespace Lambda{
 
@@ -21,6 +21,17 @@ namespace Lambda{
         stream << "Pion PDG ID                   : -211 (pi-)\n";
         stream << "Selection                     : isFinal() only\n";
         return stream.str();
+    }
+
+    // ── configure ─────────────────────────────────────────────────────────────
+    // Convenience wrapper: populate Parameters from TOML then declare histograms.
+    // Equivalent to calling extractPhysics + declareObjects in sequence.
+    inline void configure(Parameters&        parameters,
+                          RootArray&         histogramSets,
+                          Record::Writer&    writer,
+                          const std::string& configPath) {
+        extractPhysics(configPath, parameters, writer.histConfig());
+        declareObjects(histogramSets, parameters, writer);
     }
 
     inline std::string logString(const Parameters& parameters) {
@@ -37,11 +48,7 @@ namespace Lambda{
 
     // ── pythiaAnalysis ────────────────────────────────────────────────────────
     // Called once per Pythia8 event (serial or parallel).
-    // root is kept as a separate parameter because it holds the checkpoint
-    // output paths, which are specific to this handler.
-    inline void pythiaAnalysis(Pythia8::Pythia& pythia,
-                               Config::Register& root,
-                               AnalysisContext& ctx)
+    inline void pythiaAnalysis(Pythia8::Pythia& pythia, AnalysisContext& ctx)
     {
         const std::size_t eventIndex = ++ctx.logging.iEvent;
         const int workerIndex = pythia.mode("Parallelism:index");
@@ -62,37 +69,34 @@ namespace Lambda{
         ctx.asyncLogger.publish(ctx.logging, Monitor::RunPhase::Analysis, Monitor::DontWriteRunStat);
         ctx.asyncLogger.publishThreadStats(workerIndex, Monitor::ThreadPhase::Simulation, eventIndex, Monitor::CallbackCompleted);
 
-        if (ctx.logging.check_interval > 0 && eventIndex % ctx.logging.check_interval == 0) {
-            Record::checkpointWrite(ctx.histograms, root.checkpointOutName, root.histScale, eventIndex);
-            Monitor::outputLog(root, ctx.logging, logString(ctx.parameters), root.checkpointLogName,
-                               [&pythia]() { pythia.stat(); },
-                               [&pythia]() { pythia.settings.listChanged(); });
-        }
+        if (ctx.asyncLogger.checkInterval() > 0 && eventIndex % ctx.asyncLogger.checkInterval() == 0)
+            ctx.writer.checkpoint(ctx.histograms, eventIndex);
     }
 
     // ── rootAnalysis ──────────────────────────────────────────────────────────
     // Called once per Probe::Event from runParallel (multi-threaded).
-    // histMutex serialises TH1D::Fill calls and is kept as a separate
-    // parameter because it belongs to the driver, not to the shared context.
+    // ctx.writer.recordingScope() serialises TH1D::Fill calls.
     inline void rootAnalysis(const Probe::Event& ev,
                              int threadId,
-                             std::mutex& histMutex,
                              AnalysisContext& ctx)
     {
+        BlockTimer timer("Whole Analysis");
         const std::size_t eventIndex = ++ctx.logging.iEvent;
-        const auto [protonLabel, pionLabel] = resolveCandidateLabels(ctx.parameters);
 
         ctx.asyncLogger.publishThreadStats(threadId, Monitor::ThreadPhase::Analysis, eventIndex, Monitor::NoCallbackCompleted);
 
-        const std::vector<Lorentz> protonList = ev[protonLabel];
-        const std::vector<Lorentz> pionList   = ev[pionLabel];
+        const std::vector<Lorentz> protonList = ev[ctx.parameters.protonLabel];
+        const std::vector<Lorentz> pionList   = ev[ctx.parameters.pionLabel];
 
         {
-            std::lock_guard<std::mutex> lock(histMutex);
+            // BlockTimer timer("Core Analysis");
+            auto lock = ctx.writer.recordingScope();
             fillCandidates(ctx.histograms, reconstructCandidates(protonList, pionList, ctx.parameters));
         }
-
+        {
+            // BlockTimer timer("Root Recording");
         ctx.logging.recordEvent(std::chrono::system_clock::now());
+        }
 
         ctx.asyncLogger.publish(ctx.logging, Monitor::RunPhase::Analysis, Monitor::DontWriteRunStat);
         ctx.asyncLogger.publishThreadStats(threadId, Monitor::ThreadPhase::Simulation, eventIndex, Monitor::CallbackCompleted);

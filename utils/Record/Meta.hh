@@ -62,6 +62,10 @@ namespace Record::Meta {
     struct Integrity {
         std::string creation_timestamp;
         std::string processed_by;
+        std::string git_sha;        // short SHA at build time (from -DGIT_SHA)
+        bool        git_dirty = false; // uncommitted changes present at build time
+        std::string host_uname;     // kernel + hostname at run time
+        std::vector<std::string> file_shas; // "path:sha256" pairs, one per loaded file
     };
 
     struct Notes {
@@ -110,67 +114,211 @@ namespace Record::Meta {
                            std::istreambuf_iterator<char>());
     }
 
-    inline Record capture(const std::string& analysisName,
-                          const std::string& configPath,
-                          const Config::Watch&    log,
-                          const Config::Register& root)
-    {
-        Record r;
+    // Compute the SHA-256 of a file by shelling out to shasum/sha256sum.
+    // Returns "path:sha256hex" on success, "path:unavailable" if the tool
+    // is absent or the file cannot be read.
+    inline std::string sha256File(const std::string& path) {
+        if (path.empty()) return {};
+        // Try shasum -a 256 (macOS/BSD) then sha256sum (Linux)
+        for (const char* cmd : {"shasum -a 256 ", "sha256sum "}) {
+            const std::string full = std::string(cmd) + "\"" + path + "\" 2>/dev/null";
+#ifdef _WIN32
+            FILE* pipe = _popen(full.c_str(), "r");
+#else
+            FILE* pipe = popen(full.c_str(), "r");  // NOLINT(cert-env33-c)
+#endif
+            if (!pipe) continue;
+            char buf[128] = {};
+            const bool ok = (fgets(buf, sizeof(buf), pipe) != nullptr);
+#ifdef _WIN32
+            _pclose(pipe);
+#else
+            pclose(pipe);
+#endif
+            if (!ok) continue;
+            // Output is "sha256hex  filename\n" — take first token.
+            std::string sha = buf;
+            const auto sp = sha.find(' ');
+            if (sp != std::string::npos) sha = sha.substr(0, sp);
+            return path + ":" + sha;
+        }
+        return path + ":unavailable";
+    }
 
+    // Append a "path:sha256" entry to record.integrity.file_shas.
+    // Call once per significant input file (cmnd, limits, config).
+    inline void integrityAddFileSha(Record& r, const std::string& path) {
+        if (path.empty()) return;
+        r.integrity.file_shas.push_back(sha256File(path));
+    }
+
+    // ── Pass 2 helper: apply one [metadata]-shaped table to the Record ─────
+    // Per-field; only overwrites when the key is present in `meta`.
+    namespace detail {
+        inline void applyMetadataTable(Record& r, const toml::table& meta) {
+            if (meta.get("dataset_name"))
+                r.dataset.name = meta["dataset_name"].value_or(std::string{});
+            if (meta.get("data_type"))
+                r.dataset.data_type = meta["data_type"].value_or(std::string{});
+            if (meta.get("run_period"))
+                r.dataset.run_period = meta["run_period"].value_or(std::string{});
+            if (meta.get("campaign"))
+                r.dataset.campaign = meta["campaign"].value_or(std::string{});
+            if (meta.get("experiment"))
+                r.dataset.experiment = meta["experiment"].value_or(std::string{});
+            if (meta.get("notes"))
+                r.notes.description = meta["notes"].value_or(std::string{});
+            if (meta.get("known_issues"))
+                r.notes.known_issues = meta["known_issues"].value_or(std::string{});
+            if (meta.get("contact"))
+                r.notes.contact = meta["contact"].value_or(std::string{});
+            if (meta.get("generator"))
+                r.physics.generator = meta["generator"].value_or(std::string{"Pythia8"});
+            if (meta.get("tune"))
+                r.physics.tune = meta["tune"].value_or(std::string{});
+            if (meta.get("pdf_set"))
+                r.physics.pdf_set = meta["pdf_set"].value_or(std::string{});
+        }
+
+        inline std::string readObjString(TDirectory* dir, const char* name) {
+            if (!dir) return "";
+            auto* o = dynamic_cast<TObjString*>(dir->Get(name));
+            return o ? std::string(o->GetString().Data()) : std::string{};
+        }
+        template <typename T>
+        inline bool readPar(TDirectory* dir, const char* name, T& out) {
+            if (!dir) return false;
+            if (auto* p = dynamic_cast<TParameter<T>*>(dir->Get(name))) {
+                out = p->GetVal();
+                return true;
+            }
+            return false;
+        }
+    } // namespace detail
+
+    // ── Pass 2: TOML ────────────────────────────────────────────────────────
+    // Reads BOTH cfg["metadata"] (top-level) and cfg["record"]["metadata"]
+    // (nested form actually used by current project configs). Nested wins
+    // within this pass, since it is applied second.
+    inline void mergeFromToml(Record& r, const std::string& configPath) {
         try {
             const auto cfg = toml::parse_file(configPath);
-            if (const auto* meta = cfg["metadata"].as_table()) {
-                r.dataset.name       = meta->get("dataset_name") ?
-                                       (*meta)["dataset_name"].value_or(std::string{}) : "";
-                r.dataset.data_type  = meta->get("data_type") ?
-                                       (*meta)["data_type"].value_or(std::string{"MC"}) : "MC";
-                r.dataset.run_period = meta->get("run_period") ?
-                                       (*meta)["run_period"].value_or(std::string{}) : "";
-                r.dataset.campaign   = meta->get("campaign") ?
-                                       (*meta)["campaign"].value_or(std::string{}) : "";
-                r.notes.description  = meta->get("notes") ?
-                                       (*meta)["notes"].value_or(std::string{}) : "";
-                if (meta->get("generator"))
-                    r.physics.generator = (*meta)["generator"].value_or(std::string{"Pythia8"});
-                if (meta->get("tune"))
-                    r.physics.tune = (*meta)["tune"].value_or(std::string{});
-                if (meta->get("pdf_set"))
-                    r.physics.pdf_set = (*meta)["pdf_set"].value_or(std::string{});
-            }
+            if (const auto* meta = cfg["metadata"].as_table())
+                detail::applyMetadataTable(r, *meta);
+            if (const auto* meta = cfg["record"]["metadata"].as_table())
+                detail::applyMetadataTable(r, *meta);
             if (const auto* lam = cfg["lambda"].as_table()) {
                 std::ostringstream ss;
                 ss << *lam;
                 r.objects.selection_toml = ss.str();
             }
         } catch (...) {}
+    }
 
-        r.dataset.file_uuid  = TUUID().AsString();
-        r.dataset.experiment = "Pythia8_standalone";
+    // ── Pass 3: Probe (extract from input ROOT file's About/ block) ─────────
+    // Reads About/dataset/* and About/physics/* from a previously-written
+    // ROOT file (typically the input to the reconstruction driver). Per-field
+    // unconditional overwrite when the source value is non-empty / non-zero
+    // — Probe wins over TOML per W7 priority decision (Probe > TOML > defaults).
+    inline void mergeFromProbe(Record& r, const std::string& probeInputFile) {
+        if (probeInputFile.empty()) return;
+        std::unique_ptr<TFile> f(TFile::Open(probeInputFile.c_str(), "READ"));
+        if (!f || f->IsZombie()) return;
 
-        r.processing.analysis_name    = analysisName;
+        if (auto* ds = f->GetDirectory("About/dataset")) {
+            auto s = detail::readObjString(ds, "name");        if (!s.empty()) r.dataset.name = s;
+            s = detail::readObjString(ds, "experiment");       if (!s.empty()) r.dataset.experiment = s;
+            s = detail::readObjString(ds, "data_type");        if (!s.empty()) r.dataset.data_type = s;
+            s = detail::readObjString(ds, "run_period");       if (!s.empty()) r.dataset.run_period = s;
+            s = detail::readObjString(ds, "campaign");         if (!s.empty()) r.dataset.campaign = s;
+        }
+        if (auto* ph = f->GetDirectory("About/physics")) {
+            auto s = detail::readObjString(ph, "generator");   if (!s.empty()) r.physics.generator = s;
+            s = detail::readObjString(ph, "tune");             if (!s.empty()) r.physics.tune = s;
+            s = detail::readObjString(ph, "pdf_set");          if (!s.empty()) r.physics.pdf_set = s;
+            Double_t d = 0;
+            if (detail::readPar<Double_t>(ph, "center_of_mass_energy_gev", d) && d > 0)
+                r.physics.center_of_mass_energy_gev = d;
+            if (detail::readPar<Double_t>(ph, "cross_section_pb", d) && d > 0)
+                r.physics.cross_section_pb = d;
+            if (detail::readPar<Double_t>(ph, "filter_efficiency", d) && d > 0)
+                r.physics.filter_efficiency = d;
+        }
+    }
+
+    // ── Pass 4: derived ─────────────────────────────────────────────────────
+    // Fields that have no source choice — always computed locally. Safe to
+    // re-run (e.g. from Writer::shutdown to refresh event counts after the
+    // run loop completes).
+    inline void fillDerived(Record& r,
+                            const std::string& analysisName,
+                            const std::string& configPath,
+                            const Config::Watch& log,
+                            const Config::Register& root)
+    {
+        if (r.dataset.file_uuid.empty()) r.dataset.file_uuid = TUUID().AsString();
+        if (r.dataset.experiment.empty()) r.dataset.experiment = "Pythia8_standalone";
+
+        r.processing.analysis_name = analysisName;
 #ifdef NDEBUG
         r.processing.build_type = "Release";
 #else
         r.processing.build_type = "Debug";
 #endif
-        r.processing.compiler      = __VERSION__;
-        r.processing.root_version  = gROOT->GetVersion();
-        r.processing.os_arch       = osArch();
+        r.processing.compiler        = __VERSION__;
+        r.processing.root_version    = gROOT->GetVersion();
+        r.processing.os_arch         = osArch();
         r.processing.config_snapshot = readFile(configPath);
 
         r.events.n_events_total      = log.nEvents;
-        r.events.n_events_processed  = log.n_real_events;
-        r.events.sum_weights         = static_cast<Double_t>(log.n_real_events);
-        r.events.sum_weights_squared = static_cast<Double_t>(log.n_real_events);
+        r.events.n_events_processed  = log.n_real_events.load(std::memory_order_relaxed);
+        r.events.sum_weights         = static_cast<Double_t>(log.n_real_events.load(std::memory_order_relaxed));
+        r.events.sum_weights_squared = static_cast<Double_t>(log.n_real_events.load(std::memory_order_relaxed));
 
-        try {
-            r.physics.center_of_mass_energy_gev =
-                std::stod(std::string(root.beamEnergy.Data()));
-        } catch (...) {}
+        if (r.physics.center_of_mass_energy_gev == 0.0) {
+            try {
+                r.physics.center_of_mass_energy_gev =
+                    std::stod(std::string(root.beamEnergy.Data()));
+            } catch (...) {}
+        }
 
         r.integrity.creation_timestamp = nowISO8601();
         r.integrity.processed_by       = processedBy();
 
+        // Build-time git provenance (injected as -DGIT_SHA / -DGIT_DIRTY).
+#ifdef GIT_SHA
+        r.integrity.git_sha   = GIT_SHA;
+#else
+        r.integrity.git_sha   = "unknown";
+#endif
+#ifdef GIT_DIRTY
+        r.integrity.git_dirty = (GIT_DIRTY != 0);
+#else
+        r.integrity.git_dirty = false;
+#endif
+
+        // Runtime host info: extend osArch() with hostname.
+        utsname u{};
+        uname(&u);
+        char hbuf[256] = {};
+        gethostname(hbuf, sizeof(hbuf));
+        r.integrity.host_uname = std::string(u.sysname) + " " + u.release
+                                  + " " + u.machine + " @ " + hbuf;
+    }
+
+    // ── Backwards-compat capture() ──────────────────────────────────────────
+    // Existing callers (e.g. _Lambda_Reconstruction.cc:70) keep working
+    // unchanged. Probe extraction is NOT performed here — drivers that want
+    // it call Record::Meta::mergeFromProbe(record, probeInputFile) before
+    // shutdown. Once the Writer migration completes, this wrapper goes away.
+    inline Record capture(const std::string& analysisName,
+                          const std::string& configPath,
+                          const Config::Watch&    log,
+                          const Config::Register& root)
+    {
+        Record r;
+        mergeFromToml(r, configPath);
+        fillDerived(r, analysisName, configPath, log, root);
         return r;
     }
 
@@ -238,6 +386,14 @@ namespace Record::Meta {
         TDirectory* ig = about->mkdir("integrity");
         detail::writeStr(ig, "creation_timestamp", rec.integrity.creation_timestamp);
         detail::writeStr(ig, "processed_by",       rec.integrity.processed_by);
+        detail::writeStr(ig, "git_sha",            rec.integrity.git_sha);
+        detail::writeStr(ig, "git_dirty",          rec.integrity.git_dirty ? "true" : "false");
+        detail::writeStr(ig, "host_uname",         rec.integrity.host_uname);
+        {
+            std::string shas;
+            for (const auto& s : rec.integrity.file_shas) shas += s + "\n";
+            detail::writeStr(ig, "file_shas", shas);
+        }
 
         TDirectory* nt = about->mkdir("notes");
         detail::writeStr(nt, "description",  rec.notes.description);

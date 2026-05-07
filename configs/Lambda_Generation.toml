@@ -1,5 +1,4 @@
 [events]
-pythia      = true
 event_count = 10000
 nThreads    = 0      # 0 = auto (hardware_concurrency - 2)
 

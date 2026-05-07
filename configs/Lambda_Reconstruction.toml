@@ -1,20 +1,24 @@
 [events]
-probe      = true   # true = use probe input file; false = generate events with Pythia
-# pythia     = false  # true = generate events with Pythia; false = use probe input file.
-#if used with probe, this is given preference over probe
-event_count = 1000000
+event_count = 100_000
 nThreads    = 8      # 0 = auto (hardware_concurrency - 2)
 
 [probe]
 input_file = "output/Lambda_Data/_08/Lambda_Recons_7000GeV_10M.root"
 event_particles  = [
-                        ["protons",0,"Protons",["pX","pY","pZ","Energy"],"D","Index"],
-                        ["pions",0,"Pions",["pX","pY","pZ","Energy"],"D","Index"]
+                        ["protons",0,"Protons",[["pX","D"],["pY","D"],["pZ","D"],["Energy","D"]],[["Index","I"]]],
+                        ["pions",0,"Pions",[["pX","D"],["pY","D"],["pZ","D"],["Energy","D"]],[["Index","I"]]]
                     ]
 
+#probe.index below is unused, and is placeholder for future implementation
+[probe.index]
+sorted = [true,true] # for each particle index branch
+ascending = [true,true] # irrelevant if sorted = false; otherwise, specifies sort order for each particle index branch
+monotonic = [true,true] # irrelevant if sorted = true ; otherwise, specifies whether indices of same values grouped together (monotonic) or interspersed (non-monotonic)
+
 [record]
-serial     = 11
+serial     = 35
 sr_padding = 2
+bin_count = 400
 
 [record.paths]
 directory            = "output/Lambda_Reconstruction/"
@@ -36,6 +40,9 @@ data_type    = "MC"
 run_period   = ""
 campaign     = ""
 notes        = ""
+
+[pythia]
+cmnd_file = "configs/Lambda_Reconstruction.cmnd"
 
 [lambda]
 hist_limits       = "Lambda_Limits"
