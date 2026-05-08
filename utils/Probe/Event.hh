@@ -4,6 +4,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "Probe/BranchControl.hh"
@@ -18,7 +19,8 @@ namespace Probe {
                     const std::vector<CollectionSpec>& collections,
                     Long64_t minBound = std::numeric_limits<Long64_t>::min(),
                     Long64_t maxBound = std::numeric_limits<Long64_t>::max(),
-                    std::size_t nEventsHint = 0)
+                    std::size_t nEventsHint = 0,
+                    const std::vector<Bounds>& entryBounds = {})
             : filepath_(filepath), minBound_(minBound), maxBound_(maxBound)
         {
             if (collections.empty())
@@ -46,23 +48,39 @@ namespace Probe {
                 nEvents_ = vecReaders_.empty() ? 0
                          : static_cast<std::size_t>(vecReaders_[0]->totalEntries());
             } else {
-                for (const auto& cs : collections)
+                if (!entryBounds.empty() && entryBounds.size() != collections.size())
+                    throw std::runtime_error(
+                        "[Probe] EventStream: entryBounds size does not match particle specs");
+
+                const bool hasEntryBounds = !entryBounds.empty();
+                for (std::size_t i = 0; i < collections.size(); ++i) {
+                    const Bounds bounds = hasEntryBounds ? entryBounds[i] : Bounds{};
                     flatReaders_.push_back(std::make_unique<FlatReader>(
-                        file_, cs, filepath, minBound, maxBound));
+                        file_, collections[i], filepath, minBound, maxBound, bounds, hasEntryBounds));
+                }
 
                 if (nEventsHint > 0) {
-                    Long64_t gLo = std::numeric_limits<Long64_t>::max();
-                    for (auto& r : flatReaders_) {
-                        if (!r->exhausted())
-                            gLo = std::min(gLo, r->currentKey().components[0]);
-                    }
-                    if (gLo != std::numeric_limits<Long64_t>::max()) {
-                        const Long64_t lastKey = gLo + static_cast<Long64_t>(nEventsHint) - 1;
-                        denseLo_ = std::max<Long64_t>(gLo, minBound);
-                        denseHi_ = std::min<Long64_t>(lastKey, maxBound);
-                        if (denseHi_ >= denseLo_) {
-                            nextKey_ = denseLo_;
-                            nEvents_ = static_cast<std::size_t>(denseHi_ - denseLo_ + 1);
+                    if (minBound != std::numeric_limits<Long64_t>::min()
+                        && maxBound != std::numeric_limits<Long64_t>::max()
+                        && minBound <= maxBound) {
+                        denseLo_ = minBound;
+                        denseHi_ = maxBound;
+                        nextKey_  = denseLo_;
+                        nEvents_  = static_cast<std::size_t>(denseHi_ - denseLo_ + 1);
+                    } else {
+                        Long64_t gLo = std::numeric_limits<Long64_t>::max();
+                        for (auto& r : flatReaders_) {
+                            if (!r->exhausted())
+                                gLo = std::min(gLo, r->currentKey().components[0]);
+                        }
+                        if (gLo != std::numeric_limits<Long64_t>::max()) {
+                            const Long64_t lastKey = gLo + static_cast<Long64_t>(nEventsHint) - 1;
+                            denseLo_ = std::max<Long64_t>(gLo, minBound);
+                            denseHi_ = std::min<Long64_t>(lastKey, maxBound);
+                            if (denseHi_ >= denseLo_) {
+                                nextKey_ = denseLo_;
+                                nEvents_ = static_cast<std::size_t>(denseHi_ - denseLo_ + 1);
+                            }
                         }
                     }
                 } else {
@@ -99,6 +117,7 @@ namespace Probe {
         }
 
         const Event& event()   const { return current_; }
+        Event        takeEvent()     { return std::move(current_); }
         std::size_t  nEvents() const { return nEvents_; }
         std::size_t  index()   const { return index_ == 0 ? 0 : index_ - 1; }
 

@@ -58,6 +58,7 @@ text_size = 14.0
 [mass]
 line_color = "kRed-4"
 fill_color = "kRed-7"
+
 [mass.axis]
 title_x = "Invariant Mass (GeV/c^{2})"
 title_y = "Counts"

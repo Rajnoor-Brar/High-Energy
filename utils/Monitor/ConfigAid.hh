@@ -23,6 +23,9 @@ namespace Monitor {
         else if (config.contains("log"))     logKey = "log";
         else if (config.contains("logging")) logKey = "logging";
 
+        const bool trueTimeAtConfig = config["monitor"]["true_time_at_config"].value_or(false);
+        logger.markConfiguring(configPath, trueTimeAtConfig);
+
         PacingInfo p = logger.pacingInfo();  // start from current defaults
 
         if (!logKey.empty()) {
@@ -31,17 +34,13 @@ namespace Monitor {
             p.checkInterval = static_cast<std::size_t>(
                 config[logKey]["check_interval"].value_or(static_cast<int64_t>(p.checkInterval)));
 
-            const std::size_t hb = static_cast<std::size_t>(
-                config[logKey]["heartbeat_interval"].value_or(
-                    static_cast<int64_t>(p.heartbeatMs.count())));
+            const std::size_t hb = static_cast<std::size_t>( config[logKey]["heartbeat_interval"].value_or( static_cast<int64_t>(p.heartbeatMs.count())));
             p.heartbeatMs = Config::uSeconds(hb);
 
-            const double tr = config[logKey]["terminal_refresh_interval"].value_or(
-                static_cast<double>(p.terminalRefresh.count()) / 60.0);
+            const double tr = config[logKey]["terminal_refresh_interval"].value_or( static_cast<double>(p.terminalRefresh.count()) / 60.0);
             p.terminalRefresh = Config::Seconds(static_cast<int>(60 * tr));
 
-            const double ps = config[logKey]["program_stall_threshold"].value_or(
-                static_cast<double>(p.stallThreshold.count()) / 60.0);
+            const double ps = config[logKey]["program_stall_threshold"].value_or( static_cast<double>(p.stallThreshold.count()) / 60.0);
             p.stallThreshold = Config::Seconds(static_cast<int>(60 * ps));
         }
 

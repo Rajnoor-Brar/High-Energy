@@ -28,7 +28,7 @@ namespace Monitor {
     constexpr bool NoCallbackCompleted = false;
     constexpr std::size_t NoEvents = 0;
 
-    enum class RunPhase    { Starting, Analysis, Finished };
+    enum class RunPhase    { Starting, Configuring, Initialisation, Analysis, Finished };
     enum class ThreadPhase { Analysis, Simulation, Finished };
 
     struct RunSnapshot {

@@ -1,9 +1,11 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 
 #include "Physics.hh"
@@ -37,6 +39,24 @@ namespace Probe {
     };
 
     using CollectionSpec = ParticleSpec;
+
+    enum class StreamType { Unset, Events, Vectors };
+    enum class CallbackMode { WorkerThread, CollectorThread };
+    enum class IndexOrdering { Unknown, Ascending, Descending, Unordered };
+
+    struct Bounds {
+        Long64_t first = 0;
+        Long64_t last  = -1;
+
+        bool valid() const { return first <= last; }
+    };
+
+    struct IndexSpec {
+        BranchSpec    branch;
+        IndexOrdering ordering = IndexOrdering::Unknown;
+        bool          dense    = false;
+        bool          grouped  = false;
+    };
 
     struct AuxColumn {
         std::variant<
@@ -87,6 +107,12 @@ namespace Probe {
                 throw std::runtime_error("[Probe] Event: unknown column '" + col + "' in '" + label + "'");
             return ci->second.as<T>();
         }
+    };
+
+    struct QueuedEvent {
+        std::size_t workerIndex = 0;
+        Long64_t    eventIndex  = 0;
+        Event       event;
     };
 
 } // namespace Probe

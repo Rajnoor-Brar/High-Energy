@@ -5,6 +5,7 @@
 [events]
 pythia      = false
 event_count = 50
+nThreads    = 4
 
 [probe]
 input_file = "tests/fixtures/lambda_fixture.root"

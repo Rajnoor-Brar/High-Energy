@@ -11,6 +11,8 @@
 //
 // Dependency direction: Configure.hh → Config, Probe, Record, Monitor.
 
+#include <utility>
+
 #include "Config.hh"
 #include "Probe.hh"
 #include "Record.hh"
@@ -20,7 +22,7 @@ namespace Config {
 
     // ── Probe pipeline ────────────────────────────────────────────────────────
     // Reads the TOML once; populates probe, writer, and logger in the correct
-    // order so that probe.nEvents is resolved before the writer is opened
+    // order so that probe.eventCount() is resolved before the writer is opened
     // (allowing the output filename to embed the actual event count).
     inline void configure(const std::string&     configPath,
                           const std::string&     project,
@@ -28,20 +30,25 @@ namespace Config {
                           Record::Writer&        writer,
                           Monitor::AsyncLogger&  logger)
     {
+
+        Monitor::configureMonitor(logger, configPath, project);
+
         Register    reg;
         ProbeConfig probeConfig;
         configureProbe(configPath, project, logger.watch(), reg, probeConfig);
 
-        probe.inputFile   = probeConfig.inputFile;
-        probe.collections = std::move(probeConfig.collections);
-        probe.nThreads    = resolveThreadCount(probeConfig.eventConfig.nThreads);
-        probe.nEvents     = probeConfig.eventConfig.eventCount;
-        probe.resolveEvents();
-        logger.watch().nEvents = probe.nEvents;
+        probe.configureProbe(probeConfig.inputFile,
+                             std::move(probeConfig.collections),
+                             probeConfig.eventConfig.nThreads,
+                             probeConfig.eventConfig.eventCount,
+                             probeConfig.eventConfig.userEvents);
+        logger.watch().nEvents   = probe.eventCount();
+        logger.watch().n_threads = probe.threadCount();
 
-        Record::configureWriter(writer, project, configPath,
-                                logger.watch(), reg, probeConfig.inputFile);
-        Monitor::configureMonitor(logger, configPath, project);
+        toml::table config = toml::parse_file(configPath);
+        readPathsAndFile(config, project, logger.watch(), reg);
+
+        Record::configureWriter(writer, project, configPath, logger.watch(), reg, probe.inputFile());
     }
 
     // ── Pythia pipeline ───────────────────────────────────────────────────────
@@ -56,6 +63,8 @@ namespace Config {
                           Record::Writer&       writer,
                           Monitor::AsyncLogger& logger)
     {
+
+        Monitor::configureMonitor(logger, configPath, project);
         Register reg;
         configurePythia(configPath, project, logger.watch(), reg, pythia);
 
@@ -67,7 +76,6 @@ namespace Config {
         }
 
         Record::configureWriter(writer, project, configPath, logger.watch(), reg, "");
-        Monitor::configureMonitor(logger, configPath, project);
     }
 
 } // namespace Config

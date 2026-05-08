@@ -1,6 +1,6 @@
 [events]
 event_count = 100_000
-nThreads    = 8      # 0 = auto (hardware_concurrency - 2)
+nThreads    = 2      # 0 = auto (hardware_concurrency - 2)
 
 [probe]
 input_file = "output/Lambda_Data/_08/Lambda_Recons_7000GeV_10M.root"
@@ -19,6 +19,11 @@ monotonic = [true,true] # irrelevant if sorted = true ; otherwise, specifies whe
 serial     = 35
 sr_padding = 2
 bin_count = 400
+# not yet used
+save_checkpoints = false
+save_log_threads = false
+save_heartbeat = false
+save_final_log = true
 
 [record.paths]
 directory            = "output/Lambda_Reconstruction/"
@@ -40,6 +45,14 @@ data_type    = "MC"
 run_period   = ""
 campaign     = ""
 notes        = ""
+
+[monitor]
+true_time_at_config = true
+print_interval            = 50       # events
+check_interval            = 100000   # events
+heartbeat_interval        = 2000     # milliseconds
+terminal_refresh_interval = 2        # minutes
+program_stall_threshold   = 5        # minutes
 
 [pythia]
 cmnd_file = "configs/Lambda_Reconstruction.cmnd"

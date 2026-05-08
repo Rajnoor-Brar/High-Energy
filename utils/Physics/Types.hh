@@ -32,6 +32,7 @@ namespace Physics {
         Rapidity,
         Pseudorapidity,
         Azimuthal_Angle,
+        EventIndex, // reserved for tree branches that capture the event index of a particle candidate
     };
 
     enum class EventProperty : std::size_t {

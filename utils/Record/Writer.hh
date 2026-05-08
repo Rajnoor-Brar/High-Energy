@@ -9,13 +9,14 @@
 //   Config::configureWriter(writer, ...) — populates state, opens TFile
 //   writer.bind(logger, logParams, programLog, ...) — wire callbacks
 //   writer.installFatalStallHandler(histogramSets) — arm emergency path
+//   logger.initialise(writer) — supply logger output paths/start snapshot
 //   // histogram declarations, event loop ...
 //   writer.meta().dataset.parent_files = ...; fillDerived(...) — update meta
 //   writer.shutdown(histogramSets) — write, close, report
 //
 // Method bodies for bind/shutdown/checkpoint/installFatalStallHandler/
 // fatalShutdown live in Record/Finalizer.hh to avoid a circular dependency:
-//   Monitor/Logger.hh → Record/Writer.hh  (Logger::start takes const Writer&)
+//   Monitor/Logger.hh → Record/Writer.hh  (Logger::initialise takes const Writer&)
 //   Record/Writer.hh  ↛ Monitor.hh        (would create a cycle)
 // Drivers include Record.hh (umbrella) which picks up both headers.
 

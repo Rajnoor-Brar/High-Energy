@@ -24,9 +24,11 @@ namespace Monitor {
 
     inline const char* phaseString(RunPhase phase) {
         switch (phase) {
-            case RunPhase::Starting: return "Starting";
-            case RunPhase::Analysis: return "Analysis";
-            case RunPhase::Finished: return "Finished";
+            case RunPhase::Starting:       return "Starting";
+            case RunPhase::Configuring:    return "Configuring";
+            case RunPhase::Initialisation: return "Initialisation";
+            case RunPhase::Analysis:       return "Analysis";
+            case RunPhase::Finished:       return "Finished";
         }
         return "Unknown";
     }
@@ -42,9 +44,11 @@ namespace Monitor {
 
     inline const char* statusString(RunPhase phase) {
         switch (phase) {
-            case RunPhase::Starting: return "Starting";
-            case RunPhase::Finished: return "Finished";
-            default:                 return "Running";
+            case RunPhase::Starting:       return "Starting";
+            case RunPhase::Configuring:    return "Configuring";
+            case RunPhase::Initialisation: return "Initialising";
+            case RunPhase::Finished:       return "Finished";
+            default:                       return "Running";
         }
     }
 

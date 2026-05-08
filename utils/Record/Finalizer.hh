@@ -5,7 +5,7 @@
 // installFatalStallHandler / fatalShutdown.
 //
 // Lives in a separate header to break the include cycle:
-//   Monitor/Logger.hh → Record/Writer.hh  (Logger::start takes const Writer&)
+//   Monitor/Logger.hh → Record/Writer.hh  (Logger::initialise takes const Writer&)
 //   Record/Writer.hh  ↛ Monitor.hh        (would be circular)
 //
 // Include Record.hh (umbrella) to get these definitions in addition to the

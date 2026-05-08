@@ -33,8 +33,7 @@ int main(int argc, char* argv[]) {
                 [&pythia]() { pythia.settings.listChanged(); });
     writer.installFatalStallHandler(histogramSets);
 
-    logger.watch().start = std::chrono::system_clock::now();
-    logger.start(writer);
+    logger.initialise(writer);
     pythia.init();
 
     Lambda::AnalysisContext ctx{histogramSets, analysisParams, logger.watch(), logger, writer};

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -15,7 +16,9 @@ namespace Probe {
       public:
         FlatReader(TFile* file, const CollectionSpec& spec,
                    const std::string& filepath,
-                   Long64_t minKey, Long64_t maxKey)
+                   Long64_t minKey, Long64_t maxKey,
+                   Bounds entryBounds = {},
+                   bool hasEntryBounds = false)
             : label_(spec.label), filepath_(filepath),
               coords_(spec.coords), minKey_(minKey), maxKey_(maxKey)
         {
@@ -60,6 +63,28 @@ namespace Probe {
             tree_->StopCacheLearningPhase();
 
             totalEntries_ = tree_->GetEntries();
+            entryEnd_ = totalEntries_;
+
+            if (hasEntryBounds && !entryBounds.valid()) {
+                cursor_ = 0;
+                entryEnd_ = 0;
+                return;
+            }
+
+            if (hasEntryBounds) {
+                cursor_ = std::max<Long64_t>(0, entryBounds.first);
+                entryEnd_ = std::min(totalEntries_, entryBounds.last + 1);
+                if (cursor_ >= entryEnd_) {
+                    cursor_ = entryEnd_;
+                    return;
+                }
+                tree_->GetEntry(cursor_);
+                while (cursor_ < entryEnd_ && idxValue() < minKey_) {
+                    ++cursor_;
+                    if (cursor_ < entryEnd_) tree_->GetEntry(cursor_);
+                }
+                return;
+            }
 
             if (auto* idx = dynamic_cast<TTreeIndex*>(tree_->GetTreeIndex())) {
                 (void)idx;
@@ -73,9 +98,9 @@ namespace Probe {
 
             if (totalEntries_ > 0) tree_->GetEntry(cursor_);
 
-            while (cursor_ < totalEntries_ && idxValue() < minKey_) {
+            while (cursor_ < entryEnd_ && idxValue() < minKey_) {
                 ++cursor_;
-                if (cursor_ < totalEntries_) tree_->GetEntry(cursor_);
+                if (cursor_ < entryEnd_) tree_->GetEntry(cursor_);
             }
         }
 
@@ -85,7 +110,7 @@ namespace Probe {
         const std::string& label() const { return label_; }
 
         EventKey currentKey() const { return EventKey{{idxValue()}}; }
-        bool exhausted()       const { return cursor_ >= totalEntries_; }
+        bool exhausted()       const { return cursor_ >= entryEnd_; }
         bool beyondMax()       const { return !exhausted() && idxValue() > maxKey_; }
 
         void ensureLabel(Event& ev) const {
@@ -105,13 +130,13 @@ namespace Probe {
                 if (auxMap.find(auxNames_[i]) == auxMap.end())
                     auxMap[auxNames_[i]] = makeAuxCol(auxTypes_[i]);
 
-            while (cursor_ < totalEntries_ && idxValue() == target) {
+            while (cursor_ < entryEnd_ && idxValue() == target) {
                 pvec.emplace_back(BranchControl::makeLorentz(coords_,
                     kinBuf_[0].value(), kinBuf_[1].value(),
                     kinBuf_[2].value(), kinBuf_[3].value()));
                 appendAux(auxMap);
                 ++cursor_;
-                if (cursor_ < totalEntries_) tree_->GetEntry(cursor_);
+                if (cursor_ < entryEnd_) tree_->GetEntry(cursor_);
             }
         }
 
@@ -133,7 +158,7 @@ namespace Probe {
 
             const Long64_t savedCursor = cursor_;
             bool found = false;
-            for (Long64_t i = 0; i < totalEntries_; ++i) {
+            for (Long64_t i = 0; i < entryEnd_; ++i) {
                 tree_->GetEntry(i);
                 const Long64_t v = idxValue();
                 if (v < lo || v > hi) continue;
@@ -217,6 +242,7 @@ namespace Probe {
         std::string              idxName_;
         Long64_t                 cursor_       = 0;
         Long64_t                 totalEntries_ = 0;
+        Long64_t                 entryEnd_     = 0;
         Long64_t                 minKey_;
         Long64_t                 maxKey_;
         bool                     idxIsLong_   = false;

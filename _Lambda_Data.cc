@@ -42,8 +42,7 @@ int main(int argc, char* argv[]) {
                     if (dataObjects.pions)   dataObjects.pions->BuildIndex("event_index");
                 });
 
-    logger.watch().start = std::chrono::system_clock::now();
-    logger.start(writer);
+    logger.initialise(writer);
     pythia.init();
 
     Lambda::GenerationContext ctx{dataObjects, treeMutex, logger.watch(), logger, writer};

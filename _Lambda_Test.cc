@@ -34,8 +34,7 @@ int main(int argc, char* argv[]) {
 
     pythia.init();
 
-    asyncLogger.watch().start = std::chrono::system_clock::now();
-    asyncLogger.start(writer);
+    asyncLogger.initialise(writer);
     pythia.next();
 
     Lambda::AnalysisContext ctx{histogramSets, analysisParams, asyncLogger.watch(), asyncLogger, writer};

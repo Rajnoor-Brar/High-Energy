@@ -58,7 +58,7 @@ int main() {
     Monitor::AsyncLogger asyncLogger;
 
     Config::configure(kFixtureToml, "fixture_smoke", probe, writer, asyncLogger);
-    probe.nThreads = static_cast<std::size_t>(kNThreads);
+    TEST_EQ(probe.threadCount(), static_cast<std::size_t>(kNThreads));
 
     Lambda::Parameters physParams;
     Lambda::RootArray  histogramSets;
@@ -67,8 +67,7 @@ int main() {
     writer.bind(asyncLogger, asyncLogger.watch(),
                 [&physParams]() { return Lambda::logString(physParams); });
 
-    asyncLogger.watch().start = std::chrono::system_clock::now();
-    asyncLogger.start(writer);
+    asyncLogger.initialise(writer);
 
     // ── Run parallel reconstruction ───────────────────────────────────────────
     Lambda::AnalysisContext ctx{histogramSets, physParams, asyncLogger.watch(), asyncLogger, writer};

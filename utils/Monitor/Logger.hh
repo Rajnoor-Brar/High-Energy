@@ -5,6 +5,7 @@
 #include <map>
 #include <mutex>
 #include <optional>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -21,7 +22,7 @@ namespace Monitor {
       public:
         using FatalStallHandler = std::function<void(const RunSnapshot&)>;
 
-        AsyncLogger() = default;
+        explicit AsyncLogger(bool print = true) { start(print); }
         ~AsyncLogger() { stop(); }
 
         Config::Watch&       watch()       { return watch_; }
@@ -32,12 +33,64 @@ namespace Monitor {
 
         void configurePacing(PacingInfo pacing) { pacing_ = std::move(pacing); }
 
-        void start(const Record::Writer& writer) {
-            start(writer, watch_);
+        void markConfiguring(const std::string& configPath, bool trueTimeAtConfig = false) {
+            RunSnapshot snapshot;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                preserveConfigStart_ = trueTimeAtConfig;
+                if (preserveConfigStart_) watch_.start = std::chrono::system_clock::now();
+
+                snapshot     = makeSnapshot(watch_, RunPhase::Configuring);
+                snapshot.eta = configPath;
+                latestSnapshot_ = snapshot;
+            }
+
+            std::lock_guard<std::mutex> terminalLock(terminalMutex());
+            initializeTerminal();
+            renderStatusLine(snapshot);
         }
 
-        void start(const Record::Writer& writer, const Config::Watch& logging) {
+        void start(bool print = true) {
             stop();
+            RunSnapshot bootSnapshot;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                runStatPath_             = "";
+                threadStatDirectory_     = "";
+                pendingActions_.reset();
+                latestSnapshot_.reset();
+                threadSnapshots_.clear();
+                dirtyThreadSnapshots_.clear();
+                initialized_             = false;
+                preserveConfigStart_     = false;
+                stopRequested_           = false;
+                fatalStallTriggered_     = false;
+                terminalInitialized_     = false;
+                progressBarVisible_      = false;
+                heartbeat_interval_      = pacing_.heartbeatMs     > Config::uSeconds(0)
+                                            ? pacing_.heartbeatMs     : Config::uSeconds(1000);
+                terminalRefreshInterval_ = pacing_.terminalRefresh > Config::Seconds(0)
+                                            ? pacing_.terminalRefresh : Config::Seconds(300);
+                programStallThreshold_   = pacing_.stallThreshold  > Config::Seconds(0)
+                                            ? pacing_.stallThreshold  : Config::Seconds(300);
+                watch_.start             = std::chrono::system_clock::now();
+
+                RunSnapshot snapshot = makeSnapshot(watch_, RunPhase::Starting);
+                snapshot.eta         = "Booting";
+                bootSnapshot         = snapshot;
+                latestSnapshot_      = std::move(snapshot);
+            }
+            if (print) {
+                std::lock_guard<std::mutex> terminalLock(terminalMutex());
+                initializeTerminal();
+                renderStatusLine(bootSnapshot);
+            }
+            worker_ = std::thread(&AsyncLogger::runLoop, this);
+            condition_.notify_one();
+        }
+
+        void initialise(const Record::Writer& writer) {
+            if (!worker_.joinable()) start(false);
             {
                 std::lock_guard<std::mutex> lock(mutex_);
                 const Record::Paths& paths = writer.paths();
@@ -47,22 +100,22 @@ namespace Monitor {
                 latestSnapshot_.reset();
                 threadSnapshots_.clear();
                 dirtyThreadSnapshots_.clear();
+                initialized_             = true;
                 stopRequested_           = false;
                 fatalStallTriggered_     = false;
-                terminalInitialized_     = false;
-                progressBarVisible_      = false;
                 heartbeat_interval_      = pacing_.heartbeatMs     > Config::uSeconds(0)
                                             ? pacing_.heartbeatMs     : Config::uSeconds(1000);
                 terminalRefreshInterval_ = pacing_.terminalRefresh > Config::Seconds(0)
-                                            ? pacing_.terminalRefresh : Config::Seconds(60);
+                                            ? pacing_.terminalRefresh : Config::Seconds(300);
                 programStallThreshold_   = pacing_.stallThreshold  > Config::Seconds(0)
                                             ? pacing_.stallThreshold  : Config::Seconds(300);
-                RunSnapshot snapshot = makeSnapshot(logging, RunPhase::Starting);
+                if (!preserveConfigStart_)
+                    watch_.start = std::chrono::system_clock::now();
+                RunSnapshot snapshot = makeSnapshot(watch_, RunPhase::Initialisation);
                 snapshot.eta         = paths.fileTitle.Data();
                 latestSnapshot_      = std::move(snapshot);
                 pendingActions_      = PendingActions{RenderStatus, DontRenderBar, WriteRunStat};
             }
-            worker_ = std::thread(&AsyncLogger::runLoop, this);
             condition_.notify_one();
         }
 
@@ -175,6 +228,13 @@ namespace Monitor {
                           << "\033[E\033[2K\t " << snapshot.fatalReason;
             } else if (snapshot.phase == RunPhase::Starting) {
                 std::cout << "\033[E\033[2K"
+                          << "\t\033[34;1m Booting... \033[0m\033[E\033[2K";
+            } else if (snapshot.phase == RunPhase::Configuring) {
+                std::cout << "\033[E\033[2K"
+                          << "\t\033[34;1m Configurig from " << snapshot.eta
+                          << " \033[0m\033[E\033[2K";
+            } else if (snapshot.phase == RunPhase::Initialisation) {
+                std::cout << "\033[E\033[2K"
                           << "\t\033[34;1m Initializing " << snapshot.eta << "... \033[0m\033[E\033[2K";
             } else if (snapshot.phase == RunPhase::Finished) {
                 std::cout << "\033[E\r\033[2K"
@@ -211,11 +271,15 @@ namespace Monitor {
             auto nextTerminalRefresh = SteadyClock::now() + terminalRefreshInterval_;
 
             while (true) {
-                condition_.wait_until(
-                    lock,
-                    std::min(nextRunStatWrite, nextTerminalRefresh),
-                    [&] { return stopRequested_ || pendingActions_.has_value() || !dirtyThreadSnapshots_.empty(); }
-                );
+                const auto hasPendingWork = [&] {
+                    return stopRequested_ || pendingActions_.has_value() || !dirtyThreadSnapshots_.empty();
+                };
+
+                if (initialized_) {
+                    condition_.wait_until(lock, std::min(nextRunStatWrite, nextTerminalRefresh), hasPendingWork);
+                } else {
+                    condition_.wait(lock, [&] { return initialized_ || hasPendingWork(); });
+                }
 
                 const auto now              = SteadyClock::now();
                 const auto wallNow          = std::chrono::system_clock::now();
@@ -227,6 +291,8 @@ namespace Monitor {
                 std::optional<RunSnapshot>    periodicSnapshot;
                 std::optional<RunSnapshot>    fatalSnapshot;
                 std::vector<ThreadSnapshot>   dirtyThreadSnapshots;
+                Config::uSeconds  heartbeatInterval      = heartbeat_interval_;
+                Config::Seconds   terminalRefreshInterval = terminalRefreshInterval_;
                 bool              shouldExit = false;
                 FatalStallHandler fatalHandler;
 
@@ -236,10 +302,11 @@ namespace Monitor {
                     pendingActions_.reset();
                 }
 
-                if (latestSnapshot_.has_value() && (runStatDeadline || terminalDeadline))
+                if (initialized_ && latestSnapshot_.has_value() && (runStatDeadline || terminalDeadline))
                     periodicSnapshot = *latestSnapshot_;
 
-                if (!fatalStallTriggered_
+                if (initialized_
+                    && !fatalStallTriggered_
                     && latestSnapshot_.has_value()
                     && fatalStallHandler_
                     && (runStatDeadline || terminalDeadline)
@@ -286,8 +353,8 @@ namespace Monitor {
 
                 if (shouldExit) break;
 
-                if (runStatDeadline)  advanceDeadline(nextRunStatWrite,    heartbeat_interval_);
-                if (terminalDeadline) advanceDeadline(nextTerminalRefresh, terminalRefreshInterval_);
+                if (runStatDeadline)  advanceDeadline(nextRunStatWrite,    heartbeatInterval);
+                if (terminalDeadline) advanceDeadline(nextTerminalRefresh, terminalRefreshInterval);
 
                 lock.lock();
             }
@@ -350,9 +417,11 @@ namespace Monitor {
         std::vector<ThreadSnapshot>   dirtyThreadSnapshots_;
         std::thread                   worker_;
         Config::uSeconds              heartbeat_interval_      = Config::uSeconds(1000);
-        Config::Seconds               terminalRefreshInterval_ = Config::Seconds(60);
+        Config::Seconds               terminalRefreshInterval_ = Config::Seconds(300);
         Config::Seconds               programStallThreshold_   = Config::Seconds(300);
         bool                          stopRequested_           = false;
+        bool                          initialized_             = false;
+        bool                          preserveConfigStart_     = false;
         bool                          fatalStallTriggered_     = false;
         bool                          terminalInitialized_     = false;
         bool                          progressBarVisible_      = false;

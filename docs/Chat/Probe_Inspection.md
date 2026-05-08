@@ -1,798 +1,725 @@
 # Probe Inspection
 
-This note records the inspection of the Probe reconstruction path around
-`Probe::ProbeParallel`, `Probe::runParallel`, and `Probe::EventStream`.
-It is analysis only. It does not choose an implementation date.
+This document merges the earlier `Probe_Inspection.md` and
+`Probe_Inspection2.md` notes against the current code state.
 
-## Direct Answers
+Outdated sections were removed:
 
-### How parallel is `Probe::ProbeParallel`?
+- `Probe::ProbeParallel` is no longer just a public-field wrapper.
+- `Probe::runParallel` is no longer the main implementation path; it is now a
+  compatibility shim.
+- default Probe callback dispatch is no longer worker-thread callback dispatch;
+  it is `Probe::CallbackMode::CollectorThread`.
+- pre-run event planning and per-worker entry bounds now exist.
+- `Probe::readAllParallel` is no longer present.
+- `Probe::CallbackMode::MainThreadOrdered` never landed under that name; the
+  implemented mode is `Probe::CallbackMode::CollectorThread`.
 
-`Probe::ProbeParallel` is not itself a parallel executor. It is currently a
-small state holder with:
+The remaining analysis focuses on what is true now, what problems remain, and
+what should be measured next.
 
-- `Probe::ProbeParallel::inputFile`
-- `Probe::ProbeParallel::collections`
-- `Probe::ProbeParallel::nThreads`
-- `Probe::ProbeParallel::nEvents`
-- `Probe::ProbeParallel::resolveEvents()`
-- `Probe::ProbeParallel::run()`
+## Current State
 
-`Probe::ProbeParallel::run()` forwards directly to `Probe::runParallel(...)`.
-All actual worker creation, partitioning, stream construction, and callback
-dispatch happens in `Probe::runParallel`.
+### `Probe::ProbeParallel`
 
-### How parallel is `Probe::runParallel`?
+`Probe::ProbeParallel` now owns the main Probe execution model. The class lives
+in `utils/Probe/Parallel.hh` and is included through `utils/Probe.hh`.
 
-`Probe::runParallel` is genuinely multi-threaded. It:
-
-1. Enables ROOT thread safety through
-   `Probe::BranchControl::enableRootThreadSafety()`.
-2. Detects flat versus vector collection mode.
-3. Builds static partitions.
-4. Spawns one `std::thread` per partition.
-5. Constructs a separate `Probe::EventStream` inside each worker.
-6. Calls the callback from that worker thread:
+Public configuration and query API:
 
 ```cpp
-while (stream.next()) callback(stream.event(), static_cast<int>(t));
+void configureProbe(std::string inputFile,
+                    std::vector<ParticleSpec> particleSpecs,
+                    std::size_t threadCount,
+                    std::size_t requestedEvents,
+                    bool userRequestedEvents);
+
+void setCallbackMode(CallbackMode mode);
+void setQueueCapacity(std::size_t capacity);
+
+const std::string& inputFile() const;
+std::size_t threadCount() const;
+std::size_t eventCount() const;
+StreamType streamType() const;
+std::string stats() const;
 ```
 
-So the worker threads are not waiting for a main thread to invoke one serial
-callback. They call the callback concurrently.
+Private state is now internal:
 
-The callback object itself is shared by reference into all worker lambdas. That
-means a stateless callback is fine, but a callback that closes over shared state
-must make that state thread-safe. In `_Lambda_Reconstruction.cc`, the callback
-closes over one shared `Lambda::AnalysisContext`.
+- `inputFile_`
+- `particleSpecs_`
+- `indexSpecs_`
+- `streamType_`
+- `callbackMode_`
+- `threadCount_`
+- `eventCount_`
+- `eventRange_`
+- `eventPartitions_`
+- `entryBoundsByWorker_`
+- collector queue state and progress counters
 
-### How parallel is `Probe::EventStream`?
+This means callers no longer mutate `inputFile`, `collections`, `nThreads`, or
+`nEvents` directly. `Config::configure(...)` calls
+`Probe::ProbeParallel::configureProbe(...)` once, then reads
+`probe.eventCount()` and `probe.threadCount()` to configure logging and output
+paths.
 
-`Probe::EventStream` is not an internal parallel stream. Each worker owns one
-independent `Probe::EventStream`, and each stream opens its own `TFile`.
+### Event-count resolution
 
-That means the parallel model is:
+`Probe::ProbeParallel::configureProbe(...)` resolves event count in this order:
 
-- one worker thread;
-- one worker-local `Probe::EventStream`;
-- one worker-local `TFile`;
-- one worker-local current `Probe::Event`;
-- concurrent callback calls into shared callback state.
+1. explicit TOML/requested event count;
+2. ROOT metadata through `Probe::resolveEventCount(inputFile_)`;
+3. fallback scan:
+   - indexed event streams: scan index branches through
+     `Probe::BranchControl::scanIndexBranch(...)`;
+   - vector streams: use the first vector tree's `TTree::GetEntries()`.
 
-The event loading is disjoint by event-key partition after each stream has
-positioned itself. The positioning step is where the current flat/no-index path
-can waste work.
+If event count is zero after resolution, the object is configured but `run()`
+returns without starting workers.
 
-## Inspection Evidence
+### Stream type
 
-### Current reconstruction path
+`Probe::ProbeParallel::determineStreamType()` chooses:
 
-`_Lambda_Reconstruction.cc` does this:
+- `Probe::StreamType::Events` when all particle specs have index branches;
+- `Probe::StreamType::Vectors` when no particle specs have index branches;
+- throw if indexed and vector specs are mixed.
 
-- constructs `Probe::ProbeParallel`;
-- passes it into `Config::configure(...)`;
-- builds histograms through `Lambda::configure(...)`;
-- starts `Monitor::AsyncLogger`;
-- calls `Probe::ProbeParallel::run(...)`;
-- each event callback calls `Lambda::rootAnalysis(...)`.
+Vector stream support is currently only compatible with
+`Probe::CallbackMode::WorkerThread`. `CollectorThread` vector streams throw
+clearly.
 
-The runtime path is therefore:
+### Index assumptions
+
+`Probe::ProbeParallel::buildIndexSpecs()` currently hard-codes indexed flat
+input as:
+
+```cpp
+IndexOrdering::Ascending
+dense = true
+grouped = true
+```
+
+There is no TOML-level index metadata yet. The implementation assumes the
+current Lambda indexed files are ascending, dense, and grouped. If a file is not
+ascending, `prepareEntryBounds()` throws while scanning index branches.
+
+Important detail: nondecreasing index values imply grouped event IDs for a
+single sorted branch. The code catches decreasing values. It does not yet model
+descending, unordered, sparse-but-sorted, or grouped-but-not-globally-sorted
+inputs.
+
+### Event partitions
+
+For vector streams, event partitions are dense row ranges:
 
 ```text
-Config::configure(...)
-  -> Probe::ProbeParallel::resolveEvents()
-  -> Record::configureWriter(...)
-  -> Monitor::configureMonitor(...)
-
-Probe::ProbeParallel::run(...)
-  -> Probe::runParallel(...)
-  -> Probe::EventStream::EventStream(...)
-  -> Probe::EventStream::next()
-  -> Lambda::rootAnalysis(...)
+0 .. eventCount - 1
 ```
 
-### Production input differs from the smoke fixture
+For indexed event streams:
 
-The large input inspected at
-`output/Lambda_Data/_08/Lambda_Recons_7000GeV_10M.root` has:
+- if fallback scanning produced actual keys, partitions are based on those keys;
+- otherwise the code probes the first key and assumes a dense range:
 
-- `Protons`: 304,480,886 rows, no `TTreeIndex`
-- `Pions`: 2,746,275,925 rows, no `TTreeIndex`
+```text
+firstKey .. firstKey + eventCount - 1
+```
 
-The small fixture `tests/fixtures/lambda_fixture.root` has:
+`Probe::BranchControl::partitionEvents(...)` partitions key vectors by count, not
+by estimated event cost.
 
-- `Protons`: indexed
-- `Pions`: indexed
+### Entry bounds
 
-This matters because `Probe::FlatReader` has a fast path when
-`TTree::GetTreeIndex()` exists and a linear positioning path when it does not.
-The smoke fixture tests the better path; the production file uses the worse
-path.
+`Probe::ProbeParallel::prepareEntryBounds()` is the major change from the older
+docs. It scans each indexed particle tree's index branch once before workers are
+started and records physical ROOT entry bounds per worker and per particle:
 
-### Read-only timing observations
+```cpp
+std::vector<std::vector<Bounds>> entryBoundsByWorker_;
+```
 
-These timings were measured against the current workspace on this machine. They
-are diagnostic numbers, not benchmark guarantees.
+Workers pass those bounds into `Probe::EventStream`, which passes each particle's
+bound into `Probe::FlatReader`.
 
-- `Probe::runParallel` with a no-op callback, 100k events:
-  - ~3.94 seconds at 2 threads
-  - ~3.71 seconds at 8 threads
+This fixes the old worst case where every worker opened a flat tree and walked
+from entry zero to its first event range. Workers can now start near the physical
+entry range that belongs to their event partition.
 
-- `Probe::runParallel` plus hot-path `Monitor::AsyncLogger` calls, but without
-  logger worker/file output, 100k events:
-  - ~13.37 seconds at 2 threads
-  - ~14.69 seconds at 8 threads
+Limitations:
 
-- `Probe::runParallel` plus real logger worker/file output, 10k events:
-  - ~4.07 seconds at 2 threads
-  - ~4.08 seconds at 8 threads
+- bounds are found through a linear scan of index branches;
+- the scan is done for each indexed particle tree during configuration;
+- if event count fallback also needs `scanFlatEventKeys()`, index branches may
+  be scanned once to collect keys and again to prepare entry bounds;
+- bounds planning assumes ascending grouped data;
+- bounds are event-range based, not work-cost based.
 
-- `Probe::runParallel` plus `Lambda::reconstructCandidates`, 10k events:
-  - ~9.09 seconds at 2 threads
-  - ~3.46 seconds at 8 threads
-  - about 151,793,278 unvalidated proton-pion pairs in those 10k events
+### `Probe::EventStream`
 
-- `Probe::runParallel` plus `Lambda::reconstructCandidates` plus
-  `Lambda::fillCandidates`, 1k events:
-  - ~2.03 seconds at 2 threads
-  - ~1.26 seconds at 8 threads
-  - about 14,789,561 unvalidated proton-pion pairs in those 1k events
+Each worker still owns its own `Probe::EventStream`.
 
-The pure Probe no-op timing does not explain an 11-17 minute 100k-event run.
-The more likely explanation is combined cost: production event size, candidate
-construction, histogram filling, monitor mutex/file activity, static work
-imbalance, and duplicated no-index positioning.
+One worker means:
+
+- one `Probe::EventStream`;
+- one worker-local `TFile`;
+- one set of `Probe::FlatReader` or `Probe::VecReader` objects;
+- one reusable current `Probe::Event`.
+
+`Probe::EventStream` now supports:
+
+```cpp
+const Event& event() const;
+Event takeEvent();
+```
+
+`event()` supports worker-thread callback mode. `takeEvent()` supports collector
+mode by moving the current event into the bounded queue.
+
+### Callback modes
+
+Default mode:
+
+```cpp
+Probe::CallbackMode::CollectorThread
+```
+
+Collector mode flow:
+
+```text
+worker threads
+  -> EventStream::next()
+  -> EventStream::takeEvent()
+  -> push QueuedEvent into bounded queue
+
+collector thread
+  -> pop QueuedEvent
+  -> callback(event, workerIndex)
+```
+
+This means `_Lambda_Reconstruction.cc` no longer calls `Lambda::rootAnalysis`
+concurrently by default. Workers load events in parallel; analysis and output
+run serially through the collector callback.
+
+Compatibility mode:
+
+```cpp
+Probe::CallbackMode::WorkerThread
+```
+
+Worker-thread mode keeps the old behavior:
+
+```cpp
+while (stream.next())
+    callback(stream.event(), static_cast<int>(t));
+```
+
+The free function `Probe::runParallel(...)` now constructs a `ProbeParallel`,
+sets `CallbackMode::WorkerThread`, configures it, and calls `run(...)`. It is a
+compatibility shim for older call sites and tests.
+
+### Collector queue
+
+Collector mode uses:
+
+- `std::deque<Probe::QueuedEvent> queue_`
+- `std::mutex queueMutex_`
+- `std::condition_variable queueNotEmpty_`
+- `std::condition_variable queueNotFull_`
+- `std::atomic<bool> stopRequested_`
+- `workersFinished_`
+- `produced_`
+- `consumed_`
+- `progress_`
+
+Default queue capacity is `10 * threadCount`, with a minimum of `threadCount`.
+`setQueueCapacity(...)` can override it.
+
+`stats()` reports stream type, callback mode, thread count, active worker count,
+event count, queue capacity, produced/consumed event counts, and per-worker
+progress.
+
+## Current Lambda Interaction
+
+`_Lambda_Reconstruction.cc` still constructs one shared `Lambda::RootArray`:
+
+```cpp
+Lambda::RootArray histogramSets;
+Lambda::configure(physParams, histogramSets, writer, configPath);
+Lambda::AnalysisContext ctx{histogramSets, physParams, watch, logger, writer};
+probe.run([&](const Probe::Event& ev, int threadId) {
+    Lambda::rootAnalysis(ev, threadId, ctx);
+});
+```
+
+`Lambda::rootAnalysis(...)` still:
+
+1. increments `Config::Watch::iEvent`;
+2. publishes thread stats;
+3. copies protons and pions out of `Probe::Event`;
+4. locks `Record::Writer::recordingScope()`;
+5. calls `Lambda::reconstructCandidates(...)`;
+6. calls `Lambda::fillCandidates(...)`;
+7. records/publishes progress.
+
+Because the default Probe mode is now `CollectorThread`, the shared
+`Lambda::RootArray` is normally touched by only the collector callback thread in
+reconstruction. The `recordingScope()` lock remains active, but it no longer
+protects against multiple Probe workers in the default path.
+
+In `WorkerThread` mode, the current `recordingScope()` covers both candidate
+reconstruction and filling. That serializes analysis work and output fills. It is
+correcter than unlocked shared ROOT mutation, but it prevents worker-thread
+analysis scaling.
 
 ## Problems
 
-### `Probe::ProbeParallel` does not own the execution model
+### 1. Probe workers no longer parallelize `Lambda::rootAnalysis`
 
-`Probe::ProbeParallel` sounds like the high-level Probe engine, but it only
-stores configuration and forwards to `Probe::runParallel`.
+Collector mode intentionally moved callback execution to one collector thread.
+That fixed the old bug where multiple workers could call shared analysis/output
+state concurrently, and tests now confirm the callback count equals logical event
+count.
 
-This causes the same setup knowledge to be split across:
+The cost is that worker count only parallelizes event loading. If
+`Lambda::rootAnalysis`, candidate reconstruction, histogram filling, logger
+publication, or Writer locking dominate wall-clock, increasing Probe worker
+count cannot speed up the run much.
 
-- `Config::configure(...)`
-- `Probe::ProbeParallel::resolveEvents()`
-- `Probe::runParallel(...)`
-- `Probe::EventStream::EventStream(...)`
-- `Probe::FlatReader::FlatReader(...)`
+This is now the most important explanation for "CPU scales with thread count but
+work done does not": workers can spend CPU loading events while the collector is
+the throughput gate.
 
-The result is that prestream setup is repeated or deferred until worker startup,
-when it is harder to inspect and harder to optimize.
+### 2. `Lambda::rootAnalysis` still locks too much for `WorkerThread`
 
-### `Probe::runParallel` mixes too many responsibilities
-
-`Probe::runParallel` currently handles:
-
-- ROOT thread-safety setup;
-- flat/vector mode detection;
-- event count interpretation;
-- first-key probing through `Probe::BranchControl::probeFirstKey(...)`;
-- fallback index-key scanning through
-  `Probe::BranchControl::scanIndexBranch(...)`;
-- static partition construction;
-- worker creation;
-- per-worker `Probe::EventStream` construction;
-- callback dispatch;
-- exception collection.
-
-That is too much policy in one free function. It also means
-`Probe::ProbeParallel` cannot inspect or cache the execution plan after
-configuration.
-
-### No-index flat trees can duplicate positioning work
-
-`Probe::FlatReader::FlatReader(...)` binds index and kinematic branches, then:
+In current `Lambda::rootAnalysis`, the lock scope is:
 
 ```cpp
-if (auto* idx = dynamic_cast<TTreeIndex*>(tree_->GetTreeIndex())) {
-    Long64_t entry = tree_->GetEntryNumberWithIndex(minKey_, 0);
-    ...
-}
-
-if (totalEntries_ > 0) tree_->GetEntry(cursor_);
-
-while (cursor_ < totalEntries_ && idxValue() < minKey_) {
-    ++cursor_;
-    if (cursor_ < totalEntries_) tree_->GetEntry(cursor_);
-}
+auto lock = ctx.writer.recordingScope();
+fillCandidates(ctx.histograms,
+               reconstructCandidates(protonList, pionList, ctx.parameters));
 ```
 
-When no `TTreeIndex` exists, each worker starts from entry 0 and walks forward
-to its partition start. Because kinematic branches are already active, this can
-read and decompress more data than an index-only seek requires.
+This means `WorkerThread` mode serializes both pure candidate reconstruction and
+ROOT output mutation under one mutex.
 
-For 8 static chunks, later workers can spend CPU and I/O just getting to their
-first useful event. This is not workers waiting on a callback; it is duplicated
-stream positioning.
+If `WorkerThread` is used as a benchmark, it is not a benchmark of parallel
+analysis. It is a benchmark of parallel reading plus serialized analysis/output.
 
-### Static partitioning can imbalance real work
+The better long-term fix is the Writer overhaul in `docs/Chat/WriterPlan.md`:
+callbacks enqueue Writer requests and no callback thread directly mutates ROOT
+output objects.
 
-`Probe::runParallel` partitions by event-key range, not by expected amount of
-work. Real event cost is closer to:
+### 3. Shared ROOT output still exists
+
+The default collector mode hides concurrent mutation by making callbacks serial,
+but the output model itself is still shared external state:
+
+- `Lambda::RootArray`
+- `Record::RootObjects::candidateCount`
+- `TH1D*` histograms
+- optional `TTree*` candidate trees
+
+That means `WorkerThread` mode still requires serialization, and any future code
+that bypasses collector mode can reintroduce ROOT output races.
+
+The ownership issue belongs to `Record::Writer`, not Probe. The planned Writer
+scribe architecture is the right place to solve it.
+
+### 4. Candidate materialization can dominate
+
+`Lambda::reconstructCandidates(...)` constructs vectors of candidates:
+
+- `unvalidated`
+- `validated`
+- `selected`
+
+For high-multiplicity events, unvalidated candidates scale roughly as:
 
 ```text
-cost(event) ~= nProtons(event) * nPions(event)
+nProtons(event) * nPions(event)
 ```
 
-or even:
+The production input discussed earlier had event shapes far heavier than the
+small smoke fixtures. A simple 100k loop or a small fixed fixture does not
+represent the same workload.
+
+If candidate reconstruction/fill dominates, CollectorThread makes the run
+serial at exactly the expensive stage.
+
+### 5. Static partitions are not work-balanced
+
+Probe partitions by event key range, not expected work.
+
+Even after entry bounds, a worker's load is not proportional to event count if
+event multiplicity varies. In Lambda reconstruction, the real per-event cost is
+closer to:
 
 ```text
-cost(event) ~= candidates(event) * number_of_output_quantities
+nProtons(event) * nPions(event)
 ```
 
-If event multiplicity varies, equal event-count partitions are not equal work
-partitions. One worker can end up with heavier events while other workers finish
-and wait at `std::thread::join()`.
+Static partitions can leave some workers with much more event loading or queue
+production than others. Collector mode softens the effect by decoupling workers
+from callback execution, but it does not make partitioning work-aware.
 
-### The callback is concurrent, but callback state is shared
+### 6. Dense-key assumptions are still baked in
 
-`Lambda::rootAnalysis(...)` receives:
+When event count comes from TOML or ROOT metadata, event partitions assume:
 
-- one `Probe::Event`;
-- one worker id;
-- one shared `Lambda::AnalysisContext`.
-
-The shared context contains:
-
-- shared `Lambda::RootArray`;
-- shared `Lambda::Parameters`;
-- shared `Config::Watch`;
-- shared `Monitor::AsyncLogger`;
-- shared `Record::Writer`.
-
-`Config::Watch::iEvent` and `Config::Watch::n_real_events` are atomic, but the
-histogram objects and candidate counters in `Lambda::RootArray` are not
-thread-local.
-
-### Histogram filling is currently unsafe and probably distorts scaling
-
-`Record::Writer::recordingScope()` exists specifically to serialize ROOT
-histogram filling:
-
-```cpp
-std::lock_guard<std::mutex> recordingScope();
+```text
+firstKey .. firstKey + eventCount - 1
 ```
 
-But in `Lambda::rootAnalysis(...)`, the intended lock is commented out:
+`Probe::EventStream::nextFlat()` also iterates dense keys from `denseLo_` to
+`denseHi_`. If an indexed file has missing event IDs, Probe can produce empty
+events for gaps.
 
-```cpp
-// {
-//     auto lock = ctx.writer.recordingScope();
-// }
+The current `IndexSpec` has `dense` and `grouped` fields, but there is not yet a
+config path for the user to describe sparse, descending, unordered, or
+grouped-but-not-sorted index branches.
 
-fillCandidates(ctx.histograms, reconstructCandidates(...));
-```
+### 7. Entry-bound preparation is linear and index-only, but not free
 
-So worker threads call `Lambda::fillCandidates(...)` concurrently on shared
-ROOT objects and shared `candidateCount` fields.
+The old duplicated worker positioning was removed. The replacement is one
+configuration-time linear scan per index branch to compute entry bounds.
 
-That is both a correctness issue and a performance suspect. ROOT histogram
-operations may hit internal synchronization or undefined shared-state behavior,
-and `Lambda::RootObjects::candidateCount` is a plain `Int_t`.
+That is usually better than each worker walking from entry zero, but it still
+means:
 
-### `Lambda::fillCandidates` resets shared counters per event
+- very large files pay pre-run scanning cost;
+- multiple particle trees each need a scan;
+- missing metadata can cause an additional full key scan;
+- no `TTreeIndex` is built or persisted for reuse.
 
-`Lambda::fillCandidates(...)` starts with:
+### 8. ROOT internal locking and I/O contention may still cap read scaling
 
-```cpp
-Record::resetAllCounts(histogramSets);
-```
+`Probe::BranchControl::enableRootThreadSafety()` calls `ROOT::EnableThreadSafety()`.
+Independent worker-local `TFile` objects are the right broad shape, but ROOT can
+still take global or shared locks around dictionaries, metadata, directories,
+class loading, cache internals, and some branch/file operations.
 
-Then it fills candidates for one event and records event multiplicity through
-`Record::countAll(...)`.
+Removing `ROOT::EnableThreadSafety()` is not a valid test; the crash observed
+through Cling/TClass/TBranch paths is exactly the kind of unsafe behavior it is
+there to prevent.
 
-With shared `histogramSets`, one worker can reset counts while another worker
-is still filling its event. This can corrupt multiplicity histograms even if
-the individual `TH1D::Fill(...)` calls appear to survive.
+The correct test is profiling time in:
 
-### Candidate materialization is expensive
+- `pthread_mutex_lock`;
+- ROOT internals;
+- `TTree::GetEntry`;
+- `TBranch::GetEntry`;
+- decompression/read calls;
+- callback execution.
 
-`Lambda::reconstructCandidates(...)` pushes every proton-pion combination into
-`Lambda::Candidates::unvalidated`.
+### 9. Monitor publication remains hot-path work
 
-For the inspected production input, the first 10k events produced about
-151.8 million unvalidated candidates. Each candidate is a `Lorentz` object
-that is later walked again for histogram filling.
-
-That means the current path does at least two heavy passes:
-
-1. build/store all candidate vectors;
-2. fill output objects from those vectors.
-
-For the unvalidated set, most of this could be streamed directly to an output
-sink without retaining the full vector.
-
-### Monitor hot-path work is too expensive
-
-`Lambda::rootAnalysis(...)` calls:
+`Lambda::rootAnalysis` still calls:
 
 - `Monitor::AsyncLogger::publishThreadStats(...)` before analysis;
 - `Config::Watch::recordEvent(...)`;
 - `Monitor::AsyncLogger::publish(...)`;
 - `Monitor::AsyncLogger::publishThreadStats(...)` after analysis.
 
-`Monitor::AsyncLogger::publishThreadStats(...)` takes a mutex, updates a map,
-pushes a dirty snapshot, and notifies the logger thread. The logger thread then
-writes thread-stat files through `Monitor::writeTextFile(...)`.
+Collector mode makes this serial in the default Probe path, but it is still
+per-event overhead. In `WorkerThread` mode, Monitor mutexes and thread-stat file
+updates can become shared hot spots.
 
-For 100k events, that is up to 200k thread-stat updates. At higher thread
-counts, the mutex pressure rises and the logger can become a throughput tax.
+The monitor path should be sampled or batched if it shows up in measurement.
 
-### Monitor units are confusing
+### 10. `Probe::Event` allocation churn remains
 
-`Monitor::PacingInfo::heartbeatMs` is named like milliseconds, log output says
-"Status Snapshot Interval (ms)", but the type is `Config::uSeconds` and
-`Monitor::configureMonitor(...)` assigns:
+Every `EventStream::next()` clears maps and vectors inside `Probe::Event`.
+Collector mode then moves the event into `QueuedEvent`.
+
+For high-multiplicity events, repeated allocation in:
+
+- `Event::particles`;
+- `std::vector<Lorentz>`;
+- aux-column vectors;
+- `QueuedEvent`;
+
+can matter. This is secondary to callback/output bottlenecks, but it is still a
+possible optimization target.
+
+## Bottleneck Ranking For Current Code
+
+### Highest suspicion: serial collector callback
+
+Default `CollectorThread` mode means only one callback runs at a time. If
+`Lambda::rootAnalysis` is the major cost, Probe worker count cannot improve
+end-to-end wall-clock beyond hiding input-read latency.
+
+### High suspicion: candidate reconstruction/fill volume
+
+Large production events can create huge numbers of proton-pion candidate pairs.
+This can dominate even if Probe event loading is parallel.
+
+### High suspicion: old shared-output model
+
+The current Writer/RootArray model still forces serialization if callbacks are
+run on workers. It is correct to serialize ROOT output for now, but it prevents
+parallel analysis in `WorkerThread` mode.
+
+### Medium suspicion: ROOT read contention
+
+Worker-local files are correct, but ROOT internals and disk/decompression can
+still limit scaling. This needs profiler evidence.
+
+### Medium suspicion: static partition imbalance
+
+Entry bounds reduce startup waste, but event-key partitions can still be
+unbalanced by row count or candidate-pair count.
+
+### Lower suspicion: atomic event counters
+
+`Config::Watch::iEvent` and related atomics can bounce cache lines, but this is
+unlikely to dominate compared with serial callback execution, candidate work,
+ROOT I/O, and output mutation.
+
+## Measurement Plan
+
+### 1. Compare callback modes
+
+Run the same fixed event subset with:
+
+- `Probe::CallbackMode::CollectorThread`
+- `Probe::CallbackMode::WorkerThread`
+
+For WorkerThread, also test a no-output or no-analysis callback, because current
+`Lambda::rootAnalysis` holds `recordingScope()` across reconstruction and fill.
+
+Record:
+
+- wall-clock;
+- callback count;
+- `probe.stats()`;
+- output correctness if real Lambda output is enabled.
+
+### 2. Split read time from callback time
+
+Instrument in `Probe::ProbeParallel`:
+
+- worker `EventStream::next()` time;
+- worker queue wait time;
+- collector queue wait time;
+- collector callback time;
+- produced/consumed counts;
+- max queue depth.
+
+If worker read time shrinks with threads but callback time dominates, Probe is
+not the bottleneck anymore; Lambda/Writer is.
+
+### 3. Profile ROOT read scaling
+
+Use a system profiler on `nThreads = 1, 2, 4, 8`.
+
+Look for time in:
+
+- `pthread_mutex_lock`;
+- `ROOT::*`;
+- `TTree::GetEntry`;
+- `TBranch::GetEntry`;
+- decompression;
+- disk I/O.
+
+This is the safe way to evaluate ROOT global locking. Do not disable
+`ROOT::EnableThreadSafety()` for this test.
+
+### 4. Validate entry-bound planning cost
+
+Time:
+
+- `configureProbe(...)`;
+- `prepareEntryBounds()`;
+- worker startup to first produced event.
+
+Do this on:
+
+- fixture files with `TTreeIndex`;
+- production files without `TTreeIndex`;
+- files with metadata event counts;
+- files requiring fallback key scanning.
+
+### 5. Check output correctness across modes
+
+For a small deterministic input:
+
+- run CollectorThread;
+- run WorkerThread if output locking is active;
+- compare histogram entries/integrals;
+- verify candidate count histograms;
+- verify callback count equals logical event count.
+
+## Solutions And Routes
+
+### Route A: keep CollectorThread as the correctness default
+
+Keep:
 
 ```cpp
-p.heartbeatMs = Config::uSeconds(hb);
+CallbackMode::CollectorThread
 ```
 
-So a config value that looks like milliseconds is interpreted as microseconds.
-This can make logging much more aggressive than intended.
+as the default for reconstruction while `Record::Writer` still exposes shared
+ROOT output objects. This avoids concurrent ROOT output mutation and keeps
+callback count correct.
 
-### Dense-key assumptions are fragile
+Do not expect this mode to speed up CPU-heavy analysis. It parallelizes event
+loading, not callback execution.
 
-When `nEventsHint > 0`, `Probe::runParallel` uses:
+### Route B: implement the Writer overhaul
 
-```cpp
-firstKey = Probe::BranchControl::probeFirstKey(...)
-lastKey  = firstKey + total - 1
-```
+The main remaining blocker for parallel analysis is not Probe. It is shared
+output ownership.
 
-`Probe::EventStream` also uses dense key assumptions when `nEventsHint > 0`.
-This is fine only when event keys are contiguous and exactly one logical event
-exists per key.
+Implement `docs/Chat/WriterPlan.md`:
 
-If keys are sparse or have gaps, the stream can generate empty events or wrong
-partitions.
+- Writer owns ROOT output objects;
+- callbacks submit fill requests;
+- a Writer scribe thread mutates ROOT;
+- callback threads do not directly call `TH1::Fill` or `TTree::Fill`.
 
-### Data/config branch names can drift
+After that, `WorkerThread` mode can be revisited because callbacks can run
+analysis in parallel without mutating shared ROOT output directly.
 
-Current `Lambda::declareDataObjects(...)` writes `event_index`, while the
-current reconstruction config for the large input references `Index`. The
-large production file inspected has `Index`.
+### Route C: narrow `Lambda::rootAnalysis` lock as an interim benchmark
 
-This is probably historical drift, but it is dangerous. A newly generated file
-from current data code may not match the current reconstruction config unless
-the config is also changed.
-
-## Potential Problems
-
-### `std::vector<bool>` should not be used for worker readiness
-
-The proposed idea of workers pushing readiness into a `std::vector<bool>` is
-risky. `std::vector<bool>` is a packed bitset specialization with proxy
-references, not a normal vector of independent booleans.
-
-If a main-thread callback mode is ever added, use one of:
-
-- `std::queue<ReadyEvent>` plus `std::mutex` and `std::condition_variable`;
-- a bounded MPSC queue;
-- per-worker SPSC queues;
-- `std::vector<std::atomic<bool>>` only for simple flags, not event ownership.
-
-### Main-thread callback mode can serialize the actual bottleneck
-
-A design where workers only load events and the main thread invokes the
-callback may help isolate ROOT input from analysis, but it serializes
-`Lambda::rootAnalysis(...)`.
-
-That would not solve expensive candidate reconstruction or histogram filling.
-It may be useful as a debug mode or as an ordered-output mode, but it should
-not replace worker-thread callbacks as the default performance route.
-
-### Event buffering can explode memory
-
-If workers load full `Probe::Event` objects and queue them for a main thread,
-memory pressure can rise quickly. Production events contain tens of protons and
-hundreds of pions on average, and reconstructed candidate counts can be much
-larger.
-
-Any queued callback design needs bounded queues and backpressure.
-
-### ROOT object ownership is too implicit
-
-`Probe::EventStream` owns its `TFile`, `Probe::FlatReader` owns branch address
-buffers, and `Lambda::RootArray` owns raw `TH1D*` and `TTree*` pointers through
-ROOT directories.
-
-This works when lifetimes are simple, but parallel execution makes ownership
-mistakes harder to debug. Per-worker output shards will need explicit merge and
-write ownership rules.
-
-### Exceptions do not stop other workers early
-
-`Probe::runParallel` stores worker exceptions and rethrows after join. If one
-worker fails, the other workers keep running until their partitions finish.
-
-For large runs, this can waste time after a deterministic schema or read error.
-An atomic cancellation flag would allow other workers to stop sooner.
-
-### More threads can increase I/O contention
-
-Each worker opens the same ROOT file independently. On local SSD this can work
-well up to a point, but higher thread counts can increase:
-
-- decompression pressure;
-- ROOT cache memory;
-- disk read contention;
-- branch basket contention;
-- duplicated seek work without indexes.
-
-Higher CPU usage does not prove higher useful event throughput.
-
-## Bottlenecks
-
-### Bottleneck 1: production event shape
-
-The inspected production input is much heavier than the fixture. The average
-row counts are roughly:
-
-- 30 protons per event;
-- 275 pions per event.
-
-The first 10k inspected events produced about 15k unvalidated proton-pion
-pairs per event. A 100k-event run can therefore produce on the order of
-billions of candidate-level histogram fill opportunities.
-
-This makes the "analysis smoke test" misleading if it only loops 100k times
-without matching production multiplicity and output behavior.
-
-### Bottleneck 2: shared histogram output
-
-`Lambda::fillCandidates(...)` fills six particle properties for each
-candidate set, plus event multiplicity counts. For unvalidated candidates, the
-volume is huge.
-
-Because all workers fill the same `Lambda::RootArray`, output is either:
-
-- data-racy;
-- internally serialized by ROOT somewhere;
-- cache-contention-heavy;
-- or all three.
-
-This is a prime suspect for "CPU usage scales but useful work does not".
-
-### Bottleneck 3: monitor mutex and file churn
-
-The logger path is hot even when rendering is infrequent because
-`Monitor::AsyncLogger::publishThreadStats(...)` is called twice per event.
-
-At 100k events, this creates significant mutex traffic. If thread-stat file
-writing is enabled, the logger thread also repeatedly truncates and rewrites
-per-worker files.
-
-### Bottleneck 4: no-index flat stream positioning
-
-Without `TTreeIndex`, `Probe::FlatReader` walks from entry 0 to the partition
-start in every worker. For 100k events this was not enough by itself to explain
-minutes of runtime in the no-op measurement, but it is still structurally
-wrong and becomes worse for larger event counts and higher thread counts.
-
-It also makes startup cost grow with partition start position.
-
-### Bottleneck 5: static work partitioning
-
-Equal event ranges are not equal reconstruction work. A worker assigned a
-high-multiplicity region can dominate wall time while other workers finish.
-
-The current `std::thread::join()` phase then looks like workers waiting for
-each other, even though the real cause is static imbalance.
-
-### Bottleneck 6: allocation churn in `Probe::Event`
-
-`Probe::EventStream::next()` clears `current_.particles` and `current_.aux`
-every event. `Probe::FlatReader::ensureLabel(...)` then recreates map entries.
-
-For millions of events, repeated unordered-map and vector allocation can become
-noticeable. This is lower priority than output and partitioning, but worth
-fixing during a Probe cleanup.
-
-## Solutions
-
-### Solution 1: make `Probe::ProbeParallel` the actual engine
-
-Unify `Probe::ProbeParallel`, `Probe::runParallel`, and prestream setup under
-one owner.
-
-Target shape:
-
-- `Probe::ProbeParallel::configure(...)`
-- `Probe::ProbeParallel::resolveEvents()`
-- `Probe::ProbeParallel::preparePlan()`
-- `Probe::ProbeParallel::run(...)`
-- `Probe::ProbeParallel::stats()`
-
-Keep `Probe::runParallel(...)` temporarily as a compatibility wrapper:
+If `WorkerThread` mode is used before the Writer overhaul, move candidate
+reconstruction outside `recordingScope()`:
 
 ```cpp
-template <typename Callback>
-void Probe::runParallel(..., Callback&& callback) {
-    Probe::ProbeParallel probe;
-    probe.configure(...);
-    probe.run(std::forward<Callback>(callback));
+const Candidates candidates =
+    reconstructCandidates(protonList, pionList, ctx.parameters);
+
+{
+    auto lock = ctx.writer.recordingScope();
+    fillCandidates(ctx.histograms, candidates);
 }
 ```
 
-After callers are migrated, either delete the free function or leave it as a
-thin deprecated facade.
+This is not the final architecture, but it separates CPU candidate generation
+from ROOT output serialization for measurement.
 
-### Solution 2: introduce `Probe::ExecutionPlan`
+Risk: `Candidates` can be very large, so this may increase peak memory pressure
+when many worker callbacks reconstruct simultaneously.
 
-Add an internal execution plan owned by `Probe::ProbeParallel`.
+### Route D: stream candidate output instead of materializing everything
 
-It should contain:
+`Lambda::reconstructCandidates(...)` currently materializes candidate vectors and
+then `fillCandidates(...)` walks them.
 
-- input file path;
-- collection mode: flat or vector;
-- resolved event count;
-- first key and last key when dense keys are valid;
-- whether every flat tree has `TTreeIndex`;
-- worker partitions;
-- optional per-collection entry ranges;
-- branch/type validation results;
-- estimated work per partition when available.
+For high-multiplicity production events, consider a streaming candidate visitor:
 
-This moves setup out of worker startup and gives one inspectable object for
-debugging and logging.
+```cpp
+forEachCandidate(protons, pions, parameters, visitor);
+```
 
-### Solution 3: fix no-index flat partitioning
+The visitor can count, fill, or enqueue output without storing every
+unvalidated candidate. This could reduce memory traffic and allocation churn.
 
-For flat trees without `TTreeIndex`, do not let every
-`Probe::FlatReader::FlatReader(...)` walk from entry 0 with kinematic branches
-active.
+This route belongs mostly to Lambda and Writer, not Probe.
 
-Instead, during `Probe::ProbeParallel::preparePlan()`:
+### Route E: make index metadata configurable
 
-1. Open the file once.
-2. For each flat collection, activate only the index branch.
-3. Scan index values once.
-4. Build event-key to entry-range metadata.
-5. Partition using event keys and/or estimated row counts.
-6. Pass entry bounds directly to each worker's reader.
+Add config support for:
 
-For dense keys, the metadata can be compact:
+- sorted/ordering: ascending, descending, unordered;
+- dense versus sparse;
+- grouped/contiguous event IDs;
+- optional physical entry bounds or index metadata if known.
+
+Use that to decide whether Probe can:
+
+- use dense range planning;
+- compute bounds by linear scan;
+- use binary/jump search;
+- throw for unsupported unordered/interspersed data.
+
+Current v1 behavior should continue to throw on descending or unordered event
+collector input rather than silently doing inefficient or incorrect work.
+
+### Route F: dynamic scheduling
+
+Static event partitions can be replaced or augmented with dynamic chunks:
 
 ```text
-event key -> [first entry, last entry]
+shared queue of event-id chunks
+workers claim next chunk
+workers produce QueuedEvent
+collector consumes callbacks
 ```
 
-For very large files, consider a sidecar cache keyed by:
+This helps when event loading or event sizes are uneven. It does not fix serial
+collector callback cost.
 
-- input path;
-- file size;
-- modification time;
-- tree name;
-- index branch name.
+For Lambda, dynamic scheduling is most useful after Writer allows parallel
+callback execution or after Probe read time is proven to dominate.
 
-Do not require rewriting the 88G production file just to get a persistent
-ROOT index.
+### Route G: optimize `Probe::Event` reuse
 
-### Solution 4: support dynamic chunk scheduling
+If allocation shows up in profiles:
 
-Replace one static partition per worker with many smaller chunks.
+- reserve particle vectors from recent event sizes;
+- reuse aux-column vectors;
+- avoid repeated unordered-map growth;
+- consider label-indexed vectors instead of string-keyed maps on the hot path.
 
-Basic route:
-
-- create chunks larger than one event but smaller than a full worker range;
-- use `std::atomic<std::size_t> nextChunk`;
-- each worker repeatedly claims the next chunk;
-- each chunk creates or repositions a stream using precomputed entry bounds.
-
-Better route:
-
-- estimate chunk work from row counts per event;
-- partition by approximate pair count or row count;
-- keep chunks balanced by expected work, not just event count.
-
-This addresses "workers waiting for each other" at `join()`.
-
-### Solution 5: keep worker-thread callbacks as default
-
-The default should remain:
-
-```cpp
-worker loads event -> worker invokes callback
-```
-
-This preserves analysis parallelism.
-
-If a serial callback mode is useful, make it explicit:
-
-```cpp
-enum class Probe::CallbackMode {
-    WorkerThread,
-    MainThreadOrdered
-};
-```
-
-`Probe::CallbackMode::MainThreadOrdered` must use bounded queues and
-backpressure. It should be documented as a determinism/debug option, not the
-performance path.
-
-### Solution 6: add `Probe::WorkerContext`
-
-Replace the raw `int threadId` interface with a stable context type:
-
-```cpp
-namespace Probe {
-    struct WorkerContext {
-        int workerIndex;
-        Long64_t firstEvent;
-        Long64_t lastEvent;
-        std::size_t chunkIndex;
-    };
-}
-```
-
-Then support both callback forms during migration:
-
-- `callback(const Probe::Event&, int)`
-- `callback(const Probe::Event&, const Probe::WorkerContext&)`
-
-This avoids exposing worker internals while still allowing logging and
-per-worker output sharding.
-
-### Solution 7: use per-worker Lambda output shards
-
-Do not fill one shared `Lambda::RootArray` from all workers.
-
-Preferred shape:
-
-1. Create one `Lambda::RootArray` per Probe worker.
-2. Each worker fills only its own histograms and counters.
-3. After `Probe::ProbeParallel::run(...)` returns, merge worker histograms.
-4. `Record::Writer::shutdown(...)` writes the merged output.
-
-ROOT histograms support merging through `TH1::Add(...)` for compatible
-histograms. Candidate trees, if enabled, need a separate policy:
-
-- either disable candidate TTrees in parallel reconstruction;
-- or write per-worker trees and merge at finalization;
-- or serialize tree filling only.
-
-As a short-term correctness patch, wrap `Lambda::fillCandidates(...)` in
-`Record::Writer::recordingScope()`. That will likely reduce scaling, so it
-should be treated as a fallback, not the final design.
-
-### Solution 8: stream candidate output where possible
-
-Refactor `Lambda::reconstructCandidates(...)` so unvalidated candidates do not
-have to be fully materialized before output.
-
-Possible target:
-
-```cpp
-namespace Lambda {
-    struct CandidateSink {
-        void unvalidated(const Lorentz&);
-        void validated(const Lorentz&);
-        void selected(const Lorentz&);
-    };
-}
-```
-
-Then reconstruction can:
-
-- stream unvalidated candidates directly to the sink;
-- retain only validated candidates needed for sorting/selection;
-- retain selected candidates if output requires them.
-
-This reduces memory traffic and removes a second pass over the largest
-candidate set.
-
-### Solution 9: make monitor publication sampled
-
-Change `Monitor::AsyncLogger::publishThreadStats(...)` usage so it is not
-called twice per event unconditionally.
-
-Options:
-
-- publish every `pacing.threadInterval` events;
-- publish only phase changes and final worker state;
-- batch worker snapshots and flush on the logger heartbeat;
-- disable per-worker thread-stat files by default for high-event runs.
-
-Also fix the heartbeat unit mismatch:
-
-- either rename `Monitor::PacingInfo::heartbeatMs` to `heartbeatInterval`;
-- or store it as `std::chrono::milliseconds`;
-- or make config/log output say microseconds.
-
-### Solution 10: add Probe-specific instrumentation
-
-Add a lightweight `Probe::ProbeStats` object with per-worker counters:
-
-- events loaded;
-- particles loaded per collection;
-- time in stream construction;
-- time in `Probe::EventStream::next()`;
-- time in callback;
-- chunks processed;
-- exceptions;
-- empty events;
-- max/min event multiplicity.
-
-This should be optional or low-overhead. It will make future "is Probe the
-bottleneck?" checks answerable without ad hoc ROOT macros.
-
-### Solution 11: add representative tests and benchmarks
-
-Existing smoke coverage is useful but not representative.
-
-Add:
-
-- a no-index flat ROOT fixture;
-- an indexed flat ROOT fixture;
-- a sparse-key fixture;
-- a high-multiplicity fixture;
-- a no-op Probe benchmark;
-- a Probe plus logger benchmark;
-- a Probe plus Lambda reconstruction benchmark;
-- a single-thread versus multi-thread histogram equivalence test after output
-  sharding is implemented.
-
-The no-index fixture should intentionally avoid `TTree::BuildIndex(...)` so it
-tests the production path.
-
-## Suggested Implementation Route
-
-The chosen route is "Unify Now", but implementation can happen whenever desired.
-
-Order of work when implementation starts:
-
-1. Add `Probe::ExecutionPlan` and make `Probe::ProbeParallel` own preparation.
-2. Move `Probe::runParallel` logic behind `Probe::ProbeParallel::run(...)`.
-3. Add no-index entry-range planning.
-4. Add dynamic chunk scheduling.
-5. Add `Probe::WorkerContext` while preserving old callback compatibility.
-6. Add `Probe::ProbeStats`.
-7. Fix Lambda output with per-worker histogram shards.
-8. Reduce monitor hot-path publication.
-9. Add representative fixtures and benchmarks.
+This is a secondary optimization after callback/output bottlenecks are resolved.
 
 ## Non-Solutions
 
-### Main-thread callback as the primary fix
+### Disabling ROOT thread safety
 
-This can make event loading parallel and callback execution serial, but the
-callback contains expensive reconstruction and output. It is not the correct
-default performance fix.
+This is unsafe. The observed crash through Cling/TClass/TBranch paths is enough
+evidence that disabling thread safety is not a valid diagnostic for the normal
+multi-threaded path.
 
-### More threads
+Use profiling instead.
 
-Increasing `nThreads` can increase CPU usage while adding duplicated seek work,
-logger mutex pressure, ROOT output contention, and I/O contention. More threads
-will not reliably improve throughput until output sharding, monitor sampling,
-and no-index planning are fixed.
+### Increasing thread count alone
 
-### Relying on the fixture result
+More workers can increase CPU usage while not increasing completed callbacks.
+With collector mode, the collector callback can be the gate. With WorkerThread
+mode, `recordingScope()` can serialize analysis/output.
 
-The fixture has a `TTreeIndex`, tiny event multiplicity, and only 50 events. It
-does not reproduce production Probe behavior.
+### Treating the smoke fixture as representative
 
-### Rewriting the production ROOT file as the only fix
+The fixture is useful for correctness and regression tests. It does not represent
+large production row counts, missing `TTreeIndex`, high event multiplicity, or
+large candidate-pair volumes.
 
-Adding a persistent ROOT index may help, but the code should not require
-rewriting an 88G input file. Probe should be able to build a temporary or
-sidecar execution index.
+### Moving callbacks to workers before fixing output ownership
 
-## Bottom Line
+Worker callbacks can only scale safely after shared ROOT output mutation is
+removed or sharded. Otherwise the code either races on ROOT output or serializes
+through a large lock.
 
-`Probe::runParallel` is actually parallel, and worker threads call callbacks on
-their own threads. The slowdown is more likely from the interaction of:
+## Current Bottom Line
 
-- no-index flat ROOT input;
-- static chunking;
-- heavy production event multiplicity;
-- materializing huge candidate vectors;
-- shared ROOT histogram filling;
-- hot monitor mutex/file-output paths.
+The old Probe architecture problem has mostly been addressed:
 
-The clean fix is to make `Probe::ProbeParallel` the real execution owner,
-prepare an explicit `Probe::ExecutionPlan` at configuration time, eliminate
-duplicated no-index positioning, use dynamic chunks, keep worker-thread
-callbacks, and move Lambda output to per-worker shards before merging.
+- `ProbeParallel` owns configuration and execution;
+- event count and partitions are resolved during configuration;
+- per-worker entry bounds are precomputed;
+- default dispatch is CollectorThread;
+- `runParallel` is only compatibility;
+- callback count is tested to be exactly logical event count.
+
+The remaining speed problem is probably no longer "Probe workers all call the
+callback `nEvents` times" or "every worker starts at row zero." Those were
+addressed.
+
+The likely current limits are:
+
+1. default collector-mode serial callback execution;
+2. Lambda candidate reconstruction/fill volume;
+3. old shared ROOT output ownership forcing serialization in WorkerThread mode;
+4. ROOT read/decompression contention;
+5. static event-key partitioning;
+6. Monitor hot-path overhead.
+
+The next structural fix should be the Writer overhaul, then re-evaluate
+`WorkerThread` mode with callbacks that do CPU analysis in parallel and enqueue
+output requests instead of mutating ROOT objects directly.
