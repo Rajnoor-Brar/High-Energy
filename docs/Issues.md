@@ -1,368 +1,213 @@
-# Plan — `Probe::ProbeParallel` + `Config::configure` facade + `AsyncLogger::watch()`
+# Issues — active investigation
 
-## Context
+Updated: 2026-05-10.
 
-After two sessions, the primary architectural goal remains undelivered: drivers still
-declare `Config::Register`, `Config::Watch`, and `Config::ProbeConfig` explicitly, and
-no `Config::configure` facade exists. This plan delivers exactly what was requested:
+Probe and Writer have both been overhauled. The active path is:
 
-```cpp
-// Target driver shape — Probe pipeline
-Probe::ProbeParallel  probe;
-Record::Writer        writer;
-Monitor::AsyncLogger  logger;
+1. Probe reads input events with `Probe::ProbeParallel`.
+2. Lambda reconstructs candidates.
+3. Lambda submits queued fill requests to `Record::Writer`.
+4. Writer's scribe thread is the only normal path that mutates / writes /
+   closes ROOT output objects.
 
-Config::configure(configPath, project, probe, writer, logger);
+Companion docs: [CGPTsummary.md](CGPTsummary.md) (overhaul context),
+[REVIEW.md](REVIEW.md) (expansions / improvements backlog),
+[MAP.md](MAP.md) (file map), [DataFlow.md](DataFlow.md) (TOML/runtime
+flow).
 
-// ...declare histograms, build finalizer using logger.watch()...
-logger.watch().start = std::chrono::system_clock::now();
-logger.start(writer);  // UI initiation + startTime marking (kept on AsyncLogger)
-probe.run([&](const Probe::Event& ev, int tid){ /* analysis */ });
-// ...shutdown...
-```
-
----
-
-## What exists vs. what's missing
-
-**Exists (post-W7):**
-- `Config::configureProbe(configPath, project, Watch&, Register&, ProbeConfig&)` — legacy signature
-- `Config::configurePythia<T>(configPath, project, Watch&, Register&, PythiaT&)` — legacy signature
-- `Config::configuration(...)` — old facade (named wrong, exposes Register)
-- `Record::configureWriter(Writer&, project, configPath, Watch&, Register&, inputFile)`
-- `Record::FinalizerController` — fully implemented, takes `Writer&, Config::Watch&, AsyncLogger&`
-- `AsyncLogger::start(const Record::Writer&, const Config::Watch&)` — exists
-
-**Missing / broken:**
-- `Probe::ProbeParallel` class — does not exist; `runParallel` is still a free function
-- `Config::configure` facade — does not exist
-- `AsyncLogger::watch()` accessor — Watch is not owned by AsyncLogger
-- `Config::extractConfiguration` — called by 3 drivers (`_Lambda_Parallel`, `_Lambda_Test`,
-  `_Lambda_Data`) but **never defined anywhere** (current build error)
-- `fillDerived` last param is `Config::Register&` — blocks Register removal from drivers
+This file is the active open-issue list, not the long-term backlog. The
+single open issue today is **scaling does not follow `nThreads`**. The
+fix is most likely a sequence of small changes rather than one big
+restructure.
 
 ---
 
-## Step-by-step implementation
+## P0 — Scaling still does not follow `nThreads`
 
-### Step 1 — Add `watch_` to `AsyncLogger` + `watch()` accessor
-**File:** `utils/Monitor/Logger.hh`
+Observed:
 
-Add private member:
-```cpp
-Config::Watch watch_;
-```
+- Raising `nThreads` does not produce expected throughput scaling.
+- At 8 configured threads the process shows roughly 1–3 cores busy
+  rather than 8 saturated workers.
 
-Add public accessors:
-```cpp
-Config::Watch&       watch()       { return watch_; }
-const Config::Watch& watch() const { return watch_; }
-```
+This is not yet narrowed to a single cause. There are several
+contributors that compound, and instrumentation is the prerequisite.
 
-Add single-arg `start()` overload that delegates to the existing two-arg overload:
-```cpp
-void start(const Record::Writer& writer) {
-    start(writer, watch_);
-}
-```
+### Suspect ranking (by current evidence)
 
-Keep existing `start(const Record::Writer&, const Config::Watch&)` unchanged — still
-used by legacy call sites until they migrate in Steps 5–7. Do NOT change `publish()`
-or any other method signatures.
+| Rank | Suspect | Why it is plausible | What would confirm it |
+| ---- | ------- | -------------------- | --------------------- |
+| 0 | Probe `CallbackMode::CollectorThread` default | Workers read events, but the collector calls `Lambda::rootAnalysis` serially. Now that Writer queues ROOT mutation safely, `WorkerThread` mode should be retested. | `probe.stats()` reports `callbackMode=CollectorThread`; switching to `WorkerThread` raises core load and throughput. |
+| 1 | `BlockTimer` per-event file I/O in `rootAnalysis` | `modules/Lambda.hh:83` constructs `BlockTimer timer("Whole Analysis");` once per event. `BlockTimer` opens `output/timer.log` in append mode in its constructor. Per-event file open is a serialised I/O dependency under multi-threaded callbacks. | Removing the line restores throughput scaling, even before any other change. |
+| 2 | `AsyncLogger::publish` + `publishThreadStats` mutex | Both lock `AsyncLogger::mutex_`. Each `rootAnalysis` event calls them twice. Under WorkerThread mode, `nThreads × 2` lock acquisitions per event hit a single mutex. | Per-call `Monitor::ScopeTimer` (REVIEW §3.2) shows publish wall time growing with `nThreads` while CPU stays low. |
+| 3 | Lambda reconstruction loop | `reconstructCandidates` is `O(nProtons × nPions)`, materializes every unvalidated pair, computes boost-based `cosTheta` *before* the cheaper invariant-mass cut, and reads `lambda.M()` twice per pair. | Wall time per `reconstructCandidates` dominates per-event budget; reordering the cuts reduces it. |
+| 4 | Writer single-scribe ceiling | One thread applies all fills. Each event submits one `ParticleRequest` plus optional checkpoint. | `writer.stats().backlog` grows monotonically; producers block on `queueNotFull_`; scribe CPU is hot. |
+| 5 | `ParticleRequest` particle-vector copies | `fillParticleEvent` copies each candidate vector into `ParticleGroupFillRequest::particles`. For large events these copies bloat queue memory and CPU. | Move-aware fill API (REVIEW §2.2) cuts copy time noticeably. |
+| 6 | ROOT global mutex inside `EventStream::next` | `ROOT::EnableThreadSafety()` wraps `TBranch::GetEntry`. With many workers reading at high frequency, ROOT serializes I/O. | `EventStream::next` wall time scales linearly with `nThreads` while CPU stays roughly constant. |
+| 7 | `writer.finish` post-loop cost | `TFile::Write` + `TFile::Close` runs single-thread after the event loop. Currently considered unlikely to dominate. | Total runtime dominated by `writer.finish`, not by the event loop. |
 
----
+Do not assume Writer parallelisation (REVIEW §2.1) is the next correct
+implementation until instrumentation has separated Lambda reconstruction
+cost from Writer scribe cost from queue-wait cost.
 
-### Step 2 — Create `Probe::ProbeParallel`
-**File:** `utils/Probe/ProbeParallel.hh` (new file)
+### Recommended sequence
 
-```cpp
-#pragma once
-#include "Probe/Types.hh"
-#include "Probe/Parallel.hh"
-#include "Probe/EventCount.hh"
+Each step ends with a measurement; the data drives the next step.
 
-namespace Probe {
+1. **Replace `BlockTimer`.** Land the standardised `Monitor::Timer`
+   family from REVIEW §3.2. Remove the `BlockTimer` line in
+   `rootAnalysis` and the commented one in `reconstructCandidates`. The
+   replacement timer writes to thread-local buffers and never opens a
+   file on the hot path. Re-run the `nThreads ∈ {1,2,4,8}` sweep.
 
-class ProbeParallel {
-  public:
-    // Populated by Config::configure:
-    std::string                 inputFile;
-    std::vector<CollectionSpec> collections;
-    std::size_t                 nThreads = 0;
-    std::size_t                 nEvents  = 0;  // 0 = not yet resolved
+2. **Switch to `WorkerThread` callback mode.** Either via the new
+   `[probe].callback_mode` TOML key (REVIEW §1.1) or, until that lands,
+   a one-line `probe.setCallbackMode(Probe::CallbackMode::WorkerThread)`
+   in `_Lambda_Reconstruction.cc`. Run the same sweep.
 
-    // Resolve nEvents from the input file if still 0 after configure.
-    void resolveEvents() {
-        if (nEvents == 0)
-            nEvents = Probe::resolveEventCount(inputFile);
-        if (nEvents == 0)
-            nEvents = EventStream(inputFile, collections).nEvents();
-    }
+3. **Inspect `probe.stats()` and `writer.stats()`.** Print at end of
+   run (or at periodic checkpoint). Look for:
+   - Probe `produced` vs `consumed` (in CollectorThread mode);
+   - Probe `progress[]` per-worker variance;
+   - Writer `backlog`, `maxBacklog`, and whether it reached
+     `queueCapacity`.
 
-    // Run the parallel event loop (wraps Probe::runParallel).
-    template<typename Callback>
-    void run(Callback&& callback) const {
-        runParallel(inputFile, collections,
-                    std::forward<Callback>(callback), nThreads, nEvents);
-    }
-};
+4. **Read the timer registry.** Wall + CPU time per labelled region.
+   The CPU/wall ratio identifies serialisation. Initial labels per
+   REVIEW §3.3.
 
-} // namespace Probe
-```
+5. **Reorder reconstruction cuts.** Move the invariant-mass cut before
+   `cosTheta` in `reconstructCandidates`. Cache `lambda.M()`. Stop
+   copying `ev[label]` into local `std::vector<Lorentz>`. Re-measure.
 
-**File:** `utils/Probe.hh` — append at end (before closing include guard / pragma):
-```cpp
-#include "Probe/ProbeParallel.hh"
-```
+6. **Decide based on data.** If the Probe-side timers and Writer
+   backlog are healthy and Lambda timers dominate, the rest of the
+   work is in `modules/Lambda/Reconstruction.hh`. If Writer backlog
+   saturates, design multi-lane Writer per REVIEW §2.1. If
+   `EventStream::next` dominates with low CPU, the ROOT global mutex
+   is the floor and no Probe-side restructure helps — at that point,
+   pre-sharded input or RDataFrame+IMT is the path.
+
+The first three steps are the cheapest available signal. They should
+land before any architectural change.
 
 ---
 
-### Step 3 — Change `fillDerived` last param: `Register&` → `Paths&`
-**File:** `utils/Record/Meta.hh`
+## Required instrumentation before changing architecture
 
-Add `#include "Record/Configs.hh"` near top (after `#include "Config.hh"`).
+Implement once via the `Monitor::Timer` family proposed in
+[REVIEW §3.2](REVIEW.md). Initial labels:
 
-Change signature (~line 211):
-```cpp
-// Before:
-inline void fillDerived(Record& r, const std::string& analysisName,
-                        const std::string& configPath,
-                        const Config::Watch& log, const Config::Register& root)
+- Probe:
+  - per-worker `EventStream::next`,
+  - per-worker queue-push wait (CollectorThread mode),
+  - collector pop wait,
+  - collector callback-dispatch wall.
+- Lambda callback:
+  - `rootAnalysis` total,
+  - `reconstructCandidates`,
+  - `fillCandidates` enqueue cost,
+  - `AsyncLogger::publish` and `publishThreadStats` wall time,
+  - `ev[label]` lookup cost (sanity).
+- Writer:
+  - `applyParticleRequest` (scribe-side) split into count / hist /
+    graph/profile / tree fill,
+  - `pushNormal` queue-wait,
+  - `writeCheckpointFile`,
+  - `writeAllToCurrentFile`.
+- End to end:
+  - event-loop wall vs `writer.finish` wall.
 
-// After:
-inline void fillDerived(Record& r, const std::string& analysisName,
-                        const std::string& configPath,
-                        const Config::Watch& log, const Record::Paths& paths)
-```
+Print `probe.stats()` and `writer.stats()` once at end of run, plus
+optionally on each `writer.checkpoint`. Run the same config with
+`nThreads ∈ {1, 2, 4, 8}`.
 
-Change the one use of `root` inside the body:
-```cpp
-// Before:
-r.physics.center_of_mass_energy_gev = std::stod(std::string(root.beamEnergy.Data()));
-// After:
-r.physics.center_of_mass_energy_gev = std::stod(std::string(paths.beamEnergy.Data()));
-```
-
-Fix the backward-compat `capture()` wrapper (it calls `fillDerived` with a Register):
-```cpp
-inline Record capture(const std::string& analysisName, const std::string& configPath,
-                      const Config::Watch& log, const Config::Register& root)
-{
-    Record r;
-    mergeFromToml(r, configPath);
-    Record::Paths tmp;
-    tmp.beamEnergy = root.beamEnergy;        // only field fillDerived uses from Register
-    fillDerived(r, analysisName, configPath, log, tmp);
-    return r;
-}
-```
-
-**File:** `utils/Record/Writer.hh` — `configureWriter` calls `fillDerived` at line 133.
-Change:
-```cpp
-// Before:
-Meta::fillDerived(meta, project, configPath, watch, reg);
-// After (paths is in scope at this point, constructed at lines 108-120):
-Meta::fillDerived(meta, project, configPath, watch, paths);
-```
+Decision question: are producers blocked **before** enqueue (Probe-side
+or analysis-side cost) or **after** enqueue (Writer scribe ceiling)?
 
 ---
 
-### Step 4 — Add `Config::configure` facade overloads + `extractConfiguration` alias
-**File:** `utils/Config.hh`
+## Lambda analysis-loop candidates
 
-Add forward declarations before the `namespace Config {` block (to avoid circular includes,
-since `Probe.hh` and `Monitor.hh` both `#include "Config.hh"`):
-```cpp
-namespace Probe   { class ProbeParallel; }
-namespace Monitor { class AsyncLogger;   }
-// Record::Writer already forward-declared or included via Record/Writer.hh
-```
+Verified hotspots in `modules/Lambda/Reconstruction.hh` and
+`modules/Lambda.hh` (also in [REVIEW §4](REVIEW.md)):
 
-Inside `namespace Config`:
+- `rootAnalysis` copies Probe vectors via `const std::vector<Lorentz>
+  protonList = ev[...]`. Use `const auto&`; the event is alive for the
+  callback.
+- `reconstructCandidates` pushes every proton×pion pair into
+  `result.unvalidated` before any filtering. With sizes 50p × 50pi this
+  is 2500 entries before any cut. It also computes `cosTheta` before the
+  mass cut.
+- Reorder: mass cut first, then `cosTheta` only on survivors. Cache
+  `lambda.M()`.
+- `fillParticleEvent` copies candidate vectors into queued requests.
+  Today's `Recording::fillCandidates` builds the `Candidates` struct
+  locally and could move from it; see REVIEW §2.2.
 
-**Alias that fixes 3 broken drivers immediately:**
-```cpp
-inline void extractConfiguration(const std::string& configPath,
-                                 const std::string& project,
-                                 Watch& watch, Register& reg) {
-    configuration(configPath, project, watch, reg);
-}
-```
-
-**Probe pipeline facade** (requires full types — place after the forward decls, relies on
-drivers having included `Probe.hh`, `Record.hh`, `Monitor.hh` before `Config.hh`):
-```cpp
-inline void configure(const std::string&    configPath,
-                      const std::string&    project,
-                      Probe::ProbeParallel& probe,
-                      Record::Writer&       writer,
-                      Monitor::AsyncLogger& logger)
-{
-    Register    reg;
-    ProbeConfig probeConfig;
-    configureProbe(configPath, project, logger.watch(), reg, probeConfig);
-
-    probe.inputFile   = probeConfig.inputFile;
-    probe.collections = Probe::toCollectionSpecs(probeConfig);
-    probe.nThreads    = resolveThreadCount(probeConfig.eventConfig.nThreads);
-    probe.nEvents     = probeConfig.eventConfig.eventCount;
-
-    Record::configureWriter(writer, project, configPath,
-                            logger.watch(), reg, probeConfig.inputFile);
-}
-```
-
-**Pythia pipeline facade** (extracts beamEnergy fallback from Pythia settings after
-`configurePythia` runs, handles the case where beam energy is in the cmnd file not TOML):
-```cpp
-template<typename PythiaT>
-inline void configure(const std::string&    configPath,
-                      const std::string&    project,
-                      PythiaT&              pythia,
-                      Record::Writer&       writer,
-                      Monitor::AsyncLogger& logger)
-{
-    Register reg;
-    configurePythia(configPath, project, logger.watch(), reg, pythia);
-
-    // Fallback: if TOML had no beam_energy, read it from Pythia's settings
-    // (cmnd file may have set Beams:eCM before configure was called).
-    if (reg.beamEnergy.IsNull() || reg.beamEnergy == TString("")) {
-        const double ecm = pythia.settings.parm("Beams:eCM");
-        if (ecm > 0) reg.beamEnergy = Form("%.0f", ecm);
-    }
-
-    Record::configureWriter(writer, project, configPath, logger.watch(), reg, "");
-}
-```
-
-**Include ordering note:** The two `configure` overloads use `Probe::toCollectionSpecs`,
-`Record::configureWriter`, and `Monitor::AsyncLogger::watch()` — these need full types.
-Drivers include `Probe.hh`, `Record.hh`, `Monitor.hh` before `Config.hh`, so this is
-satisfied at driver scope. Add a comment in Config.hh documenting this requirement.
-If standalone Config.hh inclusion (e.g. in tests) breaks, add the three includes at
-the bottom of Config.hh after the namespace closes.
+These changes are independent of architecture. They land in any order
+relative to the Probe / Writer instrumentation.
 
 ---
 
-### Step 5 — Migrate `_Lambda_Reconstruction.cc`
+## Writer-throughput hypothesis (only if measurement points here)
 
-```cpp
-Probe::ProbeParallel  probe;
-Record::Writer        writer;
-Monitor::AsyncLogger  asyncLogger;
+Writer is intentionally single-scribe. That trades parallelism for
+output-mutation correctness. It can become the throughput ceiling.
 
-Config::configure(configPath, project, probe, writer, asyncLogger);
+Before parallelising:
 
-Lambda::Parameters physParams;
-Lambda::extractPhysics(configPath, physParams, writer.histConfig());
-Lambda::RootArray histogramSets;
-Lambda::declareObjects(histogramSets, physParams, writer);
+- Confirm `writer.stats().maxBacklog == queueCapacity` (saturated).
+- Confirm producers spend wall time blocked on `queueNotFull_`.
+- Confirm scribe CPU is hot during the event loop, not during
+  `writer.finish`.
+- Confirm `applyParticleRequest` time per event is comparable to the
+  combined Lambda enqueue rate × nThreads.
 
-Record::FinalizerController finalizer(
-    histogramSets, writer, asyncLogger.watch(), asyncLogger,
-    [&physParams]() { return Lambda::logString(physParams); }
-);
-finalizer.installFatalStallHandler();
-
-probe.resolveEvents();
-asyncLogger.watch().nEvents = probe.nEvents;          // sync after resolution
-asyncLogger.watch().start   = std::chrono::system_clock::now();
-asyncLogger.start(writer);                            // UI init + startTime marking
-
-Lambda::AnalysisContext ctx{histogramSets, physParams, asyncLogger.watch(), asyncLogger};
-std::mutex histMutex;
-probe.run([&](const Probe::Event& ev, int tid) {
-    Lambda::rootAnalysis(ev, tid, histMutex, ctx);
-});
-
-writer.meta().dataset.parent_files = {probe.inputFile};
-Record::Meta::fillDerived(writer.meta(), project, configPath,
-                           asyncLogger.watch(), writer.paths());
-finalizer.setMeta(writer.meta());
-finalizer.normalShutdown();
-```
-
-**Removed from driver:** `Config::Register rootParams`, `Config::Watch logParams`,
-`Config::ProbeConfig probeConfig`, `Probe::toCollectionSpecs(...)` call,
-`Probe::runParallel(...)` call, manual event-count resolution block.
+If those align, the safe parallel-Writer shape is REVIEW §2.1
+(per-record-key lanes, per-lane scribe, barrier on checkpoint and
+finish). Do not write the same `TFile` from multiple threads under
+ROOT thread-safety; per-object ownership by lane is the invariant.
 
 ---
 
-### Step 6 — Migrate Pythia drivers
+## Current config / data-flow mismatches
 
-**`_Lambda_Parallel.cc` and `_Lambda_Test.cc`** — replace `Register` + `Watch` +
-`extractConfiguration` with the Pythia `configure` overload:
+(Cross-referenced from [DataFlow.md](DataFlow.md).)
 
-```cpp
-Pythia8::PythiaParallel pythia;           // (or Pythia8::Pythia for _Test)
-pythia.readFile("configs/Lambda_Reconstruction.cmnd");  // sets Beams:eCM
-
-Record::Writer       writer;
-Monitor::AsyncLogger logger;
-
-Config::configure(configPath, project, pythia, writer, logger);
-
-// ...histogram setup...
-Record::FinalizerController finalizer(
-    histogramSets, writer, logger.watch(), logger, ...
-);
-finalizer.installFatalStallHandler();
-pythia.init();
-logger.watch().start = std::chrono::system_clock::now();
-logger.start(writer);
-// ...run loop using logger.watch()...
-finalizer.normalShutdown();
-```
-
-**`_Lambda_Data.cc`** — same pattern. The `preCloseHook` for `BuildIndex` calls is
-already wired through FinalizerController (from W7) — keep it. FinalizerController
-is constructed AFTER the run loop in this driver (current structure) — that stays.
+- `[probe.index]` keys (`sorted`, `ascending`, `monotonic`) appear in
+  `configs/Lambda_Reconstruction.toml` but `Probe::buildIndexSpecs`
+  hardcodes the `IndexSpec` as ascending/dense/grouped. Either parse
+  them or remove from sample configs (REVIEW §1.1).
+- Writer-owned data generation and the smoke-test fixture use
+  `event_index`, while `configs/Lambda_Reconstruction.toml` currently
+  lists `Index` in `[probe].event_particles`. This must match the
+  actual input ROOT file: a Probe-driven reconstruction over a file
+  produced by `_Lambda_Data.cc` should use `event_index`.
+- `[record].save_checkpoints`, `save_log_threads`, `save_heartbeat`,
+  `save_final_log` appear in configs but are not currently read by code.
+- `Monitor::configureMonitor` runs before `[events]` is parsed in the
+  Probe-pipeline `Config::configure`. Progress-bar `barInterval`
+  derivation may use the default event count rather than the resolved
+  one. Verify whether this affects current terminal output.
+- `_Lambda_Parallel.cc` does not explicitly apply the parsed thread
+  count to `Pythia8::PythiaParallel`. `_Lambda_Data.cc` does. Cleanup
+  alongside the per-section thread-config split (REVIEW §5).
 
 ---
 
-### Step 7 — Migrate `tests/test_rootAnalysis_smoke.cc`
+## Done since prior Issues snapshot
 
-Same migration as `_Lambda_Reconstruction.cc` (Step 5). Replace `logParams` +
-`rootParams` + manual configureProbe/configureWriter with `configure` facade.
+For history; nothing in this list is open work.
 
----
+- Probe overhaul: `Probe::ProbeParallel`, callback modes, partition
+  precompute, queue plumbing.
+- Writer overhaul: declaration APIs, queue lanes, scribe loop, barriers,
+  checkpoint/finish/fatal write, `Meta` integration.
+- Lambda migration to Writer-owned output: `Lambda::configure`,
+  `fillParticleEvent`, removal of `RootArray` from active drivers,
+  Writer-owned `Protons`/`Pions` trees in data generation.
+- Doc/Plan baseline: this Issues file replaces the prior backlog list.
 
-## Critical files
-
-| File | Change |
-|---|---|
-| `utils/Monitor/Logger.hh` | Add `Config::Watch watch_`; `watch()` accessor; `start(writer)` overload |
-| `utils/Probe/ProbeParallel.hh` | **New** — `Probe::ProbeParallel` class |
-| `utils/Probe.hh` | Add `#include "Probe/ProbeParallel.hh"` |
-| `utils/Record/Meta.hh` | `fillDerived`: `Register&` → `Paths&`; add Configs.hh include; fix `capture()` |
-| `utils/Record/Writer.hh` | `configureWriter`: pass `paths` not `reg` to `fillDerived` |
-| `utils/Config.hh` | Add `extractConfiguration` alias + two `configure` overloads |
-| `_Lambda_Reconstruction.cc` | Full migration |
-| `_Lambda_Parallel.cc` | Migrate to Pythia `configure` |
-| `_Lambda_Test.cc` | Migrate to Pythia `configure` |
-| `_Lambda_Data.cc` | Migrate to Pythia `configure` |
-| `tests/test_rootAnalysis_smoke.cc` | Migrate to clean driver |
-
----
-
-## Verification
-
-After Steps 1–4 (non-driver changes):
-```bash
-make clean && make _Lambda_Reconstruction.exe _Lambda_Parallel.exe _Lambda_Test.exe _Lambda_Data.exe
-```
-Must build clean.
-
-After Step 7:
-```bash
-make test   # T1–T5 + S1–S5 must all pass
-```
-
-Final sanity check — no legacy declarations remain in drivers:
-```bash
-grep -n "Config::Register\|Config::Watch\|Config::ProbeConfig\|extractConfiguration" \
-    _Lambda_*.cc tests/test_rootAnalysis_smoke.cc
-# Must return empty
-```
+If anything below the line above looks open, double-check the live code
+before acting on it.

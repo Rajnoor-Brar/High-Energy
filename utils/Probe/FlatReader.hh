@@ -198,6 +198,8 @@ namespace Probe {
                 case BranchType::Int64:   tree_->SetBranchAddress(n, &buf.l);  break;
                 case BranchType::UInt64:  tree_->SetBranchAddress(n, &buf.ul); break;
                 case BranchType::Bool:    tree_->SetBranchAddress(n, &buf.b);  break;
+                case BranchType::Char:
+                case BranchType::String:
                 case BranchType::Other:
                     throw std::runtime_error("[Probe] BranchType::Other not supported for '" + bspec.name + "'");
             }
@@ -213,6 +215,8 @@ namespace Probe {
                 case BranchType::UInt32:
                 case BranchType::UInt64:  col.data = std::vector<uint64_t>{}; break;
                 case BranchType::Bool:    col.data = std::vector<bool>{};     break;
+                case BranchType::Char:
+                case BranchType::String:
                 default: break;
             }
             return col;
@@ -230,6 +234,8 @@ namespace Probe {
                     case BranchType::Int64:   std::get<std::vector<int64_t>> (col.data).push_back(buf.l);  break;
                     case BranchType::UInt64:  std::get<std::vector<uint64_t>>(col.data).push_back(buf.ul); break;
                     case BranchType::Bool:    std::get<std::vector<bool>>    (col.data).push_back(buf.b);  break;
+                    case BranchType::Char:
+                    case BranchType::String:
                     default: break;
                 }
             }

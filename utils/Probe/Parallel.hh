@@ -21,6 +21,7 @@
 #include "Probe/BranchControl.hh"
 #include "Probe/Event.hh"
 #include "Probe/EventCount.hh"
+#include "Probe/Splitter.hh"
 #include "Probe/Types.hh"
 
 namespace Probe {
@@ -29,23 +30,51 @@ namespace Probe {
       public:
         ProbeParallel() = default;
 
+        ~ProbeParallel() { cleanupShards(); }
+
+        // configureProbe — primary configuration entry point.
+        //
+        // splitInput:      master switch for Phase 1 input-file sharding.
+        //                  Default false because measurement showed no CPU-floor
+        //                  improvement on our access pattern (global ROOT mutex
+        //                  is the real bottleneck, not per-TFile contention).
+        //                  Enable via [probe].split_input = true for A/B testing
+        //                  or future composition with TTreeProcessorMT.
+        // tempSpace:       base directory for shard files (e.g. "temp/").
+        //                  Empty → resolved from shardKeyPrefix ("temp/<prefix>/")
+        //                  or "temp/probe_shards/" as a last fallback.
+        // keepShards:      if true, shard directory is NOT removed on destruction.
+        //                  Use for cached reuse across repeated runs over the same
+        //                  input file.  Ignored when splitInput is false.
+        // shardKeyPrefix:  [record.file].prefix string; used to build the default
+        //                  temp sub-directory.  Ignored when tempSpace is explicit.
+        //
+        // Sharding only activates when splitInput=true AND threadCount_ > 1.
         void configureProbe(std::string inputFile,
                             std::vector<ParticleSpec> particleSpecs,
                             std::size_t threadCount,
                             std::size_t requestedEvents,
-                            bool userRequestedEvents)
+                            bool userRequestedEvents,
+                            bool        splitInput     = false,
+                            std::string tempSpace      = "",
+                            bool        keepShards     = false,
+                            std::string shardKeyPrefix = "")
         {
             BranchControl::enableRootThreadSafety();
 
             inputFile_      = std::move(inputFile);
             particleSpecs_  = std::move(particleSpecs);
             threadCount_    = Config::resolveThreadCount(threadCount);
+            keepShards_     = keepShards;
             configured_     = false;
             eventCount_     = 0;
             eventRange_     = {};
             eventPartitions_.clear();
             indexSpecs_.clear();
             entryBoundsByWorker_.clear();
+            inputShards_.clear();
+            ownsShards_    = false;
+            shardTempDir_.clear();
 
             if (inputFile_.empty())
                 throw std::runtime_error("[Probe] ProbeParallel: input file is empty");
@@ -80,6 +109,26 @@ namespace Probe {
             prepareEventPartitions(bruteKeys);
             prepareEntryBounds();
 
+            // ── Phase 1 sharding: one TFile per worker ────────────────────────
+            // Opt-in: gated on splitInput=true.  Skipped when single-threaded
+            // (no contention to eliminate) or when no partitions were produced.
+            if (splitInput && threadCount_ > 1 && !eventPartitions_.empty()) {
+                std::string baseDir;
+                if (!tempSpace.empty()) {
+                    baseDir = tempSpace;
+                    if (baseDir.back() != '/') baseDir += '/';
+                } else if (!shardKeyPrefix.empty()) {
+                    baseDir = "temp/" + shardKeyPrefix + "/";
+                } else {
+                    baseDir = "temp/probe_shards/";
+                }
+                inputShards_ = Splitter::ensureShards(
+                    inputFile_, particleSpecs_,
+                    eventPartitions_, entryBoundsByWorker_,
+                    baseDir, shardTempDir_);
+                ownsShards_ = true;
+            }
+
             if (!queueCapacityUser_)
                 queueCapacity_ = std::max<std::size_t>(threadCount_, 10 * threadCount_);
 
@@ -93,10 +142,12 @@ namespace Probe {
             queueCapacityUser_ = capacity > 0;
         }
 
-        const std::string& inputFile() const { return inputFile_; }
-        std::size_t threadCount() const { return threadCount_; }
-        std::size_t eventCount()  const { return eventCount_; }
-        StreamType streamType()   const { return streamType_; }
+        const std::string& inputFile()    const { return inputFile_; }
+        std::size_t threadCount()         const { return threadCount_; }
+        std::size_t eventCount()          const { return eventCount_; }
+        StreamType  streamType()          const { return streamType_; }
+        const std::vector<std::string>& inputShards() const { return inputShards_; }
+        const std::string& shardTempDir() const { return shardTempDir_; }
 
         std::string stats() const {
             std::lock_guard<std::mutex> lock(queueMutex_);
@@ -389,19 +440,33 @@ namespace Probe {
             std::vector<std::exception_ptr> errors(eventPartitions_.size());
             workers.reserve(eventPartitions_.size());
 
+            const bool useShards = !inputShards_.empty();
+
             for (std::size_t t = 0; t < eventPartitions_.size(); ++t) {
                 workers.emplace_back([&, t] {
                     try {
                         const auto& part = eventPartitions_[t];
-                        const auto& bounds = entryBoundsByWorker_.empty()
-                                           ? emptyBounds_
-                                           : entryBoundsByWorker_[t];
-                        EventStream stream(inputFile_, particleSpecs_,
-                                           part.firstEvent, part.lastEvent,
-                                           eventsInPartition(part), bounds);
-                        while (stream.next()) {
-                            if (t < progress_.size()) ++progress_[t];
-                            callback(stream.event(), static_cast<int>(t));
+                        if (useShards) {
+                            // Each shard contains exactly this worker's key range
+                            // starting at entry 0 — no pre-computed bounds needed.
+                            EventStream stream(inputShards_[t], particleSpecs_,
+                                               part.firstEvent, part.lastEvent,
+                                               eventsInPartition(part));
+                            while (stream.next()) {
+                                if (t < progress_.size()) ++progress_[t];
+                                callback(stream.event(), static_cast<int>(t));
+                            }
+                        } else {
+                            const auto& bounds = entryBoundsByWorker_.empty()
+                                               ? emptyBounds_
+                                               : entryBoundsByWorker_[t];
+                            EventStream stream(inputFile_, particleSpecs_,
+                                               part.firstEvent, part.lastEvent,
+                                               eventsInPartition(part), bounds);
+                            while (stream.next()) {
+                                if (t < progress_.size()) ++progress_[t];
+                                callback(stream.event(), static_cast<int>(t));
+                            }
                         }
                     } catch (...) {
                         errors[t] = std::current_exception();
@@ -435,21 +500,40 @@ namespace Probe {
                 }
             });
 
+            const bool useShards = !inputShards_.empty();
+
             for (std::size_t t = 0; t < eventPartitions_.size(); ++t) {
                 workers.emplace_back([&, t] {
                     try {
                         const auto& part = eventPartitions_[t];
-                        const auto& bounds = entryBoundsByWorker_.empty()
-                                           ? emptyBounds_
-                                           : entryBoundsByWorker_[t];
-                        EventStream stream(inputFile_, particleSpecs_,
-                                           part.firstEvent, part.lastEvent,
-                                           eventsInPartition(part), bounds);
-                        while (!stopRequested_.load(std::memory_order_acquire) && stream.next()) {
+
+                        // Construct the right EventStream depending on whether
+                        // shards are available.  Shard path → no pre-computed
+                        // entry bounds (shard contains exactly this range from
+                        // entry 0).  Original file → use pre-computed bounds.
+                        std::unique_ptr<EventStream> stream;
+                        if (useShards) {
+                            stream = std::make_unique<EventStream>(
+                                inputShards_[t], particleSpecs_,
+                                part.firstEvent, part.lastEvent,
+                                eventsInPartition(part));
+                        } else {
+                            const auto& bounds = entryBoundsByWorker_.empty()
+                                               ? emptyBounds_
+                                               : entryBoundsByWorker_[t];
+                            stream = std::make_unique<EventStream>(
+                                inputFile_, particleSpecs_,
+                                part.firstEvent, part.lastEvent,
+                                eventsInPartition(part), bounds);
+                        }
+
+                        while (!stopRequested_.load(std::memory_order_acquire)
+                               && stream->next())
+                        {
                             QueuedEvent queued{
                                 t,
-                                stream.event().index,
-                                stream.takeEvent()
+                                stream->event().index,
+                                stream->takeEvent()
                             };
                             if (!pushQueuedEvent(std::move(queued))) break;
                         }
@@ -470,11 +554,25 @@ namespace Probe {
                 if (error) std::rethrow_exception(error);
         }
 
+        // ── cleanup ───────────────────────────────────────────────────────────
+        // Called by the destructor.  Removes shardTempDir_ if we own the shards
+        // and the user did not request persistence (keep_shards = false).
+        void cleanupShards() {
+            if (ownsShards_ && !keepShards_ && !shardTempDir_.empty())
+                Splitter::removeShardDir(shardTempDir_);
+        }
+
         bool configured_ = false;
 
         std::string inputFile_;
         std::vector<ParticleSpec> particleSpecs_;
         std::vector<IndexSpec> indexSpecs_;
+
+        // ── Phase 1 shard state ───────────────────────────────────────────────
+        std::vector<std::string> inputShards_;   // one path per partition
+        bool        ownsShards_   = false;       // true when shards were created/adopted
+        std::string shardTempDir_;               // directory containing the shards
+        bool        keepShards_   = false;       // mirrors [probe].keep_shards
 
         StreamType streamType_ = StreamType::Unset;
         CallbackMode callbackMode_ = CallbackMode::CollectorThread;

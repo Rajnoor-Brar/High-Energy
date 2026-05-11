@@ -29,47 +29,32 @@ namespace Probe {
         struct Partition { Long64_t firstEvent; Long64_t lastEvent; };
 
         inline void enableRootThreadSafety() {
+            // Required: ROOT::EnableThreadSafety() must be active for any
+            // multi-threaded ROOT use. Even our read-only worker path
+            // hits shared state — TClass first-load, gROOT->fListOfFiles
+            // mutation on TFile::Open, basket allocators. Phase A
+            // experiment (5-run sweep on test_probe_parallel) confirmed
+            // sporadic crashes inside FlatReader ctor and silent stat
+            // counter corruption when this call is skipped. Do not
+            // remove. See docs/Blueprint_Probe.md.
             static std::once_flag flag;
             std::call_once(flag, []{ ROOT::EnableThreadSafety(); });
         }
 
         inline std::string branchTypeStr(BranchType t) {
-            switch (t) {
-                case BranchType::Float:   return "Float_t";
-                case BranchType::Double:  return "Double_t";
-                case BranchType::Int32:   return "Int_t";
-                case BranchType::UInt32:  return "UInt_t";
-                case BranchType::Int64:   return "Long64_t";
-                case BranchType::UInt64:  return "ULong64_t";
-                case BranchType::Bool:    return "Bool_t";
-                case BranchType::Other:   return "other";
-            }
-            return "unknown";
+            return RootUtil::typeName(t);
         }
 
         inline BranchType detectType(char c) {
-            switch (c) {
-                case 'F': return BranchType::Float;
-                case 'D': return BranchType::Double;
-                case 'I': return BranchType::Int32;
-                case 'i': return BranchType::UInt32;
-                case 'L': return BranchType::Int64;
-                case 'l': return BranchType::UInt64;
-                case 'O': return BranchType::Bool;
-                default:  return BranchType::Other;
-            }
+            return RootUtil::detectBranchType(c);
         }
 
         inline BranchType detectType(const std::string& s) {
-            return s.empty() ? BranchType::Other : detectType(s[0]);
+            return RootUtil::detectBranchType(s);
         }
 
         inline BranchType detectType(TBranch* br) {
-            const std::string title = br->GetTitle();
-            if (title.size() >= 2 && title[title.size() - 2] == '/') {
-                return detectType(title.back());
-            }
-            return BranchType::Other;
+            return RootUtil::detectBranchType(br);
         }
 
         inline TBranch* requireBranch(TTree* tree, const std::string& name, const std::string& file) {

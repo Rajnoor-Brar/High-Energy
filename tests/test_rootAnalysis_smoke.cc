@@ -31,6 +31,7 @@
 #include "Monitor.hh"
 #include "Probe.hh"
 #include "Config/Configure.hh"
+#include "TH1.h"
 
 namespace {
     constexpr int    kNEvents   = 50;
@@ -61,43 +62,41 @@ int main() {
     TEST_EQ(probe.threadCount(), static_cast<std::size_t>(kNThreads));
 
     Lambda::Parameters physParams;
-    Lambda::RootArray  histogramSets;
-    Lambda::configure(physParams, histogramSets, writer, kFixtureToml);
+    Lambda::configure(physParams, writer, kFixtureToml);
 
-    writer.bind(asyncLogger, asyncLogger.watch(),
+    writer.bind(asyncLogger,
                 [&physParams]() { return Lambda::logString(physParams); });
 
     asyncLogger.initialise(writer);
+    writer.start();
 
     // ── Run parallel reconstruction ───────────────────────────────────────────
-    Lambda::AnalysisContext ctx{histogramSets, physParams, asyncLogger.watch(), asyncLogger, writer};
+    Lambda::AnalysisContext ctx{physParams, asyncLogger.watch(), asyncLogger, writer};
 
     probe.run([&](const Probe::Event& ev, int threadId) {
         Lambda::rootAnalysis(ev, threadId, ctx);
     });
 
-    // ── S1/S2: counters checked before ROOT file close ───────────────────────
-    // shutdown() calls outFile->Close() which invalidates histogram pointers.
-    // Read everything we need BEFORE the shutdown.
+    // ── S1/S2: counters checked before final ROOT file inspection ────────────
     TEST_EQ(asyncLogger.watch().iEvent.load(), std::size_t(kNEvents));
     TEST_PASS("S1  iEvent == 50 (all events dispatched)");
 
     TEST_EQ(asyncLogger.watch().n_real_events.load(), std::size_t(kNEvents));
     TEST_PASS("S2  n_real_events == 50");
 
-    // ── S3/S4/S5: histogram sanity ────────────────────────────────────────────
-    const Lambda::RootObjects* unval =
-        Lambda::findObjects(histogramSets, Lambda::HistogramSet::Unvalidated);
-    const Lambda::RootObjects* val =
-        Lambda::findObjects(histogramSets, Lambda::HistogramSet::Validated);
+    const std::string outputPath = writer.paths().outName.Data();
+    writer.finish(asyncLogger.watch().nEvents);
 
-    TEST_TRUE(unval != nullptr);
-    TEST_TRUE(val   != nullptr);
-    TEST_TRUE(!unval->hists1D.empty());
-    TEST_TRUE(!val->hists1D.empty());
+    std::unique_ptr<TFile> out(TFile::Open(outputPath.c_str(), "READ"));
+    TEST_TRUE(out && !out->IsZombie());
 
-    const double unvalEntries = unval->hists1D[0].hist->GetEntries();
-    const double valEntries   = val  ->hists1D[0].hist->GetEntries();
+    auto* unvalHist = dynamic_cast<TH1*>(out->Get("Unvalidated/Unvalidated_Mass_Invariant_Hist"));
+    auto* valHist   = dynamic_cast<TH1*>(out->Get("Validated/Validated_Mass_Invariant_Hist"));
+    TEST_TRUE(unvalHist != nullptr);
+    TEST_TRUE(valHist   != nullptr);
+
+    const double unvalEntries = unvalHist->GetEntries();
+    const double valEntries   = valHist->GetEntries();
 
     TEST_LT(0.0, unvalEntries);
     TEST_PASS("S3  Unvalidated mass histogram has entries");
@@ -110,8 +109,6 @@ int main() {
 
     std::cout << "  (unvalidated=" << unvalEntries
               << ", validated=" << valEntries << ")\n";
-
-    writer.shutdown(histogramSets);
 
     std::cout << "ALL TESTS PASSED\n";
     return 0;

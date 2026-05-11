@@ -1,29 +1,42 @@
 [events]
 event_count = 100_000
-nThreads    = 2      # 0 = auto (hardware_concurrency - 2)
 
 [probe]
+thread_count = 4                  # docs/WriterMT.md Phase 0; 0 = auto (1/3 of hw-2)
 input_file = "output/Lambda_Data/_08/Lambda_Recons_7000GeV_10M.root"
+temp_space = "output/temp/"
+keep_shards = false
+mt_chunk_size = 1000
+
 event_particles  = [
                         ["protons",0,"Protons",[["pX","D"],["pY","D"],["pZ","D"],["Energy","D"]],[["Index","I"]]],
                         ["pions",0,"Pions",[["pX","D"],["pY","D"],["pZ","D"],["Energy","D"]],[["Index","I"]]]
                     ]
 
-#probe.index below is unused, and is placeholder for future implementation
+#event_particles = ["prtn", "pi"]
+#[probe.particle.prtn]
+# spec = 0
+# tree_name = "Protons"
+# index_branch = ["Index","I"]
+# branch_1 = ["pX","D"]
+# branch_2 = ["pY","D"]
+# branch_3 = ["pZ","D"]
+# branch_4 = ["Energy","D"]
+# #below unused, but supported
+# index_1 = ["pXindex","I"]
+# and so on, if undefined use index_branch by default
+
 [probe.index]
 sorted = [true,true] # for each particle index branch
 ascending = [true,true] # irrelevant if sorted = false; otherwise, specifies sort order for each particle index branch
 monotonic = [true,true] # irrelevant if sorted = true ; otherwise, specifies whether indices of same values grouped together (monotonic) or interspersed (non-monotonic)
 
 [record]
-serial     = 35
+thread_count = 8                  # docs/WriterMT.md Phase 0; consumed by Writer's worker pool in Phase 2
+serial     = 37
 sr_padding = 2
 bin_count = 400
-# not yet used
-save_checkpoints = false
-save_log_threads = false
-save_heartbeat = false
-save_final_log = true
+
 
 [record.paths]
 directory            = "output/Lambda_Reconstruction/"
@@ -36,7 +49,7 @@ checkpointsInSubDir  = true
 [record.file]
 prefix = "Lambda_Recons"
 serial = false
-energy = true
+energy = false
 events = true
 
 [record.metadata]
@@ -49,12 +62,19 @@ notes        = ""
 [monitor]
 true_time_at_config = true
 print_interval            = 50       # events
-check_interval            = 100000   # events
-heartbeat_interval        = 2000     # milliseconds
+check_interval            = 100000   # events (stall-check cadence)
+checkpoint_interval       = 100000   # events between checkpoint snapshots (WriterMT.md Phase 1)
+heartbeat_interval        = 2000     # milliseconds (terminal-status freshness)
 terminal_refresh_interval = 2        # minutes
 program_stall_threshold   = 5        # minutes
+# not yet used
+save_checkpoints = false
+save_log_threads = false
+save_heartbeat = false
+save_final_log = true
 
 [pythia]
+thread_count = 4                     # docs/WriterMT.md Phase 0
 cmnd_file = "configs/Lambda_Reconstruction.cmnd"
 
 [lambda]

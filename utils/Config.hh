@@ -83,6 +83,11 @@ namespace Config {
             pythia.readString("Beams:eCM = " + std::to_string(py.beamEnergy));
             reg.beamEnergy = Form("%.0f", py.beamEnergy);
         }
+
+        // WriterMT.md Phase 0: surface Pythia's thread_count on Watch so
+        // driver code (_Lambda_Data.cc) can forward it to Pythia's runtime
+        // parallelism setting without re-reading the TOML.
+        watch.n_threads = py.thread_count;
     }
 
     inline void configureProbe(const std::string& configPath,

@@ -12,6 +12,7 @@
 #include "TString.h"
 #include "Config.hh"
 #include "Record/Writer.hh"
+#include "Record/Requests.hh"
 #include "Utility.hh"
 #include "Monitor/Snapshot.hh"
 #include "Monitor/Render.hh"
@@ -21,6 +22,10 @@ namespace Monitor {
     class AsyncLogger {
       public:
         using FatalStallHandler = std::function<void(const RunSnapshot&)>;
+        // docs/WriterMT.md Phase 1: pluggable sink for WatchRequest emission.
+        // Set via bindWatchSink(); when unset, countEvent() only increments
+        // and returns.  Phase 2 wires this to Record::Writer::signalWatch.
+        using WatchSink = std::function<void(Record::WatchRequest)>;
 
         explicit AsyncLogger(bool print = true) { start(print); }
         ~AsyncLogger() { stop(); }
@@ -32,6 +37,57 @@ namespace Monitor {
         std::size_t       checkInterval() const { return pacing_.checkInterval; }
 
         void configurePacing(PacingInfo pacing) { pacing_ = std::move(pacing); }
+
+        // docs/WriterMT.md Phase 1.  Configure which WatchRequest kinds the
+        // logger emits, and at what events-based cadences.  Called from
+        // Monitor::configureMonitor after the [monitor] section is parsed.
+        void configureWatchEmission(bool saveHeartbeat,
+                                    bool saveCheckpoints,
+                                    std::size_t checkpointInterval)
+        {
+            saveHeartbeat_      = saveHeartbeat;
+            saveCheckpoints_    = saveCheckpoints;
+            checkpointInterval_ = checkpointInterval > 0 ? checkpointInterval : 100000;
+        }
+
+        void bindWatchSink(WatchSink sink) { watchSink_ = std::move(sink); }
+
+        // docs/WriterMT.md Phase 1.  Atomic increment of watch_.iEvent.
+        // Returns the new count.  When configured thresholds are crossed,
+        // pushes a WatchRequest through the watch sink (heartbeat is
+        // fire-and-forget; checkpoint blocks the caller on the barrier
+        // until the watchdog completes the snapshot).
+        std::size_t countEvent() {
+            const std::size_t n =
+                watch_.iEvent.fetch_add(1, std::memory_order_relaxed) + 1;
+
+            // Phase 1 emits requests through the sink if set.  When unset,
+            // this is a pure counter.  Phase 2 will wire Writer's watchdog
+            // to consume the requests.
+            if (watchSink_) {
+                if (saveHeartbeat_ && pacing_.printInterval > 0
+                        && (n % pacing_.printInterval) == 0)
+                {
+                    Record::WatchRequest req;
+                    req.kind       = Record::WatchRequest::Kind::Heartbeat;
+                    req.eventIndex = n;
+                    watchSink_(std::move(req));
+                }
+
+                if (saveCheckpoints_ && checkpointInterval_ > 0
+                        && (n % checkpointInterval_) == 0)
+                {
+                    Record::WatchRequest req;
+                    req.kind       = Record::WatchRequest::Kind::Checkpoint;
+                    req.eventIndex = n;
+                    req.barrier    = std::make_shared<Record::BarrierState>();
+                    watchSink_(req);
+                    waitWatchBarrier(req.barrier);
+                }
+            }
+
+            return n;
+        }
 
         void markConfiguring(const std::string& configPath, bool trueTimeAtConfig = false) {
             RunSnapshot snapshot;
@@ -404,8 +460,24 @@ namespace Monitor {
             else                             pendingActions_ = incoming;
         }
 
+        // docs/WriterMT.md Phase 1: block the calling thread until the
+        // watchdog signals completion of a Checkpoint/Finalize/Fatal
+        // WatchRequest.  Phase 1 only the Checkpoint path uses this.
+        static void waitWatchBarrier(const std::shared_ptr<Record::BarrierState>& b) {
+            if (!b) return;
+            std::unique_lock<std::mutex> lock(b->mutex);
+            b->cv.wait(lock, [&] { return b->done; });
+            if (b->exception) std::rethrow_exception(b->exception);
+        }
+
         Config::Watch                 watch_;
         PacingInfo                    pacing_;
+
+        // docs/WriterMT.md Phase 1: watchdog sink + emission config.
+        WatchSink                     watchSink_;
+        bool                          saveHeartbeat_      = false;
+        bool                          saveCheckpoints_    = false;
+        std::size_t                   checkpointInterval_ = 100000;
 
         TString                       runStatPath_             = "";
         TString                       threadStatDirectory_     = "";

@@ -24,24 +24,23 @@ int main(int argc, char* argv[]) {
     Config::configure(configPath, project, pythia, writer, logger);
 
     Lambda::Parameters analysisParams;
-    Lambda::RootArray  histogramSets;
-    Lambda::configure(analysisParams, histogramSets, writer, configPath);
+    Lambda::configure(analysisParams, writer, configPath);
 
     writer.bind(logger, logger.watch(),
                 [&analysisParams]() { return Lambda::logString(analysisParams); },
                 [&pythia]() { pythia.stat(); },
                 [&pythia]() { pythia.settings.listChanged(); });
-    writer.installFatalStallHandler(histogramSets);
 
     logger.initialise(writer);
     pythia.init();
+    writer.start();
 
-    Lambda::AnalysisContext ctx{histogramSets, analysisParams, logger.watch(), logger, writer};
+    Lambda::AnalysisContext ctx{analysisParams, logger.watch(), logger, writer};
     pythia.run(static_cast<long>(logger.watch().nEvents), [&](Pythia8::Pythia* worker) {
         Lambda::pythiaAnalysis(*worker, ctx);
     });
 
-    writer.shutdown(histogramSets);
+    writer.finish(logger.watch().nEvents);
 
     return 0;
 }

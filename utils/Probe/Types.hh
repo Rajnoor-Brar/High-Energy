@@ -10,12 +10,13 @@
 
 #include "Physics.hh"
 #include "Rtypes.h"
+#include "Utility/RootTypes.hh"
 
 namespace Probe {
 
     using Physics::Lorentz;
 
-    enum class BranchType         { Float, Double, Int32, UInt32, Int64, UInt64, Bool, Other };
+    using BranchType = RootUtil::DataType;
     enum class MissingBranchPolicy{ Error };
 
     struct BranchSpec {

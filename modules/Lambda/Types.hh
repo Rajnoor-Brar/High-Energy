@@ -1,6 +1,5 @@
 #pragma once
 
-#include "TTree.h"
 #include "Record.hh"
 
 namespace Lambda{
@@ -18,8 +17,8 @@ namespace Lambda{
     using std::string;
     using Physics::Lorentz;
 
-    using RootObjects = Record::RootObjects<HistogramSet>;
-    using RootArray   = std::vector<RootObjects>;
+    enum class DataTree : std::size_t { Protons, Pions };
+    enum class DataBranch : std::size_t { EventIndex, Energy, Px, Py, Pz };
 
     struct Candidates {
         std::vector<Lorentz> unvalidated;
@@ -45,15 +44,4 @@ namespace Lambda{
         const char* directoryName{};
     };
 
-    struct DataObjects {
-        TTree* protons{};
-        TTree* pions{};
-        // unique_ptr keeps branch addresses stable when DataObjects is moved
-        std::unique_ptr<std::array<Double_t, 4>> protonBranches{
-            std::make_unique<std::array<Double_t, 4>>()};
-        std::unique_ptr<std::array<Double_t, 4>> pionBranches{
-            std::make_unique<std::array<Double_t, 4>>()};
-        std::unique_ptr<Int_t> protonEventIndex{std::make_unique<Int_t>(0)};
-        std::unique_ptr<Int_t> pionEventIndex{std::make_unique<Int_t>(0)};
-    };
 }

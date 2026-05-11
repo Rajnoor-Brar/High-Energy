@@ -5,9 +5,9 @@
 [events]
 pythia      = false
 event_count = 50
-nThreads    = 4
 
 [probe]
+thread_count = 4
 input_file = "tests/fixtures/lambda_fixture.root"
 event_particles  = [
     ["protons", 0, "Protons", [["pX","D"], ["pY","D"], ["pZ","D"], ["Energy","D"]], [["event_index","I"]]],
@@ -15,17 +15,18 @@ event_particles  = [
 ]
 
 [record]
+thread_count = 2
 serial     = 0
 sr_padding = 1
 hist_scaling = 1.0
 
 [record.paths]
-directory            = "outputs/test/"
+directory            = "output/test/"
 output_log_directory = "logs/"
 checkpoint_directory = "checkpoints/"
 serialDirectory      = false
-logInSubDir          = false
-checkpointsInSubDir  = false
+logInSubDir          = true
+checkpointsInSubDir  = true
 
 [record.file]
 prefix = "fixture_smoke"

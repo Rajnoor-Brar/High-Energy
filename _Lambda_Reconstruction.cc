@@ -15,23 +15,21 @@ int main(int argc, char* argv[]) {
     const std::string project    = "Lambda_Reconstruction";
     const std::string configPath = argc > 1 ? argv[1] : "configs/" + project + ".toml";
 
-    Probe::ProbeParallel probe;
+    Probe::ProbeIMT probe;
     Record::Writer       writer;
     Monitor::AsyncLogger asyncLogger;
 
     Config::configure(configPath, project, probe, writer, asyncLogger);
 
     Lambda::Parameters physParams;
-    Lambda::RootArray  histogramSets;
-    Lambda::configure(physParams, histogramSets, writer, configPath);
+    Lambda::configure(physParams, writer, configPath);
 
-    writer.bind(asyncLogger, asyncLogger.watch(),
-                [&physParams]() { return Lambda::logString(physParams); });
-    writer.installFatalStallHandler(histogramSets);
+    writer.bind(asyncLogger, [&physParams]() { return Lambda::logString(physParams); });
 
     asyncLogger.initialise(writer);
+    writer.start();
 
-    Lambda::AnalysisContext ctx{histogramSets, physParams, asyncLogger.watch(), asyncLogger, writer};
+    Lambda::AnalysisContext ctx{physParams, asyncLogger.watch(), asyncLogger, writer};
     probe.run([&](const Probe::Event& ev, int threadId) {
         Lambda::rootAnalysis(ev, threadId, ctx);
     });
@@ -42,7 +40,7 @@ int main(int argc, char* argv[]) {
         Record::Meta::integrityAddFileSha(writer.meta(), configPath);
         Record::Meta::integrityAddFileSha(writer.meta(), writer.histConfig().histLimitsFile.Data());
     }
-    writer.shutdown(histogramSets);
+    writer.finish(asyncLogger.watch().nEvents);
 
     return 0;
 }

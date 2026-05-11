@@ -59,6 +59,18 @@ namespace Monitor {
         p.printInterval = std::max<std::size_t>(1, p.printInterval);
 
         logger.configurePacing(std::move(p));
+
+        // docs/WriterMT.md Phase 1: emission of WatchRequest from the
+        // logger.  Pulled from [monitor].save_* flags + checkpoint_interval.
+        // Phase 1: sink is not yet bound to the Writer; emission is dead
+        // code until Phase 2 wires bindWatchSink().
+        if (!logKey.empty()) {
+            const bool        saveHeartbeat   = config[logKey]["save_heartbeat"].value_or(false);
+            const bool        saveCheckpoints = config[logKey]["save_checkpoints"].value_or(false);
+            const std::size_t cpInterval      = static_cast<std::size_t>(
+                config[logKey]["checkpoint_interval"].value_or(static_cast<int64_t>(100000)));
+            logger.configureWatchEmission(saveHeartbeat, saveCheckpoints, cpInterval);
+        }
     }
 
 } // namespace Monitor

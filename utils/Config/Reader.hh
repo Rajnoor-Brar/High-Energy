@@ -17,10 +17,22 @@ namespace fs = std::filesystem;
 
 namespace Config {
 
+    // resolveThreadCount — used by drivers that take a manual thread count.
+    // Leaves 2 cores for OS / interactive tasks.
     inline std::size_t resolveThreadCount(std::size_t requested) {
         if (requested > 0) return requested;
         const unsigned hw = std::thread::hardware_concurrency();
         return hw > 2 ? static_cast<std::size_t>(hw - 2) : 1;
+    }
+
+    // resolveSectionThreadCount — per-section default for the WriterMT.md
+    // Phase 0 migration.  Each of [probe], [record], [pythia] gets one
+    // third of the (hw - 2) available cores.  Floored at 1.
+    inline std::size_t resolveSectionThreadCount(std::size_t requested) {
+        if (requested > 0) return requested;
+        const unsigned hw = std::thread::hardware_concurrency();
+        if (hw <= 2) return 1;
+        return std::max<std::size_t>(1, static_cast<std::size_t>((hw - 2) / 3));
     }
 
     // ── Section helpers ──────────────────────────────────────────────────────
@@ -36,12 +48,25 @@ namespace Config {
             events.eventCount = 1000;
             events.userEvents = false;
         }
-        events.nThreads   = static_cast<std::size_t>(
-            hasEvents ? config["events"]["nThreads"].value_or(0)
-                      : config["run"]["nThreads"].value_or(0));
+
+        // WriterMT.md Phase 0: [events].nThreads was removed in favour of
+        // per-section thread_count.  Fail loudly on legacy configs.
+        if (config["events"]["nThreads"]) {
+            throw std::runtime_error(
+                "[Config] '[events].nThreads' was removed; set "
+                "'[probe|record|pythia].thread_count' instead "
+                "(see docs/WriterMT.md Phase 0)");
+        }
+        if (config["run"]["nThreads"]) {
+            throw std::runtime_error(
+                "[Config] '[run].nThreads' was removed; set "
+                "'[probe|record|pythia].thread_count' instead "
+                "(see docs/WriterMT.md Phase 0)");
+        }
 
         watch.nEvents   = events.eventCount;
-        watch.n_threads = events.nThreads;
+        // watch.n_threads is set later by the pipeline-specific configure()
+        // overload to that pipeline's primary thread count.
     }
 
 
@@ -54,6 +79,11 @@ namespace Config {
         if (hasRecord) {
             reg.binCount  = config["record"]["bin_count"].value_or(reg.binCount);
             reg.histScale = config["record"]["hist_scaling"].value_or(reg.histScale);
+            // WriterMT.md Phase 0: per-section thread count.
+            reg.recordThreadCount = resolveSectionThreadCount(
+                static_cast<std::size_t>(config["record"]["thread_count"].value_or(0)));
+        } else {
+            reg.recordThreadCount = resolveSectionThreadCount(0);
         }
     }
 
@@ -66,6 +96,13 @@ namespace Config {
 
         reg.binCount  = config[logKey]["bin_count"].value_or(reg.binCount);
         reg.histScale = config[logKey]["hist_scaling"].value_or(reg.histScale);
+
+        // WriterMT.md Phase 0: checkpoint cadence (events between snapshots).
+        // Distinct from the existing 'check_interval' (stall-check cadence)
+        // and 'heartbeat_interval' (terminal-status freshness, milliseconds).
+        reg.checkpointInterval = static_cast<std::size_t>(
+            config[logKey]["checkpoint_interval"].value_or(
+                static_cast<int64_t>(reg.checkpointInterval)));
     }
 
     inline void readPathsAndFile(const toml::table& config,
@@ -114,6 +151,7 @@ namespace Config {
         reg.checkpointDirectory = checkSubDir ? rootDir + checkBasePath : checkBasePath;
 
         const std::string filePrefix = fileStr("prefix", "Unspecified");
+        reg.filePrefix = filePrefix;   // stored for shard-dir derivation in Configure.hh
         const bool fileSerial = fileBool("serial", true);
         const bool fileEnergy = fileBool("energy", true);
         const bool fileEvents = fileBool("events", true);
@@ -146,15 +184,32 @@ namespace Config {
     }
 
     inline void readPythiaSection(const toml::table& config, PythiaConfig& py) {
-        if (!config.contains("pythia")) return;
-        py.beamEnergy = config["pythia"]["beam_energy"].value_or(py.beamEnergy);
-        py.cmndFile   = config["pythia"]["cmnd_file"].value_or(py.cmndFile);
-        py.seed       = config["pythia"]["seed"].value_or(py.seed);
+        if (!config.contains("pythia")) {
+            py.thread_count = resolveSectionThreadCount(0);
+            return;
+        }
+        py.beamEnergy   = config["pythia"]["beam_energy"].value_or(py.beamEnergy);
+        py.cmndFile     = config["pythia"]["cmnd_file"].value_or(py.cmndFile);
+        py.seed         = config["pythia"]["seed"].value_or(py.seed);
+        // WriterMT.md Phase 0: per-section thread count.
+        py.thread_count = resolveSectionThreadCount(
+            static_cast<std::size_t>(config["pythia"]["thread_count"].value_or(0)));
     }
 
     inline void readProbeSection(const toml::table& config, ProbeConfig& probe) {
-        if (!config.contains("probe")) return;
+        if (!config.contains("probe")) {
+            probe.thread_count = resolveSectionThreadCount(0);
+            return;
+        }
         probe.inputFile   = config["probe"]["input_file"].value_or(probe.inputFile);
         probe.collections = Probe::parseCollectionsFromToml(config);
+        // WriterMT.md Phase 0: per-section thread count.
+        probe.thread_count = resolveSectionThreadCount(
+            static_cast<std::size_t>(config["probe"]["thread_count"].value_or(0)));
+        // Phase 1 sharding keys (docs/ROOTMT.md).  split_input defaults to
+        // false because Phase 1 measurement showed no CPU-floor improvement.
+        probe.splitInput  = config["probe"]["split_input"].value_or(false);
+        probe.tempSpace   = config["probe"]["temp_space"].value_or(std::string{});
+        probe.keepShards  = config["probe"]["keep_shards"].value_or(false);
     }
 }

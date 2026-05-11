@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+#include <mutex>
 #include <sstream>
 #include <string>
 
@@ -27,11 +29,10 @@ namespace Lambda{
     // Convenience wrapper: populate Parameters from TOML then declare histograms.
     // Equivalent to calling extractPhysics + declareObjects in sequence.
     inline void configure(Parameters&        parameters,
-                          RootArray&         histogramSets,
                           Record::Writer&    writer,
                           const std::string& configPath) {
         extractPhysics(configPath, parameters, writer.histConfig());
-        declareObjects(histogramSets, parameters, writer);
+        declareObjects(parameters, writer);
     }
 
     inline std::string logString(const Parameters& parameters) {
@@ -50,7 +51,11 @@ namespace Lambda{
     // Called once per Pythia8 event (serial or parallel).
     inline void pythiaAnalysis(Pythia8::Pythia& pythia, AnalysisContext& ctx)
     {
-        const std::size_t eventIndex = ++ctx.logging.iEvent;
+        // docs/WriterMT.md Phase 1: countEvent atomically increments
+        // watch.iEvent and emits WatchRequest (heartbeat/checkpoint) via
+        // the sink configured in Monitor::ConfigAid.  Phase 1 the sink is
+        // unbound; in Phase 2 it routes into the Writer's watchdog.
+        const std::size_t eventIndex = ctx.asyncLogger.countEvent();
         const int workerIndex = pythia.mode("Parallelism:index");
 
         if (eventIndex == 1) {
@@ -62,7 +67,7 @@ namespace Lambda{
         ctx.asyncLogger.publishThreadStats(workerIndex, Monitor::ThreadPhase::Analysis, eventIndex, Monitor::NoCallbackCompleted);
 
         const auto [protons, pions] = harvestParticles(pythia);
-        fillCandidates(ctx.histograms, reconstructCandidates(protons, pions, ctx.parameters));
+        fillCandidates(ctx.writer, reconstructCandidates(protons, pions, ctx.parameters));
 
         ctx.logging.recordEvent(std::chrono::system_clock::now());
 
@@ -70,66 +75,69 @@ namespace Lambda{
         ctx.asyncLogger.publishThreadStats(workerIndex, Monitor::ThreadPhase::Simulation, eventIndex, Monitor::CallbackCompleted);
 
         if (ctx.asyncLogger.checkInterval() > 0 && eventIndex % ctx.asyncLogger.checkInterval() == 0)
-            ctx.writer.checkpoint(ctx.histograms, eventIndex);
+            ctx.writer.checkpoint(eventIndex);
     }
 
     // ── rootAnalysis ──────────────────────────────────────────────────────────
     // Called once per Probe::Event from runParallel (multi-threaded).
-    // ctx.writer.recordingScope() serialises TH1D::Fill calls.
     inline void rootAnalysis(const Probe::Event& ev,
                              int threadId,
                              AnalysisContext& ctx)
     {
-        BlockTimer timer("Whole Analysis");
-        const std::size_t eventIndex = ++ctx.logging.iEvent;
+        // BlockTimer timer("Whole Analysis");
+        // docs/WriterMT.md Phase 1: countEvent atomically increments
+        // watch.iEvent and emits WatchRequest (heartbeat/checkpoint) via
+        // the sink configured in Monitor::ConfigAid.  Phase 1 the sink is
+        // unbound; in Phase 2 it routes into the Writer's watchdog.
+        const std::size_t eventIndex = ctx.asyncLogger.countEvent();
 
         ctx.asyncLogger.publishThreadStats(threadId, Monitor::ThreadPhase::Analysis, eventIndex, Monitor::NoCallbackCompleted);
 
         const std::vector<Lorentz> protonList = ev[ctx.parameters.protonLabel];
         const std::vector<Lorentz> pionList   = ev[ctx.parameters.pionLabel];
 
-        {
-            // BlockTimer timer("Core Analysis");
-            auto lock = ctx.writer.recordingScope();
-            fillCandidates(ctx.histograms, reconstructCandidates(protonList, pionList, ctx.parameters));
-        }
-        {
-            // BlockTimer timer("Root Recording");
+        fillCandidates(ctx.writer, reconstructCandidates(protonList, pionList, ctx.parameters));
         ctx.logging.recordEvent(std::chrono::system_clock::now());
-        }
 
         ctx.asyncLogger.publish(ctx.logging, Monitor::RunPhase::Analysis, Monitor::DontWriteRunStat);
         ctx.asyncLogger.publishThreadStats(threadId, Monitor::ThreadPhase::Simulation, eventIndex, Monitor::CallbackCompleted);
     }
 
     // ── dataGenerator ─────────────────────────────────────────────────────────
-    // Called once per Pythia8 event (parallel).  Writes raw proton/pion
-    // branches; treeMutex and the output trees live inside GenerationContext.
+    // Called once per Pythia8 event (parallel). Writes raw proton/pion rows
+    // through the Writer queue.
     inline void dataGenerator(Pythia8::Pythia& pythia, GenerationContext& ctx)
     {
-        const std::size_t eventIndex = ++ctx.logging.iEvent;
+        // docs/WriterMT.md Phase 1: countEvent atomically increments
+        // watch.iEvent and emits WatchRequest (heartbeat/checkpoint) via
+        // the sink configured in Monitor::ConfigAid.  Phase 1 the sink is
+        // unbound; in Phase 2 it routes into the Writer's watchdog.
+        const std::size_t eventIndex = ctx.asyncLogger.countEvent();
         const int workerIndex = pythia.mode("Parallelism:index");
 
         ctx.asyncLogger.publishThreadStats(workerIndex, Monitor::ThreadPhase::Analysis, eventIndex, Monitor::NoCallbackCompleted);
 
         const auto [protons, pions] = harvestParticles(pythia);
 
-        const Int_t eventIdx = static_cast<Int_t>(eventIndex);
-        {
-            std::lock_guard<std::mutex> lock(ctx.treeMutex);
-            auto& protonBranches = *ctx.data.protonBranches;
-            *ctx.data.protonEventIndex = eventIdx;
-            for (const auto& proton : protons) {
-                protonBranches = {proton.E(), proton.Px(), proton.Py(), proton.Pz()};
-                ctx.data.protons->Fill();
-            }
+        const auto eventIdx = static_cast<std::int32_t>(eventIndex);
+        for (const auto& proton : protons) {
+            ctx.writer.fillTree<DataTree, DataBranch>(DataTree::Protons, {
+                {DataBranch::EventIndex, eventIdx},
+                {DataBranch::Energy,     proton.E()},
+                {DataBranch::Px,         proton.Px()},
+                {DataBranch::Py,         proton.Py()},
+                {DataBranch::Pz,         proton.Pz()},
+            });
+        }
 
-            auto& pionBranches = *ctx.data.pionBranches;
-            *ctx.data.pionEventIndex = eventIdx;
-            for (const auto& pion : pions) {
-                pionBranches = {pion.E(), pion.Px(), pion.Py(), pion.Pz()};
-                ctx.data.pions->Fill();
-            }
+        for (const auto& pion : pions) {
+            ctx.writer.fillTree<DataTree, DataBranch>(DataTree::Pions, {
+                {DataBranch::EventIndex, eventIdx},
+                {DataBranch::Energy,     pion.E()},
+                {DataBranch::Px,         pion.Px()},
+                {DataBranch::Py,         pion.Py()},
+                {DataBranch::Pz,         pion.Pz()},
+            });
         }
 
         ctx.logging.recordEvent(std::chrono::system_clock::now());

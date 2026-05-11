@@ -50,7 +50,7 @@ namespace Monitor {
         constexpr char toDo = '-';
         const int nCols      = windowSize.ws_col ? static_cast<int>(windowSize.ws_col) - 6 : 100;
         const int filledCols = static_cast<int>(progress * nCols);
-        std::cout << "\r\033[32;1m|" << std::string(filledCols, done) << "\033[0m"
+        std::cout << "\r \033[32;1m|" << std::string(filledCols, done) << "\033[0m"
                   << (progress < 1.0 ? ">\033[31m" : std::string("\033[32;1m") + done)
                   << std::string(nCols - filledCols, toDo) << "|\033[0m"
                   << "\033[J\r" << std::flush;

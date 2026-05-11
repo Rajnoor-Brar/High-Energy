@@ -1,27 +1,27 @@
 #pragma once
 
 // ── Record ────────────────────────────────────────────────────────────────────
-// ROOT output management: histogram/tree containers, the output-file writer,
-// provenance metadata, and the fill/write helpers used by analysis handlers.
+// ROOT output management: Writer-owned histogram/tree containers, queued fill
+// requests, provenance metadata, and final ROOT file writing.
 //
 // Submodules:
 //   Extract.hh    — event-level extractor function types (Extract::Fn, Event)
 //                   used by ExtractHist1D/2D records
-//   Types.hh      — RootObjects<Basis>, RootArray, TH1Record, TreeRecord,
-//                   EventTH1Record, ExtractHist1D/2D
+//   Types.hh      — RecordKey, branch buffers, Writer-owned records, and
+//                   temporary RootObjects/RootArray compatibility types
+//   Requests.hh   — queue payloads, barrier states, and ParticleFillView
 //   Configs.hh    — HistConfig (binCount, histScale, limits maps, file paths)
 //   Meta.hh       — Record::Meta: capture/merge provenance and write
 //                   About/ directory to TFile
-//   Writer.hh     — Record::Writer class: owns TFile, Paths, HistConfig, Meta,
-//                   and the fill-mutex; exposes bind/shutdown/checkpoint
-//   Histogram.hh  — fill(), write(), writeAll() free functions for RootObjects
-//   Finalizer.hh  — inline bodies for Writer::bind, shutdown, checkpoint,
-//                   fatalShutdown (split here to break circular include with
-//                   Monitor.hh)
+//   Writer.hh     — Record::Writer class: owns TFile, records, queues, and the
+//                   scribe thread
+//   Histogram.hh  — legacy fill/write helpers retained during migration
+//   Finalizer.hh  — inline bodies for Writer::bind, finish, fatalShutdown
 // ─────────────────────────────────────────────────────────────────────────────
 
 #include "Record/Extract.hh"
 #include "Record/Types.hh"
+#include "Record/Requests.hh"
 #include "Record/Configs.hh"
 #include "Record/Meta.hh"
 #include "Record/Writer.hh"

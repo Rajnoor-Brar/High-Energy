@@ -40,19 +40,21 @@ namespace Config {
     using EventLimits    = std::map<Physics::EventProperty,    LevelBounds>;
 
     // ── [events] ─────────────────────────────────────────────────────────────
-    // Shared event-loop sizing. Driver selects the appropriate configure*()
-    // overload directly (Probe or Pythia pipeline).
+    // Event-loop sizing.  Thread counts moved out of here in WriterMT.md
+    // Phase 0; each pipeline section ([probe], [record], [pythia]) now owns
+    // its own thread_count.  See docs/WriterMT.md.
     struct Events {
-        std::size_t nThreads    = 0;     // 0 → resolveThreadCount() picks
         std::size_t eventCount  = 1000;
         bool        userEvents  = false; // true when event_count was explicit in TOML
+        // nThreads: REMOVED — see [probe|record|pythia].thread_count
     };
 
     // ── [pythia] ─────────────────────────────────────────────────────────────
     struct PythiaConfig {
-        Double_t    beamEnergy = 0.0;
+        Double_t    beamEnergy   = 0.0;
         std::string cmndFile;
-        int         seed       = 0;
+        int         seed         = 0;
+        std::size_t thread_count = 0;    // [pythia].thread_count; 0 → resolveSectionThreadCount()
         Events      eventConfig;
     };
 
@@ -64,6 +66,15 @@ namespace Config {
         std::string                           inputFile;
         std::vector<Probe::CollectionSpec>    collections;
         Events                                eventConfig;
+        std::size_t                           thread_count = 0;   // [probe].thread_count
+        // Phase 1 sharding (docs/ROOTMT.md).  Opt-in: default off because
+        // Phase 1 measurement showed no CPU-floor improvement on our access
+        // pattern — the bottleneck is ROOT's global thread-safety mutex, not
+        // per-TFile basket contention.  Flip on for A/B testing or for future
+        // composition with TTreeProcessorMT (Phase 2).
+        bool        splitInput = false;  // [probe].split_input
+        std::string tempSpace;           // [probe].temp_space; empty → auto-derive
+        bool        keepShards = false;  // [probe].keep_shards; ignored when splitInput=false
     };
 
     // ── Monitor's live run counters ───────────────────────────────────────────
@@ -105,6 +116,8 @@ namespace Config {
     // live here only because Config::Reader.hh writes into them during parsing.
     struct Register {
         Int_t   serial              = 0;
+        std::size_t recordThreadCount = 0;       // [record].thread_count
+        std::size_t checkpointInterval = 100000; // [monitor].checkpoint_interval (events)
         TString rootDirectory       = "output/";
         TString logDirectory        = "output/params/";
         TString checkpointDirectory = "output/checkpoints/";
@@ -117,6 +130,9 @@ namespace Config {
         TString checkpointLogName   = "";
         TString fileTitle           = "";
         TString histLimitsFile      = "";
+        // Bare prefix from [record.file].prefix — used by Configure.hh to
+        // construct the shard temp-directory path for ProbeParallel.
+        std::string filePrefix;
         ParticleLimits particleLimits{};
         EventLimits    eventLimits{};
         Int_t    binCount           = 100;

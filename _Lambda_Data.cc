@@ -1,6 +1,4 @@
 #include <chrono>
-#include <mutex>
-
 #include "Pythia8/Pythia.h"
 #include "Pythia8/PythiaParallel.h"
 
@@ -29,29 +27,23 @@ int main(int argc, char* argv[]) {
         pythia.readString("Parallelism:numThreads = " + std::to_string(nThreads));
     }
 
-    Lambda::DataObjects dataObjects;
-    Lambda::declareDataObjects(dataObjects, writer);
-    std::mutex treeMutex;
+    Lambda::declareDataObjects(writer);
 
     writer.bind(logger, logger.watch(),
                 []() { return Lambda::dataLogString(); },
                 [&pythia]() { pythia.stat(); },
-                [&pythia]() { pythia.settings.listChanged(); },
-                [&dataObjects]() {
-                    if (dataObjects.protons) dataObjects.protons->BuildIndex("event_index");
-                    if (dataObjects.pions)   dataObjects.pions->BuildIndex("event_index");
-                });
+                [&pythia]() { pythia.settings.listChanged(); });
 
     logger.initialise(writer);
     pythia.init();
+    writer.start();
 
-    Lambda::GenerationContext ctx{dataObjects, treeMutex, logger.watch(), logger, writer};
+    Lambda::GenerationContext ctx{logger.watch(), logger, writer};
     pythia.run(static_cast<long>(logger.watch().nEvents), [&](Pythia8::Pythia* worker) {
         Lambda::dataGenerator(*worker, ctx);
     });
 
-    Lambda::RootArray emptyObjects;
-    writer.shutdown(emptyObjects);
+    writer.finish(logger.watch().nEvents);
 
     return 0;
 }

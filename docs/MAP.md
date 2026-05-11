@@ -1,324 +1,328 @@
 # Codebase Map
 
-> Pythia8 / ROOT Lambda baryon (Λ → p + π⁻) reconstruction simulation.
-> Layered C++17 header-only design under `-I./utils -I./modules`.
->
-> **Build status (post-Batch07):** ✓ green. All four drivers
-> (`_Lambda_Reconstruction.exe`, `_Lambda_Parallel.exe`, `_Lambda_Data.exe`,
-> `_Lambda_Test.exe`) and `tests/*.exe` build clean. `make test` passes
-> T1–T5 and S1–S5.
->
-> Open backlog: [REVIEW.md](REVIEW.md). Status + deferred observations:
-> [ROADMAP.md](ROADMAP.md). Strategic plan-of-plans:
-> [Architecture.md](Architecture.md). TOML key inventory:
-> [DataFlow.md](DataFlow.md). Per-batch summary:
-> [plans/COMPLETED.md](plans/COMPLETED.md). Migration designs and
-> observations from the parallel Gemini agent live under [Gemini/](Gemini/).
+Updated: 2026-05-10.
 
----
+High-Energy is a C++17, header-heavy ROOT/Pythia8 Lambda baryon
+reconstruction project. The current architecture is post Probe/Writer
+overhaul: Probe owns event input, Lambda owns physics analysis, and
+`Record::Writer` owns ROOT output objects and queued output mutation.
 
-## Size summary (utils + modules + drivers + tests, .hh/.cc only)
+Companion docs:
 
-| Umbrella           | Lines | Notes                                                                          |
-| ------------------ | ----: | ------------------------------------------------------------------------------ |
-| Record             | 1 203 | Seven headers; `Writer.hh` central; `Finalizer.hh` is now the inline-bodies file for Writer methods |
-| Probe              | 1 123 | Nine headers; new `ProbeParallel.hh` + `ConfigAid.hh` (parses `[probe]` directly into `CollectionSpec`) |
-| Monitor            |   804 | Five headers; new `ConfigAid.hh` (`configureMonitor`); pacing fields private to `AsyncLogger` |
-| Lambda  (modules/) |   692 | Eight sub-headers + umbrella; `Lambda::configure` wraps `extractPhysics`+`declareObjects` |
-| Config             |   630 | Six headers; `Configure.hh` separated from umbrella to break circular include  |
-| Paint              |   426 | Four headers (no project deps)                                                 |
-| Physics            |   300 | Four headers + umbrella                                                        |
-| Drivers (root)     |   205 | Four `_Lambda_*.cc`                                                            |
-| Utility            |   133 | Two headers + umbrella                                                         |
-| tests/             |   396 | Asserts + 2 tests + 1 fixture generator                                        |
+- [CGPTsummary.md](CGPTsummary.md): condensed historical context for the overhaul.
+- [Issues.md](Issues.md): active performance and threading investigation
+  (P0 = `nThreads` scaling).
+- [REVIEW.md](REVIEW.md): expansions/improvements backlog for Probe,
+  Writer, Monitor, Lambda. Includes the `Monitor::Timer` proposal that
+  replaces the current `BlockTimer`.
+- [DataFlow.md](DataFlow.md): current TOML/config/runtime data flow.
 
-Direct `wc -l` of header/source under each umbrella; comments and blanks
-counted.
+## Runtime ownership
 
----
+```
+Config/Configure.hh
+  -> configures Probe or Pythia, Record::Writer, Monitor::AsyncLogger
+
+Probe::ProbeParallel or Pythia8::Pythia[Parallel]
+  -> produces one logical event at a time
+
+Lambda::{rootAnalysis,pythiaAnalysis,dataGenerator}
+  -> reconstructs candidates or raw rows
+  -> enqueues Writer requests
+
+Record::Writer
+  -> owns output TFile and ROOT records
+  -> scribe thread mutates ROOT objects
+  -> checkpoint/finish/fatal write
+
+Monitor::AsyncLogger
+  -> heartbeat/progress/logging thread
+```
+
+Normal reconstruction driver shape:
+
+```cpp
+Probe::ProbeParallel probe;
+Record::Writer writer;
+Monitor::AsyncLogger logger;
+
+Config::configure(configPath, project, probe, writer, logger);
+
+Lambda::Parameters parameters;
+Lambda::configure(parameters, writer, configPath);
+
+writer.bind(logger, logger.watch(),
+            [&] { return Lambda::logString(parameters); });
+
+logger.initialise(writer);
+writer.start();
+
+Lambda::AnalysisContext ctx{parameters, logger.watch(), logger, writer};
+probe.run([&](const Probe::Event& ev, int threadId) {
+    Lambda::rootAnalysis(ev, threadId, ctx);
+});
+
+writer.finish(logger.watch().nEvents);
+```
+
+No active Lambda driver should construct `Lambda::RootArray` or call
+`writer.shutdown(sets)`.
 
 ## Layering
 
 ```
-Physics ── ROOT only
-Utility ── consumes Config::TimePoint via include
-Paint   ── pure ROOT + toml++ (no project deps)
-Config  ── Physics
-Probe   ── Physics, Config (via Probe/ConfigAid.hh — parses [probe] TOML directly)
-Monitor ── Config, Utility (no Pythia8 in transitive set)
-Record  ── Physics, Config, Probe, Monitor
-Lambda  ── Physics, Config, Probe, Record, Monitor, Pythia8
-
-Config/Configure.hh ── Config + Probe + Record + Monitor
-                       (driver-only header; not pulled in by Config.hh
-                       because it would form a Probe ↔ Config cycle)
+Physics  -> ROOT math types only
+Utility  -> generic number/time/root-type helpers
+Config   -> TOML parsing and runtime object configuration
+Probe    -> ROOT input reader and event dispatcher
+Monitor  -> async terminal/log output
+Record   -> ROOT output owner, request queues, metadata
+Lambda   -> domain analysis and output declarations
+Drivers  -> wire one pipeline together
+Tests    -> unit/smoke coverage
 ```
 
-Pythia8 enters the include graph only through
-`modules/Lambda/Reconstruction.hh` (where `harvestParticles` directly takes
-`const Pythia8::Pythia&`). `_Lambda_Data.cc` and `_Lambda_Parallel.cc`
-also include Pythia8 directly because they construct
-`Pythia8::PythiaParallel`. Anything that does not include `Lambda.hh` does
-not pull Pythia8.
+Rule: `utils` must not depend on `modules/Lambda`. Lambda may depend on utils.
 
-**Dependency-direction rule** (documented at top of `utils/Config.hh`):
-`Config → Probe / Record / Monitor` is allowed; the reverse direction is
-also permitted (those umbrellas read Config types). `utils → Lambda`
-module is **not** permitted.
+`Config/Configure.hh` is driver-facing and intentionally not included by
+`Config.hh`; it depends on Probe, Record, and Monitor umbrellas.
 
----
+## Drivers
 
-## Drivers (`/`)
+| File | Role |
+| ---- | ---- |
+| `_Lambda_Reconstruction.cc` | Probe pipeline over an existing ROOT file. Configures Probe, Writer, Logger; declares Lambda output; runs `Lambda::rootAnalysis`; finishes Writer. |
+| `_Lambda_Parallel.cc` | Pythia8 parallel generation plus Lambda analysis. Uses Writer-owned histograms. |
+| `_Lambda_Test.cc` | Single-thread Pythia smoke-style driver with a small sleep per event. |
+| `_Lambda_Data.cc` | Pythia8 data generation. Declares Writer-owned explicit `Protons` and `Pions` trees and fills rows through Writer. |
 
-| File                        | Lines | Status  | Role                                                                                        |
-| --------------------------- | ----: | ------- | ------------------------------------------------------------------------------------------- |
-| `_Lambda_Reconstruction.cc` |    49 | ✓ green | Probe pipeline: `Probe::ProbeParallel.run` → `Lambda::rootAnalysis` over a stored ROOT file |
-| `_Lambda_Parallel.cc`       |    48 | ✓ green | Pythia pipeline: `PythiaParallel::run` → `Lambda::pythiaAnalysis`; generation + analysis    |
-| `_Lambda_Test.cc`           |    50 | ✓ green | Single-thread Pythia smoke driver; 5 ms sleep per event                                     |
-| `_Lambda_Data.cc`           |    58 | ✓ green | Pythia pipeline: `PythiaParallel::run` → `Lambda::dataGenerator`; writes raw proton/pion trees |
+## Tests
 
-All four drivers share the same lifecycle:
+| File | Role |
+| ---- | ---- |
+| `tests/test_reconstructCandidates.cc` | Pure Lambda reconstruction unit tests. |
+| `tests/test_probe_parallel.cc` | Probe collector/worker modes, queue behavior, and stats. |
+| `tests/test_record_writer.cc` | RootUtil, RecordKey, branch buffers, Writer declaration validation, queue drain, and scribe exception propagation. |
+| `tests/test_rootAnalysis_smoke.cc` | Probe + Lambda + Writer smoke test that inspects the final ROOT output after `writer.finish`. |
+| `tests/fixtures/make_lambda_fixture.cc` | Builds the committed Lambda fixture ROOT file. |
+| `tests/run_all.sh` | Runs test executables. |
+
+## `utils/Config`
+
+Purpose: parse TOML, load defaults/limits, and configure runtime objects.
+
+Important files:
+
+- `Config/Types.hh`: `Events`, `PythiaConfig`, `ProbeConfig`, `Watch`, and
+  transitional `Register`.
+- `Config/Reader.hh`: parses `[events]`, `[record]`, `[record.paths]`,
+  `[record.file]`, `[pythia]`, and `[probe]`.
+- `Config/Defaults.hh`: loads optional monitor defaults and required
+  Lambda limits.
+- `Config/Configure.hh`: driver facade overloads:
+  - `Config::configure(..., Probe::ProbeParallel&, Writer&, AsyncLogger&)`
+  - `Config::configure(..., PythiaT&, Writer&, AsyncLogger&)`
+
+Current thread caveat: `[events].nThreads` is still the only parsed thread key.
+The intended next direction is per-section thread config.
+
+## `utils/Probe`
+
+Purpose: read ROOT input data into `Probe::Event` and invoke callbacks.
+
+Important files:
+
+- `Probe/Types.hh`: branch specs, collection specs, stream/callback modes,
+  event key/event containers, `QueuedEvent`, and
+  `BranchType = RootUtil::DataType`.
+- `Probe/BranchControl.hh`: ROOT branch helpers, type checks, partitioning,
+  index scanning, and `enableRootThreadSafety`.
+- `Probe/ConfigAid.hh`: parses `[probe].event_particles` into
+  `Probe::ParticleSpec` (alias `CollectionSpec`).
+- `Probe/Event.hh`: `EventStream` wrapper for flat indexed trees and vector
+  event trees. Per-thread; opens its own `TFile`.
+- `Probe/FlatReader.hh`: per-collection reader for indexed flat trees.
+- `Probe/VecReader.hh`: per-collection reader for vector-branch event
+  trees. v1 supports float kinematics.
+- `Probe/Parallel.hh`: `Probe::ProbeParallel` class and a compatibility
+  `runParallel<Cb>(...)` free function that internally constructs a
+  `ProbeParallel` in `WorkerThread` mode.
+- `Probe/EventCount.hh`: reads `About/events/n_events_total` from ROOT input.
+
+`Probe::ProbeParallel`:
+
+- defaults to `CallbackMode::CollectorThread`;
+- in CollectorThread mode, workers parallelize event reading but the Lambda
+  callback is invoked serially by the collector;
+- supports `WorkerThread` for compatibility/direct callbacks;
+- owns input file, particle specs, stream type, event count/range, partitions,
+  entry bounds, queue capacity, callback mode, and stats;
+- assumes indexed branches are ascending, dense, and grouped;
+- queues built events to the collector in CollectorThread mode.
+
+Note: `utils/Probe.hh` still mentions a `ProbeParallel.hh` subfile, but the
+class currently lives in `Probe/Parallel.hh`.
+
+## `utils/Record`
+
+Purpose: own output ROOT records, request queues, metadata, checkpoints, final
+write, and fatal write.
+
+Important files:
+
+- `Record/Types.hh`: `RecordKey`, branch buffers, Writer-owned record structs,
+  and temporary legacy `RootObjects` / `RootArray` compatibility types.
+- `Record/Requests.hh`: queue payloads, barrier state, queue lanes, and
+  `ParticleFillView`.
+- `Record/Writer.hh`: main Writer class. Owns `TFile`, record registries,
+  queues, scribe thread, lifecycle APIs, and request application.
+- `Record/Finalizer.hh`: inline `Writer::bind`, `finish`, and fatal shutdown
+  bodies.
+- `Record/Meta.hh`: provenance metadata and `About/` ROOT writing.
+- `Record/Configs.hh`: `Paths` and `HistConfig`.
+- `Record/Histogram.hh`: legacy fill/write helpers retained during migration.
+
+Writer public lifecycle:
 
 ```cpp
-<Runner>             runner;     // Probe::ProbeParallel or Pythia[Parallel]
-Record::Writer       writer;
-Monitor::AsyncLogger logger;
-
-Config::configure(configPath, project, runner, writer, logger);
-Lambda::Parameters phys; Lambda::RootArray sets;
-Lambda::configure(phys, sets, writer, configPath);   // (analysis drivers only)
-
-writer.bind(logger, logger.watch(), [&]{ return Lambda::logString(phys); });
-writer.installFatalStallHandler(sets);
-
-logger.watch().start = std::chrono::system_clock::now();
-logger.start(writer);
-runner.run([&](...){ Lambda::<handler>(...); });
-
-writer.shutdown(sets);
+writer.open(paths, histConfig, meta);
+// declarations only
+writer.start();
+// concurrent producers enqueue fills
+writer.checkpoint(eventIndex);
+writer.finish(eventCount);
+writer.fatalWrite(eventCount, timeout);
 ```
 
-`_Lambda_Data.cc` substitutes `Lambda::declareDataObjects(dataObjects, writer)`
-for the histogram-set declaration and uses `Lambda::GenerationContext`.
+Writer is single-scribe today. The grand queue (default capacity 1024) is
+bounded; producers block on `queueNotFull_` when full. Per-lane payload
+queues exist for Particle, Hist1D, Hist2D, Graph, Profile, Tree,
+Checkpoint, Finish, FatalWrite, and Stop tickets. `writer.stats()` reports
+queue capacity, current backlog, produced/consumed request counts, and
+max observed backlog.
 
----
+Declaration APIs (must run before `start()`):
 
-## `tests/`
+- particle group: `declareParticleGroup`, `declareParticleCount`,
+  `declareParticleHist1D`, `declareParticleHist2D`,
+  `declareParticleGraph`, `declareParticleProfile`,
+  `declareParticleTree`.
+- independent: `declareHist1D`, `declareHist2D`, `declareGraph`,
+  `declareProfile`, `declareTree<TreeBasis, BranchBasis>`.
 
-| File                                        | Lines | Role                                                                                        |
-| ------------------------------------------- | ----: | ------------------------------------------------------------------------------------------- |
-| `tests/test_assert.hh`                      |    66 | `TEST_EQ`, `TEST_NE`, `TEST_TRUE`, `TEST_FALSE`, `TEST_NEAR`, `TEST_LT`, `TEST_PASS` macros |
-| `tests/test_reconstructCandidates.cc`       |    90 | Unit test, 5 cases (T1–T5). Pure physics; no ROOT file, no Pythia event                    |
-| `tests/test_rootAnalysis_smoke.cc`          |   119 | Integration test, 5 cases (S1–S5). Uses the same `Config::configure` facade as drivers     |
-| `tests/fixtures/make_lambda_fixture.cc`     |   121 | Generator for `lambda_fixture.root` (50 events, 4p + 5pi each, one signal pair per event)  |
-| `tests/fixtures/lambda_fixture.toml`        |     — | Self-contained config; uses the `[probe].event_particles` form                              |
-| `tests/fixtures/lambda_fixture_limits.toml` |     — | Limits TOML pointed at by `lambda_fixture.toml`'s `[lambda].hist_limits`                    |
-| `tests/fixtures/lambda_fixture.root`        |     — | Committed binary fixture; rebuild with `make_lambda_fixture.exe` if regen needed            |
-| `tests/run_all.sh`                          |    36 | Drives every `test_*.exe`; exit 77 = skip (fixture missing), nonzero = fail                 |
+Fill APIs (after `start()`):
 
-`make test` builds the fixture generator and both test binaries, then
-invokes `run_all.sh`. Last green run: T1–T5 and S1–S5 all pass.
+- `fillParticleEvent<Basis>({ {basis, particles}, ... })` — one call
+  per logical event; the scribe applies all groups in one ticket.
+- `fillHist1D`, `fillHist2D`, `fillGraph`, `fillProfile`, `fillTree`
+  for independent objects.
 
----
+Lifecycle: `checkpoint(eventIndex)` is a barrier ticket; the scribe
+applies every queued fill before the checkpoint write. `finish(eventCount)`
+flips `accepting_` to false, drains the queue, writes metadata, closes
+the file, joins. `fatalWrite(eventCount, timeout)` bypasses normal queue
+capacity and wakes blocked producers.
 
-## `utils/`
+## `utils/Monitor`
 
-### `Config.hh` — TOML → in-memory config
+Purpose: asynchronous terminal and log reporting.
 
-Top of file documents the dependency-direction rule (`Config → Probe /
-Record / Monitor` allowed; reverse direction also OK). Public entry
-points:
+Important files:
 
-- `configuration(path, project, events, watch, reg)` — base 5-arg.
-- `configuration(path, project, watch, reg)` — drops `Events`.
-- `extractConfiguration(path, project, watch, reg)` — back-compat alias.
-- `configurePythia<PythiaT>(path, project, watch, reg, pythia)` — loads
-  `[pythia]` and applies `cmnd_file` / `seed` / `Beams:eCM` directly.
-- `configureProbe(path, project, watch, reg, probe)` — loads `[probe]`
-  into a `Config::ProbeConfig` (whose `collections` field is now
-  `vector<Probe::CollectionSpec>` directly — no `ProbeParticle`
-  intermediate).
+- `Monitor/Logger.hh`: `AsyncLogger`, private `Config::Watch`, heartbeat
+  thread, snapshots, fatal-stall callback, thread stats.
+- `Monitor/ConfigAid.hh`: reads monitor pacing from `[monitor]`, `[log]`, or
+  `[logging]`.
+- `Monitor/Render.hh`: terminal and log rendering.
+- `Monitor/Snapshot.hh`: snapshot formatting helpers.
+- `Monitor/Timer.hh`: currently a single `BlockTimer` (global namespace,
+  not `Monitor::`) that opens `output/timer.log` per construction and
+  writes a duration on destruction. Used only in
+  `modules/Lambda.hh::rootAnalysis`. The per-event file open is
+  problematic under multi-threaded callbacks; see [REVIEW §3](REVIEW.md)
+  for the proposed `Monitor::Timer` family that replaces it.
 
-The driver-facing facade lives in `utils/Config/Configure.hh` (separate
-from the umbrella):
+Fatal-stall handling currently routes through `Writer::bind`, which registers a
+logger callback that calls `writer.fatalWrite`.
 
-- `Config::configure(path, project, Probe::ProbeParallel&, Writer&, AsyncLogger&)`
-- `Config::configure(path, project, PythiaT&, Writer&, AsyncLogger&)`
+## `modules/Lambda`
 
-Three-tier resolution still applies inside `configuration()`:
-`loadMonitorDefaults` (`configs/defaults/Monitor.toml`) → `limitExtractor`
-(`configs/defaults/Limits.toml` **optional** — silently skipped if absent
-since Batch07; project limits TOML still required) → user TOML
-(`readEventsSection`, `readRecordSection`, `readLogSection`,
-`readPathsAndFile`).
+Purpose: Lambda baryon domain logic, output declarations, and callbacks.
 
-| Subfile                | Lines | Contents                                                                                                                 |
-| ---------------------- | ----: | ------------------------------------------------------------------------------------------------------------------------ |
-| `Config/Types.hh`      |   126 | `Bounds`, `RangeSize`, `LevelBounds`, `ParticleLimits`/`EventLimits`. `Events` (with `userEvents` sentinel), `PythiaConfig`, **`ProbeConfig` (`vector<Probe::CollectionSpec> collections;`)**. `Watch` (lock-free atomic `iEvent`/`n_real_events`/`elapsed`). `Register` (now without serial; serial moved onto `Writer::paths()`). |
-| `Config/TypeAid.hh`    |    54 | `levelToString`, `stringToLevel`. Lock-free `Watch::recordEvent(TimePoint)` (`fetch_add` + relaxed `store`); `Watch::freeze()` for atomic-safe snapshots. |
-| `Config/LimitAid.hh`   |    15 | `resolveLimitsPath` — accepts bare name, `name.toml`, or full path with `/`. |
-| `Config/Defaults.hh`   |   103 | `parseBoundsArray`, `loadLimitsFile`, `limitExtractor` (defaults pass now optional), `loadMonitorDefaults`. |
-| `Config/Reader.hh`     |   160 | TOML section parsers: `readEventsSection` (sets `userEvents` from key presence), `readRecordSection`, `readLogSection`, `readPathsAndFile`, `readPythiaSection`. The `[probe]` parser was moved into `Probe/ConfigAid.hh::parseCollectionsFromToml` (Batch05). Plus `resolveThreadCount`, `sanitiseLoggingConfig`. |
-| `Config/Configure.hh`  |    73 | **The driver-facing facade.** Two `Config::configure` overloads (Probe / PythiaT). Probe overload calls `probe.resolveEvents()` before `configureWriter` so the output filename embeds the resolved count. Pythia overload reads `Beams:eCM` from already-loaded settings as fallback. |
+Important files:
 
-### `Physics.hh` — pure physics
+- `Lambda/Types.hh`: `HistogramSet`, `DataTree`, `DataBranch`, `Candidates`,
+  and `Parameters`.
+- `Lambda/Loaders.hh`: reads `[lambda]` and `[lambda.analysis].writeTree`.
+- `Lambda/Declare.hh`: declares Writer-owned particle groups/histograms/trees
+  and raw data trees.
+- `Lambda/Reconstruction.hh`: harvests Pythia particles and reconstructs
+  Lambda candidates.
+- `Lambda/Recording.hh`: adapts `Candidates` to `writer.fillParticleEvent`.
+- `Lambda/Context.hh`: lightweight contexts containing parameters/watch/logger
+  and Writer references only.
+- `Lambda.hh`: orchestrator and callback implementations. Provides
+  `Lambda::configure(parameters, writer, configPath)` (calls
+  `extractPhysics` then `declareObjects` so drivers replace four
+  setup lines with two). `rootAnalysis`, `pythiaAnalysis`, and
+  `dataGenerator` are the three event callbacks.
 
-Property enum is the canonical source for `Config::ParticleLimits` /
-`Config::EventLimits` keys. **Deps:** none.
+Current performance attention is on `reconstructCandidates`, candidate vector
+materialization, and the Writer enqueue/fill boundary; see
+[Issues.md](Issues.md).
 
-| Subfile                 | Lines | Contents                                                                                                                                          |
-| ----------------------- | ----: | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Physics/Types.hh`      |   103 | `Lorentz` (= `ROOT::Math::PxPyPzEVector`), `Column`. `ParticleProperty` (12 values), `EventProperty` (1: `Multiplicity`). `kParticleTraits[12]`/`kEventTraits[1]` arrays, `traitsOf` overloads. |
-| `Physics/TypeAid.hh`    |    47 | `particlePropertyToString`, `eventPropertyToString`, `stringToParticleProperty`, `stringToEventProperty`, `try*` variants.                       |
-| `Physics/Properties.hh` |    29 | `particlePropertyName`, `eventPropertyName`, `valueOf` (×2), `multiplicityOf`.                                                                    |
-| `Physics/Kinematics.hh` |   100 | `fromComponents`, `invariantMass` (×2), `deltaPhi`, `deltaR`, `cosOpening`. Column-vectorised variants.                                          |
+## Configs
 
-### `Utility.hh` — domain-agnostic formatters
+Primary configs:
 
-**Deps:** Config (`Time.hh` consumes `Config::TimePoint`).
+- `configs/Lambda_Reconstruction.toml`: Probe reconstruction from stored ROOT.
+- `configs/Lambda_Generation.toml`: Pythia generation and data driver input.
+- `configs/Lambda_Limits.toml`: Lambda histogram/selection bounds.
+- `configs/defaults/Limits.toml`: optional global limits fallback if present.
+- `configs/defaults/Monitor.toml`: optional histogram default fallback if
+  present.
 
-| Subfile             | Lines | Contents                                                                              |
-| ------------------- | ----: | ------------------------------------------------------------------------------------- |
-| `Utility/Number.hh` |    54 | `numberFormat` (comma-grouped, padded), `numberString` (k / M / B / T / P / E suffix). |
-| `Utility/Time.hh`   |    66 | `localTime`, `timeString` (×2), `durationString`.                                     |
+Known config caveats:
 
-### `Probe.hh` — ROOT file reader
+- `[events].nThreads` is still global-ish and should split into
+  `[probe].nThreads`, `[probe].callback_mode`, `[pythia].nThreads`, and
+  `[record].writer_threads`.
+- `[probe.index]` is present in reconstruction TOML but not currently parsed.
+- Writer-owned raw data trees use `event_index`; the current reconstruction
+  config names `Index`. Keep the config aligned with the actual input ROOT file.
+- several `[record].save_*` booleans are present but not wired.
 
-**Deps:** Physics, Config.
+## Threading at a glance
 
-| Subfile                  | Lines | Contents                                                                                                                                                                                     |
-| ------------------------ | ----: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Probe/Types.hh`         |    92 | `Lorentz` re-export. `BranchType`, `MissingBranchPolicy`, `BranchSpec` (name + type + policy). Coord specs uniform — `CartesianSpec` / `PtEtaPhiESpec` / `PtEtaPhiMSpec` each hold one `vector<BranchSpec>`. `ParticleSpec` / `using CollectionSpec = ParticleSpec`. `AuxColumn`, `ScalarValue`, `EventKey`, `Event`. |
-| `Probe/BranchControl.hh` |   218 | `namespace Probe::BranchControl`. Helpers: `Partition`, `enableRootThreadSafety`, `branchTypeStr`, `detectType` (×3), `requireBranch`/`requireType`, `KinBuf`, `coordNames`, `makeLorentz`, `partitionEvents`, `probeFirstKey`, `scanIndexBranch`. |
-| `Probe/ConfigAid.hh`     |   101 | **`Probe::parseCollectionsFromToml(const toml::table&)`** (Batch05) — builds `vector<CollectionSpec>` directly from the `[probe]` table. Replaces the old `Config::ProbeParticle` → `Probe::CollectionSpec` conversion glue. |
-| `Probe/ProbeParallel.hh` |    38 | **`class Probe::ProbeParallel`** (Batch03) — fields `inputFile`, `collections`, `nThreads`, `nEvents`; methods `resolveEvents()` (two-tier fallback) and `template<class Cb> void run(Cb&&)` wrapping `runParallel`. |
-| `Probe/FlatReader.hh`    |   231 | `class FlatReader` — per-particle row tree + index branch.                                                                                                                                   |
-| `Probe/VecReader.hh`     |   103 | `class VecReader` — per-event vector branches via `TTreeReaderArray<float>`.                                                                                                                  |
-| `Probe/Event.hh`         |   144 | `class EventStream` — unified Flat/Vec iterator with dense key range or full scan; `nEventsHint` short-circuits the index-key scan. (`scalars` parameter dropped in Batch03.)                |
-| `Probe/Parallel.hh`      |   127 | `runParallel<Callback>` — wrapped by `ProbeParallel::run`. `scalars` parameter removed in Batch03.                                                                                            |
-| `Probe/EventCount.hh`    |    36 | `resolveEventCount(filepath)` — opens a ROOT file and reads `About/events/n_events_total`. Returns 0 on any failure.                                                                          |
+- Probe can spawn N worker threads and, in CollectorThread mode, one
+  collector. The default callback mode is `CollectorThread`, which means
+  Lambda analysis is invoked serially even when N>1. `WorkerThread`
+  parallelises the Lambda callback and is now safe (Writer queues output
+  mutation), but is not yet wired to TOML; see
+  [REVIEW §1.1](REVIEW.md).
+- Pythia8 parallel drivers spawn Pythia workers controlled by Pythia
+  settings. `_Lambda_Data.cc` propagates `[events].nThreads` to Pythia;
+  `_Lambda_Parallel.cc` currently does not.
+- Writer always spawns exactly one scribe thread today. Multi-lane
+  Writer is REVIEW §2.1.
+- AsyncLogger spawns one monitor heartbeat thread.
 
-### `Record.hh` — ROOT object writer (histograms + trees + metadata)
+Do not interpret low Probe CPU as a Probe failure by itself. It can mean
+Probe is producing fine and Lambda analysis (Suspect rank 0–3 in
+[Issues.md](Issues.md)) is the bottleneck, or that Writer queue space is
+saturated.
 
-**Deps:** Physics, Config, Probe, Monitor.
+Inter-thread synchronization points to be aware of:
 
-| Subfile               | Lines | Contents                                                                                                                                                                                                                              |
-| --------------------- | ----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Record/Types.hh`     |    67 | `NoBasis`, `TH1Record`, `TH2Record`, `TreeRecord` (now populated when `[lambda.analysis].writeTree` lists the set), `EventTH1Record`, `ExtractHist1D`, `ExtractHist2D`, `RootObjects<Basis>`, `RootArray<Basis>`.                       |
-| `Record/Configs.hh`   |    47 | `HistConfig` (binCount, histScale, particle/event limits maps, `histLimitsFile`). `Paths` (output / log / checkpoint path templates, serial). |
-| `Record/Extract.hh`   |   172 | `namespace Record::Extract`. `Event`/`Lorentz`/`Scalars`/`Fn` aliases. Primitives + combinators for event-level extractors.                                                                                                            |
-| `Record/Meta.hh`      |   406 | `namespace Record::Meta`. `Dataset`/`Processing`/`EventSummary`/`Physics`/`Objects`/**`Integrity` (with `git_sha`, `git_dirty`, `host_uname`, `file_shas`)** /`Notes`/`Record` structs. `nowISO8601`, `processedBy`, `osArch`, `readFile`, **`sha256File`**, **`integrityAddFileSha`**, `mergeFromToml`, `mergeFromProbe`, `fillDerived`, `capture()`, `writeAbout()`. |
-| `Record/Histogram.hh` |   167 | `declareTree<N>`, `count`/`countAll`/`resetCount`/`resetAllCounts`. `fill` overloads. `scaleAndWrite`/`scaleAndWriteToDir`, `write`/`writeToDir`/`writeAll`.                                                                          |
-| `Record/Writer.hh`    |   184 | **`class Record::Writer`** — owns `TFile*`, `Paths`, `HistConfig`, `Meta::Record`, private `histMutex_`, and the bound `AsyncLogger` + callbacks. Exposes `bind`, `installFatalStallHandler`, `shutdown(sets)`, `checkpoint(sets, idx)`, `recordingScope()`, `meta()`, `paths()`, `histConfig()`, `file()`. `Record::configureWriter(...)` factory. |
-| `Record/Finalizer.hh` |   131 | Inline bodies for `Writer::bind`, `installFatalStallHandler`, `shutdown`, `checkpoint`, private `fatalShutdown`. Split out of `Writer.hh` to break the `Monitor::Logger` ↔ `Writer` include cycle. **`FinalizerController` no longer exists as a class** (Batch02). |
-
-### `Monitor.hh` — async terminal I/O
-
-**Deps:** Config, Utility. **No Pythia8 in transitive set.**
-
-| Subfile               | Lines | Contents                                                                                                                                                                                                                                                                                                                            |
-| --------------------- | ----: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Monitor/Types.hh`    |    71 | `FatalStallMultiplier`. `RenderStatus`/`RenderBar`/`WriteRunStat` constexpr flags + `Dont*` negatives. `NoEvents`, `CallbackCompleted`/`NoCallbackCompleted`. `RunPhase`, `ThreadPhase` enums. `RunSnapshot`, `PendingActions`, `ThreadSnapshot`, `PacingInfo`.                                                                       |
-| `Monitor/Snapshot.hh` |   106 | `phaseString`, `threadPhaseString`, `statusString`, `makeSnapshot`, `runStatString`, `threadStatString`, `updatedETA`.                                                                                                                                                                                                              |
-| `Monitor/Render.hh`   |   176 | Terminal control — `disable_input_echo`, `restore_terminal`, `terminalMutex`, `writeTextFile`, `renderProgressBar`. `buildLogText`, `outputLog`, `terminalReport`. `buildEmergencyLogText`, `writeEmergencyLog`.                                                                                                                    |
-| `Monitor/Logger.hh`   |   361 | `class AsyncLogger` — background heartbeat thread. **Owns a private `Config::Watch watch_`** (Batch03) plus pacing-interval fields populated by `configureMonitor`. `start(writer)`, `publish`, `publishThreadStats`, `finish`, `setFatalStallHandler`, `stop`, `watch()`, `checkInterval()`, `printInterval()`, `pacingInfo()`.   |
-| `Monitor/ConfigAid.hh`|    65 | **`Monitor::configureMonitor(AsyncLogger&, configPath, project)`** (Batch03) — loads pacing/interval values from `[monitor]` / `[log]` TOML directly into the logger's private fields.                                                                                                                                              |
-
-### `Paint.hh` — ROOT histogram styling and export
-
-**Deps:** none (pure ROOT + toml++).
-
-| Subfile          | Lines | Contents                                                                                                                                                                                            |
-| ---------------- | ----: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Paint/Types.hh` |    69 | `LineSpec`, `FillSpec`, `MarkerSpec`, `AxisSpec`, `CanvasSpec`, `StatsSpec`, `LegendSpec`, `Style`, `PadLayout`.                                                                                    |
-| `Paint/Style.hh` |    38 | `parseColor` (named-color + offset parser, e.g. `kRed+2`).                                                                                                                                          |
-| `Paint/Apply.hh` |   205 | `loadStyle`, `applyGlobalStyle`, `applyStyle` (TH1 / TGraph), `makeCanvas`, `applyStats`.                                                                                                            |
-| `Paint/Save.hh`  |    97 | `saveToFile`, `savePdf`, `savePng`, `saveSvg`, `saveComposite`.                                                                                                                                     |
-
----
-
-## `modules/`
-
-### `Lambda.hh` — orchestrator
-
-**Deps:** Probe, Record, Monitor, Config, Physics, Pythia8.
-
-| Subfile                    | Lines | Contents                                                                                                                                                                                                                                                                                                                                              |
-| -------------------------- | ----: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Lambda.hh` (umbrella)     |   135 | `dataLogString`, **`configure(parameters, sets, writer, configPath)`** (Batch07 — wraps `extractPhysics + declareObjects`), `logString(Parameters&)`, three handlers: `pythiaAnalysis(pythia, ctx)`, `rootAnalysis(ev, threadId, ctx)` (no histMutex param — Writer owns it), `dataGenerator(pythia, ctx)`.                                            |
-| `Lambda/Types.hh`          |    59 | Constants `kLambdaMass`/`kProtonMass`/`kPionMass`/`kMassDiff`. `ProtonPid`/`PionPid`. `HistogramSet` enum + `kHistogramSetCount = 3`. Aliases `Lorentz` (= `Physics::Lorentz`), `RootObjects`, `RootArray`. `Candidates`, `Parameters` (with `writeTree: vector<HistogramSet>`), `HistogramSetAttributes`, `DataObjects`. (`SpecsArray` deleted in Batch07.) |
-| `Lambda/TypeAid.hh`        |    23 | `kHistogramSetMap`, `propertyAlias`.                                                                                                                                                                                                                                                                                                                  |
-| `Lambda/Parameters.hh`     |    96 | Bounds resolution helpers: `Recorded_ParticleProperties`, `explicitBounds`, `levelBounds` (×2), `boundsFromNode<P>`, `resolveBounds<P>`. (`kTreeEnabledSets` deleted in Batch07.)                                                                                                                                                                       |
-| `Lambda/Loaders.hh`        |    81 | `extractPhysics` — reads `[lambda]` keys plus `[lambda.analysis].writeTree`, then loads the per-set/per-property bounds.                                                                                                                                                                                                                              |
-| `Lambda/Declare.hh`        |   117 | `declareDataObjects` (Protons/Pions trees for the Pipeline-A data driver). `declareObjects` — count + per-property histograms per set; calls `Record::declareTree(...)` for each set listed in `parameters.writeTree`.                                                                                                                                  |
-| `Lambda/Reconstruction.hh` |    96 | `Particle` candidate struct, `cosTheta`, `harvestParticles`, `reconstructCandidates`. **Includes `Pythia8/Pythia.h` directly** — only file in the project that does.                                                                                                                                                                                  |
-| `Lambda/Recording.hh`      |    45 | `findObjects`, `fill` (×2; tree fill is now real when `writeTree` opts the set in), `fillCandidates`.                                                                                                                                                                                                                                                |
-| `Lambda/Context.hh`        |    40 | `AnalysisContext { RootArray&, const Parameters&, Config::Watch&, Monitor::AsyncLogger&, Record::Writer& }`. `GenerationContext { DataObjects&, std::mutex&, Config::Watch&, Monitor::AsyncLogger&, Record::Writer& }`.                                                                                                                                  |
-
----
-
-## `configs/`
-
-### Run configs
-
-| File                         | Driver                                       | Sections                                                                                                                                  |
-| ---------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `Lambda_Generation.toml`     | `_Lambda_Parallel.exe` / `_Lambda_Data.exe`  | `[events]` · `[pythia]` · `[record]` · `[record.paths]` · `[record.file]` · `[record.metadata]` · `[lambda]` · `[monitor]`                |
-| `Lambda_Reconstruction.toml` | `_Lambda_Reconstruction.exe` / `_Lambda_Test.exe` | `[events]` · `[probe]` · **`[pythia]` (Batch07)** · `[record]` · `[record.paths]` · `[record.file]` · `[record.metadata]` · `[lambda]` |
-
-The `[probe].event_particles` form:
-
-```toml
-event_particles = [
-    ["protons", 0, "Protons", [["pX","D"],["pY","D"],["pZ","D"],["Energy","D"]], [["Index","I"]]],
-    ["pions",   0, "Pions",   [["pX","D"],["pY","D"],["pZ","D"],["Energy","D"]], [["Index","I"]]]
-]
-```
-
-Position 0 = label, 1 = `spec` (0 Cartesian / 1 PtEtaPhiE / 2 PtEtaPhiM), 2 =
-ROOT tree name, 3 = momenta `[name, type-letter]` pairs (must be exactly 4),
-4 = index `[name, type-letter]` pairs. Type letters follow ROOT TBranch
-leaf-list convention (`F`/`D`/`I`/`i`/`L`/`l`/`O`).
-
-### Limits
-
-| File                            | Scope                                                                                                  |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `configs/Lambda_Limits.toml`    | Lambda-specific bounds; loaded via `[lambda].hist_limits` resolution. Required if referenced.          |
-| `configs/defaults/Limits.toml`  | Universal fallback. **Optional since Batch07** — silently skipped if absent.                           |
-| `configs/defaults/Monitor.toml` | Read by `loadMonitorDefaults`; silently skipped if missing.                                            |
-| `configs/defaults/Paint.toml`   | Consumed by `Paint::loadStyle` callers (downstream tooling, not the drivers).                          |
-
-### Pythia
-
-| File                         | Purpose                                                                                                  |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `Lambda_Reconstruction.cmnd` | Pythia8 settings for the pp → Λ generation pass. Loaded via `[pythia].cmnd_file` — no driver hardcodes.  |
-| `NeNe.cmnd`                  | Pythia8 settings for NeNe collisions.                                                                    |
-
----
-
-## Key dependency notes
-
-- **Pythia8 enters only through `Lambda/Reconstruction.hh`.** Anything
-  that stops short of `#include "Lambda.hh"` does not need to link
-  Pythia8.
-- **Threads.** `Monitor::AsyncLogger` spawns the heartbeat thread.
-  `Pythia8::PythiaParallel::run` and `Probe::ProbeParallel::run` (which
-  delegates to `Probe::runParallel`) spawn their own worker threads.
-- **`Config::Watch` is the central per-run mutable state** — but slim
-  since Batch06: `iEvent` and `n_real_events` atomic, `start`,
-  `elapsed` atomic, `nEvents`/`n_threads` plain. `recordEvent(now)` is
-  lock-free (`fetch_add` + relaxed `store`). Owned by
-  `Monitor::AsyncLogger` (Batch03); accessed by handlers via
-  `ctx.logging` (which is `asyncLogger.watch()`).
-- **`Record::Writer` is the central per-run writer object.** Owns the
-  open `TFile*`, all output-path templates, `HistConfig`, the
-  `Meta::Record` provenance block, the histogram-fill mutex, and the
-  bound `AsyncLogger` + callbacks. Drivers no longer construct
-  `FinalizerController` — `writer.bind(...)` + `writer.shutdown(sets)`
-  cover the lifecycle.
-- **Pipeline A is the only read path.** `[probe].event_particles` →
-  `Probe::parseCollectionsFromToml` → `Probe::ProbeParallel` →
-  `Lambda::rootAnalysis` (which asks `Probe::Event` for collections by
-  string label).
+- `AsyncLogger::publish` and `publishThreadStats` lock a single
+  `mutex_`; both are called twice per event. Real contention candidate
+  under WorkerThread mode (Issues §1 suspect 2).
+- `Writer::pushNormal` blocks producers on `queueNotFull_` when the
+  bounded grand queue is full. Default capacity 1024; back-pressure
+  shows up as elevated wall time in `fillParticleEvent`.
+- `Probe::ProbeParallel::queueMutex_` (CollectorThread mode only) is
+  held briefly per push/pop. Each `QueuedEvent` carries a moved
+  `Probe::Event`.
+- ROOT's global thread-safety mutex (set once via
+  `ROOT::EnableThreadSafety()`) wraps `TBranch::GetEntry` and other ROOT
+  ops. Disabling it is not on the table.
