@@ -1,4 +1,4 @@
-// Integration smoke test: Lambda::rootAnalysis via Probe::runParallel
+// Integration smoke test: Lambda::rootAnalysis via ProbeParallel::run
 //
 // Opens tests/fixtures/lambda_fixture.root (50 events, 4 protons + 5 pions
 // per event), runs Lambda::rootAnalysis on 4 threads, and asserts:

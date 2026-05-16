@@ -41,22 +41,6 @@ namespace Probe {
             std::call_once(flag, []{ ROOT::EnableThreadSafety(); });
         }
 
-        inline std::string branchTypeStr(BranchType t) {
-            return RootUtil::typeName(t);
-        }
-
-        inline BranchType detectType(char c) {
-            return RootUtil::detectBranchType(c);
-        }
-
-        inline BranchType detectType(const std::string& s) {
-            return RootUtil::detectBranchType(s);
-        }
-
-        inline BranchType detectType(TBranch* br) {
-            return RootUtil::detectBranchType(br);
-        }
-
         inline TBranch* requireBranch(TTree* tree, const std::string& name, const std::string& file) {
             TBranch* br = tree->GetBranch(name.c_str());
             if (br == nullptr)
@@ -68,14 +52,14 @@ namespace Probe {
         }
 
         inline void requireType(TBranch* br, BranchType expected, const std::string& file) {
-            const BranchType actual = detectType(br);
+            const BranchType actual = RootUtil::detectBranchType(br);
             if (actual != expected)
                 throw std::runtime_error(
                     "[Probe] Type mismatch: branch '" + std::string(br->GetName()) +
                     "' in tree '"   + std::string(br->GetTree()->GetName()) +
                     "' of file '"   + file +
-                    "': declared "  + branchTypeStr(expected) +
-                    ", actual "     + branchTypeStr(actual));
+                    "': declared "  + RootUtil::typeName(expected) +
+                    ", actual "     + RootUtil::typeName(actual));
         }
 
         struct KinBuf {
@@ -86,13 +70,13 @@ namespace Probe {
 
             void bind(TTree* tree, const std::string& name, const std::string& file) {
                 TBranch* br = requireBranch(tree, name, file);
-                const BranchType t = detectType(br);
+                const BranchType t = RootUtil::detectBranchType(br);
                 if (t != BranchType::Float && t != BranchType::Double)
                     throw std::runtime_error(
                         "[Probe] Kinematic branch '" + name +
                         "' in tree '" + std::string(tree->GetName()) +
                         "' of file '" + file +
-                        "': must be Float_t or Double_t, got " + branchTypeStr(t));
+                        "': must be Float_t or Double_t, got " + RootUtil::typeName(t));
                 isFloat = (t == BranchType::Float);
                 tree->SetBranchStatus(name.c_str(), 1);
                 if (isFloat) tree->SetBranchAddress(name.c_str(), &f);
@@ -146,7 +130,7 @@ namespace Probe {
                 if (!br) continue;
                 t->SetBranchStatus("*", 0);
                 t->SetBranchStatus(name.c_str(), 1);
-                const BranchType bt = detectType(br);
+                const BranchType bt = RootUtil::detectBranchType(br);
                 Long64_t v64 = 0; Int_t v32 = 0;
                 if (bt == BranchType::Int64) t->SetBranchAddress(name.c_str(), &v64);
                 else                         t->SetBranchAddress(name.c_str(), &v32);
@@ -168,7 +152,7 @@ namespace Probe {
                 throw std::runtime_error("[Probe] Missing tree '" + treeName + "' in file '" + filepath + "'");
 
             TBranch* br = requireBranch(tree, idxName, filepath);
-            const BranchType t = detectType(br);
+            const BranchType t = RootUtil::detectBranchType(br);
             if (t != BranchType::Int32 && t != BranchType::Int64 && t != BranchType::UInt32)
                 throw std::runtime_error(
                     "[Probe] Index branch '" + idxName + "' in tree '" + treeName +

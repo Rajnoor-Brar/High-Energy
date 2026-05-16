@@ -22,14 +22,9 @@ int main(int argc, char* argv[]) {
 
     Config::configure(configPath, project, pythia, writer, logger);
 
-    if (logger.watch().n_threads > 0) {
-        const std::size_t nThreads = Config::resolveThreadCount(logger.watch().n_threads);
-        pythia.readString("Parallelism:numThreads = " + std::to_string(nThreads));
-    }
-
     Lambda::declareDataObjects(writer);
 
-    writer.bind(logger, logger.watch(),
+    writer.bind(logger,
                 []() { return Lambda::dataLogString(); },
                 [&pythia]() { pythia.stat(); },
                 [&pythia]() { pythia.settings.listChanged(); });

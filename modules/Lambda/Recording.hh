@@ -5,12 +5,13 @@
 
 namespace Lambda {
 
-    inline void fillCandidates(Record::Writer& writer, const Candidates& candidates) {
-        writer.fillParticleEvent<HistogramSet>({
-            {HistogramSet::Unvalidated, candidates.unvalidated},
-            {HistogramSet::Validated,   candidates.validated},
-            {HistogramSet::Selected,    candidates.selected},
-        });
+    inline void fillCandidates(Record::Writer& writer, Candidates candidates) {
+        writer.fillParticleEvent<HistogramSet>(
+            std::vector<std::pair<HistogramSet, std::vector<Lorentz>>>{
+                // {HistogramSet::Unvalidated, std::move(candidates.unvalidated)},
+                {HistogramSet::Validated,   std::move(candidates.validated)},
+                {HistogramSet::Selected,    std::move(candidates.selected)},
+            });
     }
 
 } // namespace Lambda

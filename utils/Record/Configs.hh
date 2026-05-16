@@ -18,7 +18,6 @@
 #include "RtypesCore.h"
 
 #include "Config/Types.hh"      // Config::ParticleLimits / EventLimits
-
 namespace Record {
 
     struct Paths {
@@ -43,5 +42,4 @@ namespace Record {
         Config::ParticleLimits particleLimits;
         Config::EventLimits    eventLimits;
     };
-
 } // namespace Record

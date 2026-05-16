@@ -42,19 +42,20 @@ namespace Config {
     // ── [events] ─────────────────────────────────────────────────────────────
     // Event-loop sizing.  Thread counts moved out of here in WriterMT.md
     // Phase 0; each pipeline section ([probe], [record], [pythia]) now owns
-    // its own thread_count.  See docs/WriterMT.md.
+    // explicit thread keys.  See docs/WriterMT.md.
     struct Events {
         std::size_t eventCount  = 1000;
         bool        userEvents  = false; // true when event_count was explicit in TOML
-        // nThreads: REMOVED — see [probe|record|pythia].thread_count
+        // nThreads: REMOVED — see [probe].probe_threads,
+        // [record].writer_threads, and [pythia].pythia_threads.
     };
 
     // ── [pythia] ─────────────────────────────────────────────────────────────
     struct PythiaConfig {
-        Double_t    beamEnergy   = 0.0;
+        Double_t    beamEnergy    = 0.0;
         std::string cmndFile;
-        int         seed         = 0;
-        std::size_t thread_count = 0;    // [pythia].thread_count; 0 → resolveSectionThreadCount()
+        int         seed          = 0;
+        std::size_t pythia_threads = 0;   // [pythia].pythia_threads
         Events      eventConfig;
     };
 
@@ -62,19 +63,22 @@ namespace Config {
     // ProbeConfig holds the parsed [probe] section.  Collections are stored as
     // Probe::CollectionSpec directly — no intermediate ProbeParticle type.
     // Populated by Config::configureProbe via Probe::parseCollectionsFromToml.
+    //
+    // Three independent thread counts on the Probe-side pipeline:
+    //   probe_threads    : ROOT-reader threads (per-partition TFile open + scan)
+    //   analysis_threads : collector threads pulling events off the shared
+    //                      queue and invoking the user analysis callback
+    //                      (Lambda::rootAnalysis).  Multiple collectors all
+    //                      consume from the same FIFO opportunistically.
+    // Writer-side thread count lives on Register::writer_threads.
     struct ProbeConfig {
         std::string                           inputFile;
         std::vector<Probe::CollectionSpec>    collections;
         Events                                eventConfig;
-        std::size_t                           thread_count = 0;   // [probe].thread_count
-        // Phase 1 sharding (docs/ROOTMT.md).  Opt-in: default off because
-        // Phase 1 measurement showed no CPU-floor improvement on our access
-        // pattern — the bottleneck is ROOT's global thread-safety mutex, not
-        // per-TFile basket contention.  Flip on for A/B testing or for future
-        // composition with TTreeProcessorMT (Phase 2).
-        bool        splitInput = false;  // [probe].split_input
-        std::string tempSpace;           // [probe].temp_space; empty → auto-derive
-        bool        keepShards = false;  // [probe].keep_shards; ignored when splitInput=false
+        std::size_t                           probe_threads    = 0;
+        std::size_t                           analysis_threads = 0;
+        Probe::CallbackMode                   callback_mode    = Probe::CallbackMode::CollectorThread;
+        std::size_t                           queue_capacity   = 0;   // 0 = auto (10 * probe_threads)
     };
 
     // ── Monitor's live run counters ───────────────────────────────────────────
@@ -116,8 +120,8 @@ namespace Config {
     // live here only because Config::Reader.hh writes into them during parsing.
     struct Register {
         Int_t   serial              = 0;
-        std::size_t recordThreadCount = 0;       // [record].thread_count
-        std::size_t checkpointInterval = 100000; // [monitor].checkpoint_interval (events)
+        std::size_t writer_threads        = 0;
+        std::size_t writer_queue_capacity = 0;   // [record].writer_queue_capacity; 0 = Writer default
         TString rootDirectory       = "output/";
         TString logDirectory        = "output/params/";
         TString checkpointDirectory = "output/checkpoints/";

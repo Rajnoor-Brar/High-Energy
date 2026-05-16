@@ -6,6 +6,7 @@
 #include <memory>
 #include <mutex>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "Physics.hh"
@@ -13,16 +14,13 @@
 
 namespace Record {
 
-    enum class ParticleRequestKind { FillEvent };
-
-    struct ParticleGroupFillRequest {
+    // WriterMT.md Phase 2: ParticleRequest is now a single basis + particles.
+    // The legacy `ParticleGroupFillRequest` / `groups` aggregation was
+    // dropped — `fillParticleEvent` fans out into N separate requests so
+    // each one drives one ParticleObjects' fill independently.
+    struct ParticleRequest {
         RecordKey basis{};
         std::vector<Physics::Lorentz> particles;
-    };
-
-    struct ParticleRequest {
-        ParticleRequestKind kind = ParticleRequestKind::FillEvent;
-        std::vector<ParticleGroupFillRequest> groups;
     };
 
     struct Hist1DRequest  { RecordKey basis{}; Value value; };
@@ -35,27 +33,21 @@ namespace Record {
         std::vector<std::pair<RecordKey, Value>> values;
     };
 
+    using FillRequest = std::variant<
+        ParticleRequest,
+        Hist1DRequest,
+        Hist2DRequest,
+        GraphRequest,
+        ProfileRequest,
+        TreeRowRequest
+    >;
+
     struct BarrierState {
         std::mutex mutex;
         std::condition_variable cv;
         bool done = false;
         std::exception_ptr exception;
         bool completed = false;
-    };
-
-    struct CheckpointRequest {
-        std::size_t eventIndex = 0;
-        std::shared_ptr<BarrierState> barrier;
-    };
-
-    struct FinishRequest {
-        std::size_t eventCount = 0;
-        std::shared_ptr<BarrierState> barrier;
-    };
-
-    struct FatalWriteRequest {
-        std::size_t eventCount = 0;
-        std::shared_ptr<BarrierState> barrier;
     };
 
     // ── WatchRequest ──────────────────────────────────────────────────────────
@@ -75,23 +67,6 @@ namespace Record {
         Kind                          kind        = Kind::Heartbeat;
         std::size_t                   eventIndex  = 0;
         std::shared_ptr<BarrierState> barrier;   // present for Checkpoint, Finalize, Fatal
-    };
-
-    enum class QueueLane {
-        Particle,
-        Hist1D,
-        Hist2D,
-        Graph,
-        Profile,
-        Tree,
-        Checkpoint,
-        Finish,
-        FatalWrite,
-        Stop
-    };
-
-    struct QueueTicket {
-        QueueLane lane = QueueLane::Stop;
     };
 
     template <typename Basis>

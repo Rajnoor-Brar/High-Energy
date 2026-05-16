@@ -51,10 +51,6 @@ namespace Lambda{
     // Called once per Pythia8 event (serial or parallel).
     inline void pythiaAnalysis(Pythia8::Pythia& pythia, AnalysisContext& ctx)
     {
-        // docs/WriterMT.md Phase 1: countEvent atomically increments
-        // watch.iEvent and emits WatchRequest (heartbeat/checkpoint) via
-        // the sink configured in Monitor::ConfigAid.  Phase 1 the sink is
-        // unbound; in Phase 2 it routes into the Writer's watchdog.
         const std::size_t eventIndex = ctx.asyncLogger.countEvent();
         const int workerIndex = pythia.mode("Parallelism:index");
 
@@ -71,36 +67,30 @@ namespace Lambda{
 
         ctx.logging.recordEvent(std::chrono::system_clock::now());
 
-        ctx.asyncLogger.publish(ctx.logging, Monitor::RunPhase::Analysis, Monitor::DontWriteRunStat);
+        ctx.asyncLogger.publish(Monitor::RunPhase::Analysis, Monitor::DontWriteRunStat);
         ctx.asyncLogger.publishThreadStats(workerIndex, Monitor::ThreadPhase::Simulation, eventIndex, Monitor::CallbackCompleted);
 
-        if (ctx.asyncLogger.checkInterval() > 0 && eventIndex % ctx.asyncLogger.checkInterval() == 0)
-            ctx.writer.checkpoint(eventIndex);
     }
 
     // ── rootAnalysis ──────────────────────────────────────────────────────────
-    // Called once per Probe::Event from runParallel (multi-threaded).
+    // Called once per Probe::Event via ProbeParallel::run (multi-threaded).
     inline void rootAnalysis(const Probe::Event& ev,
                              int threadId,
                              AnalysisContext& ctx)
     {
         // BlockTimer timer("Whole Analysis");
-        // docs/WriterMT.md Phase 1: countEvent atomically increments
-        // watch.iEvent and emits WatchRequest (heartbeat/checkpoint) via
-        // the sink configured in Monitor::ConfigAid.  Phase 1 the sink is
-        // unbound; in Phase 2 it routes into the Writer's watchdog.
         const std::size_t eventIndex = ctx.asyncLogger.countEvent();
 
-        ctx.asyncLogger.publishThreadStats(threadId, Monitor::ThreadPhase::Analysis, eventIndex, Monitor::NoCallbackCompleted);
+        // ctx.asyncLogger.publishThreadStats(threadId, Monitor::ThreadPhase::Analysis, eventIndex, Monitor::NoCallbackCompleted);
 
-        const std::vector<Lorentz> protonList = ev[ctx.parameters.protonLabel];
-        const std::vector<Lorentz> pionList   = ev[ctx.parameters.pionLabel];
+        const std::vector<Lorentz>& protonList = ev[ctx.parameters.protonLabel];
+        const std::vector<Lorentz>& pionList   = ev[ctx.parameters.pionLabel];
 
         fillCandidates(ctx.writer, reconstructCandidates(protonList, pionList, ctx.parameters));
         ctx.logging.recordEvent(std::chrono::system_clock::now());
 
-        ctx.asyncLogger.publish(ctx.logging, Monitor::RunPhase::Analysis, Monitor::DontWriteRunStat);
-        ctx.asyncLogger.publishThreadStats(threadId, Monitor::ThreadPhase::Simulation, eventIndex, Monitor::CallbackCompleted);
+        ctx.asyncLogger.publish( Monitor::RunPhase::Analysis);
+        // ctx.asyncLogger.publishThreadStats(threadId, Monitor::ThreadPhase::Simulation, eventIndex, Monitor::CallbackCompleted);
     }
 
     // ── dataGenerator ─────────────────────────────────────────────────────────
@@ -108,14 +98,10 @@ namespace Lambda{
     // through the Writer queue.
     inline void dataGenerator(Pythia8::Pythia& pythia, GenerationContext& ctx)
     {
-        // docs/WriterMT.md Phase 1: countEvent atomically increments
-        // watch.iEvent and emits WatchRequest (heartbeat/checkpoint) via
-        // the sink configured in Monitor::ConfigAid.  Phase 1 the sink is
-        // unbound; in Phase 2 it routes into the Writer's watchdog.
         const std::size_t eventIndex = ctx.asyncLogger.countEvent();
         const int workerIndex = pythia.mode("Parallelism:index");
 
-        ctx.asyncLogger.publishThreadStats(workerIndex, Monitor::ThreadPhase::Analysis, eventIndex, Monitor::NoCallbackCompleted);
+        // ctx.asyncLogger.publishThreadStats(workerIndex, Monitor::ThreadPhase::Analysis, eventIndex, Monitor::NoCallbackCompleted);
 
         const auto [protons, pions] = harvestParticles(pythia);
 
@@ -142,7 +128,7 @@ namespace Lambda{
 
         ctx.logging.recordEvent(std::chrono::system_clock::now());
 
-        ctx.asyncLogger.publish(ctx.logging, Monitor::RunPhase::Analysis, Monitor::DontWriteRunStat);
-        ctx.asyncLogger.publishThreadStats(workerIndex, Monitor::ThreadPhase::Simulation, eventIndex, Monitor::CallbackCompleted);
+        ctx.asyncLogger.publish( Monitor::RunPhase::Analysis);
+        // ctx.asyncLogger.publishThreadStats(workerIndex, Monitor::ThreadPhase::Simulation, eventIndex, Monitor::CallbackCompleted);
     }
 }

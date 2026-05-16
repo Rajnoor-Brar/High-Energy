@@ -1,213 +1,209 @@
-# Issues — active investigation
+# Issues - Active Investigation
 
-Updated: 2026-05-10.
+Updated: 2026-05-15.
 
-Probe and Writer have both been overhauled. The active path is:
+This file tracks active issues and mismatches in the current `modules/` and
+`utils/` code. Longer-term improvements live in [REVIEW.md](REVIEW.md).
+Architecture and runtime ownership are summarized in [MAP.md](MAP.md) and
+[Architecture.md](Architecture.md). TOML flow is in [DataFlow.md](DataFlow.md).
 
-1. Probe reads input events with `Probe::ProbeParallel`.
-2. Lambda reconstructs candidates.
-3. Lambda submits queued fill requests to `Record::Writer`.
-4. Writer's scribe thread is the only normal path that mutates / writes /
-   closes ROOT output objects.
+The active pipeline is now a three-stage threaded system:
 
-Companion docs: [CGPTsummary.md](CGPTsummary.md) (overhaul context),
-[REVIEW.md](REVIEW.md) (expansions / improvements backlog),
-[MAP.md](MAP.md) (file map), [DataFlow.md](DataFlow.md) (TOML/runtime
-flow).
+1. Probe reads ROOT input with `probe_threads`.
+2. Probe collectors or worker callbacks invoke Lambda analysis with
+   `analysis_threads` or direct worker threads.
+3. Writer drains fill requests with `writer_threads`, using worker-local ROOT
+   clones where possible and a watchdog for lifecycle writes.
 
-This file is the active open-issue list, not the long-term backlog. The
-single open issue today is **scaling does not follow `nThreads`**. The
-fix is most likely a sequence of small changes rather than one big
-restructure.
+## P0 - Stage-Level Throughput Measurement Required
 
----
+The bottleneck varies by stage ratios; no single `nThreads` knob governs total
+throughput. The question is which stage is limiting under the current per-stage
+config:
 
-## P0 — Scaling still does not follow `nThreads`
+- `[probe].probe_threads`
+- `[probe].analysis_threads`
+- `[record].writer_threads`
+- `[pythia].pythia_threads` for Pythia drivers
 
-Observed:
+Stage-level timing does not yet exist. Without it, per-stage thread changes are
+uninformed guesses.
 
-- Raising `nThreads` does not produce expected throughput scaling.
-- At 8 configured threads the process shows roughly 1–3 cores busy
-  rather than 8 saturated workers.
+### Active Suspect Ranking
 
-This is not yet narrowed to a single cause. There are several
-contributors that compound, and instrumentation is the prerequisite.
+| Rank | Suspect | Current evidence | What would confirm it |
+| ---- | ------- | ---------------- | --------------------- |
+| 0 | ROOT input path | `ProbeParallel` uses per-thread `EventStream` and ROOT branch reads under ROOT thread safety. `ROOTMT.md` records prior CPU floors for this path. | `EventStream::next` wall time grows with more reader threads while CPU does not. |
+| 1 | Writer tree mutexes | Histogram-like objects use worker-local clones, but particle and explicit TTrees are shared behind mutexes. | Tree-enabled runs scale worse than tree-disabled runs; tree mutex timing is high. |
 
-### Suspect ranking (by current evidence)
+Items removed from suspect ranking because they are resolved or by design:
 
-| Rank | Suspect | Why it is plausible | What would confirm it |
-| ---- | ------- | -------------------- | --------------------- |
-| 0 | Probe `CallbackMode::CollectorThread` default | Workers read events, but the collector calls `Lambda::rootAnalysis` serially. Now that Writer queues ROOT mutation safely, `WorkerThread` mode should be retested. | `probe.stats()` reports `callbackMode=CollectorThread`; switching to `WorkerThread` raises core load and throughput. |
-| 1 | `BlockTimer` per-event file I/O in `rootAnalysis` | `modules/Lambda.hh:83` constructs `BlockTimer timer("Whole Analysis");` once per event. `BlockTimer` opens `output/timer.log` in append mode in its constructor. Per-event file open is a serialised I/O dependency under multi-threaded callbacks. | Removing the line restores throughput scaling, even before any other change. |
-| 2 | `AsyncLogger::publish` + `publishThreadStats` mutex | Both lock `AsyncLogger::mutex_`. Each `rootAnalysis` event calls them twice. Under WorkerThread mode, `nThreads × 2` lock acquisitions per event hit a single mutex. | Per-call `Monitor::ScopeTimer` (REVIEW §3.2) shows publish wall time growing with `nThreads` while CPU stays low. |
-| 3 | Lambda reconstruction loop | `reconstructCandidates` is `O(nProtons × nPions)`, materializes every unvalidated pair, computes boost-based `cosTheta` *before* the cheaper invariant-mass cut, and reads `lambda.M()` twice per pair. | Wall time per `reconstructCandidates` dominates per-event budget; reordering the cuts reduces it. |
-| 4 | Writer single-scribe ceiling | One thread applies all fills. Each event submits one `ParticleRequest` plus optional checkpoint. | `writer.stats().backlog` grows monotonically; producers block on `queueNotFull_`; scribe CPU is hot. |
-| 5 | `ParticleRequest` particle-vector copies | `fillParticleEvent` copies each candidate vector into `ParticleGroupFillRequest::particles`. For large events these copies bloat queue memory and CPU. | Move-aware fill API (REVIEW §2.2) cuts copy time noticeably. |
-| 6 | ROOT global mutex inside `EventStream::next` | `ROOT::EnableThreadSafety()` wraps `TBranch::GetEntry`. With many workers reading at high frequency, ROOT serializes I/O. | `EventStream::next` wall time scales linearly with `nThreads` while CPU stays roughly constant. |
-| 7 | `writer.finish` post-loop cost | `TFile::Write` + `TFile::Close` runs single-thread after the event loop. Currently considered unlikely to dominate. | Total runtime dominated by `writer.finish`, not by the event loop. |
+- Lambda vector copies → resolved (`const auto&` references in `rootAnalysis`).
+- Lambda pair loop O(nP×nPi) → by design; that is the algorithm.
+- Writer particle request copies → resolved (move-aware `fillParticleEvent`).
+- Writer queue back-pressure → by design; bounded queue is intentional producer
+  throttling.
+- Monitor publish locks → by design; single-mutex publish is an accepted cost.
+- Pythia thread forwarding → resolved (`configurePythia` now sets
+  `Parallelism:numThreads`).
 
-Do not assume Writer parallelisation (REVIEW §2.1) is the next correct
-implementation until instrumentation has separated Lambda reconstruction
-cost from Writer scribe cost from queue-wait cost.
+`BlockTimer` is no longer an active hot-path suspect because the Lambda call
+sites are commented out. The old class still exists and should be replaced
+before anyone re-enables it.
 
-### Recommended sequence
+### Measurement Sequence
 
-Each step ends with a measurement; the data drives the next step.
+1. Add the timer registry proposed in [REVIEW.md](REVIEW.md), or a smaller
+   temporary equivalent.
+2. Print `probe.stats()` and `writer.stats()` at the end of reconstruction
+   runs.
+3. Run a small matrix with fixed event count:
 
-1. **Replace `BlockTimer`.** Land the standardised `Monitor::Timer`
-   family from REVIEW §3.2. Remove the `BlockTimer` line in
-   `rootAnalysis` and the commented one in `reconstructCandidates`. The
-   replacement timer writes to thread-local buffers and never opens a
-   file on the hot path. Re-run the `nThreads ∈ {1,2,4,8}` sweep.
+```text
+probe_threads:    1, 2, 4
+analysis_threads: 1, 2, 4
+writer_threads:   1, 2, 4, 8
+```
 
-2. **Switch to `WorkerThread` callback mode.** Either via the new
-   `[probe].callback_mode` TOML key (REVIEW §1.1) or, until that lands,
-   a one-line `probe.setCallbackMode(Probe::CallbackMode::WorkerThread)`
-   in `_Lambda_Reconstruction.cc`. Run the same sweep.
+4. Compare with `Probe::ProbeIMT` for the same input and event count if memory
+   permits.
+5. Only after timing data, choose between Lambda-loop work, Probe read-path
+   work, Writer queue/tree work, or monitor contention work.
 
-3. **Inspect `probe.stats()` and `writer.stats()`.** Print at end of
-   run (or at periodic checkpoint). Look for:
-   - Probe `produced` vs `consumed` (in CollectorThread mode);
-   - Probe `progress[]` per-worker variance;
-   - Writer `backlog`, `maxBacklog`, and whether it reached
-     `queueCapacity`.
+### Minimum Timer Labels
 
-4. **Read the timer registry.** Wall + CPU time per labelled region.
-   The CPU/wall ratio identifies serialisation. Initial labels per
-   REVIEW §3.3.
+- `ProbeParallel.EventStream.next`
+- `ProbeParallel.queue.push_wait`
+- `ProbeParallel.queue.pop_wait`
+- `ProbeParallel.collector.callback`
+- `ProbeIMT.allocate`
+- `ProbeIMT.read`
+- `ProbeIMT.flush`
+- `Lambda.rootAnalysis`
+- `Lambda.reconstructCandidates`
+- `Record.Writer.pushFill`
+- `Record.Writer.applyParticleRequest`
+- `Record.Writer.treeMutex`
+- `Record.Writer.mergeAllClones`
+- `Record.Writer.writeCheckpointFile`
+- `Record.Writer.writeAllToCurrentFile`
+- `Monitor.AsyncLogger.publish`
+- `Monitor.AsyncLogger.publishThreadStats`
 
-5. **Reorder reconstruction cuts.** Move the invariant-mass cut before
-   `cosTheta` in `reconstructCandidates`. Cache `lambda.M()`. Stop
-   copying `ev[label]` into local `std::vector<Lorentz>`. Re-measure.
+Decision question: are producers blocked before enqueue, during enqueue, while
+Writer workers drain, or during lifecycle writes?
 
-6. **Decide based on data.** If the Probe-side timers and Writer
-   backlog are healthy and Lambda timers dominate, the rest of the
-   work is in `modules/Lambda/Reconstruction.hh`. If Writer backlog
-   saturates, design multi-lane Writer per REVIEW §2.1. If
-   `EventStream::next` dominates with low CPU, the ROOT global mutex
-   is the floor and no Probe-side restructure helps — at that point,
-   pre-sharded input or RDataFrame+IMT is the path.
+## P1 - Config/Data-Flow Mismatches
 
-The first three steps are the cheapest available signal. They should
-land before any architectural change.
+### `configurePythia` Must Cover All Pythia Initialization
 
----
+`Config::configurePythia` now sets `Parallelism:numThreads`, but beam energy,
+random seed, and cmnd_file are still applied ad-hoc in `.cc` driver files.
 
-## Required instrumentation before changing architecture
+Impact: each driver must manually replicate setup logic. If a new driver omits
+a step, Pythia runs with defaults silently.
 
-Implement once via the `Monitor::Timer` family proposed in
-[REVIEW §3.2](REVIEW.md). Initial labels:
+Fix: add TOML keys for beam energy, seed, and cmnd_file under `[pythia]` and
+apply them inside `configurePythia` so every driver gets consistent
+initialization regardless of the entry point.
 
-- Probe:
-  - per-worker `EventStream::next`,
-  - per-worker queue-push wait (CollectorThread mode),
-  - collector pop wait,
-  - collector callback-dispatch wall.
-- Lambda callback:
-  - `rootAnalysis` total,
-  - `reconstructCandidates`,
-  - `fillCandidates` enqueue cost,
-  - `AsyncLogger::publish` and `publishThreadStats` wall time,
-  - `ev[label]` lookup cost (sanity).
-- Writer:
-  - `applyParticleRequest` (scribe-side) split into count / hist /
-    graph/profile / tree fill,
-  - `pushNormal` queue-wait,
-  - `writeCheckpointFile`,
-  - `writeAllToCurrentFile`.
-- End to end:
-  - event-loop wall vs `writer.finish` wall.
+### Branch Name Drift: `Index` vs `event_index`
 
-Print `probe.stats()` and `writer.stats()` once at end of run, plus
-optionally on each `writer.checkpoint`. Run the same config with
-`nThreads ∈ {1, 2, 4, 8}`.
+`Lambda::declareDataObjects` writes explicit data trees with branch
+`event_index`. The fixture TOML uses `event_index`. The current reconstruction
+config reads `Index`.
 
-Decision question: are producers blocked **before** enqueue (Probe-side
-or analysis-side cost) or **after** enqueue (Writer scribe ceiling)?
+Impact: reconstruction configs are input-file-specific. Running the default
+reconstruction TOML against Writer-generated data with `event_index` will fail
+branch lookup unless the file actually has `Index`.
 
----
+Fix: add config variants or comments that clearly separate old input files from
+Writer-generated data.
 
-## Lambda analysis-loop candidates
+## P1 - Writer Lifecycle/Concurrency Risks To Test
 
-Verified hotspots in `modules/Lambda/Reconstruction.hh` and
-`modules/Lambda.hh` (also in [REVIEW §4](REVIEW.md)):
+The current Writer design is much stronger than the old single-scribe queue,
+but the watchdog and worker-pool paths need targeted stress tests.
 
-- `rootAnalysis` copies Probe vectors via `const std::vector<Lorentz>
-  protonList = ev[...]`. Use `const auto&`; the event is alive for the
-  callback.
-- `reconstructCandidates` pushes every proton×pion pair into
-  `result.unvalidated` before any filtering. With sizes 50p × 50pi this
-  is 2500 entries before any cut. It also computes `cosTheta` before the
-  mass cut.
-- Reorder: mass cut first, then `cosTheta` only on survivors. Cache
-  `lambda.M()`.
-- `fillParticleEvent` copies candidate vectors into queued requests.
-  Today's `Recording::fillCandidates` builds the `Candidates` struct
-  locally and could move from it; see REVIEW §2.2.
+Required tests:
 
-These changes are independent of architecture. They land in any order
-relative to the Probe / Writer instrumentation.
+- checkpoint while fill producers are blocked on a full queue;
+- checkpoint after one worker records an exception;
+- finalize after a worker exception with pending watch requests;
+- fatal write while workers are filling shared trees;
+- tree-enabled run vs tree-disabled run at multiple `writer_threads`;
+- `save_checkpoints=true` through logger-driven WatchRequests.
 
----
+Current tests cover concurrent producer drain, explicit checkpoint, declaration
+validation, and exception propagation to `finish`, but not the full watchdog
+matrix above.
 
-## Writer-throughput hypothesis (only if measurement points here)
+Risk to check first: `quiesceWorkers()` waits for all configured Writer workers
+to arrive. A worker that exited early after storing `writerException_` will not
+arrive, so a later checkpoint may block unless the watchdog detects the stored
+exception before quiescing.
 
-Writer is intentionally single-scribe. That trades parallelism for
-output-mutation correctness. It can become the throughput ceiling.
+## P2 - Test Infrastructure
 
-Before parallelising:
+All current test targets (`test_record_writer`, `test_probe_parallel`,
+`test_reconstructCandidates`) were written against a prior codebase. They
+compile but do not cover:
 
-- Confirm `writer.stats().maxBacklog == queueCapacity` (saturated).
-- Confirm producers spend wall time blocked on `queueNotFull_`.
-- Confirm scribe CPU is hot during the event loop, not during
-  `writer.finish`.
-- Confirm `applyParticleRequest` time per event is comparable to the
-  combined Lambda enqueue rate × nThreads.
+- the ProbeParallel CollectorThread multi-collector vs WorkerThread split;
+- the new Writer worker pool, clone management, and watchdog paths;
+- `Config::configure` end-to-end with the live TOML keys;
+- `[probe.index]` parsing applied to `ParticleSpec` fields.
 
-If those align, the safe parallel-Writer shape is REVIEW §2.1
-(per-record-key lanes, per-lane scribe, barrier on checkpoint and
-finish). Do not write the same `TFile` from multiple threads under
-ROOT thread-safety; per-object ownership by lane is the invariant.
+Required new or rebuilt tests:
 
----
+- `test_probe_parallel`: CollectorThread multi-collector; WorkerThread dispatch;
+  queue back-pressure with small capacity; index error paths.
+- `test_writer`: watchdog stress matrix from P1 Writer section above.
+- `test_config`: configure round-trip for Probe, Record, and Monitor keys.
+- `test_rootAnalysis_smoke`: already covers the full pipeline; extend to
+  compare unvalidated/validated counts against analytic bounds.
 
-## Current config / data-flow mismatches
+## Done Since The Prior Issues Snapshot
 
-(Cross-referenced from [DataFlow.md](DataFlow.md).)
+Closed or changed from the previous open-issue list:
 
-- `[probe.index]` keys (`sorted`, `ascending`, `monotonic`) appear in
-  `configs/Lambda_Reconstruction.toml` but `Probe::buildIndexSpecs`
-  hardcodes the `IndexSpec` as ascending/dense/grouped. Either parse
-  them or remove from sample configs (REVIEW §1.1).
-- Writer-owned data generation and the smoke-test fixture use
-  `event_index`, while `configs/Lambda_Reconstruction.toml` currently
-  lists `Index` in `[probe].event_particles`. This must match the
-  actual input ROOT file: a Probe-driven reconstruction over a file
-  produced by `_Lambda_Data.cc` should use `event_index`.
-- `[record].save_checkpoints`, `save_log_threads`, `save_heartbeat`,
-  `save_final_log` appear in configs but are not currently read by code.
-- `Monitor::configureMonitor` runs before `[events]` is parsed in the
-  Probe-pipeline `Config::configure`. Progress-bar `barInterval`
-  derivation may use the default event count rather than the resolved
-  one. Verify whether this affects current terminal output.
-- `_Lambda_Parallel.cc` does not explicitly apply the parsed thread
-  count to `Pythia8::PythiaParallel`. `_Lambda_Data.cc` does. Cleanup
-  alongside the per-section thread-config split (REVIEW §5).
-
----
-
-## Done since prior Issues snapshot
-
-For history; nothing in this list is open work.
-
-- Probe overhaul: `Probe::ProbeParallel`, callback modes, partition
-  precompute, queue plumbing.
-- Writer overhaul: declaration APIs, queue lanes, scribe loop, barriers,
-  checkpoint/finish/fatal write, `Meta` integration.
-- Lambda migration to Writer-owned output: `Lambda::configure`,
-  `fillParticleEvent`, removal of `RootArray` from active drivers,
-  Writer-owned `Protons`/`Pions` trees in data generation.
-- Doc/Plan baseline: this Issues file replaces the prior backlog list.
-
-If anything below the line above looks open, double-check the live code
-before acting on it.
+- `[events].nThreads` removed in favor of per-stage thread keys.
+- Writer single-scribe design replaced by fill workers, per-worker clones, and
+  watchdog lifecycle requests.
+- Monitor save flags are wired.
+- `rootAnalysis` no longer constructs an active `BlockTimer`; the line is
+  commented out.
+- Probe CollectorThread mode is no longer necessarily serial; it can use
+  multiple analysis collectors.
+- ProbeIMT is implemented and covered by focused tests.
+- `utils/Record.hh` updated: no longer describes Writer as owning "the scribe
+  thread"; header comment now reflects fill workers plus watchdog.
+- `utils/Probe.hh` cleaned up: includes `Probe/Parallel.hh` directly; stale
+  `ProbeParallel.hh` subfile reference is gone.
+- `runParallel` compatibility shim removed from `Probe`; callers now use
+  `ProbeParallel::run` directly.
+- `[probe.index]` TOML section parsed and applied to `ParticleSpec` fields
+  (`indexSorted`, `indexAscending`, `indexMonotonic`).
+- `Monitor::configureMonitor` repositioned after event count resolution so bar
+  interval uses the correct event count.
+- `heartbeat_interval` is milliseconds in TOML and microseconds internally;
+  this is intentional — user-facing ms, internal µs.
+- `[events].pythia` removed from fixture TOML; `Config::Register::checkpointInterval`
+  removed (Monitor reads checkpoint interval directly).
+- `Config::configurePythia` now forwards `pythia_threads` to
+  `Parallelism:numThreads` for all Pythia drivers.
+- `[probe].callback_mode` and `[probe].queue_capacity` parsed and applied.
+- `[record].writer_queue_capacity` parsed and applied.
+- `Probe::progress_` counters made atomic; increment moved outside queue mutex.
+- `prepareEntryBounds` error now includes row index, tree name, branch name,
+  previous value, and current value.
+- `fillParticleEvent` move-aware overload added; `Lambda::fillCandidates` now
+  moves candidate vectors.
+- `rootAnalysis` proton/pion vectors accessed via `const auto&` (no copy).
+- `Meta::fillDerived` moved into `Writer::finish()` for accurate final event
+  counts.
+- `test_record_writer.cc` worker/watchdog labels corrected.
+- `Lambda.hh` stale `WriterMT.md Phase` comments removed; `runParallel`
+  references updated to `ProbeParallel::run`.
+- `test_rootAnalysis_smoke.cc` header comment updated to reference
+  `ProbeParallel::run`.

@@ -16,8 +16,6 @@ namespace Monitor {
         Config::Seconds  stallThreshold  = Config::Seconds(300);
     };
 
-    inline constexpr std::size_t FatalStallMultiplier = 5;
-
     constexpr bool RenderStatus    = true;
     constexpr bool RenderBar       = true;
     constexpr bool WriteRunStat    = true;
@@ -43,7 +41,7 @@ namespace Monitor {
         bool              fatalStall    = false;
         Config::uSeconds  stallDuration = Config::uSeconds(0);
         Config::Seconds   stallThreshold = Config::Seconds(0);
-        std::size_t       stallMultiplier = FatalStallMultiplier;
+        std::size_t       stallMultiplier = 5;
         std::string       fatalReason   = "";
     };
 
@@ -52,13 +50,6 @@ namespace Monitor {
         bool renderBar    = false;
         bool writeRunStat = false;
 
-        bool any() const { return renderStatus || renderBar || writeRunStat; }
-
-        void merge(const PendingActions& other) {
-            renderStatus |= other.renderStatus;
-            renderBar    |= other.renderBar;
-            writeRunStat |= other.writeRunStat;
-        }
     };
 
     struct ThreadSnapshot {

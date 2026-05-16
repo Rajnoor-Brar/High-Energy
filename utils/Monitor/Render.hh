@@ -1,21 +1,20 @@
 #pragma once
 
-#include <functional>
-#include <fstream>
+#include <chrono>
+#include <iomanip>
 #include <iostream>
 #include <mutex>
-#include <sstream>
 #include <string>
 
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
 
-#include "Config.hh"
-#include "Record/Writer.hh"
-#include "TString.h"
-#include "Utility.hh"
-#include "Monitor/Snapshot.hh"
+#include "Config/Types.hh"
+#include "Utility/Number.hh"
+#include "Utility/Time.hh"
+#include "Monitor/Logger.hh"
+#include "Monitor/Methods.hh"
 
 namespace Monitor {
 
@@ -38,9 +37,10 @@ namespace Monitor {
         return mutex;
     }
 
-    inline void writeTextFile(const TString& path, const std::string& text) {
-        std::ofstream stream(path.Data(), std::ios::trunc);
-        stream << text;
+    inline void AsyncLogger::initializeTerminal() {
+        if (terminalInitialized_) return;
+        std::cout << "\n\n\n" << std::flush;
+        terminalInitialized_ = true;
     }
 
     inline void renderProgressBar(double progress) {
@@ -56,121 +56,51 @@ namespace Monitor {
                   << "\033[J\r" << std::flush;
     }
 
-    inline std::string buildLogText(const Record::Writer& writer,
-                                    const Config::Watch& logging,
-                                    const std::string& programLog = {},
-                                    const std::function<void()>& printStats = {},
-                                    const std::function<void()>& listChangedSettings = {},
-                                    const PacingInfo* pacing = nullptr)
-    {
-        std::ostringstream logStream;
-        const time_t localStart = std::chrono::system_clock::to_time_t(logging.start);
-        const Record::Paths&       paths = writer.paths();
-        const Record::HistConfig&  hist  = writer.histConfig();
+    inline void AsyncLogger::renderStatusLine(const RunSnapshot& snapshot) {
+        const std::size_t percent = snapshot.nEvents > 0
+            ? static_cast<std::size_t>(100.0 * snapshot.progress) : 0;
+        const std::size_t eventWidth = Utility::numberFormat(snapshot.nEvents, 0).size();
 
-        logStream << "Serial                        : " << std::setw(2) << std::setfill('0') << paths.serial << '\n';
-        logStream << "Beam Energy                   : " << paths.beamEnergy.Data() << '\n';
-        logStream << "Event Count                   : " << Utility::numberFormat(logging.nEvents, 0) << '\n';
-        logStream << "Real Event Count              : " << Utility::numberFormat(logging.n_real_events.load(std::memory_order_relaxed), 0) << '\n';
-        logStream << "Last Run                      : " << Utility::timeString(localStart, false) << '\n';
-        logStream << "Time Taken                    : " << Utility::durationString(logging.elapsed.load(std::memory_order_relaxed)) << '\n';
-        logStream << "Time Taken / 1000 Events      : " << Utility::durationString((1000 * logging.elapsed.load(std::memory_order_relaxed)) / logging.nEvents, true) << '\n';
-        logStream << "Histogram Scale               : " << hist.histScale << '\n';
-        if (pacing) {
-            logStream << "Status Snapshot Interval (ms) : " << Utility::numberFormat(pacing->heartbeatMs.count(), 0) << '\n';
-            logStream << "Progress Bar Update Interval  : " << Utility::numberFormat(pacing->barInterval, 0) << '\n';
-            logStream << "Check Interval                : " << Utility::numberFormat(pacing->checkInterval, 0) << '\n';
+        std::cout << "\033[3F\033[2K";
+
+        if (snapshot.fatalStall) {
+            std::cout << "\033[E\r\033[2K"
+                      << "\t\033[31;1m Fatal stall\033[0m after "
+                      << Utility::durationString(snapshot.stallDuration, true)
+                      << "\033[E\033[2K\t Last event: "
+                      << Utility::numberFormat(snapshot.eventIndex, eventWidth)
+                      << " / " << Utility::numberFormat(snapshot.nEvents, 0)
+                      << "\033[E\033[2K\t " << snapshot.fatalReason;
+        } else if (snapshot.phase == RunPhase::Starting) {
+            std::cout << "\033[E\033[2K"
+                      << "\t\033[34;1m Booting... \033[0m\033[E\033[2K";
+        } else if (snapshot.phase == RunPhase::Configuring) {
+            std::cout << "\033[E\033[2K"
+                      << "\t\033[34;1m Configurig from " << snapshot.eta
+                      << " \033[0m\033[E\033[2K";
+        } else if (snapshot.phase == RunPhase::Initialisation) {
+            std::cout << "\033[E\033[2K"
+                      << "\t\033[34;1m Initializing " << snapshot.eta << "... \033[0m\033[E\033[2K";
+        } else if (snapshot.phase == RunPhase::Finished) {
+            std::cout << "\033[E\r\033[2K"
+                      << "\t\033[32;1m Finished\033[0m"
+                      << "\033[E\033[2K";
+        } else {
+            const auto now     = std::chrono::system_clock::now();
+            const bool stalled = isTerminalStalled(snapshot, now);
+            std::cout << "\t Events processed : \033[32;1m"
+                      << Utility::numberFormat(snapshot.eventIndex, eventWidth) << "\033[0m"
+                      << " out of " << Utility::numberFormat(snapshot.nEvents, 0) << "  |  "
+                      << std::setw(2) << percent << "% "
+                      << "\033[E\033[2K\t ETA: " << snapshot.eta
+                      << "\033[E\033[2K\t"
+                      << (stalled
+                              ? std::string("\033[31;1mStalled for ")
+                                    + Utility::durationString(terminalIdleFor(snapshot, now))
+                                    + "\033[0m"
+                              : "");
         }
-
-        if (!programLog.empty()) {
-            logStream << programLog;
-            if (programLog.back() != '\n') logStream << '\n';
-        }
-
-        std::ostringstream capturedOutput;
-        {
-            std::lock_guard<std::mutex> terminalLock(terminalMutex());
-            std::streambuf* oldStream = std::cout.rdbuf(capturedOutput.rdbuf());
-            std::cout << "\n\n\n";
-            if (listChangedSettings) listChangedSettings();
-            std::cout << "\n\n\n";
-            if (printStats) printStats();
-            std::cout.rdbuf(oldStream);
-        }
-
-        logStream << capturedOutput.str();
-        return logStream.str();
+        std::cout << "\033[E\r" << std::flush;
     }
 
-    inline void outputLog(const Record::Writer& writer,
-                          const Config::Watch& logging,
-                          const std::string& programLog = {},
-                          const TString& logPath = "",
-                          const std::function<void()>& printStats = {},
-                          const std::function<void()>& listChangedSettings = {},
-                          const PacingInfo* pacing = nullptr)
-    {
-        const TString targetLogPath = logPath.Length() > 0 ? logPath : writer.paths().logName;
-        writeTextFile(targetLogPath,
-                      buildLogText(writer, logging, programLog, printStats, listChangedSettings, pacing));
-    }
-
-    inline std::string buildEmergencyLogText(const Record::Writer& writer,
-                                             const Config::Watch& logging,
-                                              const RunSnapshot& snapshot,
-                                              const std::string& programLog = {},
-                                              const std::string& reason = {})
-    {
-        std::ostringstream stream;
-        const Record::Paths& paths = writer.paths();
-        stream << "Emergency Shutdown            : fatal stall\n";
-        if (!reason.empty()) stream << "Emergency Detail              : " << reason << '\n';
-        stream << "Serial                        : " << std::setw(2) << std::setfill('0') << writer.paths().serial << '\n';
-        stream << "Beam Energy                   : " << paths.beamEnergy.Data() << '\n';
-        stream << "File Title                    : " << paths.fileTitle.Data() << '\n';
-        stream << "Root Output                   : " << paths.outName.Data() << '\n';
-        stream << "Main Log                      : " << paths.logName.Data() << '\n';
-        stream << "RunStat Log                   : " << paths.runStatName.Data() << '\n';
-        stream << "Last Event                    : " << Utility::numberFormat(snapshot.eventIndex, 0)
-               << " / " << Utility::numberFormat(snapshot.nEvents, 0) << '\n';
-        stream << "Real Event Count              : " << Utility::numberFormat(snapshot.nRealEvents, 0) << '\n';
-        stream << "Phase                         : " << phaseString(snapshot.phase) << '\n';
-        stream << "Elapsed                       : " << Utility::durationString(logging.elapsed.load(std::memory_order_relaxed), true) << '\n';
-        stream << "Last Update                   : " << Utility::timeString(snapshot.lastUpdateTime, false) << '\n';
-        stream << "Fatal Reason                  : " << snapshot.fatalReason << '\n';
-        stream << "Stall Duration                : " << Utility::durationString(snapshot.stallDuration, true) << '\n';
-        stream << "Stall Threshold               : "
-               << Utility::durationString(std::chrono::duration_cast<Config::uSeconds>(snapshot.stallThreshold), true) << '\n';
-        stream << "Fatal Multiplier              : " << snapshot.stallMultiplier << "x\n";
-        if (!programLog.empty()) {
-            stream << programLog;
-            if (programLog.back() != '\n') stream << '\n';
-        }
-        return stream.str();
-    }
-
-    inline void writeEmergencyLog(const Record::Writer& writer,
-                                  const Config::Watch& logging,
-                                   const RunSnapshot& snapshot,
-                                   const std::string& programLog = {},
-                                   const std::string& reason = {})
-    {
-        writeTextFile(writer.paths().logName,
-                      buildEmergencyLogText(writer, logging, snapshot, programLog, reason));
-    }
-
-    inline void terminalReport(const Record::Writer& writer, Config::Watch& logging,
-                               const std::function<void()>& printStats = {}, bool stats = false) {
-        std::lock_guard<std::mutex> terminalLock(terminalMutex());
-        std::cout << "\n\n\n";
-        if (stats && printStats) { printStats(); std::cout << "\n\n"; }
-        const Config::TimePoint now = std::chrono::system_clock::now();
-        logging.elapsed.store(std::chrono::duration_cast<Config::uSeconds>(now - logging.start),
-                              std::memory_order_relaxed);
-        std::cout << "Finished :\n" << std::string(10, ' ')
-                  << Utility::timeString(now)
-                  << "\n" << std::string(10, ' ')
-                  << Utility::durationString(logging.elapsed.load(std::memory_order_relaxed)) << std::endl;
-        std::cout << "\nFile : " << writer.paths().outName.Data() << std::endl << std::endl;
-    }
 }

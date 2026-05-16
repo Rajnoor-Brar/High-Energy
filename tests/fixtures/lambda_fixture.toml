@@ -3,11 +3,11 @@
 # so the test is fully self-contained inside tests/fixtures/.
 
 [events]
-pythia      = false
 event_count = 50
 
 [probe]
-thread_count = 4
+probe_threads    = 4
+analysis_threads = 2
 input_file = "tests/fixtures/lambda_fixture.root"
 event_particles  = [
     ["protons", 0, "Protons", [["pX","D"], ["pY","D"], ["pZ","D"], ["Energy","D"]], [["event_index","I"]]],
@@ -15,15 +15,15 @@ event_particles  = [
 ]
 
 [record]
-thread_count = 2
+writer_threads = 2
 serial     = 0
 sr_padding = 1
 hist_scaling = 1.0
 
 [record.paths]
 directory            = "output/test/"
-output_log_directory = "logs/"
-checkpoint_directory = "checkpoints/"
+output_log_directory = "output/test/logs/"
+checkpoint_directory = "output/test/checkpoints/"
 serialDirectory      = false
 logInSubDir          = true
 checkpointsInSubDir  = true

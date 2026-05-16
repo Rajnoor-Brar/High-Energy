@@ -1,0 +1,343 @@
+# Canonical TOML reference for all project config readers.
+# All keys the parsers accept are shown here with representative values.
+# Sections marked "(example)" are user-named and appear once per logical entity.
+#
+# Legacy section aliases are not supported:
+#   [run]       → [events] and [record]
+#   [paths]     → [record.paths]
+#   [file]      → [record.file]
+#   [metadata]  → [record.metadata]
+#   [log] / [logging] → [monitor]
+
+# ── Events ───────────────────────────────────────────────────────────────────
+
+[events]
+event_count = 10000          # number of events to process (0 = all in file)
+
+# ── Probe ────────────────────────────────────────────────────────────────────
+
+[probe]
+input_file       = "output/Lambda_Data/_08/Lambda_Recons_7000GeV_10M.root"
+probe_threads    = 0         # reader threads  (0 = auto: ⌊(hw-2)/3⌋, min 1)
+analysis_threads = 0         # collector/callback threads (0 = same as probe_threads)
+callback_mode    = "CollectorThread"  # "CollectorThread" | "WorkerThread"
+queue_capacity   = 0         # bounded event queue depth (0 = 10 × probe_threads)
+
+# --- event_particles: inline array format -----------------------------------
+# Each entry: ["label", spec_id, "tree", [[br,type],...4], [[idx_br,type],...]]
+# spec_id: 0=Cartesian(x,y,z,E)  1=PtEtaPhiE  2=PtEtaPhiM
+# branch type codes: D=Double_t  F=Float_t  I=Int_t  L=Long64_t
+event_particles = [
+    ["protons", 0, "Protons", [["pX","D"],["pY","D"],["pZ","D"],["Energy","D"]], [["Index","I"]]],
+    ["pions",   0, "Pions",   [["pX","D"],["pY","D"],["pZ","D"],["Energy","D"]], [["Index","I"]]],
+]
+
+# --- event_particles: named-table format (alternative to inline array) -------
+# List labels here, then define each [probe.particle.<label>] table below.
+# event_particles = ["protons", "pions"]
+
+# --- [probe.particle.<label>] (example — one table per particle) -------------
+# [probe.particle.protons]
+# spec         = 0              # coord spec id (same codes as inline)
+# tree_name    = "Protons"
+# index_branch = ["Index", "I"] # primary event-grouping branch
+# branch_1     = ["pX",    "D"]
+# branch_2     = ["pY",    "D"]
+# branch_3     = ["pZ",    "D"]
+# branch_4     = ["Energy","D"]
+
+# [probe.particle.pions]
+# spec         = 0
+# tree_name    = "Pions"
+# index_branch = ["Index", "I"]
+# branch_1     = ["pX",    "D"]
+# branch_2     = ["pY",    "D"]
+# branch_3     = ["pZ",    "D"]
+# branch_4     = ["Energy","D"]
+
+# --- [probe.index] : per-particle index metadata (element-wise bool arrays) --
+# Applies to each particle in the order they appear in event_particles.
+[probe.index]
+sorted    = [true, true]    # entries within each event are sorted by index
+ascending = [true, true]    # index values are non-decreasing
+monotonic = [true, true]    # no duplicate index values within an event
+
+# ── Pythia ───────────────────────────────────────────────────────────────────
+
+[pythia]
+beam_energy    = 7000.0          # centre-of-mass energy (GeV); forwarded as Beams:eCM
+cmnd_file      = "configs/Lambda_Reconstruction.cmnd"  # Pythia cmnd file path (empty = skip)
+seed           = 270403          # random seed (0 = Pythia default)
+pythia_threads = 0               # Pythia parallel threads (0 = auto)
+
+# ── Record ───────────────────────────────────────────────────────────────────
+
+[record]
+serial               = 0       # serial number stamped on output filenames
+sr_padding           = 2       # zero-padding width for serial number
+bin_count            = 500     # default histogram bin count
+hist_scaling         = 1.0     # histogram scale factor applied at write time
+writer_threads       = 0       # fill-worker threads (0 = auto)
+writer_queue_capacity = 0      # fill-queue depth (0 = Writer default: 1024)
+
+[record.paths]
+directory            = "output/Lambda_Reconstruction/"
+output_log_directory = "logs/"
+checkpoint_directory = "checkpoints/"
+serialDirectory      = true    # append serial to the output directory name
+logInSubDir          = true    # place logs inside output_log_directory
+checkpointsInSubDir  = true    # place checkpoints inside checkpoint_directory
+
+[record.file]
+prefix = "Lambda"
+serial = true    # include serial in filename
+energy = true    # include beam energy in filename
+events = true    # include event count in filename
+
+[record.metadata]
+dataset_name = "Lambda_MC_pp"
+data_type    = "MC"
+run_period   = ""
+campaign     = ""
+experiment   = "Pythia8_standalone"
+notes        = ""
+known_issues = ""
+contact      = ""
+generator    = "Pythia8"
+tune         = ""
+pdf_set      = ""
+
+# ── Monitor ──────────────────────────────────────────────────────────────────
+
+[monitor]
+true_time_at_config       = false   # record wall time at config as t=0
+print_interval            = 1000    # events between status-line updates
+check_interval            = 100000  # events between stall-detection checks
+heartbeat_interval        = 2000    # ms between heartbeat file writes
+terminal_refresh_interval = 2.0     # minutes between terminal refreshes
+program_stall_threshold   = 5.0     # minutes of silence before stall warning
+checkpoint_interval       = 100000  # events between automatic checkpoints
+bin_count                 = 500     # histogram bins (overrides [record].bin_count)
+hist_scaling              = 1.0     # histogram scale (overrides [record].hist_scaling)
+save_heartbeat            = false   # emit Heartbeat WatchRequests to Writer
+save_checkpoints          = false   # emit Checkpoint WatchRequests to Writer
+save_log_threads          = false   # write per-thread stat files
+save_final_log            = true    # write final run-stat log on finish
+
+# ── Lambda (module-specific) ─────────────────────────────────────────────────
+
+[lambda]
+hist_limits      = "all"       # name or path of limits file; "all" = this file
+delta_mass_gev   = 0.15        # invariant-mass window half-width (GeV)
+delta_theta_rad  = 0.1         # decay-angle tolerance (radians)
+reserved_protons = 20          # expected beam protons per event (for multiplicity baseline)
+proton_label     = "protons"   # Probe collection label for protons
+pion_label       = "pions"     # Probe collection label for pions
+
+[lambda.analysis]
+writeTree = ["Selected"]       # HistogramSet names whose candidates are also written to TTrees
+
+# --- [lambda.limits.<HistogramSet>] (example — one table per histogram set) --
+# default: level name from [record.limits.*] used when a property has no explicit range.
+# Each property entry overrides the corresponding [record.limits.<prop>] default.
+
+[lambda.limits.Unvalidated]
+default             = "Moderate"
+Mass_Invariant      = [1.0, 2.0]
+Energy_Net          = [0.0, 10.0]
+Momentum_Net        = [0.0, 10.0]
+Momentum_Transverse = [0.0, 5.0]
+Momentum_Z          = [0.0, 10.0]
+Pseudorapidity      = [-15.0, 15.0]
+Multiplicity        = [0.0, 5000.0]
+
+[lambda.limits.Validated]
+default             = "Moderate"
+Mass_Invariant      = [1.0, 2.0]
+Energy_Net          = [0.0, 100.0]
+Momentum_Net        = [0.0, 100.0]
+Momentum_Transverse = [0.0, 5.0]
+Momentum_Z          = [0.0, 100.0]
+Pseudorapidity      = [-15.0, 15.0]
+Multiplicity        = [0.0, 1000.0]
+
+[lambda.limits.Selected]
+default             = "Moderate"
+Mass_Invariant      = [1.0, 1.3]
+Energy_Net          = [0.0, 100.0]
+Momentum_Net        = [0.0, 100.0]
+Momentum_Transverse = [0.0, 5.0]
+Momentum_Z          = [0.0, 100.0]
+Pseudorapidity      = [-15.0, 15.0]
+Multiplicity        = [0.0, 150.0]
+
+# ── Record limits (property lookup table) ────────────────────────────────────
+# Each [record.limits.<PropertyName>] defines five named ranges.
+# Lambda limit tables select a level name as their "default" and may override
+# individual properties with explicit [low, high] pairs.
+
+[record.limits.Mass_Invariant]
+Minute   = [1.110, 1.120]
+Small    = [1.105, 1.125]
+Moderate = [1.08,  1.15]
+Large    = [0.8,   1.25]
+Extreme  = [0.2,   3.0]
+
+[record.limits.Mass_Transverse]
+Minute   = [1.110, 1.120]
+Small    = [1.105, 1.125]
+Moderate = [1.08,  1.15]
+Large    = [0.8,   1.25]
+Extreme  = [0.2,   3.0]
+
+[record.limits.Energy_Net]
+Minute   = [1.10, 1.13]
+Small    = [1.05, 1.20]
+Moderate = [0.8,  2.0]
+Large    = [0.5,  5.0]
+Extreme  = [0.5,  10.0]
+
+[record.limits.Energy_Transverse]
+Minute   = [0.9, 1.2]
+Small    = [0.8, 1.5]
+Moderate = [0.5, 3.0]
+Large    = [0.0, 5.0]
+Extreme  = [0.0, 10.0]
+
+[record.limits.Momentum_Net]
+Minute   = [0.0, 1.0]
+Small    = [0.0, 2.0]
+Moderate = [0.0, 3.0]
+Large    = [0.0, 6.0]
+Extreme  = [0.0, 10.0]
+
+[record.limits.Momentum_Transverse]
+Minute   = [0.0, 0.8]
+Small    = [0.0, 1.5]
+Moderate = [0.0, 2.5]
+Large    = [0.0, 4.0]
+Extreme  = [0.0, 8.0]
+
+[record.limits.Momentum_X]
+Minute   = [-1.0,  1.0]
+Small    = [-2.0,  2.0]
+Moderate = [-5.0,  5.0]
+Large    = [-10.0, 10.0]
+Extreme  = [-20.0, 20.0]
+
+[record.limits.Momentum_Y]
+Minute   = [-1.0,  1.0]
+Small    = [-2.0,  2.0]
+Moderate = [-5.0,  5.0]
+Large    = [-10.0, 10.0]
+Extreme  = [-20.0, 20.0]
+
+[record.limits.Momentum_Z]
+Minute   = [-1.0,  1.0]
+Small    = [-2.0,  2.0]
+Moderate = [-5.0,  5.0]
+Large    = [-10.0, 10.0]
+Extreme  = [-20.0, 20.0]
+
+[record.limits.Rapidity]
+Minute   = [-1.0,  1.0]
+Small    = [-2.0,  2.0]
+Moderate = [-3.0,  3.0]
+Large    = [-5.0,  5.0]
+Extreme  = [-10.0, 10.0]
+
+[record.limits.Pseudorapidity]
+Minute   = [-1.0,  1.0]
+Small    = [-2.0,  2.0]
+Moderate = [-3.0,  3.0]
+Large    = [-5.0,  5.0]
+Extreme  = [-10.0, 10.0]
+
+[record.limits.Azimuthal_Angle]
+Minute   = [-1.57, 1.57]
+Small    = [-3.14, 3.14]
+Moderate = [-3.14, 3.14]
+Large    = [-3.14, 3.14]
+Extreme  = [-6.28, 6.28]
+
+[record.limits.Multiplicity]
+Minute   = [0.0, 10.0]
+Small    = [0.0, 50.0]
+Moderate = [0.0, 200.0]
+Large    = [0.0, 1000.0]
+Extreme  = [0.0, 50000.0]
+
+# ── Paint ────────────────────────────────────────────────────────────────────
+# Paint::loadBook reads [paint] then named result tables.
+# [paint.default.*] provides fallback style for all results.
+
+[paint]
+root_file  = "output/Lambda_Reconstruction/_08/Lambda_Recons_7000GeV_10M.root"
+result_dir = "results/"
+results    = ["Mass_Invariant", "Energy_Net", "Momentum"]
+
+# --- [paint.<ResultName>] (example — one table per result) -------------------
+
+[paint.Mass_Invariant]
+sources_objects = ["Mass_Invariant"]
+source_types    = ["H1"]          # H1 | H2 | Graph
+
+[paint.Mass_Invariant.style]
+line_color = "kRed-4"
+fill_color = "kRed-7"
+
+# --- [paint.default.*] — fallback style applied to all results ---------------
+
+[paint.default.style]
+line_color   = "kBlue-6"
+line_width   = 2
+line_style   = 1
+fill_color   = "kBlue-7"
+fill_style   = 3003
+marker_color = "kBlack"
+marker_style = 20
+marker_size  = 1.0
+draw_option  = "HIST"
+minimum      = 0.0
+
+[paint.default.axis]
+title_font    = 43
+label_font    = 43
+title_size    = 27.0
+label_size    = 20.0
+offset_x      = 1.1
+offset_y      = 1.35
+center_titles = true
+max_digits_y  = 3
+title_x       = ""
+title_y       = ""
+
+[paint.default.canvas]
+width    = 900
+height   = 600
+margin_l = 0.12
+margin_r = 0.05
+margin_b = 0.12
+margin_t = 0.08
+ticks_x  = true
+ticks_y  = true
+
+[paint.default.stats]
+show        = true
+opt_stat    = "emr"
+x           = 0.92
+y           = 0.89
+width       = 0.18
+height      = 0.10
+text_font   = 43
+text_size   = 12.0
+border_size = 2
+
+[paint.default.legend]
+show      = false
+x1        = 0.65
+y1        = 0.75
+x2        = 0.88
+y2        = 0.88
+text_font = 43
+text_size = 14.0

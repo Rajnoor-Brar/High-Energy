@@ -15,7 +15,7 @@ int main(int argc, char* argv[]) {
     const std::string project    = "Lambda_Reconstruction";
     const std::string configPath = argc > 1 ? argv[1] : "configs/" + project + ".toml";
 
-    Probe::ProbeIMT probe;
+    Probe::ProbeParallel probe;
     Record::Writer       writer;
     Monitor::AsyncLogger asyncLogger;
 
@@ -34,12 +34,9 @@ int main(int argc, char* argv[]) {
         Lambda::rootAnalysis(ev, threadId, ctx);
     });
 
-    {
-        writer.meta().dataset.parent_files = {probe.inputFile()};
-        Record::Meta::fillDerived(writer.meta(), project, configPath, asyncLogger.watch(), Config::Register{});
-        Record::Meta::integrityAddFileSha(writer.meta(), configPath);
-        Record::Meta::integrityAddFileSha(writer.meta(), writer.histConfig().histLimitsFile.Data());
-    }
+    writer.meta().dataset.parent_files = {probe.inputFile()};
+    Record::Meta::integrityAddFileSha(writer.meta(), configPath);
+    Record::Meta::integrityAddFileSha(writer.meta(), writer.histConfig().histLimitsFile.Data());
     writer.finish(asyncLogger.watch().nEvents);
 
     return 0;

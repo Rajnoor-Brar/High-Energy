@@ -1,43 +1,145 @@
 #pragma once
 
-// ── Probe/ConfigAid.hh ───────────────────────────────────────────────────────
-// Parses the [probe] section of a TOML config file directly into
-// Probe::CollectionSpec objects — without an intermediate Config type.
-//
-// Dependency direction: Probe → Physics, toml++   (no Config dependency here)
-// Config/Reader.hh includes this header and calls parseCollectionsFromToml
-// from readProbeSection.
-
+#include <cstddef>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 #include <toml++/toml.hpp>
 
+#include "TFile.h"
+#include "TParameter.h"
+
 #include "Probe/Types.hh"
 #include "Probe/BranchControl.hh"
 
 namespace Probe {
 
-    // ── parseCollectionsFromToml ─────────────────────────────────────────────
-    // Reads the [probe] event_particles array from a parsed TOML table and
-    // returns one CollectionSpec per entry.
-    //
-    // Each entry in event_particles is a 5-element array:
-    //   [ label, spec_id, tree_name, [[branch, type], ...], [[idx_branch, type], ...] ]
-    //
-    // spec_id: 0 = Cartesian (Px,Py,Pz,E), 1 = PtEtaPhiE, 2 = PtEtaPhiM
-    // type codes: D=Double, F=Float, I=Int32, i=UInt32, L=Int64, l=UInt64, O=Bool
+namespace detail {
 
-    inline std::vector<CollectionSpec>
-    parseCollectionsFromToml(const toml::table& cfg)
+    inline CoordSpec makeCoordSpec(int specId,
+                                   std::vector<BranchSpec> branches,
+                                   const std::string& label)
     {
-        std::vector<CollectionSpec> out;
+        switch (specId) {
+            case 0: return CartesianSpec{ std::move(branches)};
+            case 1: return PtEtaPhiESpec{std::move(branches)};
+            case 2: return PtEtaPhiMSpec{std::move(branches)};
+            default:
+                throw std::runtime_error(
+                    "[Probe] invalid coord spec ID " + std::to_string(specId) +
+                    " for '" + label + "'");
+        }
+    }
 
-        const auto* arr = cfg["probe"]["event_particles"].as_array();
-        if (!arr) return out;
+    inline BranchSpec parseBranchPair(const toml::array& pair) {
+        return {pair.at(0).value_or(std::string{}),
+                RootUtil::detectBranchType(pair.at(1).value_or(std::string{}))};
+    }
 
-        for (const auto& entry : *arr) {
+} // namespace detail
+
+// ── applyIndexSpecsFromToml ────────────────────────────────────────────────
+// Reads [probe.index].sorted / ascending / monotonic bool arrays and applies
+// them element-wise to the collection specs.
+inline void applyIndexSpecsFromToml(const toml::table& cfg,
+                                    std::vector<CollectionSpec>& specs)
+{
+    const auto* idxTbl = cfg["probe"]["index"].as_table();
+    if (!idxTbl || specs.empty()) return;
+
+    auto parseBoolArr = [idxTbl](const char* key) -> std::vector<bool> {
+        const auto* arr = (*idxTbl)[key].as_array();
+        if (!arr) return {};
+        std::vector<bool> result;
+        result.reserve(arr->size());
+        for (const auto& v : *arr) result.push_back(v.value_or(true));
+        return result;
+    };
+
+    const auto sorted    = parseBoolArr("sorted");
+    const auto ascending = parseBoolArr("ascending");
+    const auto monotonic = parseBoolArr("monotonic");
+
+    for (std::size_t i = 0; i < specs.size(); ++i) {
+        if (i < sorted.size())    specs[i].indexSorted    = sorted[i];
+        if (i < ascending.size()) specs[i].indexAscending = ascending[i];
+        if (i < monotonic.size()) specs[i].indexMonotonic = monotonic[i];
+    }
+}
+
+// ── parseCollectionsFromToml ───────────────────────────────────────────────
+// Supports two syntaxes for [probe].event_particles:
+//
+// Inline array (original):
+//   event_particles = [
+//     ["label", spec_id, "tree", [[br,type],...], [[idx_br,type],...]], ...
+//   ]
+//
+// Named-table (new):
+//   event_particles = ["label1", "label2"]
+//   [probe.particle.label1]
+//   spec         = 0              # 0=Cartesian 1=PtEtaPhiE 2=PtEtaPhiM
+//   tree_name    = "TreeName"
+//   index_branch = ["BrName","I"] # primary event-index branch
+//   branch_1     = ["pX","D"]
+//   branch_2     = ["pY","D"]
+//   branch_3     = ["pZ","D"]
+//   branch_4     = ["Energy","D"]
+//
+// In both cases, [probe.index] sorted/ascending/monotonic arrays are applied.
+
+inline std::vector<CollectionSpec>
+parseCollectionsFromToml(const toml::table& cfg)
+{
+    std::vector<CollectionSpec> out;
+
+    const auto* evArr = cfg["probe"]["event_particles"].as_array();
+    if (!evArr || evArr->empty()) return out;
+
+    if ((*evArr)[0].is_string()) {
+        // Named-table syntax
+        const auto* particleTbl = cfg["probe"]["particle"].as_table();
+
+        for (const auto& elem : *evArr) {
+            const std::string label = elem.value_or(std::string{});
+            if (label.empty()) continue;
+
+            const auto* ptbl = particleTbl ? (*particleTbl)[label].as_table() : nullptr;
+            if (!ptbl)
+                throw std::runtime_error(
+                    "[Probe] event_particles label '" + label +
+                    "' has no matching [probe.particle." + label + "] table");
+
+            const int         specId   = (*ptbl)["spec"].value_or(0);
+            const std::string treeName = (*ptbl)["tree_name"].value_or(std::string{});
+
+            std::vector<BranchSpec> momentaBranches;
+            for (int i = 1; i <= 4; ++i) {
+                const std::string key = "branch_" + std::to_string(i);
+                if (const auto* pair = (*ptbl)[key].as_array(); pair && pair->size() == 2)
+                    momentaBranches.push_back(detail::parseBranchPair(*pair));
+            }
+            if (momentaBranches.size() != 4)
+                throw std::runtime_error(
+                    "[Probe] '" + label + "': expected branch_1..4, got " +
+                    std::to_string(momentaBranches.size()));
+
+            std::vector<BranchSpec> indexBranches;
+            if (const auto* pair = (*ptbl)["index_branch"].as_array(); pair && pair->size() == 2)
+                indexBranches.push_back(detail::parseBranchPair(*pair));
+
+            CollectionSpec spec;
+            spec.label         = label;
+            spec.tree          = treeName;
+            spec.coords        = detail::makeCoordSpec(specId, std::move(momentaBranches), label);
+            spec.indexBranches = std::move(indexBranches);
+            out.push_back(std::move(spec));
+        }
+    } else {
+        // Inline array syntax
+        for (const auto& entry : *evArr) {
             const auto* row = entry.as_array();
             if (!row || row->size() < 5) continue;
 
@@ -45,57 +147,54 @@ namespace Probe {
             const int         specId   = (*row)[1].value_or(0);
             const std::string treeName = (*row)[2].value_or(std::string{});
 
-            // ── momenta branches ─────────────────────────────────────────────
             std::vector<BranchSpec> momentaBranches;
             if (const auto* momentaArr = (*row)[3].as_array()) {
                 for (const auto& b : *momentaArr) {
-                    if (const auto* pair = b.as_array(); pair && pair->size() == 2) {
-                        momentaBranches.push_back({
-                            pair->at(0).value_or(std::string{}),
-                            BranchControl::detectType(pair->at(1).value_or(std::string{}))
-                        });
-                    }
+                    if (const auto* pair = b.as_array(); pair && pair->size() == 2)
+                        momentaBranches.push_back(detail::parseBranchPair(*pair));
                 }
             }
             if (momentaBranches.size() != 4)
                 throw std::runtime_error(
-                    "[Probe] parseCollectionsFromToml: '" + label +
-                    "' must have exactly 4 momenta branches, got " +
+                    "[Probe] '" + label + "' must have exactly 4 momenta branches, got " +
                     std::to_string(momentaBranches.size()));
 
-            // ── coordinate spec ──────────────────────────────────────────────
-            CoordSpec coords;
-            switch (specId) {
-                case 0: coords = CartesianSpec{ momentaBranches}; break;
-                case 1: coords = PtEtaPhiESpec{momentaBranches}; break;
-                case 2: coords = PtEtaPhiMSpec{momentaBranches}; break;
-                default:
-                    throw std::runtime_error(
-                        "[Probe] parseCollectionsFromToml: invalid spec ID " +
-                        std::to_string(specId) + " for '" + label + "'");
-            }
-
-            // ── index branches ───────────────────────────────────────────────
             std::vector<BranchSpec> indexBranches;
             if (const auto* indexArr = (*row)[4].as_array()) {
                 for (const auto& b : *indexArr) {
-                    if (const auto* pair = b.as_array(); pair && pair->size() == 2) {
-                        indexBranches.push_back({
-                            pair->at(0).value_or(std::string{}),
-                            BranchControl::detectType(pair->at(1).value_or(std::string{}))
-                        });
-                    }
+                    if (const auto* pair = b.as_array(); pair && pair->size() == 2)
+                        indexBranches.push_back(detail::parseBranchPair(*pair));
                 }
             }
 
             CollectionSpec spec;
             spec.label         = label;
             spec.tree          = treeName;
-            spec.coords        = std::move(coords);
+            spec.coords        = detail::makeCoordSpec(specId, std::move(momentaBranches), label);
             spec.indexBranches = std::move(indexBranches);
             out.push_back(std::move(spec));
         }
-        return out;
     }
+
+    applyIndexSpecsFromToml(cfg, out);
+    return out;
+}
+
+
+// ── resolveEventCount ─────────────────────────────────────────────────────
+// Reads About/events/n_events_total from a ROOT file written by _Lambda_Data.
+// Returns 0 when the value is absent or non-positive.
+inline std::size_t resolveEventCount(const std::string& filepath) {
+    std::unique_ptr<TFile> f(TFile::Open(filepath.c_str(), "READ"));
+    if (!f || f->IsZombie()) return 0;
+
+    if (auto* dir = f->GetDirectory("About/events")) {
+        if (auto* par =
+                dynamic_cast<TParameter<Long64_t>*>(dir->Get("n_events_total")))
+            if (par->GetVal() > 0)
+                return static_cast<std::size_t>(par->GetVal());
+    }
+    return 0;
+}
 
 } // namespace Probe

@@ -134,7 +134,7 @@ int main() {
 
     {
         Record::Writer writer;
-        openWriter(writer, "scribe_exception");
+        openWriter(writer, "worker_exception");
         writer.declareHist1D(HistId::Values, "values", "values", 10, 0.0, 10.0);
         writer.start();
         writer.fillHist1D(HistId::Missing, Record::Value{1.0});
@@ -146,7 +146,7 @@ int main() {
             finishRejected = true;
         }
         TEST_TRUE(finishRejected);
-        TEST_PASS("Scribe exceptions propagate to finish");
+        TEST_PASS("Worker exceptions propagate to finish");
     }
 
     std::cout << "ALL TESTS PASSED\n";

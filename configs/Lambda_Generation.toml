@@ -2,13 +2,13 @@
 event_count = 10000
 
 [pythia]
-thread_count = 0     # docs/WriterMT.md Phase 0; 0 = auto (1/3 of hw-2)
+pythia_threads = 0   # 0 = auto (1/3 of hw-2)
 beam_energy = 7000   # GeV
 cmnd_file   = "configs/Lambda_Reconstruction.cmnd"
 seed        = 270403
 
 [record]
-thread_count = 0     # docs/WriterMT.md Phase 0; 0 = auto
+writer_threads = 0   # 0 = auto
 serial     = 99
 sr_padding = 2
 bin_count    = 500

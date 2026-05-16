@@ -152,7 +152,7 @@ namespace Record::Meta {
         r.integrity.file_shas.push_back(sha256File(path));
     }
 
-    // ── Pass 2 helper: apply one [metadata]-shaped table to the Record ─────
+    // ── Pass 2 helper: apply one [record.metadata]-shaped table to the Record
     // Per-field; only overwrites when the key is present in `meta`.
     namespace detail {
         inline void applyMetadataTable(Record& r, const toml::table& meta) {
@@ -197,14 +197,11 @@ namespace Record::Meta {
     } // namespace detail
 
     // ── Pass 2: TOML ────────────────────────────────────────────────────────
-    // Reads BOTH cfg["metadata"] (top-level) and cfg["record"]["metadata"]
-    // (nested form actually used by current project configs). Nested wins
-    // within this pass, since it is applied second.
+    // Reads only cfg["record"]["metadata"]. The former top-level [metadata]
+    // alias is rejected by Config::rejectSectionAliases before Writer setup.
     inline void mergeFromToml(Record& r, const std::string& configPath) {
         try {
             const auto cfg = toml::parse_file(configPath);
-            if (const auto* meta = cfg["metadata"].as_table())
-                detail::applyMetadataTable(r, *meta);
             if (const auto* meta = cfg["record"]["metadata"].as_table())
                 detail::applyMetadataTable(r, *meta);
             if (const auto* lam = cfg["lambda"].as_table()) {
@@ -304,22 +301,6 @@ namespace Record::Meta {
         gethostname(hbuf, sizeof(hbuf));
         r.integrity.host_uname = std::string(u.sysname) + " " + u.release
                                   + " " + u.machine + " @ " + hbuf;
-    }
-
-    // ── Backwards-compat capture() ──────────────────────────────────────────
-    // Existing callers (e.g. _Lambda_Reconstruction.cc:70) keep working
-    // unchanged. Probe extraction is NOT performed here — drivers that want
-    // it call Record::Meta::mergeFromProbe(record, probeInputFile) before
-    // shutdown. Once the Writer migration completes, this wrapper goes away.
-    inline Record capture(const std::string& analysisName,
-                          const std::string& configPath,
-                          const Config::Watch&    log,
-                          const Config::Register& root)
-    {
-        Record r;
-        mergeFromToml(r, configPath);
-        fillDerived(r, analysisName, configPath, log, root);
-        return r;
     }
 
     namespace detail {

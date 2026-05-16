@@ -33,32 +33,16 @@ namespace Config {
                               Watch&    watch,
                               Register& reg)
     {
+        toml::table config = toml::parse_file(configPath);
+        rejectSectionAliases(config);
+
         loadMonitorDefaults(watch, reg);
         limitExtractor(configPath, reg);
-
-        toml::table config = toml::parse_file(configPath);
 
         readEventsSection(config, events, watch);
         readRecordSection(config, watch, reg);
         readLogSection   (config, watch, reg);
         readPathsAndFile(config, project, watch, reg);
-    }
-
-    inline void configuration(const std::string& configPath,
-                              const std::string& project,
-                              Watch&    watch,
-                              Register& reg)
-    {
-        Events events;
-        configuration(configPath, project, events, watch, reg);
-    }
-
-    inline void extractConfiguration(const std::string& configPath,
-                                     const std::string& project,
-                                     Watch&    watch,
-                                     Register& reg)
-    {
-        configuration(configPath, project, watch, reg);
     }
 
     // PythiaT accepts both Pythia8::Pythia and Pythia8::PythiaParallel.
@@ -78,16 +62,14 @@ namespace Config {
 
         if (!py.cmndFile.empty()) pythia.readFile(py.cmndFile);
         if (py.seed != 0) pythia.readString("Random:seed = " + std::to_string(py.seed));
-        
         if (py.beamEnergy > 0) {
             pythia.readString("Beams:eCM = " + std::to_string(py.beamEnergy));
             reg.beamEnergy = Form("%.0f", py.beamEnergy);
         }
+        if (py.pythia_threads > 0)
+            pythia.readString("Parallelism:numThreads = " + std::to_string(py.pythia_threads));
 
-        // WriterMT.md Phase 0: surface Pythia's thread_count on Watch so
-        // driver code (_Lambda_Data.cc) can forward it to Pythia's runtime
-        // parallelism setting without re-reading the TOML.
-        watch.n_threads = py.thread_count;
+        watch.n_threads = py.pythia_threads;
     }
 
     inline void configureProbe(const std::string& configPath,

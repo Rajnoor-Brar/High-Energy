@@ -25,7 +25,7 @@ int main(int argc, char* argv[]) {
     Lambda::Parameters  analysisParams;
     Lambda::configure(analysisParams, writer, configPath);
 
-    writer.bind(asyncLogger, asyncLogger.watch(),
+    writer.bind(asyncLogger,
                 [&analysisParams]() { return Lambda::logString(analysisParams); },
                 [&pythia]() { pythia.stat(); },
                 [&pythia]() { pythia.settings.listChanged(); });

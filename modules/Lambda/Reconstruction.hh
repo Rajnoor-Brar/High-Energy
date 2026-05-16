@@ -60,17 +60,13 @@ namespace Lambda{
                 const Lorentz& pion = pions[iPion];
                 const Lorentz lambda = proton + pion;
 
-                result.unvalidated.push_back(lambda);
+                // result.unvalidated.push_back(lambda);
 
-                const Double_t theta = cosTheta(proton, pion, lambda);
-                const bool massAccepted =
-                    lambda.M() > (kLambdaMass - parameters.massTolerance) &&
-                    lambda.M() < (kLambdaMass + parameters.massTolerance);
-                const bool thetaAccepted =
-                    theta > (-1 - parameters.cosThetaTolerance) &&
-                    theta < (-1 + parameters.cosThetaTolerance);
+                // const Double_t theta = cosTheta(proton, pion, lambda);
+                const bool massAccepted = lambda.M() > (kLambdaMass - parameters.massTolerance) && lambda.M() < (kLambdaMass + parameters.massTolerance);
+                // const bool thetaAccepted =  theta > (-1 - parameters.cosThetaTolerance) && theta < (-1 + parameters.cosThetaTolerance);
 
-                if (!(massAccepted && thetaAccepted))  continue; 
+                if (!(massAccepted /*&& thetaAccepted*/))  continue; 
 
                 result.validated.push_back(lambda);
                 const Double_t delta = std::abs(lambda.M() - kLambdaMass);

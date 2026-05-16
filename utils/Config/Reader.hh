@@ -37,10 +37,33 @@ namespace Config {
 
     // ── Section helpers ──────────────────────────────────────────────────────
 
+    inline void rejectSectionAliases(const toml::table& config) {
+        if (config.contains("run")) {
+            throw std::runtime_error(
+                "[Config] '[run]' was removed; use '[events]' for event_count "
+                "and '[record]' for record serial/path settings");
+        }
+        if (config.contains("paths")) {
+            throw std::runtime_error(
+                "[Config] top-level '[paths]' was removed; use '[record.paths]'");
+        }
+        if (config.contains("file")) {
+            throw std::runtime_error(
+                "[Config] top-level '[file]' was removed; use '[record.file]'");
+        }
+        if (config.contains("metadata")) {
+            throw std::runtime_error(
+                "[Config] top-level '[metadata]' was removed; use '[record.metadata]'");
+        }
+        if (config.contains("log") || config.contains("logging")) {
+            throw std::runtime_error(
+                "[Config] '[log]' / '[logging]' sections were removed; use "
+                "'[monitor]' instead");
+        }
+    }
+
     inline void readEventsSection(const toml::table& config, Events& events, Watch& watch) {
-        const bool hasEvents = config.contains("events");
-        const auto evNode = hasEvents ? config["events"]["event_count"]
-                                      : config["run"]["event_count"];
+        const auto evNode = config["events"]["event_count"];
         if (evNode) {
             events.eventCount = static_cast<std::size_t>(evNode.value_or<int64_t>(1000));
             events.userEvents = true;
@@ -49,18 +72,11 @@ namespace Config {
             events.userEvents = false;
         }
 
-        // WriterMT.md Phase 0: [events].nThreads was removed in favour of
-        // per-section thread_count.  Fail loudly on legacy configs.
         if (config["events"]["nThreads"]) {
             throw std::runtime_error(
                 "[Config] '[events].nThreads' was removed; set "
-                "'[probe|record|pythia].thread_count' instead "
-                "(see docs/WriterMT.md Phase 0)");
-        }
-        if (config["run"]["nThreads"]) {
-            throw std::runtime_error(
-                "[Config] '[run].nThreads' was removed; set "
-                "'[probe|record|pythia].thread_count' instead "
+                "'[probe].probe_threads', '[record].writer_threads', or "
+                "'[pythia].pythia_threads' instead "
                 "(see docs/WriterMT.md Phase 0)");
         }
 
@@ -72,46 +88,48 @@ namespace Config {
 
     inline void readRecordSection(const toml::table& config, Watch& /*watch*/, Register& reg) {
         const bool hasRecord = config.contains("record");
-        reg.serial = hasRecord ? config["record"]["serial"].value_or(0)
-                               : config["run"]["serial"].value_or(0);
+        reg.serial = hasRecord ? config["record"]["serial"].value_or(0) : 0;
         // sr_padding is a local in readPathsAndFile — not stored on Watch.
 
         if (hasRecord) {
             reg.binCount  = config["record"]["bin_count"].value_or(reg.binCount);
             reg.histScale = config["record"]["hist_scaling"].value_or(reg.histScale);
-            // WriterMT.md Phase 0: per-section thread count.
-            reg.recordThreadCount = resolveSectionThreadCount(
-                static_cast<std::size_t>(config["record"]["thread_count"].value_or(0)));
+            if (config["record"]["thread_count"]) {
+                throw std::runtime_error(
+                    "[Config] '[record].thread_count' was renamed; use '[record].writer_threads'");
+            }
+            reg.writer_threads = resolveSectionThreadCount(
+                static_cast<std::size_t>(config["record"]["writer_threads"].value_or(0)));
+            reg.writer_queue_capacity = static_cast<std::size_t>(
+                config["record"]["writer_queue_capacity"].value_or(0));
         } else {
-            reg.recordThreadCount = resolveSectionThreadCount(0);
+            reg.writer_threads = resolveSectionThreadCount(0);
         }
     }
 
     inline void readLogSection(const toml::table& config, Watch& /*watch*/, Register& reg) {
-        std::string logKey;
-        if      (config.contains("monitor")) logKey = "monitor";
-        else if (config.contains("log"))     logKey = "log";
-        else if (config.contains("logging")) logKey = "logging";
-        if (logKey.empty()) return;
+        if (!config.contains("monitor")) return;
 
-        reg.binCount  = config[logKey]["bin_count"].value_or(reg.binCount);
-        reg.histScale = config[logKey]["hist_scaling"].value_or(reg.histScale);
-
-        // WriterMT.md Phase 0: checkpoint cadence (events between snapshots).
-        // Distinct from the existing 'check_interval' (stall-check cadence)
-        // and 'heartbeat_interval' (terminal-status freshness, milliseconds).
-        reg.checkpointInterval = static_cast<std::size_t>(
-            config[logKey]["checkpoint_interval"].value_or(
-                static_cast<int64_t>(reg.checkpointInterval)));
+        reg.binCount  = config["monitor"]["bin_count"].value_or(reg.binCount);
+        reg.histScale = config["monitor"]["hist_scaling"].value_or(reg.histScale);
+        // checkpoint_interval is owned by AsyncLogger (Monitor::configureMonitor);
+        // it is not stored in Register.
     }
 
     inline void readPathsAndFile(const toml::table& config,
                                  const std::string& project,
                                  Watch& watch, Register& reg) {
+        if (config.contains("paths")) {
+            throw std::runtime_error(
+                "[Config] top-level '[paths]' was removed; use '[record.paths]'");
+        }
+        if (config.contains("file")) {
+            throw std::runtime_error(
+                "[Config] top-level '[file]' was removed; use '[record.file]'");
+        }
+
         const auto* pathsTbl = config["record"]["paths"].as_table();
-        if (!pathsTbl) pathsTbl = config["paths"].as_table();
         const auto* fileTbl  = config["record"]["file"].as_table();
-        if (!fileTbl)  fileTbl  = config["file"].as_table();
 
         const auto pathStr = [pathsTbl](const char* key, std::string fallback) {
             if (!pathsTbl) return fallback;
@@ -137,10 +155,8 @@ namespace Config {
         const std::string logBasePath   = pathStr("output_log_directory", "params/");
         const std::string checkBasePath = pathStr("checkpoint_directory", "checkpoints/");
 
-        const bool hasRecord2 = config.contains("record");
         const std::size_t sr_padding = static_cast<std::size_t>(
-            hasRecord2 ? config["record"]["sr_padding"].value_or(2)
-                       : config["run"]["sr_Padding"].value_or(2));
+            config["record"]["sr_padding"].value_or(2));
 
         const std::string serialStr = Form(
             ("_%0" + std::to_string((int)sr_padding) + "d").c_str(), (int)reg.serial);
@@ -185,31 +201,44 @@ namespace Config {
 
     inline void readPythiaSection(const toml::table& config, PythiaConfig& py) {
         if (!config.contains("pythia")) {
-            py.thread_count = resolveSectionThreadCount(0);
+            py.pythia_threads = resolveSectionThreadCount(0);
             return;
         }
-        py.beamEnergy   = config["pythia"]["beam_energy"].value_or(py.beamEnergy);
-        py.cmndFile     = config["pythia"]["cmnd_file"].value_or(py.cmndFile);
-        py.seed         = config["pythia"]["seed"].value_or(py.seed);
-        // WriterMT.md Phase 0: per-section thread count.
-        py.thread_count = resolveSectionThreadCount(
-            static_cast<std::size_t>(config["pythia"]["thread_count"].value_or(0)));
+        py.beamEnergy = config["pythia"]["beam_energy"].value_or(py.beamEnergy);
+        py.cmndFile   = config["pythia"]["cmnd_file"].value_or(py.cmndFile);
+        py.seed       = config["pythia"]["seed"].value_or(py.seed);
+        if (config["pythia"]["thread_count"]) {
+            throw std::runtime_error(
+                "[Config] '[pythia].thread_count' was renamed; use '[pythia].pythia_threads'");
+        }
+        py.pythia_threads = resolveSectionThreadCount(
+            static_cast<std::size_t>(config["pythia"]["pythia_threads"].value_or(0)));
     }
 
     inline void readProbeSection(const toml::table& config, ProbeConfig& probe) {
         if (!config.contains("probe")) {
-            probe.thread_count = resolveSectionThreadCount(0);
+            probe.probe_threads    = resolveSectionThreadCount(0);
+            probe.analysis_threads = resolveSectionThreadCount(0);
             return;
         }
         probe.inputFile   = config["probe"]["input_file"].value_or(probe.inputFile);
         probe.collections = Probe::parseCollectionsFromToml(config);
-        // WriterMT.md Phase 0: per-section thread count.
-        probe.thread_count = resolveSectionThreadCount(
-            static_cast<std::size_t>(config["probe"]["thread_count"].value_or(0)));
-        // Phase 1 sharding keys (docs/ROOTMT.md).  split_input defaults to
-        // false because Phase 1 measurement showed no CPU-floor improvement.
-        probe.splitInput  = config["probe"]["split_input"].value_or(false);
-        probe.tempSpace   = config["probe"]["temp_space"].value_or(std::string{});
-        probe.keepShards  = config["probe"]["keep_shards"].value_or(false);
+        if (config["probe"]["thread_count"]) {
+            throw std::runtime_error(
+                "[Config] '[probe].thread_count' was renamed; use '[probe].probe_threads'");
+        }
+        probe.probe_threads = resolveSectionThreadCount(
+            static_cast<std::size_t>(config["probe"]["probe_threads"].value_or(0)));
+        probe.analysis_threads = resolveSectionThreadCount(
+            static_cast<std::size_t>(config["probe"]["analysis_threads"].value_or(0)));
+
+        const std::string cbMode =
+            config["probe"]["callback_mode"].value_or(std::string("CollectorThread"));
+        probe.callback_mode = (cbMode == "WorkerThread")
+            ? Probe::CallbackMode::WorkerThread
+            : Probe::CallbackMode::CollectorThread;
+
+        probe.queue_capacity = static_cast<std::size_t>(
+            config["probe"]["queue_capacity"].value_or(0));
     }
 }

@@ -17,12 +17,10 @@ namespace Probe {
     using Physics::Lorentz;
 
     using BranchType = RootUtil::DataType;
-    enum class MissingBranchPolicy{ Error };
 
     struct BranchSpec {
         std::string          name;
         BranchType           type;
-        MissingBranchPolicy  policy = MissingBranchPolicy::Error;
     };
 
     // ── Coordinate specs ─────────────────────────────────────────────────────
@@ -31,32 +29,25 @@ namespace Probe {
     struct PtEtaPhiMSpec  { std::vector<BranchSpec> branches; };
     using CoordSpec = std::variant<CartesianSpec, PtEtaPhiESpec, PtEtaPhiMSpec>;
 
-    struct ParticleSpec {
+    struct CollectionSpec {
         std::string              label;
         std::string              tree;
         CoordSpec                coords;
         std::vector<BranchSpec>  indexBranches;
         std::vector<BranchSpec>  auxBranches;
+        bool indexSorted    = true;
+        bool indexAscending = true;
+        bool indexMonotonic = true;
     };
-
-    using CollectionSpec = ParticleSpec;
 
     enum class StreamType { Unset, Events, Vectors };
     enum class CallbackMode { WorkerThread, CollectorThread };
-    enum class IndexOrdering { Unknown, Ascending, Descending, Unordered };
 
     struct Bounds {
         Long64_t first = 0;
         Long64_t last  = -1;
 
         bool valid() const { return first <= last; }
-    };
-
-    struct IndexSpec {
-        BranchSpec    branch;
-        IndexOrdering ordering = IndexOrdering::Unknown;
-        bool          dense    = false;
-        bool          grouped  = false;
     };
 
     struct AuxColumn {

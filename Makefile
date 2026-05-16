@@ -28,7 +28,7 @@ all:
 
 # ── Test targets ─────────────────────────────────────────────────────────────
 # Tests that need the full driver stack (ROOT + Pythia8 + toml++)
-TEST_EXES := tests/test_reconstructCandidates.exe tests/test_probe_parallel.exe tests/test_record_writer.exe tests/test_rootAnalysis_smoke.exe
+TEST_EXES := tests/test_reconstructCandidates.exe tests/test_probe_parallel.exe tests/test_record_writer.exe tests/test_rootAnalysis_smoke.exe tests/test_paint.exe
 
 tests/%.exe: tests/%.cc
 	@$(CXX) $< -o $@ $(ROOT_FLAGS) $(PYTHIA_FLAGS) $(TOML_FLAGS) $(BASE_CXXFLAGS) $(GIT_DEFINES)

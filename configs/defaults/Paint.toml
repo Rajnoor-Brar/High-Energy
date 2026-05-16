@@ -1,85 +1,82 @@
-# Paint.hh style schema.
-# Named sections inherit from [default]; only specify fields that differ.
+# Paint default plotting preset.
+# User configs are loaded on top of this file unless [paint].default_style
+# points to another TOML file.
 
-[default]
-line_color   = "kBlue-6"
-line_width   = 2
-line_style   = 1
-fill_color   = "kBlue-7"
-fill_style   = 3003
+[paint]
+result_dir = "results"
+formats = ["png"]
+overwrite = true
+image_scale = 1
+mutate_input = false
+
+[paint.default]
+mode = "single"
+line_color = "kBlue-6"
+line_width = 2
+line_style = 1
+fill_color = "kBlue-7"
+fill_style = 3003
 marker_color = "kBlack"
 marker_style = 20
-marker_size  = 1.0
-draw_option  = "HIST"
-minimum      = 0.0
+marker_size = 1.0
+draw_option = "HIST"
+minimum = 0.0
+maximum = 0.0
+log_x = false
+log_y = false
+log_z = false
+grid_x = false
+grid_y = false
 
-[default.axis]
-title_font     = 43
-label_font     = 43
-title_size     = 27.0
-label_size     = 20.0
-offset_x       = 1.1
-offset_y       = 1.35
-center_titles  = true
-max_digits_y   = 3
+[paint.default.axis]
+title_x = ""
+title_y = ""
+title_z = ""
+title_font = 43
+label_font = 43
+title_size = 27.0
+label_size = 20.0
+offset_x = 1.1
+offset_y = 1.35
+offset_z = 1.1
+center_titles = true
+max_digits_y = 3
 
-[default.canvas]
-width     = 900
-height    = 600
-margin_l  = 0.12
-margin_r  = 0.05
-margin_b  = 0.12
-margin_t  = 0.08
-ticks_x   = true
-ticks_y   = true
+[paint.default.canvas]
+width = 900
+height = 600
+margin_l = 0.12
+margin_r = 0.05
+margin_b = 0.12
+margin_t = 0.08
+ticks_x = true
+ticks_y = true
 
-[default.stats]
-show        = true
-opt_stat    = "emr"
-x           = 0.92
-y           = 0.89
-width       = 0.18
-height      = 0.10
-text_font   = 43
-text_size   = 12.0
+[paint.default.stats]
+show = true
+opt_stat = "emr"
+x = 0.92
+y = 0.89
+width = 0.18
+height = 0.10
+text_font = 43
+text_size = 12.0
 border_size = 2
 
-[default.legend]
-show      = false
-x1        = 0.65
-y1        = 0.75
-x2        = 0.88
-y2        = 0.88
+[paint.default.legend]
+show = false
+x1 = 0.65
+y1 = 0.75
+x2 = 0.88
+y2 = 0.88
 text_font = 43
 text_size = 14.0
+border_size = 0
+fill_style = 0
 
-# ——— Named style variants ———
-
-[mass]
-line_color = "kRed-4"
-fill_color = "kRed-7"
-
-[mass.axis]
-title_x = "Invariant Mass (GeV/c^{2})"
-title_y = "Counts"
-
-[momentum]
-line_color = "kGreen-4"
-fill_color = "kGreen-7"
-[momentum.axis]
-title_x = "Momentum (GeV/c)"
-title_y = "Counts"
-
-[eta]
-line_color = "kViolet-4"
-fill_color = "kViolet-7"
-[eta.axis]
-title_x = "Pseudorapidity #eta"
-title_y = "Counts"
-
-[pt]
-line_color = "kOrange-4"
-fill_color = "kOrange-7"
-[pt.axis]
-title_x = "Transverse Momentum p_{T} (GeV/c)"
-title_y = "Counts"
+[paint.default.title_box]
+show = true
+text_font = 43
+text_size = 24.0
+border_size = 0
+fill_style = 0

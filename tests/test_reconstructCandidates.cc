@@ -15,10 +15,9 @@
 #include <iostream>
 
 #include "test_assert.hh"
-#include "Lambda/Reconstruction.hh"   // pulls in Lambda/Types.hh → Record.hh
-                                       // → Monitor/Render.hh → Pythia8/Pythia.h
-                                       // (only the DECLARATION of harvestParticles
-                                       //  needs Pythia8; we never CALL it here)
+#include "Lambda/Reconstruction.hh"   // pulls in Lambda/Types.hh -> Record.hh,
+                                       // but this test only exercises the pure
+                                       // reconstruction function below.
 
 int main() {
     std::cout << "── test_reconstructCandidates ──────────────────────────────\n";

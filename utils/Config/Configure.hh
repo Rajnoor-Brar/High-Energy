@@ -51,36 +51,33 @@ namespace Config {
                           Record::Writer&        writer,
                           Monitor::AsyncLogger&  logger)
     {
-
-        Monitor::configureMonitor(logger, configPath, project);
-
         Register    reg;
         ProbeConfig probeConfig;
         configureProbe(configPath, project, logger.watch(), reg, probeConfig);
 
-        // WriterMT.md Phase 0: per-section thread counts.  probe gets its own
-        // count from [probe].thread_count; the Writer gets its own from
-        // [record].thread_count (stored on reg).  Pythia overload below
-        // applies its own [pythia].thread_count.
         probe.configureProbe(probeConfig.inputFile,
                              std::move(probeConfig.collections),
-                             probeConfig.thread_count,
+                             probeConfig.probe_threads,
                              probeConfig.eventConfig.eventCount,
-                             probeConfig.eventConfig.userEvents,
-                             probeConfig.splitInput,
-                             probeConfig.tempSpace,
-                             probeConfig.keepShards,
-                             reg.filePrefix);
+                             probeConfig.eventConfig.userEvents);
+        probe.setAnalysisThreadCount(probeConfig.analysis_threads);
+        probe.setCallbackMode(probeConfig.callback_mode);
+        if (probeConfig.queue_capacity > 0)
+            probe.setQueueCapacity(probeConfig.queue_capacity);
+
         logger.watch().nEvents   = probe.eventCount();
-        logger.watch().n_threads = probe.threadCount();   // Probe pipeline → Probe's count
+        logger.watch().n_threads = probe.threadCount();
+
+        // configureMonitor after event count is resolved so barInterval is correct.
+        Monitor::configureMonitor(logger, configPath, project);
 
         toml::table config = toml::parse_file(configPath);
         readPathsAndFile(config, project, logger.watch(), reg);
 
         Record::configureWriter(writer, project, configPath, logger.watch(), reg, probe.inputFile());
-        // Hand the record thread count to the Writer.  Phase 0: stored only;
-        // Phase 2 will spawn the worker pool sized to this value.
-        writer.setRecordThreadCount(reg.recordThreadCount);
+        writer.setRecordThreadCount(reg.writer_threads);
+        if (reg.writer_queue_capacity > 0)
+            writer.setQueueCapacity(reg.writer_queue_capacity);
     }
 
     // ── Pythia pipeline ───────────────────────────────────────────────────────
@@ -109,8 +106,9 @@ namespace Config {
         }
 
         Record::configureWriter(writer, project, configPath, logger.watch(), reg, "");
-        // Hand the record thread count to the Writer; Phase 0 stub.
-        writer.setRecordThreadCount(reg.recordThreadCount);
+        writer.setRecordThreadCount(reg.writer_threads);
+        if (reg.writer_queue_capacity > 0)
+            writer.setQueueCapacity(reg.writer_queue_capacity);
     }
 
 } // namespace Config
