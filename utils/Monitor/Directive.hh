@@ -13,6 +13,7 @@
 #include "TString.h"
 
 #include "Monitor/Logger.hh"
+#include "Monitor/Timer.hh"
 #include "Monitor/Methods.hh"
 #include "Monitor/Render.hh"
 #include "Monitor/Report.hh"
@@ -22,9 +23,6 @@ namespace Monitor {
     inline std::size_t AsyncLogger::countEvent() {
         const std::size_t n = watch_.iEvent.fetch_add(1, std::memory_order_relaxed) + 1;
 
-        // Phase 1 emits requests through the sink if set.  When unset,
-        // this is a pure counter.  Phase 2 will wire Writer's watchdog
-        // to consume the requests.
         if (watchSink_) {
             if (saveHeartbeat_ && pacing_.printInterval > 0
                     && (n % pacing_.printInterval) == 0)
@@ -55,6 +53,7 @@ namespace Monitor {
                                      bool forceRenderStatus,
                                      bool forceRenderBar)
     {
+        MONITOR_SCOPE_TIMER("Monitor.AsyncLogger.publish");
         RunSnapshot snapshot = makeSnapshot(watch_, phase);
 
         const std::size_t eventIndex = watch_.iEvent;
@@ -65,11 +64,11 @@ namespace Monitor {
                                   || edgeEvent || forceRenderBar;
 
         std::lock_guard<std::mutex> lock(mutex_);
-        latestSnapshot_ = std::move(snapshot);
+        latestSnapshot_ = snapshot;
 
         const PendingActions incoming{renderStatus, renderBar, writeRunStat};
         if (renderStatus || renderBar || writeRunStat) {
-            mergePending(incoming);
+            pushAction(std::move(snapshot), incoming);
             condition_.notify_one();
         }
     }
@@ -79,9 +78,6 @@ namespace Monitor {
                                                 std::size_t eventIndex,
                                                 bool callbackCompleted)
     {
-        // docs/WriterMT.md: when [monitor].save_log_threads is false,
-        // publishes are discarded and the calling thread continues.
-        // Cheap path; no lock acquired.
         if (!saveLogThreads_) return;
         if (workerIndex < 0) return;
 
@@ -133,7 +129,7 @@ namespace Monitor {
 
         while (true) {
             const auto hasPendingWork = [&] {
-                return stopRequested_ || pendingActions_.has_value() || !dirtyThreadSnapshots_.empty();
+                return stopRequested_ || !actionQueue_.empty() || !dirtyThreadSnapshots_.empty();
             };
 
             if (initialized_) {
@@ -147,8 +143,7 @@ namespace Monitor {
             const bool runStatDeadline  = now >= nextRunStatWrite;
             const bool terminalDeadline = now >= nextTerminalRefresh;
 
-            std::optional<PendingActions> actions;
-            std::optional<RunSnapshot>    actionSnapshot;
+            std::deque<std::pair<RunSnapshot, PendingActions>> localActions;
             std::optional<RunSnapshot>    periodicSnapshot;
             std::optional<RunSnapshot>    fatalSnapshot;
             std::vector<ThreadSnapshot>   dirtyThreadSnapshots;
@@ -157,11 +152,7 @@ namespace Monitor {
             bool                          shouldExit = false;
             FatalStallHandler             fatalHandler;
 
-            if (pendingActions_.has_value() && latestSnapshot_.has_value()) {
-                actions        = *pendingActions_;
-                actionSnapshot = *latestSnapshot_;
-                pendingActions_.reset();
-            }
+            localActions.swap(actionQueue_);
 
             if (initialized_ && latestSnapshot_.has_value() && (runStatDeadline || terminalDeadline))
                 periodicSnapshot = *latestSnapshot_;
@@ -184,15 +175,16 @@ namespace Monitor {
             }
 
             dirtyThreadSnapshots.swap(dirtyThreadSnapshots_);
-            shouldExit = stopRequested_ && !actions.has_value() && dirtyThreadSnapshots.empty();
+            shouldExit = stopRequested_ && localActions.empty() && dirtyThreadSnapshots.empty();
             lock.unlock();
 
-            const bool wroteImmediateRunStat = actions.has_value() && actions->writeRunStat && actionSnapshot.has_value();
-            const bool renderedImmediately   = actions.has_value() && actionSnapshot.has_value()
-                                               && (actions->renderStatus || actions->renderBar);
-
-            if (actions.has_value() && actionSnapshot.has_value())
-                processUpdate(*actionSnapshot, *actions);
+            bool wroteImmediateRunStat = false;
+            bool renderedImmediately   = false;
+            for (const auto& [snap, acts] : localActions) {
+                wroteImmediateRunStat |= acts.writeRunStat;
+                renderedImmediately   |= (acts.renderStatus || acts.renderBar);
+                processUpdate(snap, acts);
+            }
 
             if (periodicSnapshot.has_value()) {
                 if (runStatDeadline && !wroteImmediateRunStat) flushRunStat(*periodicSnapshot);
@@ -254,19 +246,17 @@ namespace Monitor {
         writeTextFile(path, threadStatString(snapshot, std::chrono::system_clock::now()));
     }
 
-    inline void AsyncLogger::mergePending(const PendingActions& incoming) {
-        if (pendingActions_.has_value()) {
-            pendingActions_->renderStatus |= incoming.renderStatus;
-            pendingActions_->renderBar    |= incoming.renderBar;
-            pendingActions_->writeRunStat |= incoming.writeRunStat;
+    inline void AsyncLogger::pushAction(RunSnapshot snap, PendingActions acts) {
+        if (!actionQueue_.empty()) {
+            actionQueue_.back().second.renderStatus |= acts.renderStatus;
+            actionQueue_.back().second.renderBar    |= acts.renderBar;
+            actionQueue_.back().second.writeRunStat |= acts.writeRunStat;
+            actionQueue_.back().first = std::move(snap);
         } else {
-            pendingActions_ = incoming;
+            actionQueue_.emplace_back(std::move(snap), acts);
         }
     }
 
-    // docs/WriterMT.md Phase 1: block the calling thread until the
-    // watchdog signals completion of a Checkpoint/Finalize/Fatal
-    // WatchRequest. Phase 1 only the Checkpoint path uses this.
     inline void AsyncLogger::waitWatchBarrier(const std::shared_ptr<Record::BarrierState>& barrier) {
         if (!barrier) return;
         std::unique_lock<std::mutex> lock(barrier->mutex);

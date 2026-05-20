@@ -69,8 +69,8 @@ modes are selectable at runtime:
 
 | Mode | Behaviour |
 |---|---|
-| `CollectorThread` | Reader workers push events onto a bounded queue; a single collector thread drains the queue and invokes the callback serially |
-| `WorkerThread` | Each reader worker invokes the callback directly (callback must be thread-safe) |
+| `CollectorThread` | Reader workers push events onto a bounded queue; `analysis_threads` collector threads pop and invoke the callback concurrently. Callbacks must be thread-safe. If `analysis_threads = 0` it defaults to `probe_threads`. |
+| `WorkerThread` | Each reader worker invokes the callback directly. `analysis_threads` is ignored. Callbacks must be thread-safe and receive the reader worker index. |
 
 Stream types detected automatically:
 
@@ -220,7 +220,7 @@ Monitor/Directive      Main loop body, heartbeat dispatch, mergePending
 Monitor/Administration Constructor/destructor, start/stop, bindWriter
 Monitor/Configure      configureMonitor() — TOML → AsyncLogger pacing/stall
 Monitor/ConfigAid      Compatibility shim → Configure.hh
-Monitor/Timer          BlockTimer RAII helper (independent of AsyncLogger)
+Monitor/Timer          ScopeTimer RAII helper + TimerRegistry (in-memory accumulator; CSV dump at shutdown)
 ```
 
 ---
@@ -252,18 +252,27 @@ Three fully independent helpers with no mutual dependencies (except
 
 ## Paint
 
-Fully isolated from the Probe/Record/Monitor runtime stack. Used only by the
-`_Paint.cc` entry point and `tests/test_paint.cc`.
+Offline ROOT plotting layer. Fully isolated from the Probe/Record/Monitor
+runtime stack. Used only by the `_Paint.cc` entry point and
+`tests/test_paint.cc`.
 
 ```
-Paint/Types       Config types for plots (PlotType, PadConfig, CanvasConfig, …)
-Paint/Style       ROOT style setters (color, marker, line)
-Paint/Apply       applyPad/Canvas/drawEntries onto ROOT objects
-Paint/Save        savePlot — renders and exports to file
-Paint/Book        TOML → PaintConfig parser
-Paint/Render      Low-level TH1/TH2/TGraph drawing primitives
-Paint/Resolve     ROOT object retrieval from TFile/TDirectory by path
-Paint/Illustrator High-level driver: book → resolve → render → save
+Paint/Types       Style specs, RenderResult, RenderPlan, KindEntry/KindRegistry
+Paint/Style       Color parsing (parseColor), TOML merge helpers (mergeStyle, …)
+Paint/Apply       apply() overloads for TH1/TH2/TGraph; kindRegistry() factory
+Paint/Book        Load and merge default + user TOML configs into PaintBook
+Paint/Resolve     Preset resolution, source_search (glob), ROOT object lookup
+Paint/Render      Single/overlay/grid drawing via kindRegistry dispatch
+Paint/Save        Export to png/pdf/svg/root via TCanvas::Print
+Paint/Illustrator High-level facade: loadBook → resolveBook → renderPlan
+```
+
+Data flow:
+
+```
+[paint].toml ──► loadBook ──► resolveBook ──► renderPlan ──► [output files]
+                    │               │
+               default.toml    TFile / ROOT objects
 ```
 
 ---

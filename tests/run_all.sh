@@ -1,6 +1,6 @@
 #!/bin/sh
 # Run all test_*.exe binaries in tests/.
-# Exit 0 if every test passes; exit 1 on first failure.
+# Exit 0 if every test passes; exit 1 after running all tests if any failed.
 # Exit code 77 from a test binary is treated as "skip" (missing fixture).
 set -e
 
@@ -26,7 +26,6 @@ for exe in "$SCRIPT_DIR"/test_*.exe; do
     else
         echo "FAIL (exit $status)"
         FAIL=$((FAIL + 1))
-        break
     fi
 done
 

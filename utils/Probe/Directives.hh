@@ -10,6 +10,7 @@
 
 #include "TROOT.h"
 
+#include "Monitor/Timer.hh"
 #include "Probe/Administration.hh"
 #include "Probe/Methods.hh"
 #include "Probe/Parallel.hh"
@@ -32,10 +33,6 @@ inline void ProbeParallel::run(Callback&& callback) {
         return;
     }
 
-    if (streamType_ == StreamType::Vectors)
-        throw std::runtime_error(
-            "[Probe] ProbeParallel: CollectorThread mode for vector streams is not implemented");
-
     runCollectorThread(callback);
 }
 
@@ -56,7 +53,10 @@ inline void ProbeParallel::runWorkerThread(Callback& callback) {
                 EventStream stream(inputFile_, particleSpecs_,
                                    part.firstEvent, part.lastEvent,
                                    eventsInPartition(part), bounds);
-                while (stream.next()) {
+                for (;;) {
+                    bool _cont;
+                    { MONITOR_SCOPE_TIMER("ProbeParallel.EventStream.next"); _cont = stream.next(); }
+                    if (!_cont) break;
                     if (t < progress_.size()) ++progress_[t];
                     callback(stream.event(), static_cast<int>(t));
                 }
@@ -87,8 +87,11 @@ inline void ProbeParallel::runCollectorThread(Callback& callback) {
         collectors.emplace_back([&, c] {
             try {
                 QueuedEvent queued;
-                while (popQueuedEvent(queued)) {
-                    callback(queued.event, static_cast<int>(c));
+                for (;;) {
+                    bool _got;
+                    { MONITOR_SCOPE_TIMER("ProbeParallel.queue.pop_wait"); _got = popQueuedEvent(queued); }
+                    if (!_got) break;
+                    { MONITOR_SCOPE_TIMER("ProbeParallel.collector.callback"); callback(queued.event, static_cast<int>(c)); }
                     queued = QueuedEvent{};
                 }
             } catch (...) {
@@ -109,15 +112,15 @@ inline void ProbeParallel::runCollectorThread(Callback& callback) {
                 EventStream stream(inputFile_, particleSpecs_,
                                    part.firstEvent, part.lastEvent,
                                    eventsInPartition(part), bounds);
-                while (!stopRequested_.load(std::memory_order_acquire)
-                       && stream.next())
-                {
-                    QueuedEvent queued{
-                        t,
-                        stream.event().index,
-                        stream.takeEvent()
-                    };
-                    if (!pushQueuedEvent(std::move(queued))) break;
+                for (;;) {
+                    if (stopRequested_.load(std::memory_order_acquire)) break;
+                    bool _cont;
+                    { MONITOR_SCOPE_TIMER("ProbeParallel.EventStream.next"); _cont = stream.next(); }
+                    if (!_cont) break;
+                    QueuedEvent queued{t, stream.event().index, stream.takeEvent()};
+                    bool _pushed;
+                    { MONITOR_SCOPE_TIMER("ProbeParallel.queue.push_wait"); _pushed = pushQueuedEvent(std::move(queued)); }
+                    if (!_pushed) break;
                 }
             } catch (...) {
                 workerErrors[t] = std::current_exception();
@@ -147,32 +150,10 @@ inline void ProbeIMT::run(Callback&& callback) {
     ROOT::EnableImplicitMT(static_cast<UInt_t>(threadCount_));
     consumed_ = 0;
 
-    using clk = std::chrono::steady_clock;
-    const auto t0 = clk::now();
-
-    BufferT buffer(eventCount_,
-                   std::vector<std::vector<Lorentz>>(specs_.size()));
-
-    const auto t1 = clk::now();
-
-    for (std::size_t p = 0; p < specs_.size(); ++p)
-        readSpecInto(specs_[p], p, buffer);
-
-    const auto t2 = clk::now();
-
-    flushParallel(buffer, std::forward<Callback>(callback));
-
-    const auto t3 = clk::now();
-
-    auto ms = [](auto a, auto b) {
-        return std::chrono::duration_cast<std::chrono::milliseconds>(b - a).count();
-    };
-    std::cerr << "[Probe::IMT] timing (ms): allocate=" << ms(t0, t1)
-              << " read=" << ms(t1, t2)
-              << " flush=" << ms(t2, t3)
-              << " total=" << ms(t0, t3)
-              << " (eventCount=" << eventCount_
-              << ", threads=" << threadCount_ << ")\n";
+    BufferT buffer;
+    { MONITOR_SCOPE_TIMER("ProbeIMT.allocate"); buffer.assign(eventCount_, std::vector<std::vector<Lorentz>>(specs_.size())); }
+    { MONITOR_SCOPE_TIMER("ProbeIMT.read");     for (std::size_t p = 0; p < specs_.size(); ++p) readSpecInto(specs_[p], p, buffer); }
+    { MONITOR_SCOPE_TIMER("ProbeIMT.flush");    flushParallel(buffer, std::forward<Callback>(callback)); }
 }
 
 template<typename Callback>

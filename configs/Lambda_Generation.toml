@@ -42,6 +42,8 @@ delta_theta_rad   = 0.1    # radians
 reserved_protons  = 20     # baseline beam protons per event (2 × Z; for Ne–Ne: 2 × 10 = 20)
 
 [monitor]
+
+[monitor.intervals]
 print_interval            = 50       # events
 check_interval            = 100000   # events (stall-check cadence)
 checkpoint_interval       = 100000   # events between checkpoint snapshots (WriterMT.md Phase 1)

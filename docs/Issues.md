@@ -95,31 +95,6 @@ Writer workers drain, or during lifecycle writes?
 
 ## P1 - Config/Data-Flow Mismatches
 
-### `configurePythia` Must Cover All Pythia Initialization
-
-`Config::configurePythia` now sets `Parallelism:numThreads`, but beam energy,
-random seed, and cmnd_file are still applied ad-hoc in `.cc` driver files.
-
-Impact: each driver must manually replicate setup logic. If a new driver omits
-a step, Pythia runs with defaults silently.
-
-Fix: add TOML keys for beam energy, seed, and cmnd_file under `[pythia]` and
-apply them inside `configurePythia` so every driver gets consistent
-initialization regardless of the entry point.
-
-### Branch Name Drift: `Index` vs `event_index`
-
-`Lambda::declareDataObjects` writes explicit data trees with branch
-`event_index`. The fixture TOML uses `event_index`. The current reconstruction
-config reads `Index`.
-
-Impact: reconstruction configs are input-file-specific. Running the default
-reconstruction TOML against Writer-generated data with `event_index` will fail
-branch lookup unless the file actually has `Index`.
-
-Fix: add config variants or comments that clearly separate old input files from
-Writer-generated data.
-
 ## P1 - Writer Lifecycle/Concurrency Risks To Test
 
 The current Writer design is much stronger than the old single-scribe queue,
@@ -190,8 +165,12 @@ Closed or changed from the previous open-issue list:
   this is intentional — user-facing ms, internal µs.
 - `[events].pythia` removed from fixture TOML; `Config::Register::checkpointInterval`
   removed (Monitor reads checkpoint interval directly).
-- `Config::configurePythia` now forwards `pythia_threads` to
-  `Parallelism:numThreads` for all Pythia drivers.
+- `Config::configurePythia` now covers all Pythia initialization: `beam_energy`,
+  `seed`, and `cmnd_file` are read from `[pythia]` TOML and applied inside the
+  facade; no ad-hoc driver setup required.
+- Branch name drift (`Index` vs `event_index`) documented in
+  `configs/Lambda_Reconstruction.toml` with an inline comment; the correct
+  branch name is whatever the source file uses — no rename required.
 - `[probe].callback_mode` and `[probe].queue_capacity` parsed and applied.
 - `[record].writer_queue_capacity` parsed and applied.
 - `Probe::progress_` counters made atomic; increment moved outside queue mutex.

@@ -51,6 +51,7 @@ inline void Writer::start() {
         accepting_.store(true, std::memory_order_release);
         stopRequested_.store(false, std::memory_order_release);
         writerException_ = nullptr;
+        activeWorkers_.store(nRecordThreads_, std::memory_order_release);
 
         workers_.reserve(nRecordThreads_);
         for (std::size_t i = 0; i < nRecordThreads_; ++i)
@@ -124,12 +125,19 @@ inline std::string Writer::stats() const {
             << "started=" << started_.load(std::memory_order_relaxed)
             << ", accepting=" << accepting_.load(std::memory_order_relaxed)
             << ", recordThreadCount=" << nRecordThreads_
+            << ", activeWorkers=" << activeWorkers_.load(std::memory_order_relaxed)
             << ", queueCapacity=" << queueCapacity_
             << ", backlog=" << fillQueue_.size()
             << ", produced=" << produced_
             << ", consumed=" << consumed_
             << ", maxBacklog=" << maxBacklog_
-            << "}";
+            << ", fills{particle=" << countParticle_.load(std::memory_order_relaxed)
+            << ", hist1d=" << countHist1D_.load(std::memory_order_relaxed)
+            << ", hist2d=" << countHist2D_.load(std::memory_order_relaxed)
+            << ", graph=" << countGraph_.load(std::memory_order_relaxed)
+            << ", profile=" << countProfile_.load(std::memory_order_relaxed)
+            << ", tree=" << countTree_.load(std::memory_order_relaxed)
+            << "}}";
         return out.str();
     }
 
@@ -205,6 +213,12 @@ inline void Writer::clearQueues() {
             std::lock_guard<std::mutex> lock(watchMutex_);
             watchQueue_.clear();
         }
+        countParticle_.store(0, std::memory_order_relaxed);
+        countHist1D_.store(0, std::memory_order_relaxed);
+        countHist2D_.store(0, std::memory_order_relaxed);
+        countGraph_.store(0, std::memory_order_relaxed);
+        countProfile_.store(0, std::memory_order_relaxed);
+        countTree_.store(0, std::memory_order_relaxed);
     }
 
 inline void Writer::closeFile() {
@@ -252,7 +266,7 @@ inline void Writer::bind(Monitor::AsyncLogger&        logger,
     });
 
     // docs/WriterMT.md Phase 2: route the logger's WatchRequest emission
-    // (driven by [monitor].save_heartbeat / save_checkpoints) into the
+    // (driven by [monitor.logs].save_heartbeat / save_checkpoints) into the
     // Writer's watchdog control queue.
     logger.bindWatchSink([this](Record::WatchRequest req) {
         signalWatch(std::move(req));
@@ -294,7 +308,7 @@ inline void Writer::finish(std::size_t eventCount) {
             std::chrono::system_clock::now() - logging_->start);
         logger_->finish(*logging_, logging_->iEvent.load(std::memory_order_relaxed));
         Monitor::terminalReport(*this, *logging_, printStats_);
-        // docs/WriterMT.md: [monitor].save_final_log gates the on-disk
+        // docs/WriterMT.md: [monitor.logs].save_final_log gates the on-disk
         // final summary log.  Terminal report still prints regardless;
         // skipping the file output keeps the logs/ directory clean for
         // smoke runs that don't need a persistent record.

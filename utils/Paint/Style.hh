@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -44,8 +45,12 @@ namespace Paint {
         }
 
         const auto it = kNamedColors.find(base);
-        if (it == kNamedColors.end()) return kBlack;
-        return static_cast<Color_t>(it->second + offset);
+        if (it == kNamedColors.end())
+            throw std::runtime_error("unknown color token: '" + base + "' in '" + spec + "'");
+        const int raw = it->second + offset;
+        if (raw < std::numeric_limits<Color_t>::min() || raw > std::numeric_limits<Color_t>::max())
+            throw std::runtime_error("color offset out of Color_t range: " + spec);
+        return static_cast<Color_t>(raw);
     }
 
     namespace detail {
@@ -67,7 +72,10 @@ namespace Paint {
         inline void readValue(const toml::table& table, const std::string& key, T& out) {
             const toml::node_view<const toml::node> node = table[key];
             if (!node) return;
-            if (auto value = node.value<T>()) out = *value;
+            auto value = node.value<T>();
+            if (!value)
+                throw std::runtime_error("type mismatch for key '" + key + "'");
+            out = *value;
         }
 
         inline void readString(const toml::table& table, const std::string& key, std::string& out) {
@@ -99,65 +107,67 @@ namespace Paint {
             return values.empty() ? fallback : values;
         }
 
-        inline void mergeAxis(const toml::table& table, AxisSpec& axis) {
-            readString(table, "title_x", axis.titleX);
-            readString(table, "title_y", axis.titleY);
-            readString(table, "title_z", axis.titleZ);
-            readValue(table, "title_font", axis.titleFont);
-            readValue(table, "label_font", axis.labelFont);
-            readValue(table, "title_size", axis.titleSize);
-            readValue(table, "label_size", axis.labelSize);
-            readValue(table, "offset_x", axis.offsetX);
-            readValue(table, "offset_y", axis.offsetY);
-            readValue(table, "offset_z", axis.offsetZ);
-            readValue(table, "center_titles", axis.centerTitles);
-            readValue(table, "max_digits_y", axis.maxDigitsY);
-        }
-
-        inline void mergeCanvas(const toml::table& table, CanvasSpec& canvas) {
-            readValue(table, "width", canvas.width);
-            readValue(table, "height", canvas.height);
-            readValue(table, "margin_l", canvas.marginL);
-            readValue(table, "margin_r", canvas.marginR);
-            readValue(table, "margin_b", canvas.marginB);
-            readValue(table, "margin_t", canvas.marginT);
-            readValue(table, "ticks_x", canvas.ticksX);
-            readValue(table, "ticks_y", canvas.ticksY);
-        }
-
-        inline void mergeStats(const toml::table& table, StatsSpec& stats) {
-            readValue(table, "show", stats.show);
-            readString(table, "opt_stat", stats.optStat);
-            readValue(table, "x", stats.x);
-            readValue(table, "y", stats.y);
-            readValue(table, "width", stats.width);
-            readValue(table, "height", stats.height);
-            readValue(table, "text_font", stats.textFont);
-            readValue(table, "text_size", stats.textSize);
-            readValue(table, "border_size", stats.borderSize);
-        }
-
-        inline void mergeLegend(const toml::table& table, LegendSpec& legend) {
-            readValue(table, "show", legend.show);
-            readValue(table, "x1", legend.x1);
-            readValue(table, "y1", legend.y1);
-            readValue(table, "x2", legend.x2);
-            readValue(table, "y2", legend.y2);
-            readValue(table, "text_font", legend.textFont);
-            readValue(table, "text_size", legend.textSize);
-            readValue(table, "border_size", legend.borderSize);
-            readValue(table, "fill_style", legend.fillStyle);
-        }
-
-        inline void mergeTitleBox(const toml::table& table, TitleBoxSpec& titleBox) {
-            readValue(table, "show", titleBox.show);
-            readValue(table, "text_font", titleBox.textFont);
-            readValue(table, "text_size", titleBox.textSize);
-            readValue(table, "border_size", titleBox.borderSize);
-            readValue(table, "fill_style", titleBox.fillStyle);
-        }
-
     } // namespace detail
+
+    inline void mergeAxis(const toml::table& table, AxisSpec& axis) {
+        detail::readString(table, "title_x", axis.titleX);
+        detail::readString(table, "title_y", axis.titleY);
+        detail::readString(table, "title_z", axis.titleZ);
+        detail::readValue(table, "title_font", axis.titleFont);
+        detail::readValue(table, "label_font", axis.labelFont);
+        detail::readValue(table, "title_size", axis.titleSize);
+        detail::readValue(table, "label_size", axis.labelSize);
+        detail::readValue(table, "offset_x", axis.offsetX);
+        detail::readValue(table, "offset_y", axis.offsetY);
+        detail::readValue(table, "offset_z", axis.offsetZ);
+        detail::readValue(table, "center_titles", axis.centerTitles);
+        detail::readValue(table, "max_digits_y", axis.maxDigitsY);
+    }
+
+    inline void mergeCanvas(const toml::table& table, CanvasSpec& canvas) {
+        detail::readValue(table, "width", canvas.width);
+        detail::readValue(table, "height", canvas.height);
+        detail::readValue(table, "margin_l", canvas.marginL);
+        detail::readValue(table, "margin_r", canvas.marginR);
+        detail::readValue(table, "margin_b", canvas.marginB);
+        detail::readValue(table, "margin_t", canvas.marginT);
+        detail::readValue(table, "ticks_x", canvas.ticksX);
+        detail::readValue(table, "ticks_y", canvas.ticksY);
+    }
+
+    inline void mergeStats(const toml::table& table, StatsSpec& stats) {
+        detail::readValue(table, "show", stats.show);
+        detail::readString(table, "opt_stat", stats.optStat);
+        detail::readValue(table, "x", stats.x);
+        detail::readValue(table, "y", stats.y);
+        detail::readValue(table, "width", stats.width);
+        detail::readValue(table, "height", stats.height);
+        detail::readValue(table, "text_font", stats.textFont);
+        detail::readValue(table, "text_size", stats.textSize);
+        detail::readValue(table, "border_size", stats.borderSize);
+        detail::readColor(table, "fill_color", stats.fillColor);
+        detail::readValue(table, "fill_style", stats.fillStyle);
+    }
+
+    inline void mergeLegend(const toml::table& table, LegendSpec& legend) {
+        detail::readValue(table, "show", legend.show);
+        detail::readValue(table, "x1", legend.x1);
+        detail::readValue(table, "y1", legend.y1);
+        detail::readValue(table, "x2", legend.x2);
+        detail::readValue(table, "y2", legend.y2);
+        detail::readValue(table, "text_font", legend.textFont);
+        detail::readValue(table, "text_size", legend.textSize);
+        detail::readValue(table, "border_size", legend.borderSize);
+        detail::readValue(table, "fill_style", legend.fillStyle);
+    }
+
+    inline void mergeTitleBox(const toml::table& table, TitleBoxSpec& titleBox) {
+        detail::readValue(table, "show", titleBox.show);
+        detail::readValue(table, "text_font", titleBox.textFont);
+        detail::readValue(table, "text_size", titleBox.textSize);
+        detail::readValue(table, "border_size", titleBox.borderSize);
+        detail::readValue(table, "fill_style", titleBox.fillStyle);
+    }
 
     inline void mergeStyle(const toml::table& table, Style& style) {
         detail::readColor(table, "line_color", style.line.color);
@@ -178,7 +188,7 @@ namespace Paint {
         }
         if (detail::hasKey(table, "maximum")) {
             detail::readValue(table, "maximum", style.maximum);
-            style.hasMaximum = std::abs(style.maximum) > 0.0;
+            style.hasMaximum = true;
         }
 
         detail::readValue(table, "log_x", style.logX);
@@ -188,19 +198,19 @@ namespace Paint {
         detail::readValue(table, "grid_y", style.gridY);
 
         if (const toml::table* axis = detail::getTable(table, "axis")) {
-            detail::mergeAxis(*axis, style.axis);
+            mergeAxis(*axis, style.axis);
         }
         if (const toml::table* canvas = detail::getTable(table, "canvas")) {
-            detail::mergeCanvas(*canvas, style.canvas);
+            mergeCanvas(*canvas, style.canvas);
         }
         if (const toml::table* stats = detail::getTable(table, "stats")) {
-            detail::mergeStats(*stats, style.stats);
+            mergeStats(*stats, style.stats);
         }
         if (const toml::table* legend = detail::getTable(table, "legend")) {
-            detail::mergeLegend(*legend, style.legend);
+            mergeLegend(*legend, style.legend);
         }
         if (const toml::table* titleBox = detail::getTable(table, "title_box")) {
-            detail::mergeTitleBox(*titleBox, style.titleBox);
+            mergeTitleBox(*titleBox, style.titleBox);
         }
     }
 
@@ -210,7 +220,7 @@ namespace Paint {
             case Mode::Overlay: return "overlay";
             case Mode::Grid:    return "grid";
         }
-        return "single";
+        throw std::logic_error("Paint: unhandled Mode enum value");
     }
 
     inline Mode parseMode(const std::string& value, const std::string& context) {
@@ -222,11 +232,12 @@ namespace Paint {
 
     inline std::string objectKindName(ObjectKind kind) {
         switch (kind) {
-            case ObjectKind::Hist1D: return "TH1";
-            case ObjectKind::Hist2D: return "TH2";
-            case ObjectKind::Graph:  return "TGraph";
+            case ObjectKind::Hist1D:    return "TH1";
+            case ObjectKind::Hist2D:    return "TH2";
+            case ObjectKind::TProfile:  return "TProfile";
+            case ObjectKind::Graph:     return "TGraph";
         }
-        return "unknown";
+        throw std::logic_error("Paint: unhandled ObjectKind enum value");
     }
 
 } // namespace Paint

@@ -11,6 +11,8 @@
 
 namespace Paint {
 
+    inline constexpr const char* kDefaultStylePath = "configs/defaults/Paint.toml";
+
     namespace detail {
 
         inline void mergeTomlTables(toml::table& dst, const toml::table& src) {
@@ -27,8 +29,8 @@ namespace Paint {
 
         inline std::string readDefaultStylePath(const toml::table& userConfig) {
             const toml::table* paint = getTable(userConfig, "paint");
-            if (paint == nullptr) return "configs/defaults/Paint.toml";
-            return (*paint)["default_style"].value_or(std::string{"configs/defaults/Paint.toml"});
+            if (paint == nullptr) return kDefaultStylePath;
+            return (*paint)["default_style"].value_or(std::string{kDefaultStylePath});
         }
 
     } // namespace detail
@@ -42,12 +44,18 @@ namespace Paint {
 
         toml::table userConfig = toml::parse_file(configPath);
         const std::string defaultStylePath = detail::readDefaultStylePath(userConfig);
-        if (!fs::exists(defaultStylePath)) {
-            throw std::runtime_error("Paint default style does not exist: " + defaultStylePath);
-        }
 
-        toml::table merged = toml::parse_file(defaultStylePath);
-        detail::mergeTomlTables(merged, userConfig);
+        toml::table merged;
+        if (defaultStylePath.empty()) {
+            // Opt-out: use the user config directly, without any defaults file.
+            merged = userConfig;
+        } else {
+            if (!fs::exists(defaultStylePath)) {
+                throw std::runtime_error("Paint default style does not exist: " + defaultStylePath);
+            }
+            merged = toml::parse_file(defaultStylePath);
+            detail::mergeTomlTables(merged, userConfig);
+        }
 
         if (detail::getTable(merged, "paint") == nullptr) {
             throw std::runtime_error("Paint config must contain a [paint] table");

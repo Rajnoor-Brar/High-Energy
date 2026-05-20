@@ -1,15 +1,6 @@
 #pragma once
 
-// ── Config/Configure.hh ──────────────────────────────────────────────────────
-// Defines Config::configure — the single-call facade that fully configures the
-// three runtime objects (Probe::ProbeParallel or PythiaT, Record::Writer,
-// Monitor::AsyncLogger) from a TOML config path and project name.
-//
-// This header is NOT included by Config.hh because it depends on Probe.hh,
-// Record.hh, and Monitor.hh which themselves depend on Config.hh (circular).
-// Drivers include it explicitly after their other umbrella includes.
-//
-// Dependency direction: Configure.hh → Config, Probe, Record, Monitor.
+// Config/Configure.hh — single-call configure() facade for Probe/Writer/Logger; included explicitly by drivers (not by Config.hh, to avoid circular deps).
 
 #include <type_traits>
 #include <utility>
@@ -21,12 +12,7 @@
 
 namespace Config {
 
-    // ── Pipeline-type tag ─────────────────────────────────────────────────────
-    // SFINAE discriminator between the Probe pipeline (reads ROOT files via
-    // ProbeParallel or ProbeIMT) and the Pythia pipeline (generates events
-    // via Pythia8::Pythia or Pythia8::PythiaParallel).  Both pipeline
-    // entry points share the name `configure` and the same signature shape;
-    // this trait picks the right body at overload resolution.
+    // SFINAE tag: distinguishes Probe pipeline (ProbeParallel/ProbeIMT) from Pythia pipeline.
     namespace detail {
         template<typename T>
         constexpr bool is_probe_runtime_v =
@@ -34,15 +20,7 @@ namespace Config {
             || std::is_same_v<T, Probe::ProbeIMT>;
     }
 
-    // ── Probe pipeline ────────────────────────────────────────────────────────
-    // Reads the TOML once; populates probe, writer, and logger in the correct
-    // order so that probe.eventCount() is resolved before the writer is opened
-    // (allowing the output filename to embed the actual event count).
-    //
-    // Templated over ProbeT so both Probe::ProbeParallel (manual std::thread
-    // pool, Phase 0/1) and Probe::ProbeIMT (TTreeProcessorMT-based, Phase 2)
-    // work as drop-in substitutes.  Both expose identical configureProbe()
-    // signatures and eventCount/threadCount/inputFile accessors.
+    // Probe pipeline — resolves event count before opening the writer so output filenames embed actual counts.
     template<typename ProbeT,
              std::enable_if_t<detail::is_probe_runtime_v<ProbeT>, int> = 0>
     inline void configure(const std::string&     configPath,
@@ -80,11 +58,7 @@ namespace Config {
             writer.setQueueCapacity(reg.writer_queue_capacity);
     }
 
-    // ── Pythia pipeline ───────────────────────────────────────────────────────
-    // PythiaT accepts both Pythia8::Pythia and Pythia8::PythiaParallel.
-    // configurePythia reads [pythia].cmnd_file from TOML and calls readFile
-    // internally. The fallback below captures Beams:eCM for the output filename
-    // when [pythia].beam_energy was absent from the TOML.
+    // Pythia pipeline — falls back to Beams:eCM when [pythia].beam_energy is absent from TOML.
     template<typename PythiaT,
              std::enable_if_t<!detail::is_probe_runtime_v<PythiaT>, int> = 0>
     inline void configure(const std::string&    configPath,

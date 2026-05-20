@@ -53,7 +53,7 @@ namespace Record {
     // ── WatchRequest ──────────────────────────────────────────────────────────
     // docs/WriterMT.md Phase 1.  Pushed by AsyncLogger into the Writer's
     // watchdog control queue when configured thresholds are crossed
-    // ([monitor].save_heartbeat / save_checkpoints / save_log_threads) or
+    // ([monitor.logs].save_heartbeat / save_checkpoints / save_log_threads) or
     // when the run reaches Finalize/Fatal.  In Phase 1 only the Logger
     // emits these; in Phase 2 the Writer's watchdog thread consumes them.
     struct WatchRequest {

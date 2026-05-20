@@ -26,8 +26,9 @@ namespace Paint {
     namespace detail {
 
         inline std::unique_ptr<TCanvas> makeCanvas(const RenderResult& result) {
-            const int width = result.style.canvas.width * std::max(1, result.cols);
-            const int height = result.style.canvas.height * std::max(1, result.rows);
+            const int scale = std::max(1, result.imageScale);
+            const int width = result.style.canvas.width * std::max(1, result.cols) * scale;
+            const int height = result.style.canvas.height * std::max(1, result.rows) * scale;
             auto canvas = std::make_unique<TCanvas>(
                 ("c_" + result.name).c_str(),
                 result.title.empty() ? result.name.c_str() : result.title.c_str(),
@@ -63,9 +64,36 @@ namespace Paint {
 
         inline std::string defaultDrawOption(const ResolvedSource& source) {
             std::string option = source.drawOption.empty() ? source.style.drawOption : source.drawOption;
-            if (source.kind == ObjectKind::Hist2D && (option.empty() || option == "HIST")) return "COLZ";
-            if (source.kind == ObjectKind::Graph && (option.empty() || option == "HIST")) return "APL";
+            for (const auto& [kind, entry] : kindRegistry()) {
+                if (kind == source.kind) {
+                    if (option.empty() || option == "HIST") return entry.defaultDraw;
+                    return option;
+                }
+            }
             return option.empty() ? "HIST" : option;
+        }
+
+        // Derive the TLegend marker-type string from the resolved draw option.
+        // 'l' = line, 'p' = marker, 'f' = filled box.
+        inline std::string legendOption(const ResolvedSource& source, const std::string& drawOpt) {
+            std::string upper = drawOpt;
+            std::transform(upper.begin(), upper.end(), upper.begin(), [](unsigned char ch) {
+                return static_cast<char>(std::toupper(ch));
+            });
+
+            if (upper.find("COLZ") != std::string::npos) return "f";
+
+            const bool hasLine   = upper.find('L') != std::string::npos
+                                || upper.find("HIST") != std::string::npos;
+            const bool hasMarker = upper.find('P') != std::string::npos;
+            const bool hasFill   = source.style.fill.style != 0
+                                && upper.find("HIST") != std::string::npos;
+
+            std::string opt;
+            if (hasLine)   opt += 'l';
+            if (hasMarker) opt += 'p';
+            if (hasFill)   opt += 'f';
+            return opt.empty() ? "lp" : opt;
         }
 
         inline bool containsSame(const std::string& option) {
@@ -77,28 +105,20 @@ namespace Paint {
         }
 
         inline void applyToSource(ResolvedSource& source) {
-            switch (source.kind) {
-                case ObjectKind::Hist2D:
-                    apply(dynamic_cast<TH2*>(source.object), source.style);
-                    break;
-                case ObjectKind::Hist1D:
-                    apply(dynamic_cast<TH1*>(source.object), source.style);
-                    break;
-                case ObjectKind::Graph:
-                    apply(dynamic_cast<TGraph*>(source.object), source.style);
-                    break;
+            for (const auto& [kind, entry] : kindRegistry()) {
+                if (kind == source.kind) {
+                    entry.applyStyle(source.object, source.style);
+                    return;
+                }
             }
         }
 
         inline void drawSource(ResolvedSource& source, const std::string& option) {
-            switch (source.kind) {
-                case ObjectKind::Hist2D:
-                case ObjectKind::Hist1D:
-                    if (TH1* hist = dynamic_cast<TH1*>(source.object)) hist->Draw(option.c_str());
-                    break;
-                case ObjectKind::Graph:
-                    if (TGraph* graph = dynamic_cast<TGraph*>(source.object)) graph->Draw(option.c_str());
-                    break;
+            for (const auto& [kind, entry] : kindRegistry()) {
+                if (kind == source.kind) {
+                    entry.draw(source.object, option);
+                    return;
+                }
             }
         }
 
@@ -127,8 +147,8 @@ namespace Paint {
             stats->SetTextFont(source.style.stats.textFont);
             stats->SetTextSize(source.style.stats.textSize);
             stats->SetBorderSize(source.style.stats.borderSize);
-            stats->SetFillColor(0);
-            stats->SetFillStyle(1001);
+            stats->SetFillColor(source.style.stats.fillColor);
+            stats->SetFillStyle(source.style.stats.fillStyle);
             pad->Modified();
             pad->Update();
         }
@@ -199,10 +219,32 @@ namespace Paint {
                 std::string option = defaultDrawOption(source);
                 if (i > 0 && !containsSame(option)) option += " SAME";
                 drawSource(source, option);
-                applyStatsBox(source, &canvas);
+
+                // Stack each source's stats box vertically so they don't overwrite each other.
+                const double stride = source.style.stats.height + 0.02;
+                const double y2     = source.style.stats.y - static_cast<double>(i) * stride;
+                if (TH1* hist = dynamic_cast<TH1*>(source.object); hist != nullptr
+                        && source.style.stats.show) {
+                    canvas.Update();
+                    if (TPaveStats* stats = dynamic_cast<TPaveStats*>(hist->FindObject("stats"))) {
+                        stats->SetX2NDC(source.style.stats.x);
+                        stats->SetY2NDC(y2);
+                        stats->SetX1NDC(source.style.stats.x - source.style.stats.width);
+                        stats->SetY1NDC(y2 - source.style.stats.height);
+                        stats->SetTextFont(source.style.stats.textFont);
+                        stats->SetTextSize(source.style.stats.textSize);
+                        stats->SetBorderSize(source.style.stats.borderSize);
+                        stats->SetLineColor(source.style.line.color);
+                        stats->SetFillColor(source.style.stats.fillColor);
+                        stats->SetFillStyle(source.style.stats.fillStyle);
+                        canvas.Modified();
+                        canvas.Update();
+                    }
+                }
 
                 if (legend && !source.label.empty()) {
-                    legend->AddEntry(source.object, source.label.c_str(), "lpf");
+                    const std::string legOpt = legendOption(source, defaultDrawOption(source));
+                    legend->AddEntry(source.object, source.label.c_str(), legOpt.c_str());
                 }
             }
 
@@ -235,7 +277,9 @@ namespace Paint {
     }
 
     inline void renderPlan(RenderPlan& plan) {
+        const Bool_t wasBatch = gROOT->IsBatch();
         gROOT->SetBatch(kTRUE);
+        struct BatchRestore { Bool_t prev; ~BatchRestore() { gROOT->SetBatch(prev); } } guard{wasBatch};
         for (RenderResult& result : plan.results) {
             renderResult(result);
         }

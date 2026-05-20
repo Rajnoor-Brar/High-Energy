@@ -107,8 +107,18 @@ int main() {
     TEST_LT(valEntries, unvalEntries);
     TEST_PASS("S5  Unvalidated entries > Validated entries (cuts working)");
 
+    // S6: Validated mass mean must be in a physically sensible range.
+    // Lambda PDG mass ≈ 1.116 GeV; validated pairs that pass the angular and
+    // mass cuts should cluster there.  Accept a loose window [0.9, 1.5] GeV
+    // to remain robust to fixture kinematics.
+    const double valMean = valHist->GetMean();
+    TEST_LT(0.9, valMean);
+    TEST_LT(valMean, 1.5);
+    TEST_PASS("S6  Validated mass mean is in physically sensible range [0.9, 1.5] GeV");
+
     std::cout << "  (unvalidated=" << unvalEntries
-              << ", validated=" << valEntries << ")\n";
+              << ", validated=" << valEntries
+              << ", val_mean=" << valMean << " GeV)\n";
 
     std::cout << "ALL TESTS PASSED\n";
     return 0;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Monitor/Timer.hh"
 #include "Record/Writer.hh"
 
 namespace Record {
@@ -14,6 +15,7 @@ inline void Writer::throwIfCannotAcceptLocked() const {
 
 template <typename Payload>
 inline void Writer::pushFill(Payload&& payload) {
+        MONITOR_SCOPE_TIMER("Record.Writer.pushFill");
         std::unique_lock<std::mutex> lock(fillMutex_);
         throwIfCannotAcceptLocked();
         fillNotFull_.wait(lock, [&] {
@@ -44,6 +46,16 @@ inline void Writer::signalWatchInternal(WatchRequest req) {
 // FillRequest from the shared queue; visits the variant to dispatch
 // into apply*(). Honors the quiesce protocol between requests.
 inline void Writer::workerLoop(int workerIdx) {
+        // Decrement activeWorkers_ on any exit path (normal or exception) so
+        // quiesceWorkers() does not wait for a worker that has already exited.
+        struct ExitGuard {
+            Writer& w;
+            ~ExitGuard() {
+                w.activeWorkers_.fetch_sub(1, std::memory_order_acq_rel);
+                w.quiesceCv_.notify_all();
+            }
+        } guard{*this};
+
         while (true) {
             if (quiesceRequested_.load(std::memory_order_acquire)) {
                 arriveAtQuiesce();
@@ -77,14 +89,15 @@ inline void Writer::workerLoop(int workerIdx) {
             }
 
             try {
+                MONITOR_SCOPE_TIMER("Record.Writer.applyParticleRequest");
                 std::visit([&](auto& r) {
                     using T = std::decay_t<decltype(r)>;
-                    if      constexpr (std::is_same_v<T, ParticleRequest>) applyParticleRequest(r, workerIdx);
-                    else if constexpr (std::is_same_v<T, Hist1DRequest>)   applyHist1DRequest(r, workerIdx);
-                    else if constexpr (std::is_same_v<T, Hist2DRequest>)   applyHist2DRequest(r, workerIdx);
-                    else if constexpr (std::is_same_v<T, GraphRequest>)    applyGraphRequest(r, workerIdx);
-                    else if constexpr (std::is_same_v<T, ProfileRequest>)  applyProfileRequest(r, workerIdx);
-                    else if constexpr (std::is_same_v<T, TreeRowRequest>)  applyTreeRowRequest(r, workerIdx);
+                    if      constexpr (std::is_same_v<T, ParticleRequest>) { applyParticleRequest(r, workerIdx); countParticle_.fetch_add(1, std::memory_order_relaxed); }
+                    else if constexpr (std::is_same_v<T, Hist1DRequest>)   { applyHist1DRequest(r, workerIdx);   countHist1D_.fetch_add(1, std::memory_order_relaxed); }
+                    else if constexpr (std::is_same_v<T, Hist2DRequest>)   { applyHist2DRequest(r, workerIdx);   countHist2D_.fetch_add(1, std::memory_order_relaxed); }
+                    else if constexpr (std::is_same_v<T, GraphRequest>)    { applyGraphRequest(r, workerIdx);    countGraph_.fetch_add(1, std::memory_order_relaxed); }
+                    else if constexpr (std::is_same_v<T, ProfileRequest>)  { applyProfileRequest(r, workerIdx);  countProfile_.fetch_add(1, std::memory_order_relaxed); }
+                    else if constexpr (std::is_same_v<T, TreeRowRequest>)  { applyTreeRowRequest(r, workerIdx);  countTree_.fetch_add(1, std::memory_order_relaxed); }
                 }, req);
             } catch (...) {
                 setWriterException(std::current_exception());
@@ -118,7 +131,12 @@ inline void Writer::quiesceWorkers() {
         quiesceRequested_.store(true, std::memory_order_release);
         fillNotEmpty_.notify_all();
         std::unique_lock<std::mutex> lock(quiesceMutex_);
-        quiesceCv_.wait(lock, [&] { return quiesceArrived_ >= nRecordThreads_; });
+        // Wait until all *still-living* workers have arrived.  Workers that
+        // exited early (due to an exception) decrement activeWorkers_ and
+        // notify quiesceCv_ so this condition re-evaluates without hanging.
+        quiesceCv_.wait(lock, [&] {
+            return quiesceArrived_ >= activeWorkers_.load(std::memory_order_acquire);
+        });
     }
 
 inline void Writer::releaseWorkers() {
@@ -153,10 +171,19 @@ inline         void Writer::watchdogLoop() {
                         // per-event heartbeat artifacts.
                         break;
 
-                    case WatchRequest::Kind::Checkpoint:
+                    case WatchRequest::Kind::Checkpoint: {
                         quiesceWorkers();
+                        // If a worker exited with an error, propagate it rather
+                        // than writing a checkpoint with partial/corrupt state.
+                        const std::exception_ptr chkErr = writerException_;
+                        if (chkErr) {
+                            releaseWorkers();
+                            completeBarrier(req.barrier, chkErr, false);
+                            failPendingWatchBarriers(chkErr);
+                            return;
+                        }
                         try {
-                            writeCheckpointFile(req.eventIndex);
+                            { MONITOR_SCOPE_TIMER("Record.Writer.writeCheckpointFile"); writeCheckpointFile(req.eventIndex); }
                         } catch (...) {
                             releaseWorkers();
                             throw;
@@ -164,6 +191,7 @@ inline         void Writer::watchdogLoop() {
                         releaseWorkers();
                         completeBarrier(req.barrier);
                         break;
+                    }
 
                     case WatchRequest::Kind::Finalize:
                         drainAndStopWorkers();
@@ -174,8 +202,8 @@ inline         void Writer::watchdogLoop() {
                             completeBarrier(req.barrier, writerException_, false);
                             return;
                         }
-                        mergeAllClones();
-                        writeAllToCurrentFile(req.eventIndex, false);
+                        { MONITOR_SCOPE_TIMER("Record.Writer.mergeAllClones");        mergeAllClones(); }
+                        { MONITOR_SCOPE_TIMER("Record.Writer.writeAllToCurrentFile"); writeAllToCurrentFile(req.eventIndex, false); }
                         completeBarrier(req.barrier);
                         return;
 
@@ -186,8 +214,8 @@ inline         void Writer::watchdogLoop() {
                         fillNotFull_.notify_all();
                         joinWorkers();
                         try {
-                            mergeAllClones();
-                            writeAllToCurrentFile(req.eventIndex, false);
+                            { MONITOR_SCOPE_TIMER("Record.Writer.mergeAllClones");        mergeAllClones(); }
+                            { MONITOR_SCOPE_TIMER("Record.Writer.writeAllToCurrentFile"); writeAllToCurrentFile(req.eventIndex, false); }
                         } catch (...) {
                             completeBarrier(req.barrier, std::current_exception(), false);
                             return;

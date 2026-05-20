@@ -3,11 +3,11 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <set>
 #include <stdexcept>
 #include <string>
 
 #include "TCanvas.h"
-#include "TImage.h"
 
 #include "Paint/Types.hh"
 
@@ -36,19 +36,10 @@ namespace Paint {
             }
         }
 
-        inline void savePng(TCanvas& canvas,
-                            const RenderResult& result,
-                            const std::filesystem::path& path) {
-            TImage* image = TImage::Create();
-            if (image == nullptr) {
-                throw std::runtime_error("Paint: TImage::Create() failed for " + path.string());
-            }
-
-            const int width = std::max(1, result.style.canvas.width * result.imageScale);
-            const int height = std::max(1, result.style.canvas.height * result.imageScale);
-            image->FromPad(&canvas, 0, 0, width, height);
-            image->WriteImage(path.string().c_str());
-            delete image;
+        // Formats routed directly through TCanvas::Print.
+        inline bool isSupportedFormat(const std::string& lower) {
+            static const std::set<std::string> kSupported = {"png", "pdf", "svg", "root", "eps", "gif"};
+            return kSupported.count(lower) != 0;
         }
 
     } // namespace detail
@@ -59,13 +50,12 @@ namespace Paint {
             const std::filesystem::path path = detail::outputPathFor(result, format);
             detail::ensureWritable(path, result.overwrite);
 
-            if (format == "png") {
-                detail::savePng(canvas, result, path);
-            } else if (format == "pdf" || format == "svg" || format == "root") {
-                canvas.Print(path.string().c_str());
-            } else {
-                throw std::runtime_error("Paint result '" + result.name + "': unsupported output format '" + rawFormat + "'");
+            if (!detail::isSupportedFormat(format)) {
+                throw std::runtime_error("Paint result '" + result.name
+                    + "': unsupported output format '" + rawFormat + "'");
             }
+
+            canvas.Print(path.string().c_str());
         }
     }
 

@@ -1,0 +1,11 @@
+[paint]
+root_file  = "output/Lambda_Reconstruction/_08/Lambda_Recons_7000GeV_10M.root"
+result_dir = "results/"
+results    = ["01_MassInv", "01_Energy", "01_Momentum"]
+
+[paint.01_MassInv]
+
+
+[paint.01_Energy]
+
+[paint.01_Momentum]

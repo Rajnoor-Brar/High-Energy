@@ -107,13 +107,31 @@ namespace Config {
         }
     }
 
-    inline void readLogSection(const toml::table& config, Watch& /*watch*/, Register& reg) {
-        if (!config.contains("monitor")) return;
+    inline void validateMonitorSection(const toml::table& config) {
+        const auto* monitor = config["monitor"].as_table();
+        if (!monitor) return;
 
-        reg.binCount  = config["monitor"]["bin_count"].value_or(reg.binCount);
-        reg.histScale = config["monitor"]["hist_scaling"].value_or(reg.histScale);
-        // checkpoint_interval is owned by AsyncLogger (Monitor::configureMonitor);
-        // it is not stored in Register.
+        const auto rejectMovedKey = [monitor](const char* key, const char* replacement) {
+            if (!monitor->contains(key)) return;
+            throw std::runtime_error(
+                std::string("[Config] '[monitor].") + key +
+                "' was removed; use '" + replacement + "'");
+        };
+
+        rejectMovedKey("print_interval", "[monitor.intervals].print_interval");
+        rejectMovedKey("check_interval", "[monitor.intervals].check_interval");
+        rejectMovedKey("heartbeat_interval", "[monitor.intervals].heartbeat_interval");
+        rejectMovedKey("terminal_refresh_interval", "[monitor.intervals].terminal_refresh_interval");
+        rejectMovedKey("program_stall_threshold", "[monitor.intervals].program_stall_threshold");
+        rejectMovedKey("checkpoint_interval", "[monitor.intervals].checkpoint_interval");
+
+        rejectMovedKey("save_heartbeat", "[monitor.logs].save_heartbeat");
+        rejectMovedKey("save_checkpoints", "[monitor.logs].save_checkpoints");
+        rejectMovedKey("save_log_threads", "[monitor.logs].save_log_threads");
+        rejectMovedKey("save_final_log", "[monitor.logs].save_final_log");
+
+        rejectMovedKey("bin_count", "[record].bin_count");
+        rejectMovedKey("hist_scaling", "[record].hist_scaling");
     }
 
     inline void readPathsAndFile(const toml::table& config,

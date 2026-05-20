@@ -88,16 +88,4 @@ namespace Config {
         loadLimitsFile(limitsFile, root.particleLimits, root.eventLimits);
     }
 
-    // Reads configs/defaults/Monitor.toml (silently skips if absent).
-    // Pacing fields (print_interval, heartbeat_interval, etc.) moved to
-    // PacingInfo / Monitor::configureMonitor (W8). Only Register fields remain.
-    inline void loadMonitorDefaults(Watch& /*logging*/, Register& root) {
-        const std::string monitorPath = "configs/defaults/Monitor.toml";
-        if (!fs::exists(monitorPath)) return;
-        try {
-            TomlTable mon = toml::parse_file(monitorPath);
-            root.binCount  = mon["monitor"]["bin_count"].value_or(100);
-            root.histScale = mon["monitor"]["hist_scaling"].value_or(1.0);
-        } catch (...) {}
-    }
 }

@@ -6,6 +6,7 @@
 #include "TGraph.h"
 #include "TH1.h"
 #include "TH2.h"
+#include "TProfile.h"
 #include "TROOT.h"
 #include "TStyle.h"
 
@@ -97,6 +98,52 @@ namespace Paint {
         graph->SetMarkerSize(style.marker.size);
 
         applyAxis2D(graph->GetXaxis(), graph->GetYaxis(), style);
+    }
+
+    inline const KindRegistry& kindRegistry() {
+        static const KindRegistry kRegistry = {
+            {ObjectKind::Hist2D, {
+                [](const TObject* o) { return dynamic_cast<const TH2*>(o) != nullptr; },
+                "TH2",
+                [](TObject* o, const Style& s) { apply(dynamic_cast<TH2*>(o), s); },
+                [](TObject* o, const std::string& opt) {
+                    if (TH1* h = dynamic_cast<TH1*>(o)) h->Draw(opt.c_str());
+                },
+                "COLZ"
+            }},
+            {ObjectKind::TProfile, {
+                [](const TObject* o) { return dynamic_cast<const TProfile*>(o) != nullptr; },
+                "TProfile",
+                [](TObject* o, const Style& s) { apply(dynamic_cast<TH1*>(o), s); },
+                [](TObject* o, const std::string& opt) {
+                    if (TH1* h = dynamic_cast<TH1*>(o)) h->Draw(opt.c_str());
+                },
+                "E1"
+            }},
+            {ObjectKind::Hist1D, {
+                [](const TObject* o) {
+                    return dynamic_cast<const TH1*>(o) != nullptr
+                        && dynamic_cast<const TH2*>(o) == nullptr
+                        && dynamic_cast<const TProfile*>(o) == nullptr;
+                },
+                "TH1",
+                [](TObject* o, const Style& s) { apply(dynamic_cast<TH1*>(o), s); },
+                [](TObject* o, const std::string& opt) {
+                    if (TH1* h = dynamic_cast<TH1*>(o)) h->Draw(opt.c_str());
+                },
+                "HIST"
+            }},
+            {ObjectKind::Graph, {
+                [](const TObject* o) { return dynamic_cast<const TGraph*>(o) != nullptr; },
+                "TGraph",
+                [](TObject* o, const Style& s) { apply(dynamic_cast<TGraph*>(o), s); },
+                [](TObject* o, const std::string& opt) {
+                    if (TGraph* g = dynamic_cast<TGraph*>(o)) g->Draw(opt.c_str());
+                },
+                "APL"
+            }},
+        };
+        return kRegistry;
     }
 
 } // namespace Paint

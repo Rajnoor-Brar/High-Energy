@@ -72,7 +72,7 @@ High-Energy/
 | `Types.hh` | Core config types: `Bounds`, `RangeSize`, `Watch`, `Register`, `Events`, `ParticleLimits`, `EventLimits`; imports `Probe::CollectionSpec` |
 | `TypeAid.hh` | `RangeSize`↔string; `Watch::recordEvent` inline |
 | `LimitAid.hh` | `resolveLimitsPath()` — bare name → `configs/*.toml` path |
-| `Defaults.hh` | `parseBoundsArray`, `loadMonitorDefaults`, `limitExtractor` — TOML helpers for defaults |
+| `Defaults.hh` | `parseBoundsArray`, `limitExtractor` — TOML helpers for defaults |
 | `Reader.hh` | `resolveThreadCount`, `readConfig` — full TOML parse into `Watch`/`Register`/`Events`; parses `event_particles` (both array and named-table formats) |
 | `Configure.hh` | `configure<ProbePipeline>()`/`configure<PythiaPipeline>()` — single-call facade to configure Probe, Writer, and Monitor from a config path |
 

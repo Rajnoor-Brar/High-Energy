@@ -349,6 +349,15 @@ namespace Record {
         std::size_t        maxBacklog_ = 0;
 
         std::size_t nRecordThreads_    = 0;
+        std::atomic<std::size_t> activeWorkers_{0};
+
+        // Per-request-kind fill counters (incremented by workers).
+        std::atomic<std::size_t> countParticle_{0};
+        std::atomic<std::size_t> countHist1D_{0};
+        std::atomic<std::size_t> countHist2D_{0};
+        std::atomic<std::size_t> countGraph_{0};
+        std::atomic<std::size_t> countProfile_{0};
+        std::atomic<std::size_t> countTree_{0};
     };
 
     inline void configureWriter(Writer&                 writer,

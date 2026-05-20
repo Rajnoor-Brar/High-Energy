@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -13,7 +14,7 @@
 namespace Paint {
 
     enum class Mode { Single, Overlay, Grid };
-    enum class ObjectKind { Hist1D, Hist2D, Graph };
+    enum class ObjectKind { Hist1D, Hist2D, TProfile, Graph };
 
     struct LineSpec {
         Color_t color{kBlack};
@@ -68,6 +69,8 @@ namespace Paint {
         Font_t textFont{43};
         Float_t textSize{12.0};
         Int_t borderSize{2};
+        Color_t fillColor{0};
+        Style_t fillStyle{1001};
     };
 
     struct LegendSpec {
@@ -111,6 +114,15 @@ namespace Paint {
         bool gridY{false};
     };
 
+    struct KindEntry {
+        std::function<bool(const TObject*)>              detect;
+        std::string                                      rootClassName;
+        std::function<void(TObject*, const Style&)>      applyStyle;
+        std::function<void(TObject*, const std::string&)> draw;
+        std::string                                      defaultDraw;
+    };
+    using KindRegistry = std::vector<std::pair<ObjectKind, KindEntry>>;
+
     struct PaintBook {
         std::string configPath{};
         std::string defaultStylePath{};
@@ -143,8 +155,8 @@ namespace Paint {
         std::vector<std::string> formats{"png"};
         bool overwrite{true};
         int imageScale{1};
-        bool mutateInput{false};
         Mode mode{Mode::Single};
+        bool modeExplicit{false};
         int rows{0};
         int cols{0};
         Style style{};

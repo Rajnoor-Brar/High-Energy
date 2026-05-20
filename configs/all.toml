@@ -1,6 +1,7 @@
-# Canonical TOML reference for all project config readers.
+# Canonical TOML reference for Config:: and utility config readers.
 # All keys the parsers accept are shown here with representative values.
 # Sections marked "(example)" are user-named and appear once per logical entity.
+# Module-specific readers, such as modules/Lambda, are intentionally omitted.
 #
 # Legacy section aliases are not supported:
 #   [run]       → [events] and [record]
@@ -111,156 +112,118 @@ pdf_set      = ""
 
 [monitor]
 true_time_at_config       = false   # record wall time at config as t=0
+
+[monitor.intervals]
 print_interval            = 1000    # events between status-line updates
 check_interval            = 100000  # events between stall-detection checks
 heartbeat_interval        = 2000    # ms between heartbeat file writes
 terminal_refresh_interval = 2.0     # minutes between terminal refreshes
 program_stall_threshold   = 5.0     # minutes of silence before stall warning
 checkpoint_interval       = 100000  # events between automatic checkpoints
-bin_count                 = 500     # histogram bins (overrides [record].bin_count)
-hist_scaling              = 1.0     # histogram scale (overrides [record].hist_scaling)
+
+[monitor.logs]
 save_heartbeat            = false   # emit Heartbeat WatchRequests to Writer
 save_checkpoints          = false   # emit Checkpoint WatchRequests to Writer
 save_log_threads          = false   # write per-thread stat files
 save_final_log            = true    # write final run-stat log on finish
 
-# ── Lambda (module-specific) ─────────────────────────────────────────────────
+# ── Histogram Limit File Selection ───────────────────────────────────────────
+# Config::limitExtractor currently reads [lambda].hist_limits to find the
+# histogram-limit TOML.  "all" resolves to configs/all.toml, so the top-level
+# physics-property tables below can make this file self-contained.
 
 [lambda]
 hist_limits      = "all"       # name or path of limits file; "all" = this file
-delta_mass_gev   = 0.15        # invariant-mass window half-width (GeV)
-delta_theta_rad  = 0.1         # decay-angle tolerance (radians)
-reserved_protons = 20          # expected beam protons per event (for multiplicity baseline)
-proton_label     = "protons"   # Probe collection label for protons
-pion_label       = "pions"     # Probe collection label for pions
 
-[lambda.analysis]
-writeTree = ["Selected"]       # HistogramSet names whose candidates are also written to TTrees
+# ── Histogram Limits ─────────────────────────────────────────────────────────
+# Config::loadLimitsFile reads top-level physics-property tables. Each table
+# defines the five supported RangeSize levels.
 
-# --- [lambda.limits.<HistogramSet>] (example — one table per histogram set) --
-# default: level name from [record.limits.*] used when a property has no explicit range.
-# Each property entry overrides the corresponding [record.limits.<prop>] default.
-
-[lambda.limits.Unvalidated]
-default             = "Moderate"
-Mass_Invariant      = [1.0, 2.0]
-Energy_Net          = [0.0, 10.0]
-Momentum_Net        = [0.0, 10.0]
-Momentum_Transverse = [0.0, 5.0]
-Momentum_Z          = [0.0, 10.0]
-Pseudorapidity      = [-15.0, 15.0]
-Multiplicity        = [0.0, 5000.0]
-
-[lambda.limits.Validated]
-default             = "Moderate"
-Mass_Invariant      = [1.0, 2.0]
-Energy_Net          = [0.0, 100.0]
-Momentum_Net        = [0.0, 100.0]
-Momentum_Transverse = [0.0, 5.0]
-Momentum_Z          = [0.0, 100.0]
-Pseudorapidity      = [-15.0, 15.0]
-Multiplicity        = [0.0, 1000.0]
-
-[lambda.limits.Selected]
-default             = "Moderate"
-Mass_Invariant      = [1.0, 1.3]
-Energy_Net          = [0.0, 100.0]
-Momentum_Net        = [0.0, 100.0]
-Momentum_Transverse = [0.0, 5.0]
-Momentum_Z          = [0.0, 100.0]
-Pseudorapidity      = [-15.0, 15.0]
-Multiplicity        = [0.0, 150.0]
-
-# ── Record limits (property lookup table) ────────────────────────────────────
-# Each [record.limits.<PropertyName>] defines five named ranges.
-# Lambda limit tables select a level name as their "default" and may override
-# individual properties with explicit [low, high] pairs.
-
-[record.limits.Mass_Invariant]
+[Mass_Invariant]
 Minute   = [1.110, 1.120]
 Small    = [1.105, 1.125]
 Moderate = [1.08,  1.15]
 Large    = [0.8,   1.25]
 Extreme  = [0.2,   3.0]
 
-[record.limits.Mass_Transverse]
+[Mass_Transverse]
 Minute   = [1.110, 1.120]
 Small    = [1.105, 1.125]
 Moderate = [1.08,  1.15]
 Large    = [0.8,   1.25]
 Extreme  = [0.2,   3.0]
 
-[record.limits.Energy_Net]
+[Energy_Net]
 Minute   = [1.10, 1.13]
 Small    = [1.05, 1.20]
 Moderate = [0.8,  2.0]
 Large    = [0.5,  5.0]
 Extreme  = [0.5,  10.0]
 
-[record.limits.Energy_Transverse]
+[Energy_Transverse]
 Minute   = [0.9, 1.2]
 Small    = [0.8, 1.5]
 Moderate = [0.5, 3.0]
 Large    = [0.0, 5.0]
 Extreme  = [0.0, 10.0]
 
-[record.limits.Momentum_Net]
+[Momentum_Net]
 Minute   = [0.0, 1.0]
 Small    = [0.0, 2.0]
 Moderate = [0.0, 3.0]
 Large    = [0.0, 6.0]
 Extreme  = [0.0, 10.0]
 
-[record.limits.Momentum_Transverse]
+[Momentum_Transverse]
 Minute   = [0.0, 0.8]
 Small    = [0.0, 1.5]
 Moderate = [0.0, 2.5]
 Large    = [0.0, 4.0]
 Extreme  = [0.0, 8.0]
 
-[record.limits.Momentum_X]
+[Momentum_X]
 Minute   = [-1.0,  1.0]
 Small    = [-2.0,  2.0]
 Moderate = [-5.0,  5.0]
 Large    = [-10.0, 10.0]
 Extreme  = [-20.0, 20.0]
 
-[record.limits.Momentum_Y]
+[Momentum_Y]
 Minute   = [-1.0,  1.0]
 Small    = [-2.0,  2.0]
 Moderate = [-5.0,  5.0]
 Large    = [-10.0, 10.0]
 Extreme  = [-20.0, 20.0]
 
-[record.limits.Momentum_Z]
+[Momentum_Z]
 Minute   = [-1.0,  1.0]
 Small    = [-2.0,  2.0]
 Moderate = [-5.0,  5.0]
 Large    = [-10.0, 10.0]
 Extreme  = [-20.0, 20.0]
 
-[record.limits.Rapidity]
+[Rapidity]
 Minute   = [-1.0,  1.0]
 Small    = [-2.0,  2.0]
 Moderate = [-3.0,  3.0]
 Large    = [-5.0,  5.0]
 Extreme  = [-10.0, 10.0]
 
-[record.limits.Pseudorapidity]
+[Pseudorapidity]
 Minute   = [-1.0,  1.0]
 Small    = [-2.0,  2.0]
 Moderate = [-3.0,  3.0]
 Large    = [-5.0,  5.0]
 Extreme  = [-10.0, 10.0]
 
-[record.limits.Azimuthal_Angle]
+[Azimuthal_Angle]
 Minute   = [-1.57, 1.57]
 Small    = [-3.14, 3.14]
 Moderate = [-3.14, 3.14]
 Large    = [-3.14, 3.14]
 Extreme  = [-6.28, 6.28]
 
-[record.limits.Multiplicity]
+[Multiplicity]
 Minute   = [0.0, 10.0]
 Small    = [0.0, 50.0]
 Moderate = [0.0, 200.0]
@@ -272,23 +235,43 @@ Extreme  = [0.0, 50000.0]
 # [paint.default.*] provides fallback style for all results.
 
 [paint]
-root_file  = "output/Lambda_Reconstruction/_08/Lambda_Recons_7000GeV_10M.root"
-result_dir = "results/"
-results    = ["Mass_Invariant", "Energy_Net", "Momentum"]
+default_style = "configs/defaults/Paint.toml"  # empty string disables default-style merge
+root_file     = "output/Lambda_Reconstruction/_08/Lambda_Recons_7000GeV_10M.root"
+result_dir    = "results/"
+results       = ["Mass_Invariant", "Energy_Net", "Momentum"]
+formats       = ["png"]      # inherited by results unless they override formats
+overwrite     = true         # false = fail if an output image already exists
+image_scale   = 1            # multiplies canvas dimensions when rendering
 
 # --- [paint.<ResultName>] (example — one table per result) -------------------
 
 [paint.Mass_Invariant]
-sources_objects = ["Mass_Invariant"]
-source_types    = ["H1"]          # H1 | H2 | Graph
+mode        = "single"            # single | overlay | grid
+rows        = 0                   # grid rows; 0 = infer from source count
+cols        = 0                   # grid columns; 0 = infer from source count
+title       = "Mass Invariant"
+output_name = "mass_invariant"
+formats     = ["png"]
+source_type = "H1"                # H1 | H2 | TProfile | Graph
+palette     = ["kRed-4", "kBlue-6"]
+sources = [
+    { path = "Mass_Invariant", label = "Candidates", draw_option = "HIST" },
+]
 
-[paint.Mass_Invariant.style]
+# Alternatives:
+# source_search = "Mass_*"        # glob search through the ROOT file
+# use        = "CommonResult"     # inherit from another [paint.<preset>] table
+# axis_use   = "AxisPreset"       # copy only [paint.AxisPreset.axis]
+# canvas_use = "CanvasPreset"     # copy only [paint.CanvasPreset.canvas]
+# stats_use  = "StatsPreset"      # copy only [paint.StatsPreset.stats]
+# legend_use = "LegendPreset"     # copy only [paint.LegendPreset.legend]
+# title_use  = "TitlePreset"      # copy only [paint.TitlePreset.title_box]
 line_color = "kRed-4"
 fill_color = "kRed-7"
 
 # --- [paint.default.*] — fallback style applied to all results ---------------
 
-[paint.default.style]
+[paint.default]
 line_color   = "kBlue-6"
 line_width   = 2
 line_style   = 1
@@ -299,6 +282,12 @@ marker_style = 20
 marker_size  = 1.0
 draw_option  = "HIST"
 minimum      = 0.0
+maximum      = 0.0
+log_x        = false
+log_y        = false
+log_z        = false
+grid_x       = false
+grid_y       = false
 
 [paint.default.axis]
 title_font    = 43
@@ -307,10 +296,12 @@ title_size    = 27.0
 label_size    = 20.0
 offset_x      = 1.1
 offset_y      = 1.35
+offset_z      = 1.1
 center_titles = true
 max_digits_y  = 3
 title_x       = ""
 title_y       = ""
+title_z       = ""
 
 [paint.default.canvas]
 width    = 900
@@ -332,6 +323,8 @@ height      = 0.10
 text_font   = 43
 text_size   = 12.0
 border_size = 2
+fill_color  = 0
+fill_style  = 1001
 
 [paint.default.legend]
 show      = false
@@ -341,3 +334,12 @@ x2        = 0.88
 y2        = 0.88
 text_font = 43
 text_size = 14.0
+border_size = 0
+fill_style  = 0
+
+[paint.default.title_box]
+show        = true
+text_font   = 43
+text_size   = 24.0
+border_size = 0
+fill_style  = 0

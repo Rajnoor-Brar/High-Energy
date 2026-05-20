@@ -27,21 +27,36 @@
 
 namespace Config {
 
+    // readConfigValues — parse and populate Watch/Register/Events without
+    // creating any output directories.  Call readPathsAndFile separately once
+    // the event count is fully resolved (e.g. after probe.configureProbe()).
+    inline void readConfigValues(const std::string& configPath,
+                                  const std::string& project,
+                                  Events&   events,
+                                  Watch&    watch,
+                                  Register& reg)
+    {
+        toml::table config = toml::parse_file(configPath);
+        rejectSectionAliases(config);
+
+        limitExtractor(configPath, reg);
+
+        readEventsSection(config, events, watch);
+        readRecordSection(config, watch, reg);
+        validateMonitorSection(config);
+        // readPathsAndFile is intentionally omitted here.
+    }
+
+    // configuration — convenience wrapper for pipelines where the event count
+    // is fixed at parse time (e.g. Pythia generation).
     inline void configuration(const std::string& configPath,
                               const std::string& project,
                               Events&   events,
                               Watch&    watch,
                               Register& reg)
     {
+        readConfigValues(configPath, project, events, watch, reg);
         toml::table config = toml::parse_file(configPath);
-        rejectSectionAliases(config);
-
-        loadMonitorDefaults(watch, reg);
-        limitExtractor(configPath, reg);
-
-        readEventsSection(config, events, watch);
-        readRecordSection(config, watch, reg);
-        readLogSection   (config, watch, reg);
         readPathsAndFile(config, project, watch, reg);
     }
 
@@ -72,13 +87,16 @@ namespace Config {
         watch.n_threads = py.pythia_threads;
     }
 
+    // configureProbe — populates Watch, Register, and ProbeConfig from TOML
+    // without creating output directories.  The caller (Configure.hh) resolves
+    // probe.eventCount() and then calls readPathsAndFile exactly once.
     inline void configureProbe(const std::string& configPath,
                                const std::string& project,
                                Watch&       watch,
                                Register&    reg,
                                ProbeConfig& probe)
     {
-        configuration(configPath, project, probe.eventConfig, watch, reg);
+        readConfigValues(configPath, project, probe.eventConfig, watch, reg);
 
         toml::table config = toml::parse_file(configPath);
         readProbeSection(config, probe);

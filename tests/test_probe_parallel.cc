@@ -111,6 +111,61 @@ int main() {
         TEST_PASS("CollectorThread callback exceptions propagate");
     }
 
+    {
+        // [probe.index] parsing — verify sorted/ascending/monotonic fields are
+        // applied element-wise to CollectionSpec from a TOML table.
+        const std::string src = R"toml(
+[probe]
+event_particles = [
+    ["protons", 0, "Protons", [["pX","D"],["pY","D"],["pZ","D"],["E","D"]], [["idx","I"]]],
+    ["pions",   0, "Pions",   [["pX","D"],["pY","D"],["pZ","D"],["E","D"]], [["idx","I"]]]
+]
+[probe.index]
+sorted    = [true, false]
+ascending = [true, true]
+monotonic = [false, true]
+)toml";
+        const toml::table tbl = toml::parse(src);
+        auto specs2 = Probe::parseCollectionsFromToml(tbl);
+        TEST_EQ(specs2.size(), std::size_t(2));
+        TEST_TRUE(specs2[0].indexSorted    == true);
+        TEST_TRUE(specs2[0].indexAscending == true);
+        TEST_TRUE(specs2[0].indexMonotonic == false);
+        TEST_TRUE(specs2[1].indexSorted    == false);
+        TEST_TRUE(specs2[1].indexAscending == true);
+        TEST_TRUE(specs2[1].indexMonotonic == true);
+        TEST_PASS("[probe.index] sorted/ascending/monotonic applied to CollectionSpec");
+    }
+
+    {
+        // Explicit multi-collector count: analysis_threads different from
+        // probe_threads.  Verify all events are still delivered exactly once.
+        Probe::ProbeParallel probe;
+        probe.setAnalysisThreadCount(2);  // 2 collectors, 4 reader threads
+        probe.configureProbe(kFixtureRoot, specs, 4, kNEvents, true);
+
+        std::atomic<std::size_t> count{0};
+        probe.run([&](const Probe::Event& /*ev*/, int workerIndex) {
+            TEST_TRUE(workerIndex >= 0 && workerIndex < 2);
+            count.fetch_add(1, std::memory_order_relaxed);
+        });
+        TEST_EQ(count.load(std::memory_order_relaxed), static_cast<std::size_t>(kNEvents));
+        TEST_PASS("CollectorThread with analysis_threads=2 delivers all events");
+    }
+
+    {
+        // Error path: non-existent input file throws during configureProbe.
+        Probe::ProbeParallel probe;
+        bool caught = false;
+        try {
+            probe.configureProbe("/no/such/file.root", specs, 1, kNEvents, true);
+        } catch (const std::runtime_error&) {
+            caught = true;
+        }
+        TEST_TRUE(caught);
+        TEST_PASS("configureProbe throws for non-existent input file");
+    }
+
     // (Phase 5 cleanup: docs/WriterMT.md.  The Splitter / shard-cache tests
     //  were removed along with the Splitter feature itself.  ProbeParallel +
     //  multithreaded Writer is the production path; splitting was never the

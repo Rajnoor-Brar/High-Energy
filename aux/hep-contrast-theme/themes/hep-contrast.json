@@ -96,6 +96,22 @@
     "terminal.foreground": "#0A0A0A",
     "terminal.selectionBackground": "#C8DCFF",
     "terminalCursor.foreground": "#000000",
+    "terminal.ansiBlack": "#0A0A0A",
+    "terminal.ansiRed": "#CC0000",
+    "terminal.ansiGreen": "#4F7703",
+    "terminal.ansiYellow": "#886600",
+    "terminal.ansiBlue": "#0055CC",
+    "terminal.ansiMagenta": "#AA0066",
+    "terminal.ansiCyan": "#007755",
+    "terminal.ansiWhite": "#777777",
+    "terminal.ansiBrightBlack": "#333333",
+    "terminal.ansiBrightRed": "#990000",
+    "terminal.ansiBrightGreen": "#2A5200",
+    "terminal.ansiBrightYellow": "#664400",
+    "terminal.ansiBrightBlue": "#0044AA",
+    "terminal.ansiBrightMagenta": "#880044",
+    "terminal.ansiBrightCyan": "#005040",
+    "terminal.ansiBrightWhite": "#BBBBBB",
     "input.background": "#FFFFFF",
     "input.foreground": "#0A0A0A",
     "input.border": "#BBBBBB",
@@ -876,6 +892,25 @@
       "scope": "string.unquoted.cmnd",
       "settings": {
         "foreground": "#E60026"
+      }
+    },
+    {
+      "name": "CMND boolean (on/off/true/false)",
+      "scope": "constant.language.boolean.cmnd",
+      "settings": {
+        "foreground": "#D71868",
+        "fontStyle": "bold italic"
+      }
+    },
+    {
+      "name": "CMND numeric value",
+      "scope": [
+        "constant.numeric.float.cmnd",
+        "constant.numeric.integer.cmnd"
+      ],
+      "settings": {
+        "foreground": "#CC332A",
+        "fontStyle": "bold"
       }
     },
     {

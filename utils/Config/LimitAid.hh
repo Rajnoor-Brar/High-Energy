@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include <string>
 #include <stdexcept>
 
@@ -9,8 +10,15 @@ namespace Config{
             throw std::runtime_error("Histogram limits file name must not be empty");
         }
 
-        if (limitsName.find('/') != std::string::npos) return limitsName;
-        if (limitsName.size() >= 5 && limitsName.substr(limitsName.size() - 5) == ".toml") return "configs/" + limitsName;
-        return "configs/" + limitsName + ".toml";
+        std::string resolved;
+        if (limitsName.find('/') != std::string::npos)
+            resolved = limitsName;
+        else if (limitsName.size() >= 5 && limitsName.substr(limitsName.size() - 5) == ".toml")
+            resolved = "configs/" + limitsName;
+        else
+            resolved = "configs/" + limitsName + ".toml";
+
+        std::clog << "[Config] histogram limits file: " << resolved << '\n';
+        return resolved;
     }
 }

@@ -40,9 +40,7 @@ namespace detail {
 
 } // namespace detail
 
-// ── applyIndexSpecsFromToml ────────────────────────────────────────────────
-// Reads [probe.index].sorted / ascending / monotonic bool arrays and applies
-// them element-wise to the collection specs.
+// applyIndexSpecsFromToml — reads [probe.index] bool arrays and applies them element-wise to collection specs.
 inline void applyIndexSpecsFromToml(const toml::table& cfg,
                                     std::vector<CollectionSpec>& specs)
 {
@@ -69,26 +67,7 @@ inline void applyIndexSpecsFromToml(const toml::table& cfg,
     }
 }
 
-// ── parseCollectionsFromToml ───────────────────────────────────────────────
-// Supports two syntaxes for [probe].event_particles:
-//
-// Inline array (original):
-//   event_particles = [
-//     ["label", spec_id, "tree", [[br,type],...], [[idx_br,type],...]], ...
-//   ]
-//
-// Named-table (new):
-//   event_particles = ["label1", "label2"]
-//   [probe.particle.label1]
-//   spec         = 0              # 0=Cartesian 1=PtEtaPhiE 2=PtEtaPhiM
-//   tree_name    = "TreeName"
-//   index_branch = ["BrName","I"] # primary event-index branch
-//   branch_1     = ["pX","D"]
-//   branch_2     = ["pY","D"]
-//   branch_3     = ["pZ","D"]
-//   branch_4     = ["Energy","D"]
-//
-// In both cases, [probe.index] sorted/ascending/monotonic arrays are applied.
+// parseCollectionsFromToml — parses [probe].event_particles; supports inline array and named-table syntax.
 
 inline std::vector<CollectionSpec>
 parseCollectionsFromToml(const toml::table& cfg)
@@ -181,9 +160,7 @@ parseCollectionsFromToml(const toml::table& cfg)
 }
 
 
-// ── resolveEventCount ─────────────────────────────────────────────────────
-// Reads About/events/n_events_total from a ROOT file written by _Lambda_Data.
-// Returns 0 when the value is absent or non-positive.
+// resolveEventCount — reads About/events/n_events_total from a ROOT file; returns 0 if absent or non-positive.
 inline std::size_t resolveEventCount(const std::string& filepath) {
     std::unique_ptr<TFile> f(TFile::Open(filepath.c_str(), "READ"));
     if (!f || f->IsZombie()) return 0;

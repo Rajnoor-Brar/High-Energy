@@ -14,6 +14,7 @@
 
 namespace Probe {
 
+    // ProbeParallel — multi-threaded ROOT event reader; supports CollectorThread and WorkerThread callback modes.
     class ProbeParallel {
       public:
         ProbeParallel();

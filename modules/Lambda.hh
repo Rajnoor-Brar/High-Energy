@@ -78,7 +78,7 @@ namespace Lambda{
                              int threadId,
                              AnalysisContext& ctx)
     {
-        // BlockTimer timer("Whole Analysis");
+        MONITOR_SCOPE_TIMER("Lambda.rootAnalysis");
         const std::size_t eventIndex = ctx.asyncLogger.countEvent();
 
         // ctx.asyncLogger.publishThreadStats(threadId, Monitor::ThreadPhase::Analysis, eventIndex, Monitor::NoCallbackCompleted);
@@ -86,7 +86,9 @@ namespace Lambda{
         const std::vector<Lorentz>& protonList = ev[ctx.parameters.protonLabel];
         const std::vector<Lorentz>& pionList   = ev[ctx.parameters.pionLabel];
 
-        fillCandidates(ctx.writer, reconstructCandidates(protonList, pionList, ctx.parameters));
+        Candidates candidates;
+        { MONITOR_SCOPE_TIMER("Lambda.reconstructCandidates"); candidates = reconstructCandidates(protonList, pionList, ctx.parameters); }
+        fillCandidates(ctx.writer, std::move(candidates));
         ctx.logging.recordEvent(std::chrono::system_clock::now());
 
         ctx.asyncLogger.publish( Monitor::RunPhase::Analysis);

@@ -39,5 +39,7 @@ int main(int argc, char* argv[]) {
     Record::Meta::integrityAddFileSha(writer.meta(), writer.histConfig().histLimitsFile.Data());
     writer.finish(asyncLogger.watch().nEvents);
 
+    Monitor::TimerRegistry::instance().dump(std::cout);
+
     return 0;
 }

@@ -2,6 +2,7 @@
 
 #include <condition_variable>
 #include <cstddef>
+#include <deque>
 #include <functional>
 #include <map>
 #include <memory>
@@ -9,6 +10,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "TString.h"
@@ -26,9 +28,7 @@ namespace Monitor {
     class AsyncLogger {
       public:
         using FatalStallHandler = std::function<void(const RunSnapshot&)>;
-        // docs/WriterMT.md Phase 1: pluggable sink for WatchRequest emission.
-        // Set via bindWatchSink(); when unset, countEvent() only increments
-        // and returns.  Phase 2 wires this to Record::Writer::signalWatch.
+        // WatchSink — pluggable callback for WatchRequest emission; Phase 2 wires to Writer::signalWatch.
         using WatchSink = std::function<void(Record::WatchRequest)>;
 
         explicit AsyncLogger(bool print = true);
@@ -42,16 +42,12 @@ namespace Monitor {
 
         void configurePacing(PacingInfo pacing);
 
-        // docs/WriterMT.md Phase 1.  Configure which WatchRequest kinds the
-        // logger emits, and at what events-based cadences.  Called from
-        // Monitor::configureMonitor after the [monitor] section is parsed.
+        // Configures which WatchRequest kinds are emitted and at what cadences.
         void configureWatchEmission(bool saveHeartbeat,
                                     bool saveCheckpoints,
                                     std::size_t checkpointInterval);
 
-        // docs/WriterMT.md: configure non-watch-queue artifacts.
-        //   saveLogThreads: if false, publishThreadStats() is a no-op
-        //   saveFinalLog: if false, Writer::finish() skips outputLog()
+        // Configures non-watch artifact emission (thread stats, final log).
         void configureArtifactEmission(bool saveLogThreads, bool saveFinalLog);
 
         bool saveLogThreads() const;
@@ -61,11 +57,7 @@ namespace Monitor {
 
         void bindWatchSink(WatchSink sink);
 
-        // docs/WriterMT.md Phase 1.  Atomic increment of watch_.iEvent.
-        // Returns the new count.  When configured thresholds are crossed,
-        // pushes a WatchRequest through the watch sink (heartbeat is
-        // fire-and-forget; checkpoint blocks the caller on the barrier
-        // until the watchdog completes the snapshot).
+        // Atomically increments watch_.iEvent; emits WatchRequests at configured thresholds.
         std::size_t countEvent();
 
         void markConfiguring(const std::string& configPath, bool trueTimeAtConfig = false);
@@ -99,14 +91,14 @@ namespace Monitor {
         void flushRunStat(const RunSnapshot& snapshot) const;
 
         void writeThreadStats(const ThreadSnapshot& snapshot) const;
-        void mergePending(const PendingActions& incoming);
+        void pushAction(RunSnapshot snap, PendingActions acts);
         
         static void waitWatchBarrier(const std::shared_ptr<Record::BarrierState>& barrier);
 
         Config::Watch                 watch_;
         PacingInfo                    pacing_;
 
-        // docs/WriterMT.md Phase 1: watchdog sink + emission config.
+        // Phase 1 watch sink + emission config.
         WatchSink                     watchSink_;
         bool                          saveHeartbeat_      = false;
         bool                          saveCheckpoints_    = false;
@@ -118,7 +110,7 @@ namespace Monitor {
         TString                       threadStatDirectory_     = "";
         std::mutex                    mutex_;
         std::condition_variable       condition_;
-        std::optional<PendingActions> pendingActions_;
+        std::deque<std::pair<RunSnapshot, PendingActions>> actionQueue_;
         std::optional<RunSnapshot>    latestSnapshot_;
         std::map<int, ThreadSnapshot> threadSnapshots_;
         std::vector<ThreadSnapshot>   dirtyThreadSnapshots_;

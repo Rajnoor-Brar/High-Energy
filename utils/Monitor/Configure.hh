@@ -12,9 +12,52 @@
 
 #include "Config/Types.hh"
 #include "Monitor/Administration.hh"
-#include "Monitor/Directive.hh"
 
 namespace Monitor {
+
+    namespace detail {
+
+        inline void rejectMovedMonitorKey(const toml::table& monitor,
+                                          const char* key,
+                                          const char* replacement)
+        {
+            if (!monitor.contains(key)) return;
+            throw std::runtime_error(
+                std::string("[Config] '[monitor].") + key +
+                "' was removed; use '" + replacement + "'");
+        }
+
+        inline void validateMonitorSchema(const toml::table& config) {
+            const auto* monitor = config["monitor"].as_table();
+            if (!monitor) return;
+
+            rejectMovedMonitorKey(*monitor, "print_interval",
+                                  "[monitor.intervals].print_interval");
+            rejectMovedMonitorKey(*monitor, "check_interval",
+                                  "[monitor.intervals].check_interval");
+            rejectMovedMonitorKey(*monitor, "heartbeat_interval",
+                                  "[monitor.intervals].heartbeat_interval");
+            rejectMovedMonitorKey(*monitor, "terminal_refresh_interval",
+                                  "[monitor.intervals].terminal_refresh_interval");
+            rejectMovedMonitorKey(*monitor, "program_stall_threshold",
+                                  "[monitor.intervals].program_stall_threshold");
+            rejectMovedMonitorKey(*monitor, "checkpoint_interval",
+                                  "[monitor.intervals].checkpoint_interval");
+
+            rejectMovedMonitorKey(*monitor, "save_heartbeat",
+                                  "[monitor.logs].save_heartbeat");
+            rejectMovedMonitorKey(*monitor, "save_checkpoints",
+                                  "[monitor.logs].save_checkpoints");
+            rejectMovedMonitorKey(*monitor, "save_log_threads",
+                                  "[monitor.logs].save_log_threads");
+            rejectMovedMonitorKey(*monitor, "save_final_log",
+                                  "[monitor.logs].save_final_log");
+
+            rejectMovedMonitorKey(*monitor, "bin_count", "[record].bin_count");
+            rejectMovedMonitorKey(*monitor, "hist_scaling", "[record].hist_scaling");
+        }
+
+    } // namespace detail
 
     inline void configureMonitor(AsyncLogger& logger,
                                  const std::string& configPath,
@@ -30,27 +73,35 @@ namespace Monitor {
                 "'[monitor]' instead (see docs/WriterMT.md)");
         }
 
-        const bool trueTimeAtConfig = config["monitor"]["true_time_at_config"].value_or(false);
+        detail::validateMonitorSchema(config);
+
+        const auto* monitor  = config["monitor"].as_table();
+        const auto* intervals = monitor ? (*monitor)["intervals"].as_table() : nullptr;
+        const auto* logs      = monitor ? (*monitor)["logs"].as_table()      : nullptr;
+
+        const bool trueTimeAtConfig = monitor
+            ? (*monitor)["true_time_at_config"].value_or(false)
+            : false;
         logger.markConfiguring(configPath, trueTimeAtConfig);
 
         PacingInfo p = logger.pacingInfo();  // start from current defaults
 
-        if (config.contains("monitor")) {
+        if (intervals) {
             p.printInterval = static_cast<std::size_t>(
-                config["monitor"]["print_interval"].value_or(static_cast<int64_t>(p.printInterval)));
+                (*intervals)["print_interval"].value_or(static_cast<int64_t>(p.printInterval)));
             p.checkInterval = static_cast<std::size_t>(
-                config["monitor"]["check_interval"].value_or(static_cast<int64_t>(p.checkInterval)));
+                (*intervals)["check_interval"].value_or(static_cast<int64_t>(p.checkInterval)));
 
             const std::size_t hb = static_cast<std::size_t>(
-                config["monitor"]["heartbeat_interval"].value_or(
+                (*intervals)["heartbeat_interval"].value_or(
                     static_cast<int64_t>(p.heartbeatMs.count())/1000));
             p.heartbeatMs = Config::uSeconds(hb*1000);
 
-            const double tr = config["monitor"]["terminal_refresh_interval"].value_or(
+            const double tr = (*intervals)["terminal_refresh_interval"].value_or(
                 static_cast<double>(p.terminalRefresh.count()) / 60.0);
             p.terminalRefresh = Config::Seconds(static_cast<int>(60 * tr));
 
-            const double ps = config["monitor"]["program_stall_threshold"].value_or(
+            const double ps = (*intervals)["program_stall_threshold"].value_or(
                 static_cast<double>(p.stallThreshold.count()) / 60.0);
             p.stallThreshold = Config::Seconds(static_cast<int>(60 * ps));
         }
@@ -71,7 +122,7 @@ namespace Monitor {
 
         logger.configurePacing(std::move(p));
 
-        // docs/WriterMT.md Phase 1/5: the four [monitor].save_* flags drive
+        // docs/WriterMT.md Phase 1/5: the four [monitor.logs].save_* flags drive
         // which optional artifacts the logger produces.
         //
         //   save_heartbeat   — emit Heartbeat WatchRequests at print_interval
@@ -81,13 +132,14 @@ namespace Monitor {
         //
         // When a flag is false the corresponding code path becomes a no-op
         // (publishThreadStats early-returns, outputLog is skipped, etc.).
-        if (config.contains("monitor")) {
-            const bool        saveHeartbeat   = config["monitor"]["save_heartbeat"].value_or(false);
-            const bool        saveCheckpoints = config["monitor"]["save_checkpoints"].value_or(false);
-            const bool        saveLogThreads  = config["monitor"]["save_log_threads"].value_or(false);
-            const bool        saveFinalLog    = config["monitor"]["save_final_log"].value_or(true);
+        if (monitor) {
+            const bool        saveHeartbeat   = logs ? (*logs)["save_heartbeat"].value_or(false)   : false;
+            const bool        saveCheckpoints = logs ? (*logs)["save_checkpoints"].value_or(false) : false;
+            const bool        saveLogThreads  = logs ? (*logs)["save_log_threads"].value_or(false) : false;
+            const bool        saveFinalLog    = logs ? (*logs)["save_final_log"].value_or(true)    : true;
             const std::size_t cpInterval      = static_cast<std::size_t>(
-                config["monitor"]["checkpoint_interval"].value_or(static_cast<int64_t>(100000)));
+                intervals ? (*intervals)["checkpoint_interval"].value_or(static_cast<int64_t>(100000))
+                          : static_cast<int64_t>(100000));
             logger.configureWatchEmission(saveHeartbeat, saveCheckpoints, cpInterval);
             logger.configureArtifactEmission(saveLogThreads, saveFinalLog);
         }

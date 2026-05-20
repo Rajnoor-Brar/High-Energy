@@ -1,6 +1,6 @@
 # HEP Contrast — VSCode Theme
 
-A high-contrast **light** theme built for long sessions with C++ and Python in a physics / scientific computing context. Every color decision prioritizes unambiguous role differentiation over decoration.
+High-contrast **light and dark** themes built for long sessions with C++ and Python in a physics / scientific computing context. Every color decision prioritizes unambiguous role differentiation over decoration.
 
 ---
 
@@ -19,30 +19,34 @@ F5  (with this folder open — launches Extension Development Host)
 ```bash
 npm install -g @vscode/vsce
 cd hep-contrast-theme
-vsce package          # produces hep-contrast-1.0.0.vsix
-code --install-extension hep-contrast-1.0.0.vsix
+node build.js         # regenerate themes/hep-contrast-light.json + themes/hep-contrast-dark.json from palette.toml
+vsce package          # produces hep-contrast-2.0.0.vsix
+code --install-extension hep-contrast-2.0.0.vsix
 ```
 
-Then: **Cmd/Ctrl+K → Cmd/Ctrl+T** → select **HEP Contrast**.
+Then: **Cmd/Ctrl+K → Cmd/Ctrl+T** → select **HEP Contrast Light** or **HEP Contrast Dark**.
 
 ---
 
 ## Palette
 
-| Role                        | Color          | Hex       |
-|-----------------------------|----------------|-----------|
-| Background                  | White          | `#FFFFFF` |
-| Base text                   | Near-black     | `#0A0A0A` |
-| Keywords / control flow     | Green          | `#1A7F00` |
-| Types / classes / structs   | Magenta        | `#BB0077` |
-| Functions / methods         | Indigo         | `#4B44CC` |
-| Strings                     | Red            | `#CC1100` |
-| Numbers / constants         | Olive          | `#5A6600` |
-| Preprocessor / macros       | Amber          | `#BB6600` |
-| Namespaces                  | Bold blue      | `#0055CC` |
-| Variables / parameters      | Deep blue      | `#003388` |
-| Operators / punctuation     | Teal           | `#007755` |
-| Comments                    | Mid gray       | `#777777` |
+All colors live in **`palette.toml`** as `[light, dark]` pairs. Edit there, run `node build.js`, done — both themes regenerate from the single source of truth.
+
+| Role                        | Light          | Dark       |
+|-----------------------------|----------------|------------|
+| Background                  | `#FFFFFF`      | `#1E1E1E`  |
+| Base text                   | `#0A0A0A`      | `#D4D4D4`  |
+| Keywords / control flow     | `#D71868`      | `#FF79C6`  |
+| Types / classes / structs   | `#D71868`      | `#FF79C6`  |
+| Functions / methods         | `#0055CC`      | `#6BB5FF`  |
+| Strings                     | `#E60026`      | `#F07178`  |
+| Numbers / constants         | `#CC332A`      | `#F78C6C`  |
+| Preprocessor / macros       | `#D75C1E`      | `#FFAB40`  |
+| Namespaces                  | `#883DA4`      | `#C792EA`  |
+| Variables                   | `#224C98`      | `#82AAFF`  |
+| Parameters                  | `#2072AF`      | `#89DDFF`  |
+| Operators / punctuation     | `#E28512`      | `#FFCB6B`  |
+| Comments                    | `#777777`      | `#676E95`  |
 
 ---
 
@@ -78,9 +82,14 @@ Add to your `settings.json` for the best experience:
 
 ## Customization
 
-All colors live in `themes/hep-contrast.json`. The file is structured with clear section comments so you can tune individual roles without hunting through an undocumented blob.
+All colors are defined in **`palette.toml`** as `key = [light_value, dark_value]` pairs, grouped into named sections (`[syntax]`, `[bg_ramp]`, `[ansi]`, etc.).
 
-Key sections:
-- `colors` — editor chrome, sidebar, terminal, status bar, etc.
-- `tokenColors` — TextMate grammar scopes (language-agnostic fallback)
-- `semanticTokenColors` — LSP semantic tokens (clangd / pylsp)
+To change something:
+1. Edit the hex value(s) in `palette.toml`
+2. Run `node build.js`
+3. VS Code picks up the change immediately if you're in Extension Development Host (F5)
+
+The theme-building logic lives in `build.js`, which has three sections:
+- **`buildTheme` → `colors`** — editor chrome, sidebar, terminal (ANSI 16), status bar, diff, peek
+- **`buildTheme` → `tokenColors`** — TextMate grammar scopes (language-agnostic fallback)
+- **`buildTheme` → `semanticTokenColors`** — LSP semantic tokens (clangd / pylsp)

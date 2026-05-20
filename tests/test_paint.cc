@@ -9,7 +9,10 @@
 #include "TGraph.h"
 #include "TH1D.h"
 #include "TH2D.h"
+#include "TProfile.h"
 #include "TTree.h"
+
+#include <toml++/toml.hpp>
 
 #include "test_assert.hh"
 #include "Paint.hh"
@@ -69,6 +72,13 @@ namespace {
         graph.SetName("G1");
         graph.SetTitle("Graph One");
         graph.Write();
+
+        file.cd();
+        TDirectory* profiles = file.mkdir("Profiles");
+        profiles->cd();
+        TProfile prof("MeanPt", "Mean pT vs eta", 10, -2.5, 2.5, 0.0, 20.0);
+        for (int i = 0; i < 10; ++i) prof.Fill(-2.0 + 0.4 * i, 1.0 + i * 0.5);
+        prof.Write();
 
         file.cd();
         TTree tree("BadTree", "Unsupported tree");
@@ -188,6 +198,19 @@ int main() {
     TEST_TRUE(std::filesystem::exists(kResultsDir / "heat.png"));
     TEST_PASS("render smoke outputs");
 
+    {
+        // Phase 24: explicit mode = "overlay" + source_search must not be silently promoted to Grid.
+        const std::filesystem::path cfg = kTmpDir / "explicit_mode.toml";
+        writeText(cfg,
+            commonHeader("[\"ov\"]") +
+            "[paint.ov]\n"
+            "mode = \"overlay\"\n"
+            "source_search = \"Repeated_Hist\"\n");
+        Paint::RenderPlan p = Paint::resolveBook(Paint::loadBook(cfg.string()));
+        TEST_EQ(static_cast<int>(p.results[0].mode), static_cast<int>(Paint::Mode::Overlay));
+        TEST_PASS("explicit mode = overlay not overridden by source_search auto-promotion");
+    }
+
     const std::filesystem::path mixedConfig = kTmpDir / "mixed.toml";
     writeText(mixedConfig,
         commonHeader("[\"bad\"]") +
@@ -218,6 +241,215 @@ int main() {
         Paint::RenderPlan bad = Paint::resolveBook(Paint::loadBook(missingConfig.string()));
     }, "not found");
     TEST_PASS("missing path fails");
+
+    {
+        // Phase 23: maximum = 0.0 must set hasMaximum = true, not evaluate abs(0.0) > 0.
+        auto cfg = toml::parse("maximum = 0.0\n");
+        Paint::Style s;
+        Paint::mergeStyle(cfg, s);
+        TEST_TRUE(s.hasMaximum);
+        TEST_EQ(s.maximum, 0.0);
+        TEST_PASS("maximum = 0.0 sets hasMaximum = true");
+    }
+
+    {
+        // Phase 29: unknown colour token throws instead of silently returning kBlack.
+        expectThrows([]() { Paint::parseColor("kRedd"); }, "unknown color token");
+        TEST_PASS("unknown colour token throws");
+    }
+
+    {
+        // Phase 30: type mismatch (string value for int key) throws.
+        auto cfg = toml::parse("line_width = \"thick\"\n");
+        Paint::Style s;
+        expectThrows([&]() { Paint::mergeStyle(cfg, s); }, "type mismatch");
+        TEST_PASS("type mismatch for int key throws");
+    }
+
+    {
+        // Phase 34: TProfile is detected as ObjectKind::TProfile, not Hist1D.
+        const std::filesystem::path cfg = kTmpDir / "profile.toml";
+        writeText(cfg,
+            commonHeader("[\"prof\"]") +
+            "[paint.prof]\n"
+            "sources = [{ path = \"Profiles/MeanPt\" }]\n");
+        Paint::RenderPlan p = Paint::resolveBook(Paint::loadBook(cfg.string()));
+        TEST_EQ(static_cast<int>(p.results[0].sources[0].kind),
+                static_cast<int>(Paint::ObjectKind::TProfile));
+        TEST_PASS("TProfile detected as ObjectKind::TProfile");
+    }
+
+    {
+        // Phase 35: palette assigns different line colors to source_search results.
+        const std::filesystem::path cfg = kTmpDir / "palette.toml";
+        writeText(cfg,
+            commonHeader("[\"pal\"]") +
+            "[paint.pal]\n"
+            "mode = \"overlay\"\n"
+            "source_search = \"Repeated_Hist\"\n"
+            "palette = [\"kRed\", \"kBlue\"]\n");
+        Paint::RenderPlan p = Paint::resolveBook(Paint::loadBook(cfg.string()));
+        const auto& srcs = p.results[0].sources;
+        TEST_TRUE(srcs.size() >= 2);
+        TEST_EQ(srcs[0].style.line.color, Paint::parseColor("kRed"));
+        TEST_EQ(srcs[1].style.line.color, Paint::parseColor("kBlue"));
+        TEST_PASS("palette assigns per-source line colors");
+    }
+
+    {
+        // Phase 36: glob wildcard in source_search.
+        const std::filesystem::path cfg = kTmpDir / "glob.toml";
+        writeText(cfg,
+            commonHeader("[\"g\"]") +
+            "[paint.g]\n"
+            "mode = \"grid\"\n"
+            "source_search = \"*_Hist\"\n");
+        Paint::RenderPlan p = Paint::resolveBook(Paint::loadBook(cfg.string()));
+        // Fixture has: Validated/Validated_Mass_Invariant_Hist, Validated/Repeated_Hist,
+        // Other/Repeated_Hist — all end in _Hist
+        TEST_TRUE(p.results[0].sources.size() >= 3);
+        TEST_PASS("glob wildcard in source_search matches multiple objects");
+    }
+
+    {
+        // Phase 37: source_type token matching is case-insensitive.
+        const std::filesystem::path cfg = kTmpDir / "source_type.toml";
+        writeText(cfg,
+            commonHeader("[\"st\"]") +
+            "[paint.st]\n"
+            "sources = [{ path = \"Validated/Validated_Mass_Invariant_Hist\", source_type = \"th1\" }]\n");
+        // Must not throw — lowercase "th1" should match TH1.
+        Paint::RenderPlan p = Paint::resolveBook(Paint::loadBook(cfg.string()));
+        TEST_EQ(static_cast<int>(p.results[0].sources[0].kind),
+                static_cast<int>(Paint::ObjectKind::Hist1D));
+        TEST_PASS("source_type token matching is case-insensitive");
+    }
+
+    {
+        // Phase 38: default_style = "" opts out of loading the defaults file.
+        const std::filesystem::path cfg = kTmpDir / "no_defaults.toml";
+        writeText(cfg,
+            "[paint]\n"
+            "root_file = \"" + kInputRoot.string() + "\"\n"
+            "result_dir = \"" + kResultsDir.string() + "\"\n"
+            "formats = [\"png\"]\n"
+            "default_style = \"\"\n"
+            "results = [\"nd\"]\n\n"
+            "[paint.nd]\n"
+            "sources = [{ path = \"Validated/Validated_Mass_Invariant_Hist\" }]\n");
+        Paint::PaintBook b = Paint::loadBook(cfg.string());
+        TEST_EQ(b.defaultStylePath, std::string{""});
+        // Must resolve without errors even without a defaults file.
+        Paint::RenderPlan p = Paint::resolveBook(b);
+        TEST_EQ(p.results.size(), std::size_t{1});
+        TEST_PASS("default_style = \"\" opts out of defaults file");
+    }
+
+    {
+        // Phase 39: output_name set in a visual preset is inherited by the result.
+        const std::filesystem::path cfg = kTmpDir / "output_name_preset.toml";
+        writeText(cfg,
+            commonHeader("[\"r1\", \"r2\"]") +
+            "[paint.myPreset]\n"
+            "output_name = \"from_preset\"\n\n"
+            "[paint.r1]\n"
+            "use = \"myPreset\"\n"
+            "sources = [{ path = \"Validated/Validated_Mass_Invariant_Hist\" }]\n\n"
+            "[paint.r2]\n"
+            "use = \"myPreset\"\n"
+            "output_name = \"overridden\"\n"
+            "sources = [{ path = \"Validated/Validated_Mass_Invariant_Hist\" }]\n");
+        Paint::RenderPlan p = Paint::resolveBook(Paint::loadBook(cfg.string()));
+        TEST_EQ(p.results[0].outputName, std::string{"from_preset"});
+        TEST_EQ(p.results[1].outputName, std::string{"overridden"});
+        TEST_PASS("output_name in visual preset is inherited; result-level wins");
+    }
+
+    {
+        // Phase 40: stats fill_color and fill_style are configurable.
+        auto cfg = toml::parse("[stats]\nfill_color = \"kYellow\"\nfill_style = 3001\n");
+        Paint::Style s;
+        if (const toml::table* stats = cfg["stats"].as_table()) Paint::mergeStats(*stats, s.stats);
+        TEST_EQ(s.stats.fillColor, Paint::parseColor("kYellow"));
+        TEST_EQ(s.stats.fillStyle, static_cast<Style_t>(3001));
+        TEST_PASS("stats fill_color and fill_style are configurable");
+    }
+
+    {
+        // Phase 51 gap: preset cycle is detected and throws.
+        const std::filesystem::path cfg = kTmpDir / "cycle.toml";
+        writeText(cfg,
+            commonHeader("[\"r\"]") +
+            "[paint.A]\n"
+            "use = \"B\"\n"
+            "line_color = \"kRed\"\n\n"
+            "[paint.B]\n"
+            "use = \"A\"\n"
+            "line_color = \"kBlue\"\n\n"
+            "[paint.r]\n"
+            "use = \"A\"\n"
+            "sources = [{ path = \"Validated/Validated_Mass_Invariant_Hist\" }]\n");
+        expectThrows([&]() {
+            Paint::resolveBook(Paint::loadBook(cfg.string()));
+        }, "cycle involving");
+        TEST_PASS("preset cycle detection throws");
+    }
+
+    {
+        // Phase 51 gap: source_type mismatch throws.
+        const std::filesystem::path cfg = kTmpDir / "type_mismatch.toml";
+        writeText(cfg,
+            commonHeader("[\"tm\"]") +
+            "[paint.tm]\n"
+            "sources = [{ path = \"Validated/Validated_Mass_Invariant_Hist\","
+            " source_type = \"TH2\" }]\n");
+        expectThrows([&]() {
+            Paint::resolveBook(Paint::loadBook(cfg.string()));
+        }, "expected TH2");
+        TEST_PASS("source_type mismatch throws expected kind error");
+    }
+
+    {
+        // Phase 51 gap: '?' wildcard matches single character in source_search.
+        const std::filesystem::path cfg = kTmpDir / "qmark.toml";
+        writeText(cfg,
+            commonHeader("[\"q\"]") +
+            "[paint.q]\n"
+            "mode = \"grid\"\n"
+            "source_search = \"?epeated_Hist\"\n");
+        Paint::RenderPlan p = Paint::resolveBook(Paint::loadBook(cfg.string()));
+        TEST_TRUE(p.results[0].sources.size() >= 2);
+        TEST_PASS("? wildcard matches single character in source_search");
+    }
+
+    {
+        // Phase 51 gap: empty palette = [] is a no-op (does not crash).
+        const std::filesystem::path cfg = kTmpDir / "empty_palette.toml";
+        writeText(cfg,
+            commonHeader("[\"ep\"]") +
+            "[paint.ep]\n"
+            "mode = \"overlay\"\n"
+            "source_search = \"Repeated_Hist\"\n"
+            "palette = []\n");
+        Paint::RenderPlan p = Paint::resolveBook(Paint::loadBook(cfg.string()));
+        TEST_TRUE(p.results[0].sources.size() >= 2);
+        TEST_PASS("empty palette = [] is a no-op");
+    }
+
+    {
+        // Phase 51 gap: axis_use subsection preset applies axis title.
+        const std::filesystem::path cfg = kTmpDir / "axis_use.toml";
+        writeText(cfg,
+            commonHeader("[\"au\"]") +
+            "[paint.myAxis.axis]\n"
+            "title_x = \"My X Axis\"\n\n"
+            "[paint.au]\n"
+            "axis_use = \"myAxis\"\n"
+            "sources = [{ path = \"Validated/Validated_Mass_Invariant_Hist\" }]\n");
+        Paint::RenderPlan p = Paint::resolveBook(Paint::loadBook(cfg.string()));
+        TEST_EQ(p.results[0].style.axis.titleX, std::string{"My X Axis"});
+        TEST_PASS("axis_use subsection preset applies axis title to result");
+    }
 
     std::cout << "ALL TESTS PASSED\n";
     return 0;

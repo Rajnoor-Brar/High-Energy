@@ -76,7 +76,7 @@ namespace Monitor {
             std::lock_guard<std::mutex> lock(mutex_);
             runStatPath_             = "";
             threadStatDirectory_     = "";
-            pendingActions_.reset();
+            actionQueue_.clear();
             latestSnapshot_.reset();
             threadSnapshots_.clear();
             dirtyThreadSnapshots_.clear();
@@ -115,7 +115,7 @@ namespace Monitor {
             const Record::Paths& paths = writer.paths();
             runStatPath_             = paths.runStatName;
             threadStatDirectory_     = paths.threadStatDirectory;
-            pendingActions_.reset();
+            actionQueue_.clear();
             latestSnapshot_.reset();
             threadSnapshots_.clear();
             dirtyThreadSnapshots_.clear();
@@ -133,7 +133,7 @@ namespace Monitor {
             RunSnapshot snapshot = makeSnapshot(watch_, RunPhase::Initialisation);
             snapshot.eta         = paths.fileTitle.Data();
             latestSnapshot_      = std::move(snapshot);
-            pendingActions_      = PendingActions{RenderStatus, DontRenderBar, WriteRunStat};
+            pushAction(*latestSnapshot_, PendingActions{RenderStatus, DontRenderBar, WriteRunStat});
         }
         condition_.notify_one();
     }
@@ -143,7 +143,7 @@ namespace Monitor {
         {
             std::lock_guard<std::mutex> lock(mutex_);
             latestSnapshot_ = std::move(snapshot);
-            mergePending(PendingActions{RenderStatus, RenderBar, WriteRunStat});
+            pushAction(*latestSnapshot_, PendingActions{RenderStatus, RenderBar, WriteRunStat});
             stopRequested_  = true;
         }
         condition_.notify_one();

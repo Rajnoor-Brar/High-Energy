@@ -3,9 +3,13 @@ event_count = 100_000
 
 [probe]
 probe_threads    = 4              # ROOT readers; 0 = auto (1/3 of hw-2)
-analysis_threads = 4               # collector threads invoking Lambda::rootAnalysis
+analysis_threads = 4               # CollectorThread mode: N collector threads pop events and invoke
+                                   # Lambda::rootAnalysis concurrently. Ignored in WorkerThread mode.
 input_file = "output/Lambda_Data/_08/Lambda_Recons_7000GeV_10M.root"
 
+# Index branch name is input-file-specific — specify whatever the source ROOT
+# file actually uses.  External files (e.g. Lambda_Recons_7000GeV_10M.root)
+# use "Index"; Writer-generated data from _Lambda_Data uses "event_index".
 event_particles  = [
                         ["protons",0,"Protons",[["pX","D"],["pY","D"],["pZ","D"],["Energy","D"]],[["Index","I"]]],
                         ["pions",0,"Pions",[["pX","D"],["pY","D"],["pZ","D"],["Energy","D"]],[["Index","I"]]]
@@ -60,13 +64,16 @@ notes        = ""
 
 [monitor]
 true_time_at_config = true
+
+[monitor.intervals]
 print_interval            = 1000       # events
 check_interval            = 100000   # events (stall-check cadence)
 checkpoint_interval       = 100000   # events between checkpoint snapshots (WriterMT.md Phase 1)
 heartbeat_interval        = 2000     # milliseconds (terminal-status freshness)
 terminal_refresh_interval = 2        # minutes
 program_stall_threshold   = 5        # minutes
-# not yet used
+
+[monitor.logs]
 save_checkpoints = false
 save_log_threads = false
 save_heartbeat = false
