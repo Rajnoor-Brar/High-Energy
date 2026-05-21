@@ -1,0 +1,105 @@
+# Monitor configuration template.
+# Source readers:
+#   Config::validateMonitorSection  validates rejected/moved keys
+#   Monitor::configureMonitor       -> Monitor::AsyncLogger, Monitor::PacingInfo
+#
+# All [monitor.*] keys are optional. Absent keys use AsyncLogger defaults.
+# The following legacy top-level keys are REJECTED with a runtime error;
+# use the sub-table paths shown:
+#   [monitor].print_interval            -> [monitor.intervals].print_interval
+#   [monitor].heartbeat_interval        -> [monitor.intervals].heartbeat_interval
+#   [monitor].terminal_refresh_interval -> [monitor.intervals].terminal_refresh_interval
+#   [monitor].program_stall_threshold   -> [monitor.intervals].program_stall_threshold
+#   [monitor].checkpoint_interval       -> [monitor.intervals].checkpoint_interval
+#   [monitor].save_heartbeat            -> [monitor.logs].save_heartbeat
+#   [monitor].save_checkpoints          -> [monitor.logs].save_checkpoints
+#   [monitor].save_log_threads          -> [monitor.logs].save_log_threads
+#   [monitor].save_final_log            -> [monitor.logs].save_final_log
+#   [monitor].bin_count                 -> [record].bin_count
+#   [monitor].hist_scaling              -> [record].hist_scaling
+
+[monitor]
+# When true, the wall-clock run start is recorded at config time rather than
+# at the first event. Use when profiling config overhead is relevant.
+# Stored in Monitor::AsyncLogger.preserveConfigStart_.
+true_time_at_config = false
+
+[monitor.intervals]
+# Events between terminal status line updates.
+# Stored in Monitor::PacingInfo.printInterval.
+print_interval = 1000
+
+# Milliseconds between heartbeat WatchRequests written to the ROOT file.
+# Only active when [monitor.logs].save_heartbeat = true.
+# Stored in Monitor::PacingInfo.heartbeatMs (as microseconds internally).
+heartbeat_interval = 2000
+
+# Minutes between terminal progress-bar and status full refreshes, in addition to refreshes by print_interval and progress of run.
+# Stored in Monitor::PacingInfo.terminalRefresh.
+terminal_refresh_interval = 2.0
+
+# Minutes of no recorded events before a stall warning is emitted.
+# Stored in Monitor::PacingInfo.stallThreshold.
+program_stall_threshold = 5.0
+
+# Events between checkpoint WatchRequests written to the ROOT file.
+# Only active when [monitor.logs].save_checkpoints = true.
+# Stored in AsyncLogger checkpoint emission state.
+checkpoint_interval = 100000
+
+[monitor.logs]
+# Emit a Heartbeat WatchRequest every heartbeat_interval ms.
+# Results in intermediate ROOT file snapshots. Slight I/O overhead.
+# Stored in Monitor::AsyncLogger.saveHeartbeat_.
+save_heartbeat = false
+
+# Emit a Checkpoint WatchRequest every checkpoint_interval events.
+# Allows mid-run histogram inspection. Stored in AsyncLogger.saveCheckpoints_.
+save_checkpoints = false
+
+# Accept publishThreadStats calls and write per-thread timing logs.
+# Stored in Monitor::AsyncLogger.saveLogThreads_.
+save_log_threads = false
+
+# Write the final run-stat JSON summary at Writer::finish.
+# Stored in Monitor::AsyncLogger.saveFinalLog_.
+save_final_log = true
+
+# =============================================================================
+# USAGE PATTERNS
+# =============================================================================
+
+# ── Quiet production run (minimal file I/O) ───────────────────────────────────
+#
+# [monitor.logs]
+# save_heartbeat   = false
+# save_checkpoints = false
+# save_log_threads = false
+# save_final_log   = true    # keep the end-of-run summary
+
+# ── Debug / profiling run ─────────────────────────────────────────────────────
+#
+# [monitor]
+# true_time_at_config = true
+#
+# [monitor.intervals]
+# print_interval     = 100     # update terminal every 100 events
+# heartbeat_interval = 500     # snapshot ROOT file every 500 ms
+#
+# [monitor.logs]
+# save_heartbeat   = true
+# save_checkpoints = true
+# save_log_threads = true
+# save_final_log   = true
+
+# ── Long overnight run (reduce terminal noise, keep checkpoints) ──────────────
+#
+# [monitor.intervals]
+# print_interval            = 10000
+# checkpoint_interval       = 500000
+# terminal_refresh_interval = 10.0   # refresh every 10 minutes
+# program_stall_threshold   = 30.0   # allow 30 min before stall warning
+#
+# [monitor.logs]
+# save_checkpoints = true    # recover histogram state if process is killed
+# save_final_log   = true

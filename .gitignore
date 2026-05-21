@@ -1,5 +1,6 @@
 *.exe
 output/*
+outputs/*
 dump
 examples
 archive/*
@@ -8,3 +9,7 @@ legacy/
 .DS_Store
 output/Lambda_Reconstruction/.DS_Store
 datasets/*
+tests/tmp_paint/
+results/*
+*.trace
+*.trace/*

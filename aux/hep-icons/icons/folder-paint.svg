@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Folder body: blue (visualization / event display) -->
+  <path fill="#1565C0" d="m13.844 7.536-1.288-1.072A2 2 0 0 0 11.276 6H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h24a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2H15.124a2 2 0 0 1-1.28-.464"/>
+  <!-- Paintbrush: diagonal shaft + tapered tip -->
+  <path fill="white" d="M27 14L30 17L19 26.5L16.5 24Z"/>
+  <path fill="white" d="M16.5 24L14.5 27.5C13.8 29.2 16 30.2 17 28.5L19 26.5Z"/>
+</svg>

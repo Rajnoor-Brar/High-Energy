@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Folder body: deep purple (test beam / beam probe / inspection) -->
+  <path fill="#6A1B9A" d="m13.844 7.536-1.288-1.072A2 2 0 0 0 11.276 6H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h24a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2H15.124a2 2 0 0 1-1.28-.464"/>
+  <!-- Magnifying glass: circle lens + handle -->
+  <circle fill="none" stroke="white" stroke-width="2.2" cx="20" cy="18" r="6"/>
+  <line stroke="white" stroke-width="2.5" stroke-linecap="round"
+        x1="24.5" y1="22.5" x2="29" y2="27"/>
+</svg>

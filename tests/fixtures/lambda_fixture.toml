@@ -1,0 +1,57 @@
+# Minimal config used by test_rootAnalysis_smoke — wraps the 50-event fixture.
+# All mandatory TOML keys are present; limits point at the fixture limits file
+# so the test is fully self-contained inside tests/fixtures/.
+
+[events]
+event_count = 50
+
+[threads]
+probe    = 4
+analysis = 2
+writer   = 2
+
+[probe]
+input_file = "tests/fixtures/lambda_fixture.root"
+
+[probe.events.particles.protons]
+tree            = "Protons"
+spec            = 0
+branches        = [["pX","D"], ["pY","D"], ["pZ","D"], ["Energy","D"]]
+index           = ["event_index", "I"]
+index_sorted    = true
+index_ascending = true
+index_monotonic = true
+
+[probe.events.particles.pions]
+tree            = "Pions"
+spec            = 0
+branches        = [["pX","D"], ["pY","D"], ["pZ","D"], ["Energy","D"]]
+index           = ["event_index", "I"]
+index_sorted    = true
+index_ascending = true
+index_monotonic = true
+
+[record]
+serial     = 0
+sr_padding = 1
+hist_scaling = 1.0
+
+[record.paths]
+directory            = "output/test/"
+output_log_directory = "output/test/logs/"
+checkpoint_directory = "output/test/checkpoints/"
+serialDirectory      = false
+logInSubDir          = true
+checkpointsInSubDir  = true
+
+[record.file]
+prefix = "fixture_smoke"
+serial = false
+energy = false
+events = false
+
+[lambda]
+hist_limits      = "tests/fixtures/lambda_fixture_limits.toml"
+delta_mass_gev   = 0.1
+delta_theta_rad  = 0.1
+reserved_protons = 0

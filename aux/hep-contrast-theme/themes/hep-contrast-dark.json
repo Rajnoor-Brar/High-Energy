@@ -1,0 +1,700 @@
+{
+  "name": "HEP Contrast Dark",
+  "type": "dark",
+  "colors": {
+    "editorError.background": "#3B1B1B",
+    "editorWarning.background": "#2E2800"
+  },
+  "tokenColors": [
+    {
+      "name": "Base text",
+      "scope": [
+        "source",
+        "text"
+      ],
+      "settings": {}
+    },
+    {
+      "name": "Comments",
+      "scope": [
+        "comment",
+        "punctuation.definition.comment"
+      ],
+      "settings": {
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "name": "Doc comment tags",
+      "scope": [
+        "comment.block.documentation storage.type.class.jsdoc",
+        "comment.block.doxygen keyword",
+        "comment.line.double-slash.doxygen keyword",
+        "storage.type.class.jsdoc"
+      ],
+      "settings": {
+        "fontStyle": "italic bold"
+      }
+    },
+    {
+      "name": "Doc comment parameter names",
+      "scope": "comment.block.doxygen variable",
+      "settings": {
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "name": "Control-flow keywords",
+      "scope": [
+        "keyword.control",
+        "keyword.control.flow",
+        "keyword.control.conditional",
+        "keyword.control.loop",
+        "keyword.control.return",
+        "keyword.control.exception"
+      ],
+      "settings": {
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Other keywords",
+      "scope": [
+        "keyword",
+        "keyword.other",
+        "storage.modifier",
+        "storage.type.modifier"
+      ],
+      "settings": {}
+    },
+    {
+      "name": "C++ storage types (int, double, void, auto, …)",
+      "scope": [
+        "storage.type",
+        "storage.type.primitive",
+        "storage.type.built-in",
+        "keyword.type"
+      ],
+      "settings": {
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "C++ new / delete / sizeof / this",
+      "scope": [
+        "keyword.operator.new",
+        "keyword.operator.delete",
+        "keyword.operator.sizeof",
+        "variable.language.this",
+        "variable.language.self"
+      ],
+      "settings": {
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Python self / cls",
+      "scope": [
+        "variable.parameter.function.language.special"
+      ],
+      "settings": {
+        "fontStyle": "bold italic"
+      }
+    },
+    {
+      "name": "import / from / as",
+      "scope": [
+        "keyword.control.import",
+        "keyword.control.from-import",
+        "keyword.other.import",
+        "keyword.other.use"
+      ],
+      "settings": {
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Preprocessor directive",
+      "scope": [
+        "keyword.control.directive",
+        "keyword.control.directive.include",
+        "keyword.control.directive.define",
+        "keyword.control.directive.pragma",
+        "keyword.control.directive.conditional",
+        "meta.preprocessor keyword",
+        "meta.preprocessor.include keyword"
+      ],
+      "settings": {
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Macro names",
+      "scope": [
+        "entity.name.function.preprocessor",
+        "meta.preprocessor.macro entity.name.function"
+      ],
+      "settings": {}
+    },
+    {
+      "name": "Preprocessor include path",
+      "scope": [
+        "meta.preprocessor.include string",
+        "string.quoted.other.lt-gt.include"
+      ],
+      "settings": {}
+    },
+    {
+      "name": "Class / struct / enum names",
+      "scope": [
+        "entity.name.type",
+        "entity.name.type.class",
+        "entity.name.type.struct",
+        "entity.name.type.enum",
+        "entity.name.type.template",
+        "entity.name.class",
+        "support.class"
+      ],
+      "settings": {
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Inherited / used type",
+      "scope": [
+        "entity.other.inherited-class",
+        "entity.name.type.base-class"
+      ],
+      "settings": {
+        "fontStyle": "bold italic"
+      }
+    },
+    {
+      "name": "Python decorators",
+      "scope": [
+        "meta.decorator",
+        "entity.name.function.decorator",
+        "punctuation.definition.decorator"
+      ],
+      "settings": {
+        "fontStyle": "bold italic"
+      }
+    },
+    {
+      "name": "Template type parameters",
+      "scope": [
+        "storage.type.template",
+        "entity.name.type.template-parameter"
+      ],
+      "settings": {}
+    },
+    {
+      "name": "Namespace names",
+      "scope": [
+        "entity.name.namespace",
+        "entity.name.type.namespace"
+      ],
+      "settings": {}
+    },
+    {
+      "name": "Scope resolution ::",
+      "scope": [
+        "punctuation.separator.scope-resolution",
+        "punctuation.accessor.double-colon"
+      ],
+      "settings": {}
+    },
+    {
+      "name": "Function / method definition",
+      "scope": [
+        "entity.name.function",
+        "entity.name.function.member",
+        "entity.name.function.definition"
+      ],
+      "settings": {
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Function call",
+      "scope": [
+        "meta.function-call entity.name.function",
+        "meta.function-call.generic entity.name.function"
+      ],
+      "settings": {}
+    },
+    {
+      "name": "Support functions",
+      "scope": [
+        "support.function",
+        "support.function.builtin",
+        "support.function.std"
+      ],
+      "settings": {}
+    },
+    {
+      "name": "Lambda",
+      "scope": [
+        "meta.lambda",
+        "storage.type.lambda",
+        "punctuation.definition.lambda"
+      ],
+      "settings": {
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "name": "Function parameters",
+      "scope": [
+        "variable.parameter",
+        "meta.function.parameter variable"
+      ],
+      "settings": {}
+    },
+    {
+      "name": "Member variables",
+      "scope": [
+        "variable.other.member",
+        "variable.other.property",
+        "variable.other.object.property"
+      ],
+      "settings": {}
+    },
+    {
+      "name": "Local / other variables",
+      "scope": [
+        "variable",
+        "variable.other",
+        "variable.other.local",
+        "variable.other.readwrite"
+      ],
+      "settings": {}
+    },
+    {
+      "name": "Constants (ALL_CAPS / constexpr)",
+      "scope": [
+        "variable.other.constant",
+        "entity.name.variable.constant",
+        "support.constant"
+      ],
+      "settings": {
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Python builtins",
+      "scope": "support.function.builtin.python",
+      "settings": {}
+    },
+    {
+      "name": "Strings",
+      "scope": [
+        "string",
+        "string.quoted",
+        "string.quoted.double",
+        "string.quoted.single",
+        "string.template"
+      ],
+      "settings": {}
+    },
+    {
+      "name": "Raw / byte strings",
+      "scope": [
+        "string.quoted.raw",
+        "string.quoted.other",
+        "string.other"
+      ],
+      "settings": {
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "name": "Escape sequences",
+      "scope": [
+        "constant.character.escape",
+        "constant.other.placeholder"
+      ],
+      "settings": {
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Numbers",
+      "scope": [
+        "constant.numeric",
+        "constant.numeric.integer",
+        "constant.numeric.float",
+        "constant.numeric.hex",
+        "constant.numeric.octal",
+        "constant.numeric.binary"
+      ],
+      "settings": {
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Boolean / null / nullptr / None",
+      "scope": [
+        "constant.language",
+        "constant.language.boolean",
+        "constant.language.null",
+        "constant.language.nullptr"
+      ],
+      "settings": {
+        "fontStyle": "bold italic"
+      }
+    },
+    {
+      "name": "Operators",
+      "scope": [
+        "keyword.operator",
+        "keyword.operator.arithmetic",
+        "keyword.operator.assignment",
+        "keyword.operator.comparison",
+        "keyword.operator.logical",
+        "keyword.operator.bitwise",
+        "keyword.operator.increment",
+        "keyword.operator.decrement",
+        "keyword.operator.pointer",
+        "keyword.operator.address"
+      ],
+      "settings": {
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Arrow / member access",
+      "scope": [
+        "punctuation.accessor",
+        "punctuation.separator.dot-access",
+        "punctuation.accessor.arrow"
+      ],
+      "settings": {}
+    },
+    {
+      "name": "Brackets / parens / braces",
+      "scope": [
+        "punctuation.section",
+        "punctuation.section.block",
+        "punctuation.section.parens",
+        "punctuation.definition.bracket",
+        "meta.brace.round",
+        "meta.brace.square",
+        "meta.brace.curly"
+      ],
+      "settings": {}
+    },
+    {
+      "name": "Semicolons / commas",
+      "scope": [
+        "punctuation.terminator",
+        "punctuation.separator.comma",
+        "punctuation.separator.colon"
+      ],
+      "settings": {}
+    },
+    {
+      "name": "Template angle brackets",
+      "scope": [
+        "punctuation.section.angle-brackets",
+        "punctuation.definition.typeparameters"
+      ],
+      "settings": {}
+    },
+    {
+      "name": "C++ cast keywords",
+      "scope": [
+        "keyword.operator.cast",
+        "keyword.operator.word",
+        "keyword.operator.expression"
+      ],
+      "settings": {
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "C++ override / final / virtual / inline / constexpr",
+      "scope": [
+        "storage.modifier.override",
+        "storage.modifier.final",
+        "storage.modifier.virtual",
+        "storage.modifier.inline",
+        "storage.modifier.constexpr",
+        "storage.modifier.explicit"
+      ],
+      "settings": {
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "name": "Pointer / reference declarators",
+      "scope": [
+        "storage.modifier.pointer",
+        "storage.modifier.reference"
+      ],
+      "settings": {
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Python f-string braces",
+      "scope": [
+        "punctuation.definition.template-expression",
+        "meta.fstring punctuation.definition.string"
+      ],
+      "settings": {}
+    },
+    {
+      "name": "Python magic methods",
+      "scope": [
+        "support.function.magic",
+        "meta.function.python entity.name.function.magic"
+      ],
+      "settings": {
+        "fontStyle": "bold italic"
+      }
+    },
+    {
+      "name": "Python type hints",
+      "scope": [
+        "meta.function.annotation",
+        "meta.function.annotation.return"
+      ],
+      "settings": {}
+    },
+    {
+      "name": "Markdown headings",
+      "scope": [
+        "markup.heading",
+        "entity.name.section.markdown",
+        "heading.1 entity.name",
+        "heading.2 entity.name"
+      ],
+      "settings": {
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Markdown bold",
+      "scope": "markup.bold",
+      "settings": {
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Markdown italic",
+      "scope": "markup.italic",
+      "settings": {
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "name": "Markdown inline code",
+      "scope": "markup.inline.raw",
+      "settings": {}
+    },
+    {
+      "name": "Markdown links",
+      "scope": [
+        "markup.underline.link",
+        "string.other.link"
+      ],
+      "settings": {}
+    },
+    {
+      "name": "CMake commands",
+      "scope": "keyword.cmake",
+      "settings": {
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "CMake variables",
+      "scope": [
+        "variable.other.cmake",
+        "variable.cmake"
+      ],
+      "settings": {}
+    },
+    {
+      "name": "Shell built-in commands",
+      "scope": "support.function.builtin.shell",
+      "settings": {
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Shell variable expansion",
+      "scope": [
+        "variable.other.normal.shell",
+        "punctuation.definition.variable.shell"
+      ],
+      "settings": {}
+    },
+    {
+      "name": "JSON / YAML / TOML booleans",
+      "scope": [
+        "constant.language.json",
+        "constant.language.yaml",
+        "constant.language.toml"
+      ],
+      "settings": {
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "TOML / YAML keys",
+      "scope": [
+        "support.type.property-name",
+        "entity.name.tag.yaml",
+        "keyword.key.group.toml",
+        "meta.mapping.key string"
+      ],
+      "settings": {
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "TOML section headers",
+      "scope": [
+        "entity.name.section.group-title.toml",
+        "punctuation.definition.table.toml"
+      ],
+      "settings": {
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "YAML anchors / aliases",
+      "scope": [
+        "entity.name.type.anchor.yaml",
+        "variable.other.alias.yaml"
+      ],
+      "settings": {}
+    },
+    {
+      "name": "JSON keys",
+      "scope": "support.type.property-name.json",
+      "settings": {
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "CMND namespace",
+      "scope": "entity.name.namespace.cmnd",
+      "settings": {}
+    },
+    {
+      "name": "CMND namespace separator",
+      "scope": "punctuation.separator.namespace.cmnd",
+      "settings": {}
+    },
+    {
+      "name": "CMND parameter",
+      "scope": "variable.parameter.cmnd",
+      "settings": {}
+    },
+    {
+      "name": "CMND assignment operator",
+      "scope": "keyword.operator.assignment.cmnd",
+      "settings": {}
+    },
+    {
+      "name": "CMND value — boolean (on/off/true/false)",
+      "scope": "constant.language.boolean.cmnd",
+      "settings": {
+        "fontStyle": "bold italic"
+      }
+    },
+    {
+      "name": "CMND value — numeric (int, float, PDG ID)",
+      "scope": "constant.numeric.cmnd",
+      "settings": {
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "CMND value — string",
+      "scope": "string.unquoted.cmnd",
+      "settings": {}
+    },
+    {
+      "name": "CMND disabled command (commented-out setting)",
+      "scope": "comment.line.exclamation.disabled.cmnd",
+      "settings": {
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "name": "Invalid / deprecated",
+      "scope": [
+        "invalid",
+        "invalid.deprecated"
+      ],
+      "settings": {
+        "fontStyle": "underline"
+      }
+    }
+  ],
+  "semanticHighlighting": true,
+  "semanticTokenColors": {
+    "namespace": {},
+    "namespace.declaration": {},
+    "class": {
+      "bold": true
+    },
+    "struct": {
+      "bold": true
+    },
+    "enum": {
+      "bold": true
+    },
+    "enumMember": {
+      "bold": true
+    },
+    "type": {},
+    "typeParameter": {
+      "italic": true
+    },
+    "interface": {
+      "italic": true
+    },
+    "function": {},
+    "function.declaration": {
+      "bold": true
+    },
+    "method": {},
+    "method.declaration": {
+      "bold": true
+    },
+    "event": {},
+    "variable": {},
+    "variable.static": {},
+    "parameter": {},
+    "property": {},
+    "property.static": {},
+    "selfParameter": {
+      "bold": true,
+      "italic": true
+    },
+    "clsParameter": {
+      "bold": true,
+      "italic": true
+    },
+    "macro": {
+      "bold": true
+    },
+    "keyword": {},
+    "decorator": {
+      "italic": true
+    },
+    "string": {},
+    "number": {
+      "bold": true
+    },
+    "operator": {},
+    "comment": {
+      "italic": true
+    }
+  }
+}

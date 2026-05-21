@@ -1,0 +1,185 @@
+# Probe configuration template.
+# Source readers:
+#   Config::readProbeSection  -> Config::ProbeConfig
+#   Probe::parseProbeConfig   -> Probe::ProbeConfig (event/feed bucket schema)
+#
+# Thread-count precedence (highest to lowest):
+#   1. [threads].probe / [threads].analysis  (global block, see Other.toml)
+#   2. [probe].probe_threads / analysis_threads  (per-section override)
+#   3. Config::resolveSectionThreadCount(0)  (auto: (hw-2)/3 floored at 1)
+#
+# Branch type codes (ROOT leaf-list codes):
+#   F=Float_t  D=Double_t  I=Int_t  i=UInt_t  L=Long64_t  l=ULong64_t
+#   O=Bool_t   B=Char_t
+#
+# Coordinate spec ids (probe.events/feed.particles.[*].spec):
+#   0 = Cartesian  (pX, pY, pZ, E)
+#   1 = PtEtaPhiE  (pt, eta, phi, E)
+#   2 = PtEtaPhiM  (pt, eta, phi, mass)
+
+[probe]
+# Input ROOT file path. Stored in Config::ProbeConfig.inputFile.
+input_file = "output/input.root"
+
+# Stream mode hint. Accepted literals: "auto", "events", "feed".
+#   "auto"   — inferred from which buckets are populated (default).
+#   "events" — error if no [probe.events.*] specs are defined.
+#   "feed"   — error if no [probe.feed.*] specs are defined.
+# Stored in Probe::ProbeConfig.requestedMode.
+stream = "auto"
+
+# ROOT reader threads (one TFile partition per thread).
+# Overrides [threads].probe when present and non-zero.
+# Stored in Config::ProbeConfig.probe_threads.
+probe_threads = 0
+
+# Collector/callback threads used in CollectorThread mode.
+# Overrides [threads].analysis when present and non-zero.
+# Stored in Config::ProbeConfig.analysis_threads.
+analysis_threads = 0
+
+# Callback placement. Accepted literals: "CollectorThread", "WorkerThread".
+#   CollectorThread — separate analysis threads pull events from the shared queue.
+#   WorkerThread    — each ROOT reader thread runs the callback directly
+#                     (ignores analysis_threads / [threads].analysis).
+# Stored in Config::ProbeConfig.callback_mode.
+callback_mode = "CollectorThread"
+
+# Shared event queue capacity between reader and analysis threads.
+# 0 means Probe default (10 × probe_threads).
+# Stored in Config::ProbeConfig.queue_capacity.
+queue_capacity = 0
+
+# ── Event bucket: particles ───────────────────────────────────────────────────
+# One sub-table per particle species. Labels are the sub-table key names,
+# discovered automatically — no separate declaration list needed.
+# toml++ iterates sub-tables alphabetically by label, not by definition order.
+# Sub-tables stored as Probe::EventParticleSpec entries in Probe::ProbeConfig.
+
+[probe.events.particles.protons]
+# Source TTree name inside the ROOT file.
+tree = "Protons"
+
+# Coordinate spec id (0/1/2; see header). Stored in EventParticleSpec.coords.
+spec = 0
+
+# Exactly four kinematic branch specs in coord order.
+# Accepted per-entry forms:
+#   ["branch_name", "D"]              two-element array (name + type code)
+#   { name = "branch_name", type = "D" }  inline table
+#   "branch_name"                      bare string (type inferred at runtime;
+#                                       only valid for kinematic branches)
+branches = [["pX","D"], ["pY","D"], ["pZ","D"], ["Energy","D"]]
+
+# Optional auxiliary (non-kinematic) columns. Bare strings not accepted here;
+# use array or inline-table form. Stored in EventParticleSpec.auxBranches.
+# aux = [["charge","I"], { name = "isGlobal", type = "O" }]
+
+# Event index branch [name, type] pair. Stored in EventParticleSpec.indexBranches.
+# Required for event-grouped (non-flat) trees; omit for flat-per-entry trees.
+index = ["event_index", "I"]
+
+# Index property hints that allow ProbeParallel to skip binary search.
+# Stored as bool flags on EventParticleSpec.
+index_sorted    = true   # entries are sorted by index value
+index_ascending = true   # sort order is ascending
+index_monotonic = true   # each index value appears in one contiguous run
+
+[probe.events.particles.pions]
+tree            = "Pions"
+spec            = 0
+branches        = [["pX","D"], ["pY","D"], ["pZ","D"], ["Energy","D"]]
+index           = ["event_index", "I"]
+index_sorted    = true
+index_ascending = true
+index_monotonic = true
+
+# ── Event bucket: nodes ───────────────────────────────────────────────────────
+# Non-particle per-event columns (hit arrays, weights keyed by event index, …).
+# Stored as Probe::EventNodeSpec entries. All branch forms accepted except bare string.
+
+# [probe.events.nodes.hits]
+# tree     = "Hits"
+# branches = [["energy","F"], { name = "channel", type = "I" }]
+# index    = ["event_index", "I"]
+# index_sorted    = true
+# index_ascending = true
+# index_monotonic = true
+
+# ── Feed bucket: particles ────────────────────────────────────────────────────
+# Per-entry scalar four-vectors (NTuple rows, not event-grouped).
+# 'index' key is rejected; feed specs have no event-grouping concept.
+# Stored as Probe::FeedParticleSpec entries.
+
+# [probe.feed.particles.leading_jet]
+# tree     = "Events"
+# spec     = 2
+# branches = ["Jet_pt", "Jet_eta", "Jet_phi", "Jet_mass"]
+
+# ── Feed bucket: nodes ────────────────────────────────────────────────────────
+# Per-entry scalar/array columns with no kinematic interpretation.
+# 'index' key is rejected. Stored as Probe::FeedNodeSpec entries.
+
+# [probe.feed.nodes.weights]
+# tree     = "Events"
+# branches = [["genWeight","F"], { name = "pu_weight", type = "F" }]
+
+# =============================================================================
+# USAGE PATTERNS
+# =============================================================================
+
+# ── Standard two-species reconstruction (proton + pion from same file) ────────
+#
+# [probe]
+# input_file = "output/Lambda_Data/_08/Lambda.root"
+#
+# [probe.events.particles.protons]
+# tree     = "Protons"
+# spec     = 0
+# branches = [["pX","D"],["pY","D"],["pZ","D"],["Energy","D"]]
+# index    = ["event_index","I"]
+# index_sorted = true
+# index_ascending = true
+# index_monotonic = true
+#
+# [probe.events.particles.pions]
+# tree     = "Pions"
+# spec     = 0
+# branches = [["pX","D"],["pY","D"],["pZ","D"],["Energy","D"]]
+# index    = ["event_index","I"]
+# index_sorted = true
+# index_ascending = true
+# index_monotonic = true
+
+# ── External file with different index branch name ────────────────────────────
+#
+# [probe.events.particles.protons]
+# tree  = "Protons"
+# spec  = 0
+# branches = [["pX","D"],["pY","D"],["pZ","D"],["Energy","D"]]
+# index = ["Index","I"]     # external files may use "Index" not "event_index"
+# index_sorted = true
+# index_ascending = true
+# index_monotonic = true
+
+# ── CMS-style pt/eta/phi/mass NTuple with auxiliary charge column ─────────────
+#
+# [probe.events.particles.muon]
+# tree     = "Events"
+# spec     = 2              # PtEtaPhiM
+# branches = ["Muon_pt","Muon_eta","Muon_phi","Muon_mass"]
+# aux      = [["Muon_charge","I"], { name = "Muon_isGlobal", type = "O" }]
+# index    = ["event_number","I"]
+# index_sorted = true
+# index_ascending = true
+# index_monotonic = true
+
+# ── Manual thread tuning for a CPU-bound analysis callback ───────────────────
+#
+# Prefer setting these in the top-level [threads] block (Other.toml).
+# Per-section keys override the global block when non-zero:
+#
+# [probe]
+# probe_threads    = 2    # keep reader count low to avoid I/O contention
+# analysis_threads = 6    # spend most threads on the callback
+# callback_mode    = "CollectorThread"

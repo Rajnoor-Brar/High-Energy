@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- EvtGen decay file: parent particle → 3 daughters (decay tree) -->
+  <circle cx="12" cy="4.5" r="2.3" fill="#33691E"/>
+  <g stroke="#33691E" stroke-width="1.6" stroke-linecap="round" fill="none">
+    <line x1="12" y1="6.8" x2="4.5"  y2="18.5"/>
+    <line x1="12" y1="6.8" x2="12"   y2="18.5"/>
+    <line x1="12" y1="6.8" x2="19.5" y2="18.5"/>
+  </g>
+  <circle cx="4.5"  cy="20.5" r="2" fill="#33691E"/>
+  <circle cx="12"   cy="20.5" r="2" fill="#33691E"/>
+  <circle cx="19.5" cy="20.5" r="2" fill="#33691E"/>
+</svg>

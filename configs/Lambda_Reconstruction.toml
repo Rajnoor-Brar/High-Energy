@@ -1,13 +1,48 @@
 [events]
-nThreads   = 8   # 0 = auto (hardware_concurrency - 2)
+event_count = 100_000
+
+# ── Thread counts ─────────────────────────────────────────────────────────────
+# All worker-pool sizes in one place.  Per-section keys (probe_threads, etc.)
+# override these when present; 0 / absent → auto (hw-2)/3 floored at 1.
+[threads]
+probe    = 4   # ROOT reader threads
+analysis = 4   # CollectorThread collectors (ignored in WorkerThread mode)
+writer   = 4   # Record fill-worker pool
+pythia   = 4   # Pythia generator threads (unused in Probe pipelines)
+
+[probe]
 input_file = "output/Lambda_Data/_08/Lambda_Recons_7000GeV_10M.root"
-event_count = 1000000
+
+# ── Phase 10: new [probe.events.particles.<label>] format ────────────────────
+# Index branch name is input-file-specific — specify whatever the source ROOT
+# file actually uses.  External files (e.g. Lambda_Recons_7000GeV_10M.root)
+# use "Index"; Writer-generated data from _Lambda_Data uses "event_index".
+
+[probe.events.particles.protons]
+tree            = "Protons"
+spec            = 0
+branches        = [["pX","D"], ["pY","D"], ["pZ","D"], ["Energy","D"]]
+index           = ["Index", "I"]
+index_sorted    = true
+index_ascending = true
+index_monotonic = true
+
+[probe.events.particles.pions]
+tree            = "Pions"
+spec            = 0
+branches        = [["pX","D"], ["pY","D"], ["pZ","D"], ["Energy","D"]]
+index           = ["Index", "I"]
+index_sorted    = true
+index_ascending = true
+index_monotonic = true
 
 [record]
-serial     = 9
+serial     = 41
 sr_padding = 2
+bin_count = 400
 
-[paths]
+
+[record.paths]
 directory            = "output/Lambda_Reconstruction/"
 output_log_directory = "logs/"
 checkpoint_directory = "checkpoints/"
@@ -15,20 +50,40 @@ serialDirectory      = true
 logInSubDir          = true
 checkpointsInSubDir  = true
 
-[file]
+[record.file]
 prefix = "Lambda_Recons"
 serial = false
-energy = true
+energy = false
 events = true
 
-[lambda]
-hist_limits     = "Lambda_Limits"
-delta_mass_gev  = 0.15
-delta_theta_rad = 0.1
-
-[metadata]
+[record.metadata]
 dataset_name = "Lambda_MC_pp"
 data_type    = "MC"
 run_period   = ""
 campaign     = ""
 notes        = ""
+
+[monitor]
+true_time_at_config = true
+
+[monitor.intervals]
+print_interval            = 1000       # events
+checkpoint_interval       = 100000   # events between checkpoint snapshots (WriterMT.md Phase 1)
+heartbeat_interval        = 2000     # milliseconds (terminal-status freshness)
+terminal_refresh_interval = 2        # minutes
+program_stall_threshold   = 5        # minutes
+
+[monitor.logs]
+save_checkpoints = false
+save_log_threads = false
+save_heartbeat = false
+save_final_log = true
+
+[pythia]
+cmnd_file = "configs/Lambda_Reconstruction.cmnd"
+
+[lambda]
+hist_limits       = "Lambda_Limits"
+delta_mass_gev    = 0.15
+delta_theta_rad   = 0.1
+reserved_protons  = 20   # baseline beam protons per event (2 × Z; for Ne–Ne: 2 × 10 = 20)

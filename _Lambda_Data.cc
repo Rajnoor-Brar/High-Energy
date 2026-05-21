@@ -1,14 +1,12 @@
 #include <chrono>
-#include <mutex>
-
 #include "Pythia8/Pythia.h"
 #include "Pythia8/PythiaParallel.h"
 
 #include "Record.hh"
 #include "Config.hh"
-#include "Meta.hh"
 #include "Lambda.hh"
 #include "Monitor.hh"
+#include "Config/Configure.hh"
 
 int main(int argc, char* argv[]) {
     Monitor::disable_input_echo();
@@ -18,48 +16,29 @@ int main(int argc, char* argv[]) {
     const std::string configPath = argc > 1 ? argv[1] : "configs/Lambda_Generation.toml";
 
     Pythia8::PythiaParallel pythia;
-    pythia.readFile("configs/Lambda_Reconstruction.cmnd");
-    Config::Root rootParams;
-                 rootParams.beamEnergy = pythia.settings.parm("Beams:eCM") > 0 ? Form("%.0f", pythia.settings.parm("Beams:eCM")) : "UnknownEnergy";
-    Config::Log  logParams;
-    Config::extractConfiguration(configPath, project, logParams, rootParams);
-    Config::openOutputFile(rootParams);
 
-    if (logParams.nThreads > 0) {
-        const std::size_t nThreads = Config::resolveThreadCount(logParams.nThreads);
-        pythia.readString("Parallelism:numThreads = " + std::to_string(nThreads));
-    }
-
-    Lambda::DataObjects dataObjects;
-    Lambda::declareDataObjects(dataObjects, rootParams);
-    std::mutex treeMutex;
-
+    Record::Writer       writer;
     Monitor::AsyncLogger logger;
 
-    logParams.start = std::chrono::system_clock::now();
-    logger.start(rootParams, logParams);
+    Config::configure(configPath, project, pythia, writer, logger);
 
+    Lambda::declareDataObjects(writer);
+
+    writer.bind(logger,
+                []() { return Lambda::dataLogString(); },
+                [&pythia]() { pythia.stat(); },
+                [&pythia]() { pythia.settings.listChanged(); });
+
+    logger.initialise(writer);
     pythia.init();
+    writer.start();
 
-    pythia.run(static_cast<long>(logParams.nEvents), [&](Pythia8::Pythia* worker) {
-        Lambda::pythiaGenerator(*worker, dataObjects, treeMutex, logParams, logger);
+    Lambda::GenerationContext ctx{logger.watch(), logger, writer};
+    pythia.run(static_cast<long>(logger.watch().nEvents), [&](Pythia8::Pythia* worker) {
+        Lambda::dataGenerator(*worker, ctx);
     });
 
-    // Part 6b: persist a TTreeIndex on event_index so downstream readers can
-    // seek to partition boundaries in O(log N) instead of O(N) per worker.
-    // Cost: seconds even for 10M rows. Falls through harmlessly if the tree
-    // is empty or the branch is missing.
-    if (dataObjects.protons) dataObjects.protons->BuildIndex("event_index");
-    if (dataObjects.pions)   dataObjects.pions->BuildIndex("event_index");
-
-    rootParams.outFile->Write("", TObject::kOverwrite);
-    rootParams.outFile->Close();
-
-    logParams.elapsed = std::chrono::duration_cast<Config::uSeconds>(
-        std::chrono::system_clock::now() - logParams.start);
-    logger.finish(logParams, logParams.iEvent.load());
-    Monitor::terminalReport(pythia, rootParams, logParams);
-    Monitor::outputLog(pythia, rootParams, logParams, Lambda::dataLogString());
+    writer.finish(logger.watch().nEvents);
 
     return 0;
 }

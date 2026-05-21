@@ -1,0 +1,340 @@
+# Architecture
+
+Updated: 2026-05-20.
+
+Focus: `utils/` layer. Domain logic lives in `modules/Lambda/`; driver entry
+points live in the top-level `_*.cc` files.
+
+---
+
+## Overview
+
+The runtime is a three-stage pipeline:
+
+```
+[ROOT TTree] ──► Probe ──► user callback ──► Record::Writer ──► [ROOT output]
+                                 │
+                          Monitor::AsyncLogger (heartbeat, progress, stall)
+```
+
+Configuration is parsed once from TOML at startup and distributed to each
+stage via `Config::configure<ProbePipeline>()`.
+
+---
+
+## Config
+
+### Responsibilities
+
+- Parse a TOML file and an optional limits file into `Watch`, `Register`, and
+  `Events` structs.
+- Resolve thread counts (hardware concurrency minus two, clamped to ≥ 1).
+- Parse `[probe.events.particles.*]` / `[probe.feed.*]` sub-tables into a
+  `Probe::ProbeConfig` (Event bucket + optional Feed bucket).
+- Provide `Config::configure<ProbePipeline>()` — a single-call facade that
+  configures Probe, Writer, and Monitor without the caller managing order.
+
+### Key types (`Config/Types.hh`)
+
+| Type | Purpose |
+|---|---|
+| `Watch` | Runtime logging flags and event counter |
+| `Register` | Output paths, histogram bin counts, limits maps |
+| `Events` | Event-count cap, thread counts, particle specs |
+| `Bounds` | `{low, high}` pair for histogram / cut limits |
+| `ParticleLimits` / `EventLimits` | `ParticleProperty`/`EventProperty` → `Bounds` maps |
+
+### Include topology
+
+`Config.hh` wraps `Config/{Types,TypeAid,LimitAid,Defaults,Reader}`.
+`Config/Configure.hh` is excluded from the wrapper because it depends on
+`Probe.hh`, `Record.hh`, and `Monitor.hh`, which all depend on `Config.hh`
+(would be circular). Drivers include `Config/Configure.hh` explicitly after
+their other umbrella includes.
+
+---
+
+## Probe
+
+### Responsibilities
+
+Read ROOT TTrees in parallel and invoke user-supplied callbacks for each entry,
+delivering typed `Event` and `Feed` payloads:
+
+- **`Event`** — multi-row join across particle trees sharing an event-index
+  branch (e.g. protons + pions for the same event).  `event.particle["protons"]`
+  is a `vector<Lorentz>`.
+- **`Feed`** — scalar per-entry payload from a single TTree (one Lorentz per
+  labelled particle, plus named scalar/array node columns).
+
+Both are declared in `Probe/Types.hh`.  TOML configuration places particle and
+node specs in two independent buckets (`[probe.events.*]` and `[probe.feed.*]`)
+parsed into a single `Probe::ProbeConfig`.
+
+### Streaming methods
+
+Three entry points on `ProbeParallel`:
+
+| Method | Mode | When to use |
+|---|---|---|
+| `streamEvents(ce)` | Event-only | `[probe.events.*]` only; throws if Feed-only config |
+| `streamFeed(cf)` | Feed-only | `[probe.feed.*]` only; throws if Events-only config |
+| `stream(ce, cf)` | Mixed | both buckets; both callbacks fire per entry |
+
+Callback signatures: `ce(const Event&, int threadId)` and
+`cf(const Feed&, int threadId)`.
+
+`ActiveMode` (`Events`, `Feed`, `Mixed`) is resolved automatically from the
+populated buckets and an optional `stream =` key in `[probe]`.
+
+### Callback modes
+
+| `CallbackMode` | Behaviour |
+|---|---|
+| `CollectorThread` | Reader workers push frames onto a bounded queue; `analysis_threads` collector threads pop and invoke the callback concurrently. Callbacks must be thread-safe. |
+| `WorkerThread` | Each reader worker invokes the callback directly. `analysis_threads` is ignored. |
+
+### `ProbeIMT`
+
+Alternative reader using ROOT's `TTreeProcessorMT`. Loads events into a
+3-D buffer then flushes in parallel via `run(callback)`.  Event-keyed (flat)
+streams only; uses `vector<EventParticleSpec>` directly.
+
+### Internal structure
+
+```
+Probe/Types          EventParticleSpec, EventNodeSpec, FeedParticleSpec, FeedNodeSpec,
+                     ProbeConfig, Event, Feed, QueuedFrame, ActiveMode, StreamMode
+Probe/BranchControl  ROOT branch introspection, KinBuf, probeFirstKey, enableRootThreadSafety
+Probe/ConfigAid      parseBranchPair, parseBranchList, parseProbeConfig — TOML → ProbeConfig
+Probe/Readers        EventReader/FeedReader base classes; EventParticleReaderRowJoin,
+                     EventNodeReaderArray; FeedParticleReader, FeedNodeReader;
+                     EventStream, FeedStream
+Probe/Parallel       ProbeParallel class declaration
+Probe/ParallelIMT    ProbeIMT class declaration
+Probe/Administration Constructors, getters, activeMode(), partition helpers
+Probe/Configuration  configureProbe() implementations for both classes
+Probe/Methods        Reader ctor bodies, EventStream/FeedStream iteration, IMT flush
+Probe/Directives     streamEvents/streamFeed/stream implementations;
+                     runWorkerThread/runCollectorThread loop bodies
+```
+
+---
+
+## Record
+
+### Responsibilities
+
+Accept fill requests from analysis callbacks, buffer them through a worker
+pool, accumulate per-worker ROOT-object clones, and write merged masters to a
+ROOT output file.
+
+### Threading model
+
+```
+caller thread  ──pushFill()──► bounded deque ──► N fill-worker threads
+                                                       │
+                                              per-worker TH1/TH2/TGraph/TProfile clones
+                                                       │
+                                              watchdog thread
+                                                  │            │
+                                           finalize()    checkpoint() (every K events)
+                                                  │
+                                          mergeAllClones() → TFile::Write()
+```
+
+- **Fill workers**: pull `FillRequest` variants from the deque and dispatch via
+  `if constexpr` to `applyParticleRequest`, `applyHist1DRequest`, etc.
+- **Clones**: each fill-worker has its own ROOT object clones, allocated in
+  `allocateAllClones()`. Clones are detached from any `TDirectory` so they
+  don't appear in the output file.
+- **Merge**: `mergeAllClones()` resets the master then `Add()`s each clone
+  into it. For `TGraph`, points are copied sequentially.
+- **Watchdog**: a dedicated thread monitors `consumed_` and emits
+  `WatchRequest`s to `Monitor::AsyncLogger`, which triggers checkpoint
+  or finalize depending on the abort flag.
+
+### Fill request lifecycle
+
+```
+fillParticleEvent(basis, particles)
+    → pushFill(ParticleRequest{...})     ← move-only, no copy
+    → fill-worker dequeues
+    → applyParticleRequest(req, workerIdx)
+    → clone[workerIdx]->Fill(...)
+```
+
+### Internal structure
+
+```
+Record/Types          Master and clone record structs; RecordKey
+Record/Type_Methods   RecordKey hash, equality, string
+Record/Requests       FillRequest variant + all request types
+Record/Configs        Paths, HistConfig (output paths + limits)
+Record/Meta           Run provenance metadata; writeMeta()
+Record/Writer         Class declaration; aggregates all impl fragments
+Record/Declaration    declareXxx() — register histograms/graphs/trees
+Record/Recording      fillXxx() — create fill requests; scaleAndWrite
+Record/Directives     pushFill(), worker loop, applyXxxRequest bodies
+Record/Cloning        allocateAllClones(), mergeAllClones(), *Impl helpers
+Record/Administration open/start/finalize/checkpoint lifecycle;
+                      binds Monitor::AsyncLogger as the watchdog
+```
+
+---
+
+## Monitor
+
+### Responsibilities
+
+Run a background heartbeat thread that: renders terminal progress (status line
++ bar), detects fatal stalls, writes run-stat files, and issues checkpoint /
+finalize signals to `Record::Writer`.
+
+### `AsyncLogger` lifecycle
+
+```
+AsyncLogger::start()
+    ↓
+heartbeat thread ──loop──► sleep(heartbeatMs)
+                        ├── render progress (every printInterval events)
+                        ├── render bar (every barInterval events)
+                        ├── check stall (every checkInterval events)
+                        │       └── stallThreshold exceeded? → abort + finalize
+                        └── flush log slots → file / stdout
+
+AsyncLogger::stop()
+    ↓
+join heartbeat thread
+```
+
+`WatchRequest` variants are emitted by the watchdog in `Record::Administration`
+and queued in Logger's slot vector. The heartbeat loop drains them.
+
+### Pacing (`PacingInfo`)
+
+| Field | Default | Effect |
+|---|---|---|
+| `printInterval` | 10 | render status line every N events |
+| `barInterval` | 50 | render progress bar every N events |
+| `checkInterval` | 10 000 | check stall / emit WatchRequest every N events |
+| `heartbeatMs` | 1 000 ms | heartbeat sleep duration |
+| `terminalRefresh` | 300 s | full terminal re-draw period |
+| `stallThreshold` | 300 s | no-progress duration before abort |
+
+### Internal structure
+
+```
+Monitor/Types          PacingInfo, RunSnapshot, PendingActions
+Monitor/Logger         AsyncLogger class declaration (no method bodies)
+Monitor/Methods        String builders: updatedETA, formatProgress, statusLine
+Monitor/Render         renderStatus, renderBar (ANSI terminal, ioctl width)
+Monitor/Report         writeRunStat, flushLog
+Monitor/Directive      Main loop body, heartbeat dispatch, mergePending
+Monitor/Administration Constructor/destructor, start/stop, bindWriter
+Monitor/Configure      configureMonitor() — TOML → AsyncLogger pacing/stall
+Monitor/ConfigAid      Compatibility shim → Configure.hh
+Monitor/Timer          ScopeTimer RAII helper + TimerRegistry (in-memory accumulator; CSV dump at shutdown)
+```
+
+---
+
+## Physics
+
+Thin domain layer. No `utils/` dependencies other than ROOT's `Math/Vector4D`.
+
+- `Physics/Types.hh` — `Lorentz` alias (`ROOT::Math::PxPyPzEVector`);
+  `ParticleProperty` / `EventProperty` enums with trait tables (name,
+  extractor function).
+- `Physics/Kinematics.hh` — invariant mass, rapidity, pT, η calculators.
+- `Physics/Properties.hh` — `valueOf(lorentz, property)` dispatcher.
+- `Physics/TypeAid.hh` — enum↔string converters.
+
+---
+
+## Utility
+
+Three fully independent helpers with no mutual dependencies (except
+`Utility/Time` which uses `Config::uSeconds`/`Seconds`).
+
+- `Utility/RootTypes.hh` — `DataType` enum + `detectBranchType(TBranch*)`
+  and `typeName()` used throughout Probe for branch introspection.
+- `Utility/Number.hh` — comma-separated, padded integer formatter.
+- `Utility/Time.hh` — elapsed-time and ETA string formatters.
+
+---
+
+## Paint
+
+Offline ROOT plotting layer. Fully isolated from the Probe/Record/Monitor
+runtime stack. Used only by the `_Paint.cc` entry point and
+`tests/test_paint.cc`.
+
+```
+Paint/Types       Style specs, RenderResult, RenderPlan, KindEntry/KindRegistry
+Paint/Style       Color parsing (parseColor), TOML merge helpers (mergeStyle, …)
+Paint/Apply       apply() overloads for TH1/TH2/TGraph; kindRegistry() factory
+Paint/Book        Load and merge default + user TOML configs into PaintBook
+Paint/Resolve     Preset resolution, source_search (glob), ROOT object lookup
+Paint/Render      Single/overlay/grid drawing via kindRegistry dispatch
+Paint/Save        Export to png/pdf/svg/root via TCanvas::Print
+Paint/Illustrator High-level facade: loadBook → resolveBook → renderPlan
+```
+
+Data flow:
+
+```
+[paint].toml ──► loadBook ──► resolveBook ──► renderPlan ──► [output files]
+                    │               │
+               default.toml    TFile / ROOT objects
+```
+
+---
+
+## Threading Summary
+
+| Thread | Owner | Role |
+|---|---|---|
+| Main | driver | configure, call `streamEvents`/`streamFeed`/`stream`, await completion |
+| Reader × N | `ProbeParallel` | open TFile, read TTrees, push frames to queue or invoke callback |
+| Collector (optional) | `ProbeParallel` | drain queue, invoke event/feed callbacks |
+| Fill worker × M | `Record::Writer` | dequeue `FillRequest`, fill per-worker clones |
+| Watchdog | `Record::Writer` | monitor `consumed_`, emit `WatchRequest`, merge+write on finalize |
+| Heartbeat | `Monitor::AsyncLogger` | render progress, detect stall, flush log slots |
+
+Reader thread count (`probe_threads`) and fill-worker count (`record_threads`)
+are configured independently. Both default to `(hardware_concurrency − 2) / 2`.
+
+---
+
+## Data Flow
+
+```
+TOML file
+    │
+    ▼ Config::readConfig
+Watch / Register / Events
+    │
+    ├──► Probe::configureProbe(ProbeConfig)   ← Event / Feed / Mixed
+    │         │
+    │         ▼ ProbeParallel::streamEvents(callback)
+    │         │   Reader thread 0: EventStream → Event{particle, node}
+    │         │   Reader thread 1: …
+    │         │   [Collector thread]: invoke callback(Event&, threadId)
+    │         │
+    │         └──► callback (Lambda::rootAnalysis, …)
+    │                   │
+    │                   ▼ Record::Writer::fillParticleEvent(…)
+    │                         │ pushFill(ParticleRequest)
+    │                         ▼
+    │                   Fill worker: clone[i]->Fill(…)
+    │
+    ├──► Monitor::AsyncLogger::start()
+    │         heartbeat thread: progress render, stall check
+    │         WatchRequest: checkpoint every K events
+    │
+    └──► end of run:
+              mergeAllClones()
+              TFile::Write()
+              Monitor::AsyncLogger::stop()
+```

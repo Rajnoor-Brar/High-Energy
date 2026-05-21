@@ -1,0 +1,340 @@
+# Paint configuration template.
+# Source readers:
+#   Paint::loadBook      -> Paint::PaintBook
+#   Paint::resolveBook   -> Paint::RenderPlan / Paint::RenderResult
+#   Paint::mergeStyle    -> Paint::Style (and AxisSpec/CanvasSpec/StatsSpec/…)
+#   Paint::resolveSource -> Paint::ResolvedSource
+#
+# Key concepts:
+#   Result table  — [paint.<name>] listed in [paint].results; gets rendered.
+#   Preset table  — [paint.<name>] NOT in results; inherited via use/axis_use/…
+#   Source        — a ROOT object (TH1/TH2/TGraph/TProfile) resolved from file.
+#
+# Style inheritance order (last writer wins):
+#   [paint.default] -> result use= preset chain -> result inline keys
+#     -> per-source use= preset -> per-source inline keys
+#   palette color is applied before per-source keys so per-source keys override it.
+#
+# source_search ordering: matches are sorted lexicographically by full object path
+# (directory/name). The first match is drawn without SAME and therefore sets both
+# the X and Y axis ranges for the whole overlay. Use explicit sources = [...] to
+# control order precisely.
+
+[paint]
+# Default style file merged before all results. Absent or empty disables it.
+# Stored in Paint::PaintBook.defaultStylePath.
+default_style = "configs/defaults/Paint.toml"
+
+# Input ROOT file. Stored in Paint::RenderPlan.rootFile.
+root_file = "output/project/run.root"
+
+# Output directory prefix inherited by all results.
+# Stored in Paint::RenderResult.resultDir.
+result_dir = "results/"
+
+# Ordered list of result names to render. Each name requires a [paint.<name>] table.
+# Stored as Paint::RenderPlan result names.
+results = ["mass_plot", "overlay_plot"]
+
+# Default output formats for all results (overrideable per-result).
+# Accepted: png, pdf, svg, root, eps, gif.
+# Stored in Paint::RenderResult.formats.
+formats = ["png"]
+
+# Overwrite existing output files. false aborts if a file already exists.
+# Stored in Paint::RenderResult.overwrite.
+overwrite = true
+
+# Integer canvas-dimension multiplier. Values < 1 are clamped to 1.
+# Also scales text sizes, line widths, marker sizes, and border widths
+# by the same factor (before text_scale / brush_scale fine-tuning).
+# Stored in Paint::RenderResult.imageScale.
+image_scale = 1
+
+# Extra text size multiplier applied after image_scale.
+# Effective text scale = image_scale × text_scale.
+# Stored in Paint::RenderResult.textScale.
+text_scale = 1.0
+
+# Extra line-width / marker-size / border multiplier applied after image_scale.
+# Effective brush scale = image_scale × brush_scale.
+# Stored in Paint::RenderResult.brushScale.
+brush_scale = 1.0
+
+# ── [paint.default] ──────────────────────────────────────────────────────────
+# Default visual and render settings merged into every result before result-
+# level overrides. All keys here are also valid directly in a result table.
+
+[paint.default]
+mode        = "single"    # "single" / "overlay" / "grid"
+rows        = 0           # grid rows; 0 = infer from source count
+cols        = 0           # grid cols; 0 = infer from source count
+title       = ""          # canvas title (empty = result name)
+output_name = ""          # output filename base (empty = result name)
+formats     = ["png"]
+image_scale = 1
+text_scale  = 1.0
+brush_scale = 1.0
+
+# ROOT object style. Stored in Paint::Style.
+line_color   = "kBlack"  # ROOT named color (kBlue, kRed, …) or +/- offset (kBlue-6)
+line_width   = 2          # integer line width in ROOT units
+line_style   = 1          # ROOT line style code
+fill_color   = "kBlue-7"  # only visible when fill_style != 0
+fill_style   = 0          # 0 = no fill; 1001 = solid; 3003/3004 = hatching
+marker_color = "kBlack"
+marker_style = 20         # ROOT marker style code
+marker_size  = 1.0
+draw_option  = "HIST"     # ROOT Draw() option string
+
+# Explicit Y-axis range. Omit (or comment out) to use ROOT auto-range.
+# In overlay mode, auto-range is set by the FIRST source drawn; if that source
+# is smaller than others, later sources will be clipped. Set maximum explicitly
+# when overlaying histograms with very different scales.
+# minimum = 0.0
+# maximum = 1e7
+
+log_x  = false
+log_y  = false
+log_z  = false
+grid_x = false
+grid_y = false
+
+[paint.default.axis]
+# Stored in Paint::AxisSpec.
+title_x       = ""
+title_y       = ""
+title_z       = ""
+title_font    = 43      # ROOT font code (43 = Helvetica pixel-size)
+label_font    = 43
+title_size    = 27.0    # in pixels when font >= 40
+label_size    = 20.0
+offset_x      = 1.1
+offset_y      = 1.35
+offset_z      = 1.1
+center_titles = true
+max_digits_y  = 3       # suppress scientific notation below 10^max_digits_y
+
+[paint.default.canvas]
+# Stored in Paint::CanvasSpec.
+width    = 900
+height   = 600
+margin_l = 0.12
+margin_r = 0.05
+margin_b = 0.12
+margin_t = 0.08
+ticks_x  = true
+ticks_y  = true
+
+[paint.default.stats]
+# ROOT stats box. Stored in Paint::StatsSpec.
+show        = true
+opt_stat    = "emr"   # ROOT OptStat string: e=entries m=mean r=rms
+x           = 0.92    # right edge NDC
+y           = 0.89    # top edge NDC
+width       = 0.18
+height      = 0.10
+text_font   = 43
+text_size   = 12.0
+border_size = 2
+fill_color  = 0
+fill_style  = 1001
+
+[paint.default.legend]
+# TLegend. Drawn in overlay mode whenever at least one source has a label.
+# Stored in Paint::LegendSpec.
+show        = false
+x1          = 0.65
+y1          = 0.75
+x2          = 0.88
+y2          = 0.88
+text_font   = 43
+text_size   = 14.0
+border_size = 0
+fill_style  = 0
+
+[paint.default.title_box]
+# ROOT title box (TPaveText). Stored in Paint::TitleBoxSpec.
+show        = true
+text_font   = 43
+text_size   = 24.0
+border_size = 0
+fill_style  = 0
+
+# =============================================================================
+# RESULT TABLES
+# =============================================================================
+# Every key from [paint.default] is also accepted in a result table and
+# overrides the default. Additional result-only keys are documented below.
+
+[paint.mass_plot]
+# Inherit all style/render settings from another [paint.<presetName>] table.
+# Preset chains are resolved recursively (use= in the preset is followed).
+# Stored by merging into Paint::RenderResult before local keys.
+use = "hist_preset"
+
+# Inherit a sub-section style from [paint.<presetName>.<sub>]:
+axis_use   = "axis_preset"    # copies [paint.axis_preset.axis]   -> style.axis
+canvas_use = "canvas_preset"  # copies [paint.canvas_preset.canvas] -> style.canvas
+stats_use  = "stats_preset"   # copies [paint.stats_preset.stats]  -> style.stats
+legend_use = "legend_preset"  # copies [paint.legend_preset.legend] -> style.legend
+title_use  = "title_preset"   # copies [paint.title_preset.title_box] -> style.titleBox
+
+mode        = "single"
+title       = "Mass Invariant"
+output_name = "mass_plot"
+formats     = ["png", "pdf"]
+
+# Expected ROOT class for all sources (overrideable per-source via source_type).
+# Accepted case-insensitive tokens: TH1/H1, TH2/H2, TProfile/Profile, TGraph/Graph.
+source_type = "TH1"
+
+# Palette: colors cycled across sources in declaration/search order.
+# Applied to line_color AND marker_color before per-source overrides.
+# Accepts ROOT named colors (kBlue-6) or raw integer color codes.
+# Cycles if source count > palette length (source i uses palette[i % len]).
+palette = ["kRed-4", "kBlue-6", "kGreen-6"]
+
+# Explicit source list. Cannot be combined with source_search.
+# Each entry is a source table. Accepted keys:
+#   path        (required) — full path to ROOT object inside root_file
+#   label       — legend entry text (legend shown automatically when any source has a label)
+#   title       — object title override
+#   draw_option — per-source ROOT Draw() option
+#   use         — name of a preset to merge into this source's style
+#   source_type — per-source ROOT class check
+#   + all style keys: line_color, fill_style, marker_style, minimum, maximum, …
+# Per-source style keys are applied AFTER palette color; they take precedence.
+sources = [
+    { path = "Unvalidated/Unvalidated_Mass_Invariant_Hist", label = "Unvalidated" },
+    { path = "Validated/Validated_Mass_Invariant_Hist",     label = "Validated"   },
+    { path = "Selected/Selected_Mass_Invariant_Hist",       label = "Selected", line_color = "kGreen-2" }
+]
+
+[paint.mass_plot.legend]
+show = true
+
+[paint.overlay_plot]
+# Glob search for ROOT objects by name (not full path). Supports * and ?.
+# Cannot be combined with sources. Results are sorted lexicographically by
+# full path; the first match sets the X/Y axis range for the overlay.
+# Use sources = [...] instead when order matters.
+source_search = "*_Mass_Invariant*"
+mode          = "overlay"
+palette       = ["kBlue-6", "kRed-6", "kGreen-6"]
+draw_option   = "HIST"
+fill_style    = 0     # clear fill so overlaid histograms are distinguishable lines
+line_width    = 2
+# Set explicit Y ceiling when the first-drawn histogram is not the tallest:
+# maximum = 6e6
+
+[paint.overlay_plot.legend]
+show = true
+
+# =============================================================================
+# PRESET TABLES
+# =============================================================================
+
+[paint.hist_preset]
+# Inherited via use = "hist_preset".
+line_color  = "kBlack"
+line_width  = 2
+draw_option = "HIST"
+fill_style  = 0
+
+[paint.axis_preset.axis]
+title_x = "M  [GeV]"
+title_y = "Candidates"
+
+[paint.canvas_preset.canvas]
+width  = 900
+height = 600
+
+[paint.stats_preset.stats]
+show = true
+
+[paint.legend_preset.legend]
+show = true
+
+[paint.title_preset.title_box]
+show = true
+
+# =============================================================================
+# USAGE PATTERNS
+# =============================================================================
+
+# ── Single histogram, publication quality ─────────────────────────────────────
+#
+# [paint]
+# root_file   = "output/Lambda_Reconstruction/_42/Lambda_Recons_1M.root"
+# result_dir  = "results/paper/"
+# results     = ["mass_signal"]
+# image_scale = 4        # 4× canvas for print resolution
+# text_scale  = 0.8      # slightly smaller text relative to image_scale
+# brush_scale = 0.7
+#
+# [paint.mass_signal]
+# mode        = "single"
+# title       = "Lambda Mass Invariant"
+# output_name = "Lambda_mass"
+# formats     = ["pdf", "png"]
+# sources     = [{ path = "Selected/Selected_Mass_Invariant_Hist" }]
+# draw_option = "HIST"
+# fill_style  = 1001
+# fill_color  = "kBlue-9"
+# line_color  = "kBlue-4"
+# log_y       = false
+# minimum     = 0.0
+#
+# [paint.mass_signal.axis]
+# title_x = "M_{p#pi^{-}}  [GeV/c^{2}]"
+# title_y = "Candidates / 5 MeV"
+#
+# [paint.mass_signal.stats]
+# show = false    # suppress stats box for clean paper figure
+
+# ── Three-set overlay with explicit order and Y ceiling ───────────────────────
+#
+# [paint.mass_overlay]
+# mode        = "overlay"
+# title       = "Mass Invariant — all selection stages"
+# output_name = "mass_overlay"
+# palette     = ["kBlue-6", "kRed-6", "kGreen-3"]
+# draw_option = "HIST"
+# fill_style  = 0
+# line_width  = 2
+# maximum     = 6e6      # prevent the Unvalidated histogram clipping the others
+# sources = [
+#     { path = "Unvalidated/Unvalidated_Mass_Invariant_Hist", label = "Unvalidated" },
+#     { path = "Validated/Validated_Mass_Invariant_Hist",     label = "Validated"   },
+#     { path = "Selected/Selected_Mass_Invariant_Hist",       label = "Selected"    },
+# ]
+#
+# [paint.mass_overlay.legend]
+# show = true
+# x1 = 0.60  y1 = 0.70  x2 = 0.88  y2 = 0.88
+
+# ── Grid of all momentum histograms ──────────────────────────────────────────
+#
+# [paint.momentum_grid]
+# source_search = "*Momentum*Hist"
+# mode          = "grid"
+# cols          = 3      # 0 = auto-square; explicit cols forces row count
+# draw_option   = "HIST"
+# fill_style    = 1001
+# fill_color    = "kAzure-9"
+#
+# [paint.momentum_grid.canvas]
+# width  = 1800
+# height = 1200
+
+# ── Log-scale mass with suppressed stats ─────────────────────────────────────
+#
+# [paint.mass_log]
+# sources = [{ path = "Unvalidated/Unvalidated_Mass_Invariant_Hist" }]
+# mode    = "single"
+# log_y   = true
+# minimum = 1.0    # prevents log(0) rendering artefacts
+#
+# [paint.mass_log.stats]
+# show = false

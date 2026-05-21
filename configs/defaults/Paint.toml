@@ -1,0 +1,82 @@
+# Paint default plotting preset.
+# User configs are loaded on top of this file unless [paint].default_style
+# points to another TOML file.
+
+[paint]
+result_dir = "results"
+formats = ["png"]
+overwrite = true
+image_scale = 1
+text_scale = 1.0
+brush_scale = 1.0
+mutate_input = false
+
+[paint.default]
+mode = "single"
+line_color = "kBlue-6"
+line_width = 2
+line_style = 1
+fill_color = "kBlue-7"
+fill_style = 3003
+marker_color = "kBlack"
+marker_style = 20
+marker_size = 1.0
+draw_option = "HIST"
+log_x = false
+log_y = false
+log_z = false
+grid_x = false
+grid_y = false
+
+[paint.default.axis]
+title_x = ""
+title_y = ""
+title_z = ""
+title_font = 43
+label_font = 43
+title_size = 27.0
+label_size = 20.0
+offset_x = 1.1
+offset_y = 1.35
+offset_z = 1.1
+center_titles = true
+max_digits_y = 3
+
+[paint.default.canvas]
+width = 900
+height = 600
+margin_l = 0.12
+margin_r = 0.05
+margin_b = 0.12
+margin_t = 0.08
+ticks_x = true
+ticks_y = true
+
+[paint.default.stats]
+show = true
+opt_stat = "emr"
+x = 0.92
+y = 0.89
+width = 0.18
+height = 0.10
+text_font = 43
+text_size = 12.0
+border_size = 2
+
+[paint.default.legend]
+show = false
+x1 = 0.65
+y1 = 0.75
+x2 = 0.88
+y2 = 0.88
+text_font = 43
+text_size = 14.0
+border_size = 0
+fill_style = 0
+
+[paint.default.title_box]
+show = true
+text_font = 43
+text_size = 24.0
+border_size = 0
+fill_style = 0

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Open folder body: green -->
+  <path fill="#2E7D32" d="M28.967 12H9.442a2 2 0 0 0-1.898 1.368L4 24V10h24a2 2 0 0 0-2-2H15.124a2 2 0 0 1-1.28-.464l-1.288-1.072A2 2 0 0 0 11.276 6H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h22l4.805-11.212A2 2 0 0 0 28.967 12"/>
+  <!-- Monitor overlay (same) -->
+  <rect fill="white" x="15" y="13" width="14" height="9.5" rx="1.2"/>
+  <path fill="none" stroke="#2E7D32" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"
+        d="M17 18L18.5 15.5L20.5 20.5L22.5 15L24.5 19L26.5 17"/>
+  <rect fill="white" x="19.5" y="22.5" width="5"  height="1.5"/>
+  <rect fill="white" x="17.5" y="24"   width="9"  height="1.5" rx="0.5"/>
+</svg>

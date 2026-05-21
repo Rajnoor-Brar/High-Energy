@@ -1,0 +1,158 @@
+# hep-contrast palette
+# Every entry is a pair:  key = [light_value, dark_value]
+# Edit here, then run:  node build.js
+# Outputs: themes/hep-contrast-light.json  +  themes/hep-contrast-dark.json
+
+# ── Syntax roles ──────────────────────────────────────────────────────────────
+[syntax]
+functions    = ["#0055CC", "#6BB5FF"]   # bold blue
+types        = ["#D71868", "#FF79C6"]   # magenta  (keywords, class, struct, decorators, self/cls)
+namespaces   = ["#883DA4", "#C792EA"]   # purple
+variables    = ["#224C98", "#82AAFF"]   # deep blue
+strings      = ["#E60026", "#F07178"]   # red / coral
+operators    = ["#E28512", "#FFCB6B"]   # amber-brown / gold
+numbers      = ["#CC332A", "#F78C6C"]   # dark red / orange-red
+preprocessor = ["#D75C1E", "#FFAB40"]   # amber
+parameters   = ["#2072AF", "#89DDFF"]   # medium blue / sky
+fgComment    = ["#777777", "#676E95"]   # mid gray / muted indigo
+enumMember   = ["#007755", "#4EC994"]   # teal / mint
+docCommentTag= ["#555577", "#7070A0"]   # blue-gray
+chartsOrange = ["#AA4400", "#FF7733"]
+
+# ── Base foreground ramp (light → near-black, dark → near-white) ──────────────
+[fg_ramp]
+fg           = ["#0A0A0A", "#D4D4D4"]
+fg2          = ["#111111", "#CCCCCC"]
+fg3          = ["#1A1A1A", "#BBBBBB"]
+fg4          = ["#333333", "#AAAAAA"]
+fgMid        = ["#555555", "#888888"]
+fgLight      = ["#666666", "#777777"]
+fgSubtle     = ["#888888", "#666666"]
+fgFaint      = ["#AAAAAA", "#444444"]
+fgFainter    = ["#BBBBBB", "#3A3A3A"]
+fgAlmostGone = ["#CCCCCC", "#333333"]
+fgWhisper    = ["#DDDDDD", "#2A2A2A"]
+baseForeground = ["#222222", "#D4D4D4"]
+
+# ── Backgrounds ───────────────────────────────────────────────────────────────
+[bg_ramp]
+bg           = ["#FFFFFF", "#1E1E1E"]
+bgEditor     = ["#FFFFFF", "#1E1E1E"]
+bgLine       = ["#F3F3F3", "#2A2D2E"]
+bgSidebar    = ["#F5F5F5", "#252526"]
+bgPanel      = ["#FAFAFA", "#1E1E1E"]
+bgSection    = ["#EBEBEB", "#2D2D30"]
+bgActivity   = ["#EFEFEF", "#333333"]
+bgTitle      = ["#F0F0F0", "#3C3C3C"]
+bgTitleInact = ["#F8F8F8", "#2D2D30"]
+bgInputFocus = ["#F8FBFF", "#1F2937"]
+bgPeekResult = ["#F0F4FF", "#1A1F2E"]
+baseBackground = ["#F5F5F5", "#1E1E1E"]
+
+# ── Errors / warnings ─────────────────────────────────────────────────────────
+[diagnostics]
+errors       = ["#E00000", "#EF5350"]
+warnings     = ["#ED9121", "#FFA726"]
+
+# ── Accent colors ─────────────────────────────────────────────────────────────
+[accents]
+accentBlue     = ["#0055CC", "#4FC3F7"]
+accentBlueDark = ["#0044AA", "#3DA8D9"]
+accentAmber    = ["#E6A117", "#FFD54F"]
+accentGreen    = ["#337D27", "#81C784"]
+accentOrange   = ["#CF6F00", "#FFA726"]
+accentRed      = ["#E60000", "#EF5350"]
+accentRedDark  = ["#CC0000", "#E53935"]
+accentWarn     = ["#886600", "#FFCA28"]
+
+# ── Git decorations ───────────────────────────────────────────────────────────
+[git]
+gitAdded     = ["#4F7703", "#81B88B"]
+gitModified  = ["#E05915", "#E2C08D"]
+gitDeleted   = ["#BA160C", "#C74E39"]
+gitConflict  = ["#F42A92", "#FF79C6"]
+gitUntracked = ["#4682B4", "#73C2FB"]
+gitIgnored   = ["#777777", "#555555"]
+
+# ── Status bar ────────────────────────────────────────────────────────────────
+[statusbar]
+statusBg      = ["#DEDEDE", "#007ACC"]
+statusFg      = ["#111111", "#FFFFFF"]
+statusDebugBg = ["#EEDAF2", "#CC6633"]
+statusRemoteBg= ["#DBDAF2", "#16825D"]
+statusRemoteFg= ["#111111", "#FFFFFF"]
+
+# ── Selection / highlights ────────────────────────────────────────────────────
+[selection]
+selection    = ["#C8DCFF", "#264F78"]
+selectionHi  = ["#DDEEFF", "#2A3F5F"]
+wordHi       = ["#E0EBF5", "#2D3748"]
+wordHiStrong = ["#B8D4F0", "#1E3A5F"]
+findMatch    = ["#FFC400", "#9E6A03"]
+findMatchHi  = ["#FFDCA0", "#7B5900"]
+rangeHi      = ["#FFECCC", "#4B3300"]
+listFocus    = ["#C8DCFF", "#264F78"]
+listActive   = ["#D0E4FF", "#094771"]
+listHover    = ["#F2F2F2", "#2A2D2E"]
+
+# ── Borders / dividers ────────────────────────────────────────────────────────
+[borders]
+border       = ["#DCDCDC", "#474747"]
+borderLight  = ["#D4D4D4", "#3E3E42"]
+borderSubtle = ["#E8E8E8", "#3A3A3A"]
+borderFaint  = ["#E0E0E0", "#333333"]
+
+# ── Diff editor ───────────────────────────────────────────────────────────────
+[diff]
+diffAddedLine   = ["#EEFFF0", "#1B3B1B"]
+diffRemovedLine = ["#FFF0F0", "#3B1B1B"]
+diffAdded55     = ["#CCFFCC55", "#81C78455"]
+diffRemoved55   = ["#FFCCCC55", "#EF535055"]
+
+# ── Peek view ─────────────────────────────────────────────────────────────────
+[peek]
+peekBorder = ["#0055CC", "#4FC3F7"]
+peekEditor = ["#F8FBFF", "#1A1F2E"]
+peekResult = ["#F0F4FF", "#1A1A2E"]
+peekTitle  = ["#D0E4FF", "#1F3A5C"]
+
+# ── Transparent overlays ──────────────────────────────────────────────────────
+[overlays]
+shadowColor    = ["#00000022", "#00000044"]
+scrollbarBg    = ["#00000018", "#FFFFFF18"]
+scrollbarHover = ["#00000030", "#FFFFFF30"]
+scrollbarActive= ["#0055CC44", "#4FC3F744"]
+warnBg66       = ["#88660066", "#FFCA2866"]
+errorBg66      = ["#E6000066", "#EF535066"]
+findMatch55    = ["#FFD70055", "#9E6A0355"]
+
+# ── Bracket pair colorization ─────────────────────────────────────────────────
+[brackets]
+bracket1     = ["#0055CC", "#4FC3F7"]
+bracket2     = ["#CF1196", "#FF79C6"]
+bracket3     = ["#007755", "#4EC994"]
+bracket4     = ["#E59F2E", "#FFD54F"]
+bracketGuide1= ["#D0E4FF", "#1F3A5C"]
+bracketGuide2= ["#FFD8CC", "#3D2B1B"]
+bracketGuide3= ["#C8F0E0", "#1B3B2D"]
+
+# ── Integrated terminal — ANSI 16 ─────────────────────────────────────────────
+# Light values calibrated for white background (no invisible yellows).
+# Dark values calibrated for #1E1E1E background.
+[ansi]
+ansiBlack        = ["#000000", "#000000"]
+ansiRed          = ["#CC0000", "#F44747"]
+ansiGreen        = ["#2E7D32", "#4EC994"]
+ansiYellow       = ["#886600", "#FFD700"]   # dark enough to read on white
+ansiBlue         = ["#0055CC", "#4FC3F7"]
+ansiMagenta      = ["#883DA4", "#C792EA"]
+ansiCyan         = ["#007755", "#80CBC4"]
+ansiWhite        = ["#666666", "#D4D4D4"]
+ansiBrightBlack  = ["#444444", "#808080"]
+ansiBrightRed    = ["#E60000", "#FF5252"]
+ansiBrightGreen  = ["#337D27", "#A5D6A7"]
+ansiBrightYellow = ["#E6A117", "#FFEE58"]
+ansiBrightBlue   = ["#003FA3", "#82B1FF"]
+ansiBrightMagenta= ["#D71868", "#FF79C6"]
+ansiBrightCyan   = ["#005544", "#A7FFEB"]
+ansiBrightWhite  = ["#AAAAAA", "#FFFFFF"]

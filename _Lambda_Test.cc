@@ -6,6 +6,7 @@
 #include "Config.hh"
 #include "Lambda.hh"
 #include "Monitor.hh"
+#include "Config/Configure.hh"
 
 int main(int argc, char* argv[]) {
     Monitor::disable_input_echo();
@@ -15,42 +16,33 @@ int main(int argc, char* argv[]) {
     const std::string configPath = argc > 1 ? argv[1] : "configs/Lambda_Reconstruction.toml";
 
     Pythia8::Pythia pythia;
-    pythia.readFile("configs/Lambda_Reconstruction.cmnd");
-    Config::Root        rootParams;
-    Config::Log         logParams;
 
-    rootParams.beamEnergy = pythia.settings.parm("Beams:eCM") > 0 ? Form("%.0f", pythia.settings.parm("Beams:eCM")) : "UnknownEnergy";
+    Record::Writer       writer;
+    Monitor::AsyncLogger asyncLogger;
 
-    Config::extractConfiguration(configPath, project, logParams, rootParams);
-    Config::openOutputFile(rootParams);
+    Config::configure(configPath, project, pythia, writer, asyncLogger);
 
     Lambda::Parameters  analysisParams;
-    Lambda::extractPhysics(configPath, analysisParams, rootParams);
-    Lambda::RootArray histogramSets;
-    Lambda::declareObjects(histogramSets, analysisParams, rootParams);
+    Lambda::configure(analysisParams, writer, configPath);
 
-    Monitor::AsyncLogger asyncLogger;
-    Record::FinalizerController finalizer(
-        pythia,
-        histogramSets,
-        rootParams,
-        logParams,
-        asyncLogger,
-        [&analysisParams]() { return Lambda::logString(analysisParams); }
-    );
-    finalizer.installFatalStallHandler();
+    writer.bind(asyncLogger,
+                [&analysisParams]() { return Lambda::logString(analysisParams); },
+                [&pythia]() { pythia.stat(); },
+                [&pythia]() { pythia.settings.listChanged(); });
 
     pythia.init();
 
-    logParams.start = std::chrono::system_clock::now();
-    asyncLogger.start(rootParams, logParams);
+    asyncLogger.initialise(writer);
+    writer.start();
     pythia.next();
-    for (std::size_t iEvent = 0; iEvent < logParams.nEvents; ++iEvent) {
+
+    Lambda::AnalysisContext ctx{analysisParams, asyncLogger.watch(), asyncLogger, writer};
+    for (std::size_t iEvent = 0; iEvent < asyncLogger.watch().nEvents; ++iEvent) {
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
-        Lambda::pythiaAnalysis(pythia, histogramSets, analysisParams, rootParams, logParams, asyncLogger);
+        Lambda::pythiaAnalysis(pythia, ctx);
     }
 
-    finalizer.normalShutdown();
+    writer.finish(asyncLogger.watch().nEvents);
 
     return 0;
 }

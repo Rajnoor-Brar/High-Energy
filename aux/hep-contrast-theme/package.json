@@ -1,8 +1,8 @@
 {
   "name": "hep-contrast",
   "displayName": "HEP Contrast",
-  "description": "A high-contrast light theme tuned for C++ and Python — deep ink on white, zero ambiguity.",
-  "version": "1.0.0",
+  "description": "High-contrast light and dark themes tuned for C++ and Python — deep ink on white or near-black, zero ambiguity. Built from a single TOML palette (palette.toml) via `node build.js`.",
+  "version": "2.0.0",
   "publisher": "local",
   "engines": {
     "vscode": "^1.70.0"
@@ -13,9 +13,14 @@
   "contributes": {
     "themes": [
       {
-        "label": "HEP Contrast",
+        "label": "HEP Contrast Light",
         "uiTheme": "vs",
-        "path": "./themes/hep-contrast.json"
+        "path": "./themes/hep-contrast-light.json"
+      },
+      {
+        "label": "HEP Contrast Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/hep-contrast-dark.json"
       }
     ]
   }
