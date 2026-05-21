@@ -38,9 +38,9 @@ namespace Monitor {
         const Config::Watch& watch() const;
 
         const PacingInfo& pacingInfo() const;
-        std::size_t       checkInterval() const;
 
         void configurePacing(PacingInfo pacing);
+        void applyPacing(); // applies pacing_ to internal interval fields; call under mutex_
 
         // Configures which WatchRequest kinds are emitted and at what cadences.
         void configureWatchEmission(bool saveHeartbeat,
@@ -104,7 +104,7 @@ namespace Monitor {
         bool                          saveCheckpoints_    = false;
         bool                          saveLogThreads_     = false;
         bool                          saveFinalLog_       = true;
-        std::size_t                   checkpointInterval_ = 100000;
+        std::size_t                   checkpointInterval_ = kDefaultCheckpointInterval;
 
         TString                       runStatPath_             = "";
         TString                       threadStatDirectory_     = "";
@@ -115,9 +115,9 @@ namespace Monitor {
         std::map<int, ThreadSnapshot> threadSnapshots_;
         std::vector<ThreadSnapshot>   dirtyThreadSnapshots_;
         std::thread                   worker_;
-        Config::uSeconds              heartbeat_interval_      = Config::uSeconds(1000);
-        Config::Seconds               terminalRefreshInterval_ = Config::Seconds(300);
-        Config::Seconds               programStallThreshold_   = Config::Seconds(300);
+        Config::uSeconds              heartbeat_interval_      = Config::uSeconds(kDefaultHeartbeatMs * 1000);
+        Config::Seconds               terminalRefreshInterval_ = Config::Seconds(kDefaultStallThresholdSeconds);
+        Config::Seconds               programStallThreshold_   = Config::Seconds(kDefaultStallThresholdSeconds);
         bool                          stopRequested_           = false;
         bool                          initialized_             = false;
         bool                          preserveConfigStart_     = false;

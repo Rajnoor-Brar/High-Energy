@@ -14,17 +14,20 @@
 
 namespace Probe {
 
-    // ProbeParallel — multi-threaded ROOT event reader; supports CollectorThread and WorkerThread callback modes.
+    // ProbeParallel — multi-threaded ROOT reader; Event/Feed/Mixed streaming.
+    // See docs/ProbeStream.md for the full bucket-split design and TOML format.
     class ProbeParallel {
       public:
         ProbeParallel();
         ~ProbeParallel();
 
+        // ProbeConfig-based configure (Phase 7+).
         void configureProbe(std::string inputFile,
-                            std::vector<CollectionSpec> particleSpecs,
+                            ProbeConfig config,
                             std::size_t threadCount,
                             std::size_t requestedEvents,
                             bool userRequestedEvents);
+
         void setCallbackMode(CallbackMode mode);
         void setQueueCapacity(std::size_t capacity);
         void setAnalysisThreadCount(std::size_t n);
@@ -33,16 +36,24 @@ namespace Probe {
         std::size_t threadCount() const;
         std::size_t analysisThreadCount() const;
         std::size_t eventCount() const;
-        StreamType streamType() const;
+        ActiveMode  activeMode() const;
         std::string stats() const;
 
-        template<typename Callback>
-        void run(Callback&& callback);
+        // streamEvents — Event-only; callback signature: void(const Event&, int tid)
+        template<typename EventCallback>
+        void streamEvents(EventCallback&& ce);
+
+        // streamFeed — Feed-only; callback signature: void(const Feed&, int tid)
+        template<typename FeedCallback>
+        void streamFeed(FeedCallback&& cf);
+
+        // stream — Mixed mode; both callbacks fired per frame.
+        template<typename EventCallback, typename FeedCallback>
+        void stream(EventCallback&& ce, FeedCallback&& cf);
 
       private:
-        static const char* streamTypeName(StreamType type);
         static const char* callbackModeName(CallbackMode mode);
-        void determineStreamType();
+        void determineStreamType();   // internal: used by legacy configureProbe path
         std::vector<Long64_t> scanFlatEventKeys() const;
         std::size_t vectorEntryCount() const;
         static std::vector<BranchControl::Partition>
@@ -53,22 +64,23 @@ namespace Probe {
         std::size_t eventsInPartition(const BranchControl::Partition& part) const;
         void resetRuntimeState();
         void requestStop();
-        bool pushQueuedEvent(QueuedEvent event);
-        bool popQueuedEvent(QueuedEvent& event);
+        bool pushQueuedFrame(QueuedFrame frame);
+        bool popQueuedFrame(QueuedFrame& frame);
         void markWorkerFinished();
 
-        template<typename Callback>
-        void runWorkerThread(Callback& callback);
+        template<typename EventCallback, typename FeedCallback>
+        void runWorkerThread(EventCallback& ce, FeedCallback& cf);
 
-        template<typename Callback>
-        void runCollectorThread(Callback& callback);
+        template<typename EventCallback, typename FeedCallback>
+        void runCollectorThread(EventCallback& ce, FeedCallback& cf);
 
         bool configured_ = false;
 
         std::string inputFile_;
-        std::vector<CollectionSpec> particleSpecs_;
+        ProbeConfig config_;
 
-        StreamType streamType_ = StreamType::Unset;
+        StreamType   streamType_   = StreamType::Unset;  // used by determineStreamType; not public
+        ActiveMode   activeMode_   = ActiveMode::Events;
         CallbackMode callbackMode_ = CallbackMode::CollectorThread;
 
         std::size_t threadCount_         = 0;
@@ -83,7 +95,7 @@ namespace Probe {
         mutable std::mutex queueMutex_;
         std::condition_variable queueNotEmpty_;
         std::condition_variable queueNotFull_;
-        std::deque<QueuedEvent> queue_;
+        std::deque<QueuedFrame> queue_;
         std::atomic<bool> stopRequested_{false};
         std::size_t workersFinished_ = 0;
         std::size_t produced_ = 0;

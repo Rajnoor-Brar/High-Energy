@@ -42,7 +42,10 @@ namespace Config {
         }
 
         TomlTable table = toml::parse_file(filePath);
-        for (auto&& [quantityKey, quantityValue] : table) {
+        const auto* limitsTable = table["record"]["limits"].as_table();
+        if (!limitsTable) return; // no [record.limits] section — silently skip
+
+        for (auto&& [quantityKey, quantityValue] : *limitsTable) {
             if (!quantityValue.is_table()) continue;
 
             const std::string qname = std::string(quantityKey.str());
@@ -67,22 +70,22 @@ namespace Config {
         }
     }
 
-    inline void limitExtractor(const std::string& configPath, Register& root) { // to be renamed defaultLimits()
+    // limitExtractor — accepts the already-parsed master config table so that
+    // callers using parseConfig() (which handles directory paths) don't need
+    // to re-parse the file internally.
+    inline void limitExtractor(const TomlTable& mainConfig, Register& root) {
         root.particleLimits.clear();
         root.eventLimits.clear();
 
         // Pass 1: global defaults file (optional — silently skipped if absent).
-        // Provides fallback bounds for all properties without requiring every
-        // project to ship its own defaults block.
         const std::string defaultLimitsPath = "configs/defaults/Limits.toml";
-        if (fs::exists(defaultLimitsPath)) {
+        if (fs::exists(defaultLimitsPath))
             loadLimitsFile(defaultLimitsPath, root.particleLimits, root.eventLimits);
-        }
 
         // Pass 2: project-specific limits (required — throws if absent).
         // Keys present here override the defaults loaded in Pass 1.
-        TomlTable mainConfig = toml::parse_file(configPath);
-        const std::string limitsFileName = mainConfig["lambda"]["hist_limits"].value_or("Lambda_Limits");
+        const std::string limitsFileName =
+            mainConfig["lambda"]["hist_limits"].value_or(std::string{"Lambda_Limits"});
         const std::string limitsFile = resolveLimitsPath(limitsFileName);
         root.histLimitsFile = limitsFile;
         loadLimitsFile(limitsFile, root.particleLimits, root.eventLimits);

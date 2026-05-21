@@ -7,6 +7,8 @@ result_dir = "results"
 formats = ["png"]
 overwrite = true
 image_scale = 1
+text_scale = 1.0
+brush_scale = 1.0
 mutate_input = false
 
 [paint.default]
@@ -20,8 +22,6 @@ marker_color = "kBlack"
 marker_style = 20
 marker_size = 1.0
 draw_option = "HIST"
-minimum = 0.0
-maximum = 0.0
 log_x = false
 log_y = false
 log_z = false

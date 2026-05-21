@@ -259,6 +259,12 @@ int main() {
     }
 
     {
+        // Non-k non-numeric strings throw rather than silently falling back to kBlack.
+        expectThrows([]() { Paint::parseColor("purple"); }, "unknown color spec");
+        TEST_PASS("non-k non-numeric color string throws");
+    }
+
+    {
         // Phase 30: type mismatch (string value for int key) throws.
         auto cfg = toml::parse("line_width = \"thick\"\n");
         Paint::Style s;
@@ -373,6 +379,39 @@ int main() {
         TEST_EQ(s.stats.fillColor, Paint::parseColor("kYellow"));
         TEST_EQ(s.stats.fillStyle, static_cast<Style_t>(3001));
         TEST_PASS("stats fill_color and fill_style are configurable");
+    }
+
+    {
+        // image_scale now multiplies canvas size and render style sizes; text_scale
+        // and brush_scale are additional multipliers for their domains.
+        const std::filesystem::path cfg = kTmpDir / "scale_options.toml";
+        writeText(cfg,
+            "[paint]\n"
+            "root_file = \"" + kInputRoot.string() + "\"\n"
+            "result_dir = \"" + kResultsDir.string() + "\"\n"
+            "formats = [\"png\"]\n"
+            "results = [\"sc\"]\n"
+            "image_scale = 3\n"
+            "text_scale = 0.5\n"
+            "brush_scale = 2.0\n\n"
+            "[paint.sc]\n"
+            "line_width = 2\n"
+            "marker_size = 1.5\n"
+            "sources = [{ path = \"Validated/Validated_Mass_Invariant_Hist\" }]\n\n"
+            "[paint.sc.axis]\n"
+            "title_size = 10.0\n"
+            "label_size = 8.0\n");
+        Paint::RenderPlan p = Paint::resolveBook(Paint::loadBook(cfg.string()));
+        TEST_EQ(p.results[0].imageScale, 3);
+        TEST_NEAR(p.results[0].textScale, 0.5, 1e-12);
+        TEST_NEAR(p.results[0].brushScale, 2.0, 1e-12);
+
+        const Paint::Style scaled = Paint::detail::scaledStyle(p.results[0].style, p.results[0]);
+        TEST_NEAR(scaled.axis.titleSize, 15.0, 1e-6);
+        TEST_NEAR(scaled.axis.labelSize, 12.0, 1e-6);
+        TEST_EQ(scaled.line.width, static_cast<Width_t>(12));
+        TEST_NEAR(scaled.marker.size, 9.0, 1e-6);
+        TEST_PASS("image/text/brush scale options multiply render style sizes");
     }
 
     {

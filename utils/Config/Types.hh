@@ -7,8 +7,7 @@
 #include <string>
 #include <vector>
 
-#include "TFile.h"
-#include "TString.h"
+#include "RtypesCore.h"
 
 #include "Physics/Types.hh"
 #include "Probe/Types.hh"
@@ -46,8 +45,6 @@ namespace Config {
     struct Events {
         std::size_t eventCount  = 1000;
         bool        userEvents  = false; // true when event_count was explicit in TOML
-        // nThreads: REMOVED — see [probe].probe_threads,
-        // [record].writer_threads, and [pythia].pythia_threads.
     };
 
     // ── [pythia] ─────────────────────────────────────────────────────────────
@@ -60,9 +57,9 @@ namespace Config {
     };
 
     // ── [probe] ──────────────────────────────────────────────────────────────
-    // ProbeConfig holds the parsed [probe] section.  Collections are stored as
-    // Probe::CollectionSpec directly — no intermediate ProbeParticle type.
-    // Populated by Config::configureProbe via Probe::parseCollectionsFromToml.
+    // ProbeConfig holds the parsed [probe] section.
+    // Phase 10: `probeSpec` replaces the legacy `collections` field.
+    // `collections` is kept for backward compat during the transition.
     //
     // Three independent thread counts on the Probe-side pipeline:
     //   probe_threads    : ROOT-reader threads (per-partition TFile open + scan)
@@ -73,7 +70,7 @@ namespace Config {
     // Writer-side thread count lives on Register::writer_threads.
     struct ProbeConfig {
         std::string                           inputFile;
-        std::vector<Probe::CollectionSpec>    collections;
+        Probe::ProbeConfig                    probeSpec;     // parsed by parseProbeConfig
         Events                                eventConfig;
         std::size_t                           probe_threads    = 0;
         std::size_t                           analysis_threads = 0;
@@ -122,18 +119,18 @@ namespace Config {
         Int_t   serial              = 0;
         std::size_t writer_threads        = 0;
         std::size_t writer_queue_capacity = 0;   // [record].writer_queue_capacity; 0 = Writer default
-        TString rootDirectory       = "output/";
-        TString logDirectory        = "output/params/";
-        TString checkpointDirectory = "output/checkpoints/";
-        TString beamEnergy          = "";
-        TString outName             = "";
-        TString logName             = "";
-        TString runStatName         = "";
-        TString threadStatDirectory = "";
-        TString checkpointOutName   = "";
-        TString checkpointLogName   = "";
-        TString fileTitle           = "";
-        TString histLimitsFile      = "";
+        std::string rootDirectory       = "output/";
+        std::string logDirectory        = "output/params/";
+        std::string checkpointDirectory = "output/checkpoints/";
+        std::string beamEnergy;
+        std::string outName;
+        std::string logName;
+        std::string runStatName;
+        std::string threadStatDirectory;
+        std::string checkpointOutName;
+        std::string checkpointLogName;
+        std::string fileTitle;
+        std::string histLimitsFile;
         // Bare prefix from [record.file].prefix — used by Configure.hh to
         // construct the shard temp-directory path for ProbeParallel.
         std::string filePrefix;

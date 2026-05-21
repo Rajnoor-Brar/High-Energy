@@ -73,7 +73,7 @@ int main() {
     // ── Run parallel reconstruction ───────────────────────────────────────────
     Lambda::AnalysisContext ctx{physParams, asyncLogger.watch(), asyncLogger, writer};
 
-    probe.run([&](const Probe::Event& ev, int threadId) {
+    probe.streamEvents([&](const Probe::Event& ev, int threadId) {
         Lambda::rootAnalysis(ev, threadId, ctx);
     });
 

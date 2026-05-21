@@ -1,6 +1,6 @@
 # Review - Current Backlog
 
-Updated: 2026-05-15.
+Updated: 2026-05-21.
 
 This review reflects the current `modules/` and `utils/` state after the
 Probe/WriterMT work. Items here are backlog and design cleanup, not a claim
@@ -13,10 +13,12 @@ Major changes since the prior review snapshot:
   pool, per-worker ROOT clones for histograms/graphs/profiles, mutexed shared
   trees, and a watchdog lifecycle queue.
 - Monitor save flags are wired.
-- `BlockTimer` call sites in Lambda are commented out; the class file still
-  exists and must be replaced before anyone re-enables it.
+- `Monitor::TimerRegistry` / `ScopeTimer` in `utils/Monitor/Timer.hh` replace
+  the old `BlockTimer`. Most hot-path labels are already instrumented.
 - `Probe::ProbeIMT` is in tree as a drop-in runtime but not the default driver
   choice.
+- `[monitor.intervals].check_interval` removed; stall detection is purely
+  time-based via `program_stall_threshold`.
 
 Companion docs:
 
@@ -51,13 +53,6 @@ Lambda callback" is stale. Document and test the current contract:
 - the callback receives the collector index, not the original reader index;
 - in WorkerThread mode `analysis_threads` is silently ignored.
 
-### 1.2 Vector-stream CollectorThread support
-
-`ProbeParallel::run` still throws on `StreamType::Vectors + CollectorThread`.
-The queue plumbing now supports multiple collectors, so the remaining work is
-mostly reader parity and tests. Until implemented, vector streams must use
-WorkerThread mode or the direct EventStream path.
-
 ## 2. Writer Backlog
 
 ### 2.1 Per-worker and per-record stats
@@ -72,7 +67,7 @@ WorkerThread mode or the direct EventStream path.
 
 This can be lightweight text first; structured stats can follow.
 
-### 2.2 Watchdog barrier resilience
+### 2.2 Watchdog barrier stress tests
 
 Checkpoint/final/fatal lifecycles route through `WatchRequest` barriers. Add
 stress tests for:
@@ -82,49 +77,19 @@ stress tests for:
 - fatal write while worker threads are in tree mutex sections;
 - multiple queued watch barriers after the first failure.
 
-Risk to check first: `quiesceWorkers()` waits for all configured Writer workers
-to arrive. A worker that exited early after storing `writerException_` will not
-arrive, so a later checkpoint may block unless the watchdog detects the stored
-exception before quiescing.
-
 ## 3. Monitor And Timer Backlog
 
-### 3.1 Replace `BlockTimer`
+### 3.1 Remaining timer labels
 
-`utils/Monitor/Timer.hh` still defines a global `BlockTimer` that opens
-`output/timer.log` in the constructor and writes an unlabeled duration in the
-destructor. Current Lambda call sites are commented out, so this is not an
-active hot-path cost unless someone re-enables it.
+`Monitor::TimerRegistry` / `MONITOR_SCOPE_TIMER` are implemented and most
+hot-path labels are instrumented. Two labels remain:
 
-Replace with a real `Monitor::ScopeTimer` / `TimerRegistry` design:
-
-- no file I/O on the hot path;
-- thread-local accumulation;
-- wall time and thread CPU time;
-- CSV dump at shutdown or on demand;
-- compile-time off switch for production builds.
-
-### 3.2 Instrument current bottleneck boundaries
-
-First labels:
-
-- `ProbeParallel/EventStream::next`
-- Probe queue push/pop wait
-- Probe collector callback dispatch
-- `ProbeIMT` allocate/read/flush
-- `Lambda::rootAnalysis`
-- `Lambda::reconstructCandidates`
-- `Record::Writer::pushFill`
-- `Record::Writer::applyParticleRequest`
-- tree mutex wait
-- clone merge
-- checkpoint write
-- final write
-- `AsyncLogger::publish`
+- `Record.Writer.treeMutex` — tree mutex wait in fill workers.
+- `Monitor.AsyncLogger.publishThreadStats` — per-thread stats publish cost.
 
 Wall/CPU ratios are needed before more architecture changes.
 
-### 3.3 Reduce per-event monitor locking
+### 3.2 Reduce per-event monitor locking
 
 `AsyncLogger::publish` still locks a single mutex when a publish happens.
 `publishThreadStats` is gated by `save_log_threads`, but when enabled it also
@@ -144,14 +109,7 @@ Partially done: `Lambda.hh` and `Config/Reader.hh` cleaned. Remaining headers
 to audit: `Probe/Parallel.hh`, `Probe/ConfigAid.hh`, `Record/Writer.hh`,
 `Monitor/Logger.hh`, `Config/Configure.hh`.
 
-### 4.2 Keep branch names honest
-
-`Lambda::declareDataObjects` writes `event_index`. The reconstruction config
-currently reads `Index`. That can be correct only for older input files. Add a
-comment or config variant for Writer-generated input so users do not silently
-run Probe against the wrong branch. See Issues.md for the active mismatch.
-
-### 4.3 Split parse side effects
+### 4.2 Split parse side effects
 
 The Probe facade still calls `configuration`, which creates directories before
 Probe has resolved a metadata-derived event count. The facade then re-reads
@@ -162,8 +120,6 @@ directories" so the final event count is known before filesystem side effects.
 
 - `Config::LimitAid::resolveLimitsPath` silently expands bare names into
   `configs/<name>.toml`; log or expose the resolved path.
-- `tests/run_all.sh` stops on first failure. Reporting all failures would make
-  CI triage easier.
 - `AsyncLogger::runLoop` carries several optional action snapshots across a
   lock boundary; a small action queue may be simpler to extend.
 - Consider structured JSON/CSV stats for Probe/Writer/Monitor once the timing

@@ -1,6 +1,6 @@
 # Architecture
 
-Updated: 2026-05-15.
+Updated: 2026-05-20.
 
 Focus: `utils/` layer. Domain logic lives in `modules/Lambda/`; driver entry
 points live in the top-level `_*.cc` files.
@@ -29,8 +29,8 @@ stage via `Config::configure<ProbePipeline>()`.
 - Parse a TOML file and an optional limits file into `Watch`, `Register`, and
   `Events` structs.
 - Resolve thread counts (hardware concurrency minus two, clamped to ≥ 1).
-- Parse `event_particles` sections into `CollectionSpec` vectors (both
-  inline-array and named-table formats).
+- Parse `[probe.events.particles.*]` / `[probe.feed.*]` sub-tables into a
+  `Probe::ProbeConfig` (Event bucket + optional Feed bucket).
 - Provide `Config::configure<ProbePipeline>()` — a single-call facade that
   configures Probe, Writer, and Monitor without the caller managing order.
 
@@ -58,51 +58,65 @@ their other umbrella includes.
 
 ### Responsibilities
 
-Read ROOT TTrees in parallel and invoke a user-supplied callback for each
-event, delivering a `std::vector<std::vector<Lorentz>>` — one inner vector
-per particle collection declared in config.
+Read ROOT TTrees in parallel and invoke user-supplied callbacks for each entry,
+delivering typed `Event` and `Feed` payloads:
 
-### `ProbeParallel` (the primary path)
+- **`Event`** — multi-row join across particle trees sharing an event-index
+  branch (e.g. protons + pions for the same event).  `event.particle["protons"]`
+  is a `vector<Lorentz>`.
+- **`Feed`** — scalar per-entry payload from a single TTree (one Lorentz per
+  labelled particle, plus named scalar/array node columns).
 
-`ProbeParallel` splits the event space across *N* reader threads. Two callback
-modes are selectable at runtime:
+Both are declared in `Probe/Types.hh`.  TOML configuration places particle and
+node specs in two independent buckets (`[probe.events.*]` and `[probe.feed.*]`)
+parsed into a single `Probe::ProbeConfig`.
 
-| Mode | Behaviour |
+### Streaming methods
+
+Three entry points on `ProbeParallel`:
+
+| Method | Mode | When to use |
+|---|---|---|
+| `streamEvents(ce)` | Event-only | `[probe.events.*]` only; throws if Feed-only config |
+| `streamFeed(cf)` | Feed-only | `[probe.feed.*]` only; throws if Events-only config |
+| `stream(ce, cf)` | Mixed | both buckets; both callbacks fire per entry |
+
+Callback signatures: `ce(const Event&, int threadId)` and
+`cf(const Feed&, int threadId)`.
+
+`ActiveMode` (`Events`, `Feed`, `Mixed`) is resolved automatically from the
+populated buckets and an optional `stream =` key in `[probe]`.
+
+### Callback modes
+
+| `CallbackMode` | Behaviour |
 |---|---|
-| `CollectorThread` | Reader workers push events onto a bounded queue; `analysis_threads` collector threads pop and invoke the callback concurrently. Callbacks must be thread-safe. If `analysis_threads = 0` it defaults to `probe_threads`. |
-| `WorkerThread` | Each reader worker invokes the callback directly. `analysis_threads` is ignored. Callbacks must be thread-safe and receive the reader worker index. |
-
-Stream types detected automatically:
-
-| `StreamType` | Source layout |
-|---|---|
-| `Events` | TTree with event-key index (flat per-event branches) |
-| `Vectors` | TTree with vector-valued branches (one entry = one event) |
-
-Entry bounds are precomputed in `configureProbe` by scanning the TTreeIndex or
-vector entry count, then partitioned uniformly across threads.
+| `CollectorThread` | Reader workers push frames onto a bounded queue; `analysis_threads` collector threads pop and invoke the callback concurrently. Callbacks must be thread-safe. |
+| `WorkerThread` | Each reader worker invokes the callback directly. `analysis_threads` is ignored. |
 
 ### `ProbeIMT`
 
-Alternative reader using ROOT's `TTreeProcessorMT`. Loads all events into a
-3-D buffer (`vector<vector<vector<Lorentz>>>`) then flushes in parallel.
-Suitable only for event-keyed (flat) streams; not used in the reconstruction
-pipeline by default.
+Alternative reader using ROOT's `TTreeProcessorMT`. Loads events into a
+3-D buffer then flushes in parallel via `run(callback)`.  Event-keyed (flat)
+streams only; uses `vector<EventParticleSpec>` directly.
 
 ### Internal structure
 
 ```
-Probe/Types          CollectionSpec, Bounds, EventStream, StreamType
-Probe/BranchControl  ROOT branch introspection, KinBuf (branch binding), key scanning
-Probe/ConfigAid      TOML → CollectionSpec parsing; validates branch names
-Probe/Readers        FlatReader, VecReader — per-thread TTreeReader wrappers
+Probe/Types          EventParticleSpec, EventNodeSpec, FeedParticleSpec, FeedNodeSpec,
+                     ProbeConfig, Event, Feed, QueuedFrame, ActiveMode, StreamMode
+Probe/BranchControl  ROOT branch introspection, KinBuf, probeFirstKey, enableRootThreadSafety
+Probe/ConfigAid      parseBranchPair, parseBranchList, parseProbeConfig — TOML → ProbeConfig
+Probe/Readers        EventReader/FeedReader base classes; EventParticleReaderRowJoin,
+                     EventNodeReaderArray; FeedParticleReader, FeedNodeReader;
+                     EventStream, FeedStream
 Probe/Parallel       ProbeParallel class declaration
 Probe/ParallelIMT    ProbeIMT class declaration
-Probe/Administration Constructors, getters, partition helpers (determineStreamType,
-                     prepareEventPartitions, prepareEntryBounds)
+Probe/Administration Constructors, getters, activeMode(), partition helpers
 Probe/Configuration  configureProbe() implementations for both classes
-Probe/Methods        run() body — spawns reader threads, handles IMT flush
-Probe/Directives     Worker and collector thread loop bodies
+Probe/Methods        Reader ctor bodies, EventStream/FeedStream iteration, IMT flush
+Probe/Directives     streamEvents/streamFeed/stream implementations;
+                     runWorkerThread/runCollectorThread loop bodies
 ```
 
 ---
@@ -281,9 +295,9 @@ Data flow:
 
 | Thread | Owner | Role |
 |---|---|---|
-| Main | driver | configure, call `run()`, await completion |
-| Reader × N | `ProbeParallel` | open TFile, read TTrees, push to queue or invoke callback |
-| Collector (optional) | `ProbeParallel` | drain queue, invoke callback serially |
+| Main | driver | configure, call `streamEvents`/`streamFeed`/`stream`, await completion |
+| Reader × N | `ProbeParallel` | open TFile, read TTrees, push frames to queue or invoke callback |
+| Collector (optional) | `ProbeParallel` | drain queue, invoke event/feed callbacks |
 | Fill worker × M | `Record::Writer` | dequeue `FillRequest`, fill per-worker clones |
 | Watchdog | `Record::Writer` | monitor `consumed_`, emit `WatchRequest`, merge+write on finalize |
 | Heartbeat | `Monitor::AsyncLogger` | render progress, detect stall, flush log slots |
@@ -301,14 +315,14 @@ TOML file
     ▼ Config::readConfig
 Watch / Register / Events
     │
-    ├──► Probe::configureProbe(Events)
+    ├──► Probe::configureProbe(ProbeConfig)   ← Event / Feed / Mixed
     │         │
-    │         ▼ ProbeParallel::run(callback)
-    │         │   Reader thread 0: FlatReader/VecReader → Lorentz vectors
+    │         ▼ ProbeParallel::streamEvents(callback)
+    │         │   Reader thread 0: EventStream → Event{particle, node}
     │         │   Reader thread 1: …
-    │         │   [Collector thread]: invoke callback(event_vectors)
+    │         │   [Collector thread]: invoke callback(Event&, threadId)
     │         │
-    │         └──► callback (Lambda::reconstructCandidates, …)
+    │         └──► callback (Lambda::rootAnalysis, …)
     │                   │
     │                   ▼ Record::Writer::fillParticleEvent(…)
     │                         │ pushFill(ParticleRequest)

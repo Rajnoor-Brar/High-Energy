@@ -118,7 +118,7 @@ namespace Probe {
         }
 
         inline Long64_t probeFirstKey(const std::string& filepath,
-                                       const std::vector<CollectionSpec>& collections) {
+                                       const std::vector<EventParticleSpec>& collections) {
             std::unique_ptr<TFile> f(TFile::Open(filepath.c_str(), "READ"));
             if (!f || f->IsZombie()) return 0;
             for (const auto& cs : collections) {

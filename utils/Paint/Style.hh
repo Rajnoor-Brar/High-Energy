@@ -33,7 +33,7 @@ namespace Paint {
 
         if (s[0] != 'k') {
             try { return static_cast<Color_t>(std::stoi(s)); }
-            catch (...) { return kBlack; }
+            catch (...) { throw std::runtime_error("unknown color spec: '" + spec + "'"); }
         }
 
         const std::size_t opPos = s.find_first_of("+-", 1);

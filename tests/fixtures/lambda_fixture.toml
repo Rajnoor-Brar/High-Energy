@@ -5,17 +5,33 @@
 [events]
 event_count = 50
 
+[threads]
+probe    = 4
+analysis = 2
+writer   = 2
+
 [probe]
-probe_threads    = 4
-analysis_threads = 2
 input_file = "tests/fixtures/lambda_fixture.root"
-event_particles  = [
-    ["protons", 0, "Protons", [["pX","D"], ["pY","D"], ["pZ","D"], ["Energy","D"]], [["event_index","I"]]],
-    ["pions", 0, "Pions", [["pX","D"], ["pY","D"], ["pZ","D"], ["Energy","D"]], [["event_index","I"]]]
-]
+
+[probe.events.particles.protons]
+tree            = "Protons"
+spec            = 0
+branches        = [["pX","D"], ["pY","D"], ["pZ","D"], ["Energy","D"]]
+index           = ["event_index", "I"]
+index_sorted    = true
+index_ascending = true
+index_monotonic = true
+
+[probe.events.particles.pions]
+tree            = "Pions"
+spec            = 0
+branches        = [["pX","D"], ["pY","D"], ["pZ","D"], ["Energy","D"]]
+index           = ["event_index", "I"]
+index_sorted    = true
+index_ascending = true
+index_monotonic = true
 
 [record]
-writer_threads = 2
 serial     = 0
 sr_padding = 1
 hist_scaling = 1.0

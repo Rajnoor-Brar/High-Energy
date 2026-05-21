@@ -27,15 +27,14 @@ inline std::size_t ProbeParallel::analysisThreadCount() const {
 
 inline std::size_t ProbeParallel::eventCount() const { return eventCount_; }
 
-inline StreamType ProbeParallel::streamType() const { return streamType_; }
+inline ActiveMode ProbeParallel::activeMode() const { return activeMode_; }
 
 inline std::string ProbeParallel::stats() const {
             std::lock_guard<std::mutex> lock(queueMutex_);
 
             std::ostringstream out;
             out << "ProbeParallel{"
-                << "streamType=" << streamTypeName(streamType_)
-                << ", callbackMode=" << callbackModeName(callbackMode_)
+                << "callbackMode=" << callbackModeName(callbackMode_)
                 << ", threadCount=" << threadCount_
                 << ", activeWorkers=" << eventPartitions_.size()
                 << ", eventCount=" << eventCount_
@@ -51,15 +50,6 @@ inline std::string ProbeParallel::stats() const {
             return out.str();
         }
 
-inline const char* ProbeParallel::streamTypeName(StreamType type) {
-            switch (type) {
-                case StreamType::Unset:   return "Unset";
-                case StreamType::Events:  return "Events";
-                case StreamType::Vectors: return "Vectors";
-            }
-            return "Unknown";
-        }
-
 inline const char* ProbeParallel::callbackModeName(CallbackMode mode) {
             switch (mode) {
                 case CallbackMode::WorkerThread:    return "WorkerThread";
@@ -71,7 +61,7 @@ inline const char* ProbeParallel::callbackModeName(CallbackMode mode) {
 inline void ProbeParallel::determineStreamType() {
             bool anyFlat = false;
             bool anyVec  = false;
-            for (const auto& spec : particleSpecs_) {
+            for (const auto& spec : config_.eventParticles) {
                 if (spec.indexBranches.empty()) anyVec  = true;
                 else                            anyFlat = true;
             }
@@ -88,7 +78,7 @@ inline std::vector<Long64_t> ProbeParallel::scanFlatEventKeys() const {
                 throw std::runtime_error("[Probe] Failed to open file '" + inputFile_ + "'");
 
             std::set<Long64_t> keySet;
-            for (const auto& spec : particleSpecs_) {
+            for (const auto& spec : config_.eventParticles) {
                 if (!spec.indexBranches.empty())
                     BranchControl::scanIndexBranch(
                         file.get(), spec.tree, spec.indexBranches[0].name, keySet, inputFile_);
@@ -101,7 +91,7 @@ inline std::size_t ProbeParallel::vectorEntryCount() const {
             if (!file || file->IsZombie())
                 throw std::runtime_error("[Probe] Failed to open file '" + inputFile_ + "'");
 
-            TTree* tree = dynamic_cast<TTree*>(file->Get(particleSpecs_[0].tree.c_str()));
+            TTree* tree = dynamic_cast<TTree*>(file->Get(config_.eventParticles[0].tree.c_str()));
             if (!tree) return 0;
             return static_cast<std::size_t>(std::max<Long64_t>(0, tree->GetEntries()));
         }
@@ -132,7 +122,7 @@ inline void ProbeParallel::prepareEventPartitions(const std::vector<Long64_t>& b
                 return;
             }
 
-            const Long64_t first = BranchControl::probeFirstKey(inputFile_, particleSpecs_);
+            const Long64_t first = BranchControl::probeFirstKey(inputFile_, config_.eventParticles);
             const Long64_t last  = first + static_cast<Long64_t>(eventCount_) - 1;
             eventRange_ = {first, last};
             eventPartitions_ = partitionDenseRange(first, last, threadCount_);
@@ -147,14 +137,14 @@ inline void ProbeParallel::prepareEntryBounds() {
             if (streamType_ != StreamType::Events || eventPartitions_.empty()) return;
 
             entryBoundsByWorker_.assign(
-                eventPartitions_.size(), std::vector<Bounds>(particleSpecs_.size()));
+                eventPartitions_.size(), std::vector<Bounds>(config_.eventParticles.size()));
 
             std::unique_ptr<TFile> file(TFile::Open(inputFile_.c_str(), "READ"));
             if (!file || file->IsZombie())
                 throw std::runtime_error("[Probe] Failed to open file '" + inputFile_ + "'");
 
-            for (std::size_t p = 0; p < particleSpecs_.size(); ++p) {
-                const auto& spec = particleSpecs_[p];
+            for (std::size_t p = 0; p < config_.eventParticles.size(); ++p) {
+                const auto& spec = config_.eventParticles[p];
                 if (spec.indexBranches.empty()) continue;
 
                 TTree* tree = dynamic_cast<TTree*>(file->Get(spec.tree.c_str()));
@@ -236,7 +226,7 @@ inline void ProbeParallel::requestStop() {
             queueNotFull_.notify_all();
         }
 
-inline bool ProbeParallel::pushQueuedEvent(QueuedEvent event) {
+inline bool ProbeParallel::pushQueuedFrame(QueuedFrame frame) {
             std::unique_lock<std::mutex> lock(queueMutex_);
             queueNotFull_.wait(lock, [&] {
                 return stopRequested_.load(std::memory_order_acquire)
@@ -245,8 +235,8 @@ inline bool ProbeParallel::pushQueuedEvent(QueuedEvent event) {
 
             if (stopRequested_.load(std::memory_order_acquire)) return false;
 
-            const std::size_t worker = event.workerIndex;
-            queue_.push_back(std::move(event));
+            const std::size_t worker = frame.workerIndex;
+            queue_.push_back(std::move(frame));
             ++produced_;
 
             lock.unlock();
@@ -255,7 +245,7 @@ inline bool ProbeParallel::pushQueuedEvent(QueuedEvent event) {
             return true;
         }
 
-inline bool ProbeParallel::popQueuedEvent(QueuedEvent& event) {
+inline bool ProbeParallel::popQueuedFrame(QueuedFrame& frame) {
             std::unique_lock<std::mutex> lock(queueMutex_);
             queueNotEmpty_.wait(lock, [&] {
                 return stopRequested_.load(std::memory_order_acquire)
@@ -265,7 +255,7 @@ inline bool ProbeParallel::popQueuedEvent(QueuedEvent& event) {
 
             if (queue_.empty()) return false;
 
-            event = std::move(queue_.front());
+            frame = std::move(queue_.front());
             queue_.pop_front();
             ++consumed_;
 
@@ -290,11 +280,9 @@ inline std::size_t ProbeIMT::threadCount() const { return threadCount_; }
 
 inline std::size_t ProbeIMT::eventCount() const { return eventCount_; }
 
-inline StreamType ProbeIMT::streamType() const { return StreamType::Events; }
-
 inline std::string ProbeIMT::stats() const {
             std::ostringstream out;
-            out << "ProbeIMT{streamType=Events"
+            out << "ProbeIMT{"
                 << ", threadCount=" << threadCount_
                 << ", eventCount="  << eventCount_
                 << ", firstKey="    << firstEventKey_

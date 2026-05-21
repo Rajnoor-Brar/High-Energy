@@ -33,8 +33,10 @@ namespace Monitor {
 
             rejectMovedMonitorKey(*monitor, "print_interval",
                                   "[monitor.intervals].print_interval");
-            rejectMovedMonitorKey(*monitor, "check_interval",
-                                  "[monitor.intervals].check_interval");
+            if (monitor->contains("check_interval"))
+                throw std::runtime_error(
+                    "[Config] '[monitor.intervals].check_interval' was removed; "
+                    "stall detection is time-based via program_stall_threshold");
             rejectMovedMonitorKey(*monitor, "heartbeat_interval",
                                   "[monitor.intervals].heartbeat_interval");
             rejectMovedMonitorKey(*monitor, "terminal_refresh_interval",
@@ -63,7 +65,7 @@ namespace Monitor {
                                  const std::string& configPath,
                                  const std::string& /*project*/)
     {
-        toml::table config = toml::parse_file(configPath);
+        toml::table config = Config::parseConfig(configPath);
 
         // Only [monitor] is supported; legacy [log] / [logging] aliases were
         // removed for consistency with the rest of the TOML layout.
@@ -87,11 +89,13 @@ namespace Monitor {
         PacingInfo p = logger.pacingInfo();  // start from current defaults
 
         if (intervals) {
+            if (intervals->contains("check_interval"))
+                throw std::runtime_error(
+                    "[Config] '[monitor.intervals].check_interval' was removed; "
+                    "stall detection is time-based via program_stall_threshold");
+
             p.printInterval = static_cast<std::size_t>(
                 (*intervals)["print_interval"].value_or(static_cast<int64_t>(p.printInterval)));
-            p.checkInterval = static_cast<std::size_t>(
-                (*intervals)["check_interval"].value_or(static_cast<int64_t>(p.checkInterval)));
-
             const std::size_t hb = static_cast<std::size_t>(
                 (*intervals)["heartbeat_interval"].value_or(
                     static_cast<int64_t>(p.heartbeatMs.count())/1000));
@@ -107,11 +111,9 @@ namespace Monitor {
         }
 
         // Derive barInterval from window width and event count.
-        static const int wsCol = [] {
-            struct winsize windowSize{};
-            ioctl(STDOUT_FILENO, TIOCGWINSZ, &windowSize);
-            return static_cast<int>(windowSize.ws_col);
-        }();
+        struct winsize windowSize{};
+        ioctl(STDOUT_FILENO, TIOCGWINSZ, &windowSize);
+        const int wsCol = static_cast<int>(windowSize.ws_col);
         const std::size_t nEvents = logger.watch().nEvents;
         if (nEvents > 0) {
             const std::size_t divisor  = static_cast<std::size_t>(std::max(1, wsCol - 6));
@@ -138,7 +140,7 @@ namespace Monitor {
             const bool        saveLogThreads  = logs ? (*logs)["save_log_threads"].value_or(false) : false;
             const bool        saveFinalLog    = logs ? (*logs)["save_final_log"].value_or(true)    : true;
             const std::size_t cpInterval      = static_cast<std::size_t>(
-                intervals ? (*intervals)["checkpoint_interval"].value_or(static_cast<int64_t>(100000))
+                intervals ? (*intervals)["checkpoint_interval"].value_or(static_cast<int64_t>(kDefaultCheckpointInterval))
                           : static_cast<int64_t>(100000));
             logger.configureWatchEmission(saveHeartbeat, saveCheckpoints, cpInterval);
             logger.configureArtifactEmission(saveLogThreads, saveFinalLog);

@@ -24,9 +24,18 @@ namespace Monitor {
 
     inline const PacingInfo& AsyncLogger::pacingInfo() const { return pacing_; }
 
-    inline std::size_t AsyncLogger::checkInterval() const { return pacing_.checkInterval; }
-
     inline void AsyncLogger::configurePacing(PacingInfo pacing) { pacing_ = std::move(pacing); }
+
+    // Apply pacing_ values to the internal interval fields, using compile-time
+    // defaults when the pacing field is zero/unset.  Must be called under mutex_.
+    inline void AsyncLogger::applyPacing() {
+        heartbeat_interval_      = pacing_.heartbeatMs     > Config::uSeconds(0)
+                                    ? pacing_.heartbeatMs     : Config::uSeconds(kDefaultHeartbeatMs * 1000);
+        terminalRefreshInterval_ = pacing_.terminalRefresh > Config::Seconds(0)
+                                    ? pacing_.terminalRefresh : Config::Seconds(kDefaultStallThresholdSeconds);
+        programStallThreshold_   = pacing_.stallThreshold  > Config::Seconds(0)
+                                    ? pacing_.stallThreshold  : Config::Seconds(kDefaultStallThresholdSeconds);
+    }
 
     inline void AsyncLogger::configureWatchEmission(bool saveHeartbeat,
                                                     bool saveCheckpoints,
@@ -34,7 +43,7 @@ namespace Monitor {
     {
         saveHeartbeat_      = saveHeartbeat;
         saveCheckpoints_    = saveCheckpoints;
-        checkpointInterval_ = checkpointInterval > 0 ? checkpointInterval : 100000;
+        checkpointInterval_ = checkpointInterval > 0 ? checkpointInterval : kDefaultCheckpointInterval;
     }
 
     inline void AsyncLogger::configureArtifactEmission(bool saveLogThreads, bool saveFinalLog) {
@@ -86,12 +95,7 @@ namespace Monitor {
             fatalStallTriggered_     = false;
             terminalInitialized_     = false;
             progressBarVisible_      = false;
-            heartbeat_interval_      = pacing_.heartbeatMs     > Config::uSeconds(0)
-                                        ? pacing_.heartbeatMs     : Config::uSeconds(1000);
-            terminalRefreshInterval_ = pacing_.terminalRefresh > Config::Seconds(0)
-                                        ? pacing_.terminalRefresh : Config::Seconds(300);
-            programStallThreshold_   = pacing_.stallThreshold  > Config::Seconds(0)
-                                        ? pacing_.stallThreshold  : Config::Seconds(300);
+            applyPacing();
             watch_.start             = std::chrono::system_clock::now();
 
             RunSnapshot snapshot = makeSnapshot(watch_, RunPhase::Starting);
@@ -122,12 +126,7 @@ namespace Monitor {
             initialized_             = true;
             stopRequested_           = false;
             fatalStallTriggered_     = false;
-            heartbeat_interval_      = pacing_.heartbeatMs     > Config::uSeconds(0)
-                                        ? pacing_.heartbeatMs     : Config::uSeconds(1000);
-            terminalRefreshInterval_ = pacing_.terminalRefresh > Config::Seconds(0)
-                                        ? pacing_.terminalRefresh : Config::Seconds(300);
-            programStallThreshold_   = pacing_.stallThreshold  > Config::Seconds(0)
-                                        ? pacing_.stallThreshold  : Config::Seconds(300);
+            applyPacing();
             if (!preserveConfigStart_)
                 watch_.start = std::chrono::system_clock::now();
             RunSnapshot snapshot = makeSnapshot(watch_, RunPhase::Initialisation);

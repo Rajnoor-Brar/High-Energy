@@ -30,7 +30,7 @@ int main(int argc, char* argv[]) {
     writer.start();
 
     Lambda::AnalysisContext ctx{physParams, asyncLogger.watch(), asyncLogger, writer};
-    probe.run([&](const Probe::Event& ev, int threadId) {
+    probe.streamEvents([&](const Probe::Event& ev, int threadId) {
         Lambda::rootAnalysis(ev, threadId, ctx);
     });
 

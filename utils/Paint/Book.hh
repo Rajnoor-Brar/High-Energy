@@ -1,8 +1,10 @@
 #pragma once
 
+#include <algorithm>
 #include <filesystem>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include <toml++/toml.hpp>
 
@@ -33,6 +35,32 @@ namespace Paint {
             return (*paint)["default_style"].value_or(std::string{kDefaultStylePath});
         }
 
+        // parseBookConfig — mirrors Config::parseConfig for the Paint layer.
+        // Returns a merged table when configPath is a directory of *.toml files,
+        // or a single parsed table when it is a regular file.
+        inline toml::table parseBookConfig(const std::string& configPath) {
+            namespace fs = std::filesystem;
+            if (!fs::is_directory(configPath))
+                return toml::parse_file(configPath);
+
+            std::vector<std::string> paths;
+            for (const auto& entry : fs::directory_iterator(configPath)) {
+                if (entry.is_regular_file() && entry.path().extension() == ".toml")
+                    paths.push_back(entry.path().string());
+            }
+            if (paths.empty())
+                throw std::runtime_error(
+                    "Paint config directory '" + configPath + "' contains no .toml files");
+
+            std::sort(paths.begin(), paths.end());
+            toml::table master;
+            for (const auto& p : paths) {
+                toml::table t = toml::parse_file(p);
+                mergeTomlTables(master, t);
+            }
+            return master;
+        }
+
     } // namespace detail
 
     inline PaintBook loadBook(const std::string& configPath) {
@@ -42,7 +70,7 @@ namespace Paint {
             throw std::runtime_error("Paint config does not exist: " + configPath);
         }
 
-        toml::table userConfig = toml::parse_file(configPath);
+        toml::table userConfig = detail::parseBookConfig(configPath);
         const std::string defaultStylePath = detail::readDefaultStylePath(userConfig);
 
         toml::table merged;

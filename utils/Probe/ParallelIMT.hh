@@ -14,7 +14,13 @@ namespace Probe {
         ProbeIMT();
 
         void configureProbe(std::string inputFile,
-                            std::vector<CollectionSpec> particleSpecs,
+                            std::vector<EventParticleSpec> particleSpecs,
+                            std::size_t threadCount,
+                            std::size_t requestedEvents,
+                            bool userRequestedEvents);
+
+        void configureProbe(std::string inputFile,
+                            ProbeConfig config,
                             std::size_t threadCount,
                             std::size_t requestedEvents,
                             bool userRequestedEvents);
@@ -22,7 +28,6 @@ namespace Probe {
         const std::string& inputFile() const;
         std::size_t threadCount() const;
         std::size_t eventCount() const;
-        StreamType streamType() const;
         std::string stats() const;
 
         template<typename Callback>
@@ -34,17 +39,17 @@ namespace Probe {
         template<typename Callback>
         void flushParallel(BufferT& buffer, Callback&& callback);
 
-        void readSpecInto(const CollectionSpec& spec,
+        void readSpecInto(const EventParticleSpec& spec,
                           std::size_t specOrdinal,
                           BufferT& buffer);
 
-        bool                      configured_    = false;
-        std::string               inputFile_;
-        std::vector<CollectionSpec> specs_;
-        std::size_t               threadCount_   = 0;
-        std::size_t               eventCount_    = 0;
-        Long64_t                  firstEventKey_ = 0;
-        std::atomic<std::size_t>  consumed_{0};
+        bool                           configured_    = false;
+        std::string                    inputFile_;
+        std::vector<EventParticleSpec> specs_;
+        std::size_t                    threadCount_   = 0;
+        std::size_t                    eventCount_    = 0;
+        Long64_t                       firstEventKey_ = 0;
+        std::atomic<std::size_t>       consumed_{0};
     };
 
 } // namespace Probe

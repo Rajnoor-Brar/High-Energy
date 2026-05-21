@@ -1,0 +1,174 @@
+# Record configuration template.
+# Source readers:
+#   Config::readRecordSection  -> Config::Register (bin_count, hist_scaling,
+#                                 writer_threads, writer_queue_capacity, serial)
+#   Config::readPathsAndFile   -> Config::Register path/name fields
+#   Record::configureWriter    -> Record::Paths, Record::HistConfig
+#   Record::Meta::mergeFromToml -> Record::Meta::Record
+#
+# Thread-count precedence (highest to lowest):
+#   1. [threads].writer        (global block, see Other.toml)
+#   2. [record].writer_threads (per-section override)
+#   3. Config::resolveSectionThreadCount(0)  (auto: (hw-2)/3 floored at 1)
+
+[record]
+# Serial number appended to directory and file names when serialDirectory/
+# serial flags are enabled. Stored in Config::Register.serial.
+serial = 0
+
+# Zero-padding width for the serial string "_NN". Used by readPathsAndFile.
+# e.g. sr_padding=2 -> "_00", "_01"; sr_padding=3 -> "_000".
+sr_padding = 2
+
+# Default histogram bin count for all declared histograms.
+# Stored in Config::Register.binCount -> Record::HistConfig.binCount.
+bin_count = 100
+
+# Global histogram Y-axis scaling divisor. Applied during scaleAndWrite.
+# Stored in Config::Register.histScale -> Record::HistConfig.histScale.
+hist_scaling = 100.0
+
+# Writer fill-worker thread count. Overrides [threads].writer when non-zero.
+# Stored in Config::Register.writer_threads -> Writer::setRecordThreadCount.
+writer_threads = 0
+
+# Fill-request queue depth between analysis and writer threads.
+# 0 means Writer internal default. Stored in Config::Register.writer_queue_capacity.
+writer_queue_capacity = 0
+
+[record.paths]
+# Base output directory. Serialised to rootDirectory; if serialDirectory=true,
+# the padded serial suffix is appended before the trailing slash.
+# Stored in Config::Register.rootDirectory -> Record::Paths.rootDirectory.
+directory = "output/project/"
+
+# Log file directory name. If logInSubDir=true, written as rootDirectory + this.
+# Stored in Config::Register.logDirectory -> Record::Paths.logDirectory.
+output_log_directory = "logs/"
+
+# Checkpoint file directory name. If checkpointsInSubDir=true, written as
+# rootDirectory + this. Stored in Config::Register.checkpointDirectory.
+checkpoint_directory = "checkpoints/"
+
+# Append "_NN" serial sub-directory to the base directory.
+# true  -> output/project/_00/   false -> output/project/
+serialDirectory = true
+
+# Resolve log path relative to rootDirectory.
+# true  -> output/project/_00/logs/   false -> logs/  (relative to cwd)
+logInSubDir = true
+
+# Resolve checkpoint path relative to rootDirectory.
+# true  -> output/project/_00/checkpoints/   false -> checkpoints/
+checkpointsInSubDir = true
+
+[record.file]
+# Bare output filename prefix. Combined with serial/energy/events suffixes to
+# form Register.fileTitle and all output artifact paths.
+prefix = "Run"
+
+# Append "_NN" serial to generated filenames.
+serial = true
+
+# Append "_XGeV" beam energy to generated filenames.
+energy = true
+
+# Append "_NM" formatted event count to generated filenames.
+events = true
+
+[record.metadata]
+# Human-readable dataset label. Stored in Record::Meta::Dataset.name.
+dataset_name = ""
+
+# Dataset kind, e.g. "MC" or "data". Stored in Record::Meta::Dataset.data_type.
+data_type = "MC"
+
+# Data-taking period label. Stored in Record::Meta::Dataset.run_period.
+run_period = ""
+
+# Campaign label. Stored in Record::Meta::Dataset.campaign.
+campaign = ""
+
+# Experiment/source label. Stored in Record::Meta::Dataset.experiment.
+# When absent, defaults to "Pythia8_standalone" at Record::Meta::fillDerived.
+# Overwritten by About/dataset/experiment in the probe input file when non-empty.
+experiment = "Pythia8_standalone"
+
+# Free-form description. Stored in Record::Meta::Notes.description.
+notes = ""
+
+# Known issues with this run. Stored in Record::Meta::Notes.known_issues.
+known_issues = ""
+
+# Contact information. Stored in Record::Meta::Notes.contact.
+contact = ""
+
+# Physics generator name. Stored in Record::Meta::Physics.generator.
+# Overwritten by About/physics/generator in the probe input file when non-empty.
+generator = "Pythia8"
+
+# Generator tune label. Stored in Record::Meta::Physics.tune.
+tune = ""
+
+# PDF set label. Stored in Record::Meta::Physics.pdf_set.
+pdf_set = ""
+
+# =============================================================================
+# USAGE PATTERNS
+# =============================================================================
+
+# ── Minimal development run (no serial dirs, flat output) ────────────────────
+#
+# [record]
+# serial     = 0
+# sr_padding = 1
+# bin_count  = 100
+#
+# [record.paths]
+# directory       = "output/dev/"
+# serialDirectory = false
+# logInSubDir     = false
+# checkpointsInSubDir = false
+#
+# [record.file]
+# prefix = "dev"
+# serial = false
+# energy = false
+# events = false
+
+# ── Production run with serial tracking ──────────────────────────────────────
+#
+# [record]
+# serial     = 42
+# sr_padding = 2
+# bin_count  = 400
+#
+# [record.paths]
+# directory            = "output/Lambda_Reconstruction/"
+# output_log_directory = "logs/"
+# checkpoint_directory = "checkpoints/"
+# serialDirectory      = true
+# logInSubDir          = true
+# checkpointsInSubDir  = true
+#
+# [record.file]
+# prefix = "Lambda_Recons"
+# serial = false
+# energy = false
+# events = true
+#
+# [record.metadata]
+# dataset_name = "Lambda_MC_pp"
+# data_type    = "MC"
+# notes        = "7 TeV pp, Monash tune, 10M events"
+
+# ── High-resolution histograms with explicit writer tuning ────────────────────
+#
+# [threads]
+# writer = 6      # prefer setting here; overrides writer_threads below
+#
+# [record]
+# bin_count             = 800
+# hist_scaling          = 1.0
+# writer_threads        = 0   # 0 = defer to [threads].writer
+# writer_queue_capacity = 500

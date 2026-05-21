@@ -71,6 +71,16 @@ namespace Monitor {
         return snapshot;
     }
 
+    // Writes the four stall detail fields shared by runStatString and buildEmergencyLogText.
+    // Caller is responsible for any surrounding guard (fatalStall check) or header line.
+    inline void writeStallFields(std::ostream& stream, const RunSnapshot& snapshot) {
+        stream << "Fatal Reason                  : " << snapshot.fatalReason << '\n';
+        stream << "Stall Duration                : " << Utility::durationString(snapshot.stallDuration, true) << '\n';
+        stream << "Stall Threshold               : "
+               << Utility::durationString(std::chrono::duration_cast<Config::uSeconds>(snapshot.stallThreshold), true) << '\n';
+        stream << "Fatal Multiplier              : " << snapshot.stallMultiplier << "x\n";
+    }
+
     inline std::string runStatString(const RunSnapshot& snapshot, const Config::TimePoint& now) {
         std::ostringstream stream;
         const auto idleFor  = std::chrono::duration_cast<Config::uSeconds>(now - snapshot.lastUpdateTime);
@@ -90,11 +100,7 @@ namespace Monitor {
 
         if (snapshot.fatalStall) {
             stream << "Fatal Stall                   : YES\n";
-            stream << "Fatal Reason                  : " << snapshot.fatalReason << '\n';
-            stream << "Stall Duration                : " << Utility::durationString(snapshot.stallDuration, true) << '\n';
-            stream << "Stall Threshold               : "
-                   << Utility::durationString(std::chrono::duration_cast<Config::uSeconds>(snapshot.stallThreshold), true) << '\n';
-            stream << "Fatal Multiplier              : " << snapshot.stallMultiplier << "x\n";
+            writeStallFields(stream, snapshot);
         }
         return stream.str();
     }

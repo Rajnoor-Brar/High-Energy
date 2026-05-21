@@ -155,6 +155,8 @@ namespace Paint {
         std::vector<std::string> formats{"png"};
         bool overwrite{true};
         int imageScale{1};
+        double textScale{1.0};
+        double brushScale{1.0};
         Mode mode{Mode::Single};
         bool modeExplicit{false};
         int rows{0};

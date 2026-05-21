@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -44,6 +45,38 @@ namespace Paint {
             canvas->SetBorderMode(0);
             canvas->SetFrameBorderMode(0);
             return canvas;
+        }
+
+        inline double positiveScale(double value) {
+            return value > 0.0 ? value : 1.0;
+        }
+
+        template <typename T>
+        inline T scaleIntegralSize(T value, double scale) {
+            if (value == 0) return value;
+            const long scaled = std::lround(static_cast<double>(value) * scale);
+            if (value > 0) return static_cast<T>(std::max<long>(1, scaled));
+            return static_cast<T>(scaled);
+        }
+
+        inline Style scaledStyle(Style style, const RenderResult& result) {
+            const double imageScale = static_cast<double>(std::max(1, result.imageScale));
+            const double textScale = imageScale * positiveScale(result.textScale);
+            const double brushScale = imageScale * positiveScale(result.brushScale);
+
+            style.axis.titleSize = static_cast<Float_t>(style.axis.titleSize * textScale);
+            style.axis.labelSize = static_cast<Float_t>(style.axis.labelSize * textScale);
+            style.stats.textSize = static_cast<Float_t>(style.stats.textSize * textScale);
+            style.legend.textSize = static_cast<Float_t>(style.legend.textSize * textScale);
+            style.titleBox.textSize = static_cast<Float_t>(style.titleBox.textSize * textScale);
+
+            style.line.width = scaleIntegralSize(style.line.width, brushScale);
+            style.marker.size = static_cast<Float_t>(style.marker.size * brushScale);
+            style.stats.borderSize = scaleIntegralSize(style.stats.borderSize, brushScale);
+            style.legend.borderSize = scaleIntegralSize(style.legend.borderSize, brushScale);
+            style.titleBox.borderSize = scaleIntegralSize(style.titleBox.borderSize, brushScale);
+
+            return style;
         }
 
         inline void configurePad(TPad* pad, const Style& style) {
@@ -104,10 +137,10 @@ namespace Paint {
             return upper.find("SAME") != std::string::npos;
         }
 
-        inline void applyToSource(ResolvedSource& source) {
+        inline void applyToSource(ResolvedSource& source, const Style& style) {
             for (const auto& [kind, entry] : kindRegistry()) {
                 if (kind == source.kind) {
-                    entry.applyStyle(source.object, source.style);
+                    entry.applyStyle(source.object, style);
                     return;
                 }
             }
@@ -131,8 +164,8 @@ namespace Paint {
             }
         }
 
-        inline void applyStatsBox(ResolvedSource& source, TPad* pad) {
-            if (pad == nullptr || !source.style.stats.show) return;
+        inline void applyStatsBox(ResolvedSource& source, TPad* pad, const Style& style) {
+            if (pad == nullptr || !style.stats.show) return;
             TH1* hist = dynamic_cast<TH1*>(source.object);
             if (hist == nullptr) return;
 
@@ -140,15 +173,15 @@ namespace Paint {
             TPaveStats* stats = dynamic_cast<TPaveStats*>(hist->FindObject("stats"));
             if (stats == nullptr) return;
 
-            stats->SetX2NDC(source.style.stats.x);
-            stats->SetY2NDC(source.style.stats.y);
-            stats->SetX1NDC(source.style.stats.x - source.style.stats.width);
-            stats->SetY1NDC(source.style.stats.y - source.style.stats.height);
-            stats->SetTextFont(source.style.stats.textFont);
-            stats->SetTextSize(source.style.stats.textSize);
-            stats->SetBorderSize(source.style.stats.borderSize);
-            stats->SetFillColor(source.style.stats.fillColor);
-            stats->SetFillStyle(source.style.stats.fillStyle);
+            stats->SetX2NDC(style.stats.x);
+            stats->SetY2NDC(style.stats.y);
+            stats->SetX1NDC(style.stats.x - style.stats.width);
+            stats->SetY1NDC(style.stats.y - style.stats.height);
+            stats->SetTextFont(style.stats.textFont);
+            stats->SetTextSize(style.stats.textSize);
+            stats->SetBorderSize(style.stats.borderSize);
+            stats->SetFillColor(style.stats.fillColor);
+            stats->SetFillStyle(style.stats.fillStyle);
             pad->Modified();
             pad->Update();
         }
@@ -167,76 +200,85 @@ namespace Paint {
             pad->Update();
         }
 
-        inline void drawOneOnPad(ResolvedSource& source, TPad* pad) {
-            configurePad(pad, source.style);
+        inline void drawOneOnPad(ResolvedSource& source, TPad* pad, const RenderResult& result) {
+            const Style style = scaledStyle(source.style, result);
+            configurePad(pad, style);
             if (pad != nullptr) pad->cd();
-            applyGlobalStyle(source.style);
-            applyToSource(source);
+            applyGlobalStyle(style);
             setSourceTitle(source);
             drawSource(source, defaultDrawOption(source));
-            applyStatsBox(source, pad);
-            applyTitleBox(pad, source.style);
+            // Apply per-source style AFTER Draw(): gROOT->ForceStyle() (armed by
+            // applyGlobalStyle) fires inside TObject::AppendPad during Draw() and
+            // calls UseCurrentStyle(), which resets line/marker colors to gStyle
+            // defaults.  Setting them again here survives that reset.
+            applyToSource(source, style);
+            applyStatsBox(source, pad, style);
+            applyTitleBox(pad, style);
         }
 
         inline void drawSingle(RenderResult& result, TCanvas& canvas) {
-            drawOneOnPad(result.sources.front(), &canvas);
+            drawOneOnPad(result.sources.front(), &canvas, result);
         }
 
         inline void drawGrid(RenderResult& result, TCanvas& canvas) {
             canvas.Divide(result.cols, result.rows);
             for (std::size_t i = 0; i < result.sources.size(); ++i) {
                 TPad* pad = dynamic_cast<TPad*>(canvas.cd(static_cast<Int_t>(i + 1)));
-                drawOneOnPad(result.sources[i], pad);
+                drawOneOnPad(result.sources[i], pad, result);
             }
             canvas.cd();
         }
 
         inline void drawOverlay(RenderResult& result, TCanvas& canvas) {
-            configurePad(&canvas, result.style);
+            const Style resultStyle = scaledStyle(result.style, result);
+            configurePad(&canvas, resultStyle);
             canvas.cd();
-            applyGlobalStyle(result.style);
+            applyGlobalStyle(resultStyle);
 
             const bool hasLabels = std::any_of(result.sources.begin(), result.sources.end(), [](const ResolvedSource& source) {
                 return !source.label.empty();
             });
 
             std::unique_ptr<TLegend> legend;
-            if (result.style.legend.show || hasLabels) {
+            if (resultStyle.legend.show || hasLabels) {
                 legend = std::make_unique<TLegend>(
-                    result.style.legend.x1, result.style.legend.y1,
-                    result.style.legend.x2, result.style.legend.y2);
-                legend->SetTextFont(result.style.legend.textFont);
-                legend->SetTextSize(result.style.legend.textSize);
-                legend->SetBorderSize(result.style.legend.borderSize);
-                legend->SetFillStyle(result.style.legend.fillStyle);
+                    resultStyle.legend.x1, resultStyle.legend.y1,
+                    resultStyle.legend.x2, resultStyle.legend.y2);
+                legend->SetTextFont(resultStyle.legend.textFont);
+                legend->SetTextSize(resultStyle.legend.textSize);
+                legend->SetBorderSize(resultStyle.legend.borderSize);
+                legend->SetFillStyle(resultStyle.legend.fillStyle);
             }
 
             for (std::size_t i = 0; i < result.sources.size(); ++i) {
                 ResolvedSource& source = result.sources[i];
-                applyToSource(source);
+                const Style sourceStyle = scaledStyle(source.style, result);
                 setSourceTitle(source);
 
                 std::string option = defaultDrawOption(source);
                 if (i > 0 && !containsSame(option)) option += " SAME";
                 drawSource(source, option);
+                // Apply per-source style (palette colors, line width, etc.) AFTER
+                // Draw() so ROOT's ForceStyle/UseCurrentStyle cannot overwrite them.
+                applyToSource(source, sourceStyle);
 
                 // Stack each source's stats box vertically so they don't overwrite each other.
-                const double stride = source.style.stats.height + 0.02;
-                const double y2     = source.style.stats.y - static_cast<double>(i) * stride;
+                const double stride = sourceStyle.stats.height + 0.02;
+                const double y2     = sourceStyle.stats.y - static_cast<double>(i) * stride;
                 if (TH1* hist = dynamic_cast<TH1*>(source.object); hist != nullptr
-                        && source.style.stats.show) {
+                        && sourceStyle.stats.show) {
                     canvas.Update();
                     if (TPaveStats* stats = dynamic_cast<TPaveStats*>(hist->FindObject("stats"))) {
-                        stats->SetX2NDC(source.style.stats.x);
+                        stats->SetX2NDC(sourceStyle.stats.x);
                         stats->SetY2NDC(y2);
-                        stats->SetX1NDC(source.style.stats.x - source.style.stats.width);
-                        stats->SetY1NDC(y2 - source.style.stats.height);
-                        stats->SetTextFont(source.style.stats.textFont);
-                        stats->SetTextSize(source.style.stats.textSize);
-                        stats->SetBorderSize(source.style.stats.borderSize);
-                        stats->SetLineColor(source.style.line.color);
-                        stats->SetFillColor(source.style.stats.fillColor);
-                        stats->SetFillStyle(source.style.stats.fillStyle);
+                        stats->SetX1NDC(sourceStyle.stats.x - sourceStyle.stats.width);
+                        stats->SetY1NDC(y2 - sourceStyle.stats.height);
+                        stats->SetTextFont(sourceStyle.stats.textFont);
+                        stats->SetTextSize(sourceStyle.stats.textSize);
+                        stats->SetBorderSize(sourceStyle.stats.borderSize);
+                        stats->SetLineColor(sourceStyle.line.color);
+                        stats->SetFillColor(sourceStyle.stats.fillColor);
+                        stats->SetFillStyle(sourceStyle.stats.fillStyle);
                         canvas.Modified();
                         canvas.Update();
                     }

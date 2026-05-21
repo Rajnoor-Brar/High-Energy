@@ -6,6 +6,7 @@
 #include <memory>
 #include <optional>
 #include <ostream>
+#include <regex>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -89,6 +90,9 @@ namespace Paint {
                 mergeLegend(*sub, style.legend);
             } else if (subtableKey == "title_box") {
                 mergeTitleBox(*sub, style.titleBox);
+            } else {
+                throw std::logic_error(
+                    "Paint: mergeSubsectionUse: unhandled subtable key '" + subtableKey + "'");
             }
         }
 
@@ -103,6 +107,9 @@ namespace Paint {
             }
             readValue(table, "rows", result.rows);
             readValue(table, "cols", result.cols);
+            readValue(table, "image_scale", result.imageScale);
+            readValue(table, "text_scale", result.textScale);
+            readValue(table, "brush_scale", result.brushScale);
             readString(table, "title", result.title);
 
             const std::vector<std::string> formats = readStringArray(table["formats"]);
@@ -220,31 +227,12 @@ namespace Paint {
             }
         }
 
-        // Glob matcher: '*' matches any sequence, '?' matches any single character.
-        inline bool globMatch(const std::string& pattern, const std::string& text) {
-            std::size_t pi = 0, ti = 0;
-            std::size_t starPi = std::string::npos, starTi = 0;
-            while (ti < text.size()) {
-                if (pi < pattern.size() && (pattern[pi] == text[ti] || pattern[pi] == '?')) {
-                    ++pi; ++ti;
-                } else if (pi < pattern.size() && pattern[pi] == '*') {
-                    starPi = pi++;
-                    starTi = ti;
-                } else if (starPi != std::string::npos) {
-                    pi = starPi + 1;
-                    ti = ++starTi;
-                } else {
-                    return false;
-                }
-            }
-            while (pi < pattern.size() && pattern[pi] == '*') ++pi;
-            return pi == pattern.size();
-        }
-
         static constexpr int kMaxSearchDepth = 32;
 
+        // needle is compiled once in searchObjects and passed down by const-ref
+        // so the regex is not reconstructed for every key in the directory walk.
         inline void searchDirectory(TDirectory* dir,
-                                    const std::string& needle,
+                                    const std::regex& needle,
                                     const std::string& prefix,
                                     std::vector<std::string>& matches,
                                     int depth = 0) {
@@ -271,11 +259,25 @@ namespace Paint {
                     continue;
                 }
 
-                if (globMatch(needle, name)) matches.push_back(path);
+                if (std::regex_search(name, needle)) matches.push_back(path);
             }
         }
 
-        inline std::vector<std::string> searchObjects(TFile& file, const std::string& needle) {
+        // source_search uses ECMAScript regex matched with regex_search (substring
+        // by default). Anchor with ^ / $ for full-name matching.
+        // Examples:  "Mass"        → any name containing "Mass"
+        //            "^Mass"       → names starting with "Mass"
+        //            "Net$"        → names ending with "Net"
+        //            "Mass_.*"     → "Mass_" followed by anything
+        //            "Net|Transverse" → either substring
+        inline std::vector<std::string> searchObjects(TFile& file, const std::string& pattern) {
+            std::regex needle;
+            try {
+                needle = std::regex(pattern, std::regex::ECMAScript | std::regex::optimize);
+            } catch (const std::regex_error& e) {
+                throw std::runtime_error(
+                    "Paint source_search: invalid regex '" + pattern + "': " + e.what());
+            }
             std::vector<std::string> matches;
             searchDirectory(&file, needle, "", matches);
             std::sort(matches.begin(), matches.end());
@@ -459,6 +461,8 @@ namespace Paint {
         std::vector<std::string> formats = detail::readStringArray(paint["formats"], {"png"});
         bool overwrite = paint["overwrite"].value_or(true);
         int imageScale = paint["image_scale"].value_or(1);
+        double textScale = paint["text_scale"].value_or(1.0);
+        double brushScale = paint["brush_scale"].value_or(1.0);
 
         const toml::table* defaultTable = detail::getTable(paint, "default");
         const std::vector<std::string> resultNames = detail::readRequiredResults(paint);
@@ -473,7 +477,9 @@ namespace Paint {
             result.resultDir = resultDir;
             result.formats = formats;
             result.overwrite = overwrite;
-            result.imageScale = imageScale < 1 ? 1 : imageScale;
+            result.imageScale = imageScale;
+            result.textScale  = textScale;
+            result.brushScale = brushScale;
 
             if (defaultTable != nullptr) {
                 detail::mergeDirectRenderSettings(*defaultTable, result, "Paint default", false, false);
@@ -481,6 +487,9 @@ namespace Paint {
             }
 
             detail::mergeResultVisual(paint, name, *resultConfig, result);
+            if (result.imageScale < 1) result.imageScale = 1;
+            if (result.textScale <= 0.0) result.textScale = 1.0;
+            if (result.brushScale <= 0.0) result.brushScale = 1.0;
             detail::resolveSources(paint, *plan.file, *resultConfig, result);
             detail::finaliseLayout(result);
 
@@ -502,6 +511,9 @@ namespace Paint {
             os << "  formats:";
             for (const std::string& format : result.formats) os << ' ' << format;
             os << '\n';
+            os << "  scale: image=" << result.imageScale
+               << " text=" << result.textScale
+               << " brush=" << result.brushScale << '\n';
             os << "  layout: " << result.rows << "x" << result.cols << '\n';
             os << "  style: line_color=" << result.style.line.color
                << " log_y=" << (result.style.logY ? "true" : "false")

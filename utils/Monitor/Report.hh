@@ -49,7 +49,6 @@ namespace Monitor {
         if (pacing) {
             logStream << "Status Snapshot Interval (ms) : " << Utility::numberFormat(pacing->heartbeatMs.count(), 0) << '\n';
             logStream << "Progress Bar Update Interval  : " << Utility::numberFormat(pacing->barInterval, 0) << '\n';
-            logStream << "Check Interval                : " << Utility::numberFormat(pacing->checkInterval, 0) << '\n';
         }
 
         if (!programLog.empty()) {
@@ -107,11 +106,7 @@ namespace Monitor {
         stream << "Phase                         : " << phaseString(snapshot.phase) << '\n';
         stream << "Elapsed                       : " << Utility::durationString(logging.elapsed.load(std::memory_order_relaxed), true) << '\n';
         stream << "Last Update                   : " << Utility::timeString(snapshot.lastUpdateTime, false) << '\n';
-        stream << "Fatal Reason                  : " << snapshot.fatalReason << '\n';
-        stream << "Stall Duration                : " << Utility::durationString(snapshot.stallDuration, true) << '\n';
-        stream << "Stall Threshold               : "
-               << Utility::durationString(std::chrono::duration_cast<Config::uSeconds>(snapshot.stallThreshold), true) << '\n';
-        stream << "Fatal Multiplier              : " << snapshot.stallMultiplier << "x\n";
+        writeStallFields(stream, snapshot);
         if (!programLog.empty()) {
             stream << programLog;
             if (programLog.back() != '\n') stream << '\n';

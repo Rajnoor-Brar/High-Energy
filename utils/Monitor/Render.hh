@@ -18,18 +18,21 @@
 
 namespace Monitor {
 
-    inline termios oldt;
+    inline termios& savedTermios() {
+        static termios oldt{};
+        return oldt;
+    }
 
     inline void disable_input_echo() {
         termios newt;
-        tcgetattr(STDIN_FILENO, &oldt);
-        newt = oldt;
+        tcgetattr(STDIN_FILENO, &savedTermios());
+        newt = savedTermios();
         newt.c_lflag &= ~(ECHO | ICANON);
         tcsetattr(STDIN_FILENO, TCSANOW, &newt);
     }
 
     inline void restore_terminal() {
-        tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+        tcsetattr(STDIN_FILENO, TCSANOW, &savedTermios());
     }
 
     inline std::mutex& terminalMutex() {
@@ -76,7 +79,7 @@ namespace Monitor {
                       << "\t\033[34;1m Booting... \033[0m\033[E\033[2K";
         } else if (snapshot.phase == RunPhase::Configuring) {
             std::cout << "\033[E\033[2K"
-                      << "\t\033[34;1m Configurig from " << snapshot.eta
+                      << "\t\033[34;1m Configuring from " << snapshot.eta
                       << " \033[0m\033[E\033[2K";
         } else if (snapshot.phase == RunPhase::Initialisation) {
             std::cout << "\033[E\033[2K"

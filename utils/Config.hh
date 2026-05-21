@@ -27,24 +27,31 @@
 
 namespace Config {
 
+    namespace detail {
+        // Applies all value-reading passes to an already-parsed table.
+        // Shared by readConfigValues, configuration, configurePythia, configureProbe
+        // so each entry point calls parseConfig exactly once.
+        inline void applyConfigValues(const toml::table& config,
+                                      Events& events, Watch& watch, Register& reg)
+        {
+            limitExtractor(config, reg);
+            readEventsSection(config, events, watch);
+            readRecordSection(config, watch, reg);
+        }
+    } // namespace detail
+
     // readConfigValues — parse and populate Watch/Register/Events without
     // creating any output directories.  Call readPathsAndFile separately once
     // the event count is fully resolved (e.g. after probe.configureProbe()).
     inline void readConfigValues(const std::string& configPath,
-                                  const std::string& project,
+                                  const std::string& /*project*/,
                                   Events&   events,
                                   Watch&    watch,
                                   Register& reg)
     {
-        toml::table config = toml::parse_file(configPath);
+        toml::table config = parseConfig(configPath);
         rejectSectionAliases(config);
-
-        limitExtractor(configPath, reg);
-
-        readEventsSection(config, events, watch);
-        readRecordSection(config, watch, reg);
-        validateMonitorSection(config);
-        // readPathsAndFile is intentionally omitted here.
+        detail::applyConfigValues(config, events, watch, reg);
     }
 
     // configuration — convenience wrapper for pipelines where the event count
@@ -55,8 +62,9 @@ namespace Config {
                               Watch&    watch,
                               Register& reg)
     {
-        readConfigValues(configPath, project, events, watch, reg);
-        toml::table config = toml::parse_file(configPath);
+        toml::table config = parseConfig(configPath);
+        rejectSectionAliases(config);
+        detail::applyConfigValues(config, events, watch, reg);
         readPathsAndFile(config, project, watch, reg);
     }
 
@@ -68,11 +76,11 @@ namespace Config {
                                 Register& reg,
                                 PythiaT&  pythia)
     {
-
         PythiaConfig py;
-        configuration(configPath, project, py.eventConfig, watch, reg);
-
-        toml::table config = toml::parse_file(configPath);
+        toml::table config = parseConfig(configPath);
+        rejectSectionAliases(config);
+        detail::applyConfigValues(config, py.eventConfig, watch, reg);
+        readPathsAndFile(config, project, watch, reg);
         readPythiaSection(config, py);
 
         if (!py.cmndFile.empty()) pythia.readFile(py.cmndFile);
@@ -96,9 +104,9 @@ namespace Config {
                                Register&    reg,
                                ProbeConfig& probe)
     {
-        readConfigValues(configPath, project, probe.eventConfig, watch, reg);
-
-        toml::table config = toml::parse_file(configPath);
+        toml::table config = parseConfig(configPath);
+        rejectSectionAliases(config);
+        detail::applyConfigValues(config, probe.eventConfig, watch, reg);
         readProbeSection(config, probe);
     }
 

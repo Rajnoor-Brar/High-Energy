@@ -19,28 +19,88 @@
 
 namespace Probe {
 
-template<typename Callback>
-inline void ProbeParallel::run(Callback&& callback) {
-    if (!configured_)
-        throw std::runtime_error("[Probe] ProbeParallel::run called before configureProbe");
-    if (eventPartitions_.empty()) return;
+namespace detail {
 
-    BranchControl::enableRootThreadSafety();
-    resetRuntimeState();
+    struct StreamPair {
+        std::unique_ptr<EventStream> evStream;
+        std::unique_ptr<FeedStream>  fdStream;
+    };
 
-    if (callbackMode_ == CallbackMode::WorkerThread) {
-        runWorkerThread(callback);
-        return;
+    // Constructs the event/feed streams for one worker partition.
+    inline StreamPair buildStreams(
+        const std::string&              inputFile,
+        const ProbeConfig&              config,
+        const BranchControl::Partition& part,
+        std::size_t                     nEvents,
+        const std::vector<Bounds>&      bounds,
+        bool hasEventData,
+        bool hasFeedData)
+    {
+        StreamPair sp;
+        if (hasEventData)
+            sp.evStream = std::make_unique<EventStream>(inputFile, config,
+                              part.firstEvent, part.lastEvent, nEvents, bounds);
+        if (hasFeedData)
+            sp.fdStream = std::make_unique<FeedStream>(inputFile, config,
+                              part.firstEvent, part.lastEvent);
+        return sp;
     }
 
-    runCollectorThread(callback);
+} // namespace detail
+
+// ── Streaming methods ─────────────────────────────────────────────────────────
+
+template<typename EventCallback>
+inline void ProbeParallel::streamEvents(EventCallback&& ce) {
+    auto noopFeed = [](const Feed&, int){};
+    if (!configured_)
+        throw std::runtime_error("[Probe] ProbeParallel::streamEvents called before configureProbe");
+    if (activeMode_ == ActiveMode::Feed)
+        throw std::runtime_error(
+            "[Probe] streamEvents called on a Feed-only config; use streamFeed or stream");
+    if (eventPartitions_.empty()) return;
+    BranchControl::enableRootThreadSafety();
+    resetRuntimeState();
+    if (callbackMode_ == CallbackMode::WorkerThread) { runWorkerThread(ce, noopFeed); return; }
+    runCollectorThread(ce, noopFeed);
 }
 
-template<typename Callback>
-inline void ProbeParallel::runWorkerThread(Callback& callback) {
+template<typename FeedCallback>
+inline void ProbeParallel::streamFeed(FeedCallback&& cf) {
+    auto noopEvent = [](const Event&, int){};
+    if (!configured_)
+        throw std::runtime_error("[Probe] ProbeParallel::streamFeed called before configureProbe");
+    if (activeMode_ == ActiveMode::Events)
+        throw std::runtime_error(
+            "[Probe] streamFeed called on an Events-only config; use streamEvents or stream");
+    if (eventPartitions_.empty()) return;
+    BranchControl::enableRootThreadSafety();
+    resetRuntimeState();
+    if (callbackMode_ == CallbackMode::WorkerThread) { runWorkerThread(noopEvent, cf); return; }
+    runCollectorThread(noopEvent, cf);
+}
+
+template<typename EventCallback, typename FeedCallback>
+inline void ProbeParallel::stream(EventCallback&& ce, FeedCallback&& cf) {
+    if (!configured_)
+        throw std::runtime_error("[Probe] ProbeParallel::stream called before configureProbe");
+    if (eventPartitions_.empty()) return;
+    BranchControl::enableRootThreadSafety();
+    resetRuntimeState();
+    if (callbackMode_ == CallbackMode::WorkerThread) { runWorkerThread(ce, cf); return; }
+    runCollectorThread(ce, cf);
+}
+
+// ── Two-callback worker/collector implementations ────────────────────────────
+
+template<typename EventCallback, typename FeedCallback>
+inline void ProbeParallel::runWorkerThread(EventCallback& ce, FeedCallback& cf) {
     std::vector<std::thread> workers;
     std::vector<std::exception_ptr> errors(eventPartitions_.size());
     workers.reserve(eventPartitions_.size());
+
+    const bool hasEventData = (activeMode_ == ActiveMode::Events || activeMode_ == ActiveMode::Mixed);
+    const bool hasFeedData  = (activeMode_ == ActiveMode::Feed   || activeMode_ == ActiveMode::Mixed);
 
     for (std::size_t t = 0; t < eventPartitions_.size(); ++t) {
         workers.emplace_back([&, t] {
@@ -48,17 +108,28 @@ inline void ProbeParallel::runWorkerThread(Callback& callback) {
                 const auto& part = eventPartitions_[t];
                 static const std::vector<Bounds> kNoBounds;
                 const auto& bounds = entryBoundsByWorker_.empty()
-                                   ? kNoBounds
-                                   : entryBoundsByWorker_[t];
-                EventStream stream(inputFile_, particleSpecs_,
-                                   part.firstEvent, part.lastEvent,
-                                   eventsInPartition(part), bounds);
+                                   ? kNoBounds : entryBoundsByWorker_[t];
+                auto [evStream, fdStream] = detail::buildStreams(
+                    inputFile_, config_,
+                    part, eventsInPartition(part), bounds,
+                    hasEventData, hasFeedData);
+
                 for (;;) {
-                    bool _cont;
-                    { MONITOR_SCOPE_TIMER("ProbeParallel.EventStream.next"); _cont = stream.next(); }
-                    if (!_cont) break;
+                    bool contE = false;
+                    bool contF = false;
+                    if (hasEventData && evStream) {
+                        MONITOR_SCOPE_TIMER("ProbeParallel.EventStream.next");
+                        contE = evStream->next();
+                    }
+                    if (hasFeedData && fdStream) {
+                        contF = fdStream->next();
+                    }
+                    if (!contE && !contF) break;
+                    if (!contE && hasEventData) break;   // streams exhausted together
+
                     if (t < progress_.size()) ++progress_[t];
-                    callback(stream.event(), static_cast<int>(t));
+                    if (hasEventData && evStream) ce(evStream->event(), static_cast<int>(t));
+                    if (hasFeedData  && fdStream) cf(fdStream->current(), static_cast<int>(t));
                 }
             } catch (...) {
                 errors[t] = std::current_exception();
@@ -71,28 +142,32 @@ inline void ProbeParallel::runWorkerThread(Callback& callback) {
         if (error) std::rethrow_exception(error);
 }
 
-template<typename Callback>
-inline void ProbeParallel::runCollectorThread(Callback& callback) {
+template<typename EventCallback, typename FeedCallback>
+inline void ProbeParallel::runCollectorThread(EventCallback& ce, FeedCallback& cf) {
     std::vector<std::thread> workers;
     std::vector<std::exception_ptr> workerErrors(eventPartitions_.size());
     workers.reserve(eventPartitions_.size());
 
-    // docs/WriterMT.md Phase 5+: N collector threads drain the shared queue.
     const std::size_t nCollectors = analysisThreadCount();
     std::vector<std::thread> collectors;
     std::vector<std::exception_ptr> collectorErrors(nCollectors);
     collectors.reserve(nCollectors);
 
+    const bool hasEventData = (activeMode_ == ActiveMode::Events || activeMode_ == ActiveMode::Mixed);
+    const bool hasFeedData  = (activeMode_ == ActiveMode::Feed   || activeMode_ == ActiveMode::Mixed);
+
     for (std::size_t c = 0; c < nCollectors; ++c) {
         collectors.emplace_back([&, c] {
             try {
-                QueuedEvent queued;
+                QueuedFrame frame;
                 for (;;) {
-                    bool _got;
-                    { MONITOR_SCOPE_TIMER("ProbeParallel.queue.pop_wait"); _got = popQueuedEvent(queued); }
-                    if (!_got) break;
-                    { MONITOR_SCOPE_TIMER("ProbeParallel.collector.callback"); callback(queued.event, static_cast<int>(c)); }
-                    queued = QueuedEvent{};
+                    bool got;
+                    { MONITOR_SCOPE_TIMER("ProbeParallel.queue.pop_wait"); got = popQueuedFrame(frame); }
+                    if (!got) break;
+                    { MONITOR_SCOPE_TIMER("ProbeParallel.collector.callback");
+                      if (hasEventData) ce(frame.event, static_cast<int>(c));
+                      if (hasFeedData)  cf(frame.feed,  static_cast<int>(c)); }
+                    frame = QueuedFrame{};
                 }
             } catch (...) {
                 collectorErrors[c] = std::current_exception();
@@ -107,20 +182,39 @@ inline void ProbeParallel::runCollectorThread(Callback& callback) {
                 const auto& part = eventPartitions_[t];
                 static const std::vector<Bounds> kNoBounds;
                 const auto& bounds = entryBoundsByWorker_.empty()
-                                   ? kNoBounds
-                                   : entryBoundsByWorker_[t];
-                EventStream stream(inputFile_, particleSpecs_,
-                                   part.firstEvent, part.lastEvent,
-                                   eventsInPartition(part), bounds);
+                                   ? kNoBounds : entryBoundsByWorker_[t];
+                auto [evStream, fdStream] = detail::buildStreams(
+                    inputFile_, config_,
+                    part, eventsInPartition(part), bounds,
+                    hasEventData, hasFeedData);
+
                 for (;;) {
                     if (stopRequested_.load(std::memory_order_acquire)) break;
-                    bool _cont;
-                    { MONITOR_SCOPE_TIMER("ProbeParallel.EventStream.next"); _cont = stream.next(); }
-                    if (!_cont) break;
-                    QueuedEvent queued{t, stream.event().index, stream.takeEvent()};
-                    bool _pushed;
-                    { MONITOR_SCOPE_TIMER("ProbeParallel.queue.push_wait"); _pushed = pushQueuedEvent(std::move(queued)); }
-                    if (!_pushed) break;
+
+                    // Default true: a missing stream is treated as "still running"
+                    // so the active stream drives iteration. runWorkerThread uses
+                    // false instead because it drives both streams directly.
+                    bool contE = true, contF = true;
+                    if (hasEventData && evStream) {
+                        MONITOR_SCOPE_TIMER("ProbeParallel.EventStream.next");
+                        contE = evStream->next();
+                    }
+                    if (hasFeedData && fdStream) contF = fdStream->next();
+                    if (!contE && !contF) break;
+                    if (!contE && hasEventData) break;
+
+                    QueuedFrame frame;
+                    frame.workerIndex = t;
+                    if (hasEventData && evStream) {
+                        frame.eventIndex = evStream->event().index;
+                        frame.event      = evStream->takeEvent();
+                    }
+                    if (hasFeedData && fdStream)
+                        frame.feed = fdStream->takeCurrent();
+
+                    bool pushed;
+                    { MONITOR_SCOPE_TIMER("ProbeParallel.queue.push_wait"); pushed = pushQueuedFrame(std::move(frame)); }
+                    if (!pushed) break;
                 }
             } catch (...) {
                 workerErrors[t] = std::current_exception();
@@ -172,7 +266,7 @@ inline void ProbeIMT::flushParallel(BufferT& buffer, Callback&& callback) {
                     Event ev;
                     ev.index = firstEventKey_ + Long64_t(i);
                     for (std::size_t p = 0; p < specs_.size(); ++p)
-                        ev.particles[specs_[p].label] = std::move(buffer[i][p]);
+                        ev.particle[specs_[p].label] = std::move(buffer[i][p]);
                     callback(ev, static_cast<int>(t));
                     consumed_.fetch_add(1, std::memory_order_relaxed);
                 }

@@ -115,7 +115,6 @@ true_time_at_config       = false   # record wall time at config as t=0
 
 [monitor.intervals]
 print_interval            = 1000    # events between status-line updates
-check_interval            = 100000  # events between stall-detection checks
 heartbeat_interval        = 2000    # ms between heartbeat file writes
 terminal_refresh_interval = 2.0     # minutes between terminal refreshes
 program_stall_threshold   = 5.0     # minutes of silence before stall warning
@@ -128,102 +127,102 @@ save_log_threads          = false   # write per-thread stat files
 save_final_log            = true    # write final run-stat log on finish
 
 # ── Histogram Limit File Selection ───────────────────────────────────────────
-# Config::limitExtractor currently reads [lambda].hist_limits to find the
-# histogram-limit TOML.  "all" resolves to configs/all.toml, so the top-level
-# physics-property tables below can make this file self-contained.
+# Config::limitExtractor reads [lambda].hist_limits to find the limits TOML.
+# "all" resolves to configs/all.toml, so the [record.limits.*] tables below
+# make this file self-contained.
 
 [lambda]
 hist_limits      = "all"       # name or path of limits file; "all" = this file
 
 # ── Histogram Limits ─────────────────────────────────────────────────────────
-# Config::loadLimitsFile reads top-level physics-property tables. Each table
-# defines the five supported RangeSize levels.
+# Config::loadLimitsFile reads [record.limits.*] tables. Each table defines
+# the five supported RangeSize levels: Minute/Small/Moderate/Large/Extreme.
 
-[Mass_Invariant]
+[record.limits.Mass_Invariant]
 Minute   = [1.110, 1.120]
 Small    = [1.105, 1.125]
 Moderate = [1.08,  1.15]
 Large    = [0.8,   1.25]
 Extreme  = [0.2,   3.0]
 
-[Mass_Transverse]
+[record.limits.Mass_Transverse]
 Minute   = [1.110, 1.120]
 Small    = [1.105, 1.125]
 Moderate = [1.08,  1.15]
 Large    = [0.8,   1.25]
 Extreme  = [0.2,   3.0]
 
-[Energy_Net]
+[record.limits.Energy_Net]
 Minute   = [1.10, 1.13]
 Small    = [1.05, 1.20]
 Moderate = [0.8,  2.0]
 Large    = [0.5,  5.0]
 Extreme  = [0.5,  10.0]
 
-[Energy_Transverse]
+[record.limits.Energy_Transverse]
 Minute   = [0.9, 1.2]
 Small    = [0.8, 1.5]
 Moderate = [0.5, 3.0]
 Large    = [0.0, 5.0]
 Extreme  = [0.0, 10.0]
 
-[Momentum_Net]
+[record.limits.Momentum_Net]
 Minute   = [0.0, 1.0]
 Small    = [0.0, 2.0]
 Moderate = [0.0, 3.0]
 Large    = [0.0, 6.0]
 Extreme  = [0.0, 10.0]
 
-[Momentum_Transverse]
+[record.limits.Momentum_Transverse]
 Minute   = [0.0, 0.8]
 Small    = [0.0, 1.5]
 Moderate = [0.0, 2.5]
 Large    = [0.0, 4.0]
 Extreme  = [0.0, 8.0]
 
-[Momentum_X]
+[record.limits.Momentum_X]
 Minute   = [-1.0,  1.0]
 Small    = [-2.0,  2.0]
 Moderate = [-5.0,  5.0]
 Large    = [-10.0, 10.0]
 Extreme  = [-20.0, 20.0]
 
-[Momentum_Y]
+[record.limits.Momentum_Y]
 Minute   = [-1.0,  1.0]
 Small    = [-2.0,  2.0]
 Moderate = [-5.0,  5.0]
 Large    = [-10.0, 10.0]
 Extreme  = [-20.0, 20.0]
 
-[Momentum_Z]
+[record.limits.Momentum_Z]
 Minute   = [-1.0,  1.0]
 Small    = [-2.0,  2.0]
 Moderate = [-5.0,  5.0]
 Large    = [-10.0, 10.0]
 Extreme  = [-20.0, 20.0]
 
-[Rapidity]
+[record.limits.Rapidity]
 Minute   = [-1.0,  1.0]
 Small    = [-2.0,  2.0]
 Moderate = [-3.0,  3.0]
 Large    = [-5.0,  5.0]
 Extreme  = [-10.0, 10.0]
 
-[Pseudorapidity]
+[record.limits.Pseudorapidity]
 Minute   = [-1.0,  1.0]
 Small    = [-2.0,  2.0]
 Moderate = [-3.0,  3.0]
 Large    = [-5.0,  5.0]
 Extreme  = [-10.0, 10.0]
 
-[Azimuthal_Angle]
+[record.limits.Azimuthal_Angle]
 Minute   = [-1.57, 1.57]
 Small    = [-3.14, 3.14]
 Moderate = [-3.14, 3.14]
 Large    = [-3.14, 3.14]
 Extreme  = [-6.28, 6.28]
 
-[Multiplicity]
+[record.limits.Multiplicity]
 Minute   = [0.0, 10.0]
 Small    = [0.0, 50.0]
 Moderate = [0.0, 200.0]

@@ -69,11 +69,11 @@ High-Energy/
 
 | File | Summary |
 |---|---|
-| `Types.hh` | Core config types: `Bounds`, `RangeSize`, `Watch`, `Register`, `Events`, `ParticleLimits`, `EventLimits`; imports `Probe::CollectionSpec` |
+| `Types.hh` | Core config types: `Bounds`, `RangeSize`, `Watch`, `Register`, `Events`, `ParticleLimits`, `EventLimits`; imports `Probe::ProbeConfig` |
 | `TypeAid.hh` | `RangeSize`↔string; `Watch::recordEvent` inline |
 | `LimitAid.hh` | `resolveLimitsPath()` — bare name → `configs/*.toml` path |
 | `Defaults.hh` | `parseBoundsArray`, `limitExtractor` — TOML helpers for defaults |
-| `Reader.hh` | `resolveThreadCount`, `readConfig` — full TOML parse into `Watch`/`Register`/`Events`; parses `event_particles` (both array and named-table formats) |
+| `Reader.hh` | `resolveThreadCount`, `readConfig` — full TOML parse into `Watch`/`Register`/`Events`; calls `parseProbeConfig` for `[probe.events.*]`/`[probe.feed.*]` |
 | `Configure.hh` | `configure<ProbePipeline>()`/`configure<PythiaPipeline>()` — single-call facade to configure Probe, Writer, and Monitor from a config path |
 
 ---
@@ -82,16 +82,16 @@ High-Energy/
 
 | File | Summary |
 |---|---|
-| `Types.hh` | `CollectionSpec`, `Bounds`, `EventRange`, `EventStream`, `StreamType` (Events/Vectors) |
+| `Types.hh` | `EventParticleSpec`, `EventNodeSpec`, `FeedParticleSpec`, `FeedNodeSpec`, `ProbeConfig`, `Event`, `Feed`, `QueuedFrame`, `ActiveMode`, `StreamMode`, `CallbackMode` |
 | `BranchControl.hh` | ROOT branch introspection; `KinBuf` (float/double branch binding); `probeFirstKey`, `scanFlatEventKeys`, `enableRootThreadSafety` |
-| `ConfigAid.hh` | `parseBranchPair`, `parseCollectionSpec`, `readParticleSpecs` — TOML → `CollectionSpec` parsing |
-| `Readers.hh` | `FlatReader` (event-keyed TTree reader) and `VecReader` (vector-branch reader) |
-| `Parallel.hh` | `ProbeParallel` class — multi-threaded ROOT event reader (CollectorThread and WorkerThread modes) |
-| `ParallelIMT.hh` | `ProbeIMT` class — ROOT IMT in-memory table reader |
-| `Administration.hh` | `ProbeParallel`/`ProbeIMT` constructors, getters, `determineStreamType`, partition helpers |
-| `Configuration.hh` | `ProbeParallel::configureProbe` and `ProbeIMT::configureProbe` implementations |
-| `Methods.hh` | `ProbeParallel::run` and `ProbeIMT::run` — top-level reader loop bodies |
-| `Directives.hh` | Worker-thread and collector-thread loop bodies for `ProbeParallel::run` |
+| `ConfigAid.hh` | `parseBranchPair`, `parseBranchList`, `parseProbeConfig` — TOML → `ProbeConfig` (Event + Feed buckets) |
+| `Readers.hh` | `EventReader`/`FeedReader` abstract bases; `FlatReader`, `VecReader`, `EventParticleReaderRowJoin`, `EventNodeReaderArray`; `FeedParticleReader`, `FeedNodeReader`; `EventStream`, `FeedStream` |
+| `Parallel.hh` | `ProbeParallel` — multi-threaded ROOT event reader; `streamEvents`, `streamFeed`, `stream` |
+| `ParallelIMT.hh` | `ProbeIMT` — ROOT IMT in-memory table reader; `run(callback)` |
+| `Administration.hh` | `ProbeParallel`/`ProbeIMT` constructors, getters, `activeMode()`, partition helpers |
+| `Configuration.hh` | `ProbeParallel::configureProbe` (legacy `EventParticleSpec` and new `ProbeConfig` overloads); `ProbeIMT::configureProbe` |
+| `Methods.hh` | Reader ctor bodies, `EventStream`/`FeedStream` iteration; `FeedParticleReader`/`FeedNodeReader::readEntry`; ProbeIMT flush |
+| `Directives.hh` | `streamEvents`/`streamFeed`/`stream` implementations; `runWorkerThread`/`runCollectorThread` loop bodies |
 
 ---
 

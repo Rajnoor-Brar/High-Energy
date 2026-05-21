@@ -1,0 +1,262 @@
+# Other configuration template.
+# Covers keys that are not Probe, Record, Monitor, or Paint:
+#   [threads]  — global thread-count block (all pipelines)
+#   [events]   — event count
+#   [pythia]   — Pythia8 generator settings
+#   [lambda]   — Lambda module physics cuts and labels
+#
+# Also documents the histogram limits file format (a separate TOML file
+# referenced by [lambda].hist_limits, not part of the main config).
+
+# =============================================================================
+# [threads] — global thread counts
+# =============================================================================
+# Sets thread counts for all pipeline sections in one place.
+# Two-level precedence: [threads].<key> is checked first; if absent or 0,
+# the per-section key ([probe].probe_threads, etc.) is used; if that is also
+# absent or 0, Config::resolveSectionThreadCount(0) auto-resolves.
+# Stored via Config::resolveThreadKey into the respective config structs.
+
+[threads]
+# ROOT reader threads. Feeds Config::ProbeConfig.probe_threads.
+probe    = 4
+
+# CollectorThread analysis threads. Feeds Config::ProbeConfig.analysis_threads.
+# Ignored when [probe].callback_mode = "WorkerThread".
+analysis = 4
+
+# Record writer-worker threads. Feeds Config::Register.writer_threads.
+writer   = 4
+
+# Pythia8 generator threads. Feeds Config::PythiaConfig.pythia_threads.
+# Unused in Probe pipelines.
+pythia   = 4
+
+# =============================================================================
+# [events]
+# =============================================================================
+
+[events]
+# Number of events to process. Absence defaults to 1000 and marks
+# Config::Events.userEvents = false (auto-resolved from the input file when
+# the probe pipeline supports it). Stored in Config::Events.eventCount and
+# Config::Watch.nEvents.
+event_count = 1000
+
+# =============================================================================
+# [pythia]
+# =============================================================================
+
+[pythia]
+# Center-of-mass beam energy in GeV. Stored in Config::PythiaConfig.beamEnergy,
+# forwarded to Pythia8 as Beams:eCM, and mirrored to Config::Register.beamEnergy
+# for use in output file naming. Omitting this key falls back to the value
+# already in the loaded .cmnd file.
+beam_energy = 7000.0
+
+# Pythia8 command file path. Passed to pythia.readFile().
+# Stored in Config::PythiaConfig.cmndFile.
+cmnd_file = "configs/Lambda_Reconstruction.cmnd"
+
+# Pythia8 random seed. 0 leaves Pythia8 default (time-based).
+# Stored in Config::PythiaConfig.seed.
+seed = 0
+
+# Pythia8 generator threads. Overrides [threads].pythia when non-zero.
+# Stored in Config::PythiaConfig.pythia_threads.
+pythia_threads = 0
+
+# =============================================================================
+# [lambda]
+# =============================================================================
+# The entire [lambda] table is serialised verbatim by Record::Meta::mergeFromToml
+# into Record::Meta::Record.objects.selection_toml for run provenance.
+
+[lambda]
+# Histogram limits selector. Resolved by Config::resolveLimitsPath:
+#   "Name"           -> configs/Name.toml
+#   "Name.toml"      -> configs/Name.toml
+#   "path/to/f.toml" -> path/to/f.toml  (any path containing '/')
+# Stored in Config::Register.histLimitsFile and Record::HistConfig.histLimitsFile.
+hist_limits = "Lambda_Limits"
+
+# Mass-window half-width in GeV applied to proton+pion invariant mass.
+# Candidates with |M - M_Lambda| > delta_mass_gev are rejected.
+# Stored in Lambda::Parameters.massTolerance.
+delta_mass_gev = 0.15
+
+# Opening-angle tolerance in radians. Stored in Lambda::Parameters.thetaTolerance
+# and cosThetaTolerance (cos is precomputed and used in the cut).
+delta_theta_rad = 0.1
+
+# Baseline beam protons subtracted from the event proton list before combinatorics.
+# For pp: 0. For Ne–Ne: 2 × 10 = 20. Stored in Lambda::Parameters.reservedProtons.
+reserved_protons = 0
+
+# Label matching the [probe.events.particles.*] sub-table name for protons.
+# Default "protons". Stored in Lambda::Parameters.protonLabel.
+proton_label = "protons"
+
+# Label matching the [probe.events.particles.*] sub-table name for pions.
+# Default "pions". Stored in Lambda::Parameters.pionLabel.
+pion_label = "pions"
+
+[lambda.analysis]
+# Histogram sets for which a candidate TTree is also declared.
+# Accepted names: "Unvalidated", "Validated", "Selected".
+# Stored in Lambda::Parameters.writeTree.
+writeTree = ["Selected"]
+
+# =============================================================================
+# HISTOGRAM LIMITS FILE FORMAT
+# =============================================================================
+# The file named by [lambda].hist_limits is a separate TOML file, not part of
+# the main config. It is loaded by Config::limitExtractor after merging with
+# configs/defaults/Limits.toml (which provides the global defaults).
+#
+# ALL sections must be nested under [record.limits.*].
+#
+# ── Per-quantity RangeSize bounds ─────────────────────────────────────────────
+# [record.limits.<PropertyName>] maps to five RangeSize levels.
+# Valid property names (aliases accepted where noted):
+#   Mass_Invariant (alias: Mass)   Mass_Transverse
+#   Energy_Net     (alias: Energy) Energy_Transverse
+#   Momentum_Net   Momentum_Transverse   Momentum_X   Momentum_Y   Momentum_Z
+#   Rapidity       Pseudorapidity   Azimuthal_Angle   Multiplicity
+#
+# Each level value must be [low, high].
+# All five levels (Minute/Small/Moderate/Large/Extreme) must be present.
+# Read by Config::loadLimitsFile → Config::Register.particleLimits / eventLimits.
+
+[record.limits.Mass_Invariant]
+Minute   = [1.110, 1.120]
+Small    = [1.105, 1.125]
+Moderate = [1.080, 1.150]
+Large    = [0.800, 1.250]
+Extreme  = [0.200, 3.000]
+
+[record.limits.Energy_Net]
+Minute   = [1.10, 1.13]
+Small    = [1.05, 1.20]
+Moderate = [0.80, 2.00]
+Large    = [0.50, 5.00]
+Extreme  = [0.50, 10.00]
+
+[record.limits.Momentum_Net]
+Minute   = [0.0, 1.0]
+Small    = [0.0, 2.0]
+Moderate = [0.0, 3.0]
+Large    = [0.0, 6.0]
+Extreme  = [0.0, 10.0]
+
+[record.limits.Momentum_Transverse]
+Minute   = [0.0, 0.8]
+Small    = [0.0, 1.5]
+Moderate = [0.0, 2.5]
+Large    = [0.0, 4.0]
+Extreme  = [0.0, 8.0]
+
+[record.limits.Momentum_Z]
+Minute   = [-1.0, 1.0]
+Small    = [-2.0, 2.0]
+Moderate = [-3.0, 3.0]
+Large    = [-5.0, 5.0]
+Extreme  = [-10.0, 10.0]
+
+[record.limits.Pseudorapidity]
+Minute   = [-1.0, 1.0]
+Small    = [-1.5, 1.5]
+Moderate = [-2.5, 2.5]
+Large    = [-4.0, 4.0]
+Extreme  = [-6.0, 6.0]
+
+[record.limits.Multiplicity]
+Minute   = [0.0, 10.0]
+Small    = [0.0, 50.0]
+Moderate = [0.0, 200.0]
+Large    = [0.0, 1000.0]
+Extreme  = [0.0, 50000.0]
+
+# ── Per-set axis overrides ────────────────────────────────────────────────────
+# [record.limits.Unvalidated / Validated / Selected] — fixed names matching
+# kHistogramSetMap tags. Read by Lambda::extractPhysics.
+# 'default' sets a RangeSize fallback for all unspecified properties in that set.
+# Per-property values accept either a RangeSize string or explicit [low, high] bounds.
+# Stored in Lambda::Parameters.setParticleLimits / setEventLimits.
+
+[record.limits.Unvalidated]
+default             = "Moderate"
+Mass                = "Moderate"
+Energy              = [0.0, 10.0]
+Momentum_Net        = "Large"
+Momentum_Transverse = "Moderate"
+Momentum_Z          = "Large"
+Pseudorapidity      = "Large"
+Multiplicity        = [0.0, 5000.0]
+
+[record.limits.Validated]
+default             = "Moderate"
+Mass                = [1.0, 2.0]
+Energy              = "Large"
+Momentum_Net        = "Large"
+Momentum_Transverse = "Moderate"
+Momentum_Z          = "Large"
+Pseudorapidity      = "Large"
+Multiplicity        = [0.0, 1000.0]
+
+[record.limits.Selected]
+default             = "Small"
+Mass                = [1.0, 1.3]
+Energy              = "Large"
+Momentum_Net        = "Large"
+Momentum_Transverse = "Moderate"
+Momentum_Z          = "Large"
+Pseudorapidity      = "Large"
+Multiplicity        = [0.0, 150.0]
+
+# =============================================================================
+# USAGE PATTERNS
+# =============================================================================
+
+# ── pp collision run (no reserved beam protons) ───────────────────────────────
+#
+# [threads]
+# probe    = 4
+# analysis = 4
+# writer   = 4
+#
+# [events]
+# event_count = 1_000_000
+#
+# [lambda]
+# hist_limits      = "Lambda_Limits"
+# delta_mass_gev   = 0.15
+# delta_theta_rad  = 0.1
+# reserved_protons = 0
+# proton_label     = "protons"
+# pion_label       = "pions"
+#
+# [lambda.analysis]
+# writeTree = ["Selected"]
+
+# ── Heavy-ion run (Ne–Ne, subtract 20 beam protons) ──────────────────────────
+#
+# [lambda]
+# reserved_protons = 20   # 2 × Z for Z=10 (Ne)
+# delta_mass_gev   = 0.15
+
+# ── Tight signal window for yield extraction ──────────────────────────────────
+#
+# [lambda]
+# delta_mass_gev  = 0.005   # ±5 MeV — covers 3σ of the Lambda peak
+# delta_theta_rad = 0.05
+
+# ── Pythia8 generation run ────────────────────────────────────────────────────
+#
+# [threads]
+# pythia = 4
+#
+# [pythia]
+# beam_energy = 7000.0
+# cmnd_file   = "configs/Lambda_Reconstruction.cmnd"
+# seed        = 42          # fixed seed for reproducibility (0 = time-based)

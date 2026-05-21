@@ -45,7 +45,6 @@ reserved_protons  = 20     # baseline beam protons per event (2 × Z; for Ne–N
 
 [monitor.intervals]
 print_interval            = 50       # events
-check_interval            = 100000   # events (stall-check cadence)
 checkpoint_interval       = 100000   # events between checkpoint snapshots (WriterMT.md Phase 1)
 heartbeat_interval        = 2000     # milliseconds (terminal-status freshness)
 terminal_refresh_interval = 2        # minutes

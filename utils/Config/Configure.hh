@@ -34,7 +34,7 @@ namespace Config {
         configureProbe(configPath, project, logger.watch(), reg, probeConfig);
 
         probe.configureProbe(probeConfig.inputFile,
-                             std::move(probeConfig.collections),
+                             std::move(probeConfig.probeSpec),
                              probeConfig.probe_threads,
                              probeConfig.eventConfig.eventCount,
                              probeConfig.eventConfig.userEvents);
@@ -49,7 +49,7 @@ namespace Config {
         // configureMonitor after event count is resolved so barInterval is correct.
         Monitor::configureMonitor(logger, configPath, project);
 
-        toml::table config = toml::parse_file(configPath);
+        toml::table config = Config::parseConfig(configPath);
         readPathsAndFile(config, project, logger.watch(), reg);
 
         Record::configureWriter(writer, project, configPath, logger.watch(), reg, probe.inputFile());
@@ -74,7 +74,7 @@ namespace Config {
 
         // Beam-energy fallback: if [pythia].beam_energy was absent from TOML,
         // read from the already-loaded Pythia settings (set by readFile).
-        if (reg.beamEnergy.IsNull() || reg.beamEnergy.IsWhitespace() || reg.beamEnergy == "") {
+        if (reg.beamEnergy.empty()) {
             const double ecm = pythia.settings.parm("Beams:eCM");
             if (ecm > 0) reg.beamEnergy = Form("%.0f", ecm);
         }

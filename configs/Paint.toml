@@ -1,11 +1,165 @@
 [paint]
-root_file  = "output/Lambda_Reconstruction/_08/Lambda_Recons_7000GeV_10M.root"
-result_dir = "results/"
-results    = ["01_MassInv", "01_Energy", "01_Momentum"]
+default_style = "configs/defaults/Paint.toml"
+root_file     = "output/Lambda_Reconstruction/_27/Lambda_Recons_GeV_1M.root"
+result_dir    = "results/hist"
+results       = [
+    "unvalidated_count",
+    "unvalidated_mass_invariant",
+    "unvalidated_energy_net",
+    "unvalidated_momentum_net",
+    "unvalidated_momentum_transverse",
+    "unvalidated_momentum_z",
+    "unvalidated_pseudorapidity",
+    "validated_count",
+    "validated_mass_invariant",
+    "validated_energy_net",
+    "validated_momentum_net",
+    "validated_momentum_transverse",
+    "validated_momentum_z",
+    "validated_pseudorapidity",
+    "selected_count",
+    "selected_mass_invariant",
+    "selected_energy_net",
+    "selected_momentum_net",
+    "selected_momentum_transverse",
+    "selected_momentum_z",
+    "selected_pseudorapidity",
+    "mass"
+]
+formats     = ["png"]
+overwrite   = true
+image_scale = 4
+text_scale  = 1.0
+brush_scale = 1.0
 
-[paint.01_MassInv]
+[paint.default]
+mode = "single"
+source_type = "H1"
+draw_option = "HIST"
 
+[paint.default.canvas]
+width = 900
+height = 600
 
-[paint.01_Energy]
+[paint.mass]
+mode    = "overlay"
+palette = ["kBlue-6", "kRed-6", "kGreen-6"]
+sources = [
+    { path = "Unvalidated/Unvalidated_Mass_Invariant_Hist", label = "Unvalidated" },
+    { path = "Validated/Validated_Mass_Invariant_Hist",     label = "Validated"   },
+    { path = "Selected/Selected_Mass_Invariant_Hist",       label = "Selected"    },
+]
+title = "Mass_Invariant Distribution"
+output_name = "mass"
+draw_option = "HIST"
+brush_scale = 0.5
+fill_style  = 0
+# line_width  = 2
 
-[paint.01_Momentum]
+[paint.mass.legend]
+show = true
+
+[paint.unvalidated_count]
+title = "Unvalidated Candidate Count"
+output_name = "unvalidated_count"
+sources = [{ path = "Unvalidated/UnvalidatedCountHist" }]
+
+[paint.unvalidated_mass_invariant]
+title = "Unvalidated Mass Invariant"
+output_name = "unvalidated_mass_invariant"
+sources = [{ path = "Unvalidated/Unvalidated_Mass_Invariant_Hist" }]
+
+[paint.unvalidated_energy_net]
+title = "Unvalidated Energy Net"
+output_name = "unvalidated_energy_net"
+sources = [{ path = "Unvalidated/Unvalidated_Energy_Net_Hist" }]
+
+[paint.unvalidated_momentum_net]
+title = "Unvalidated Momentum Net"
+output_name = "unvalidated_momentum_net"
+sources = [{ path = "Unvalidated/Unvalidated_Momentum_Net_Hist" }]
+
+[paint.unvalidated_momentum_transverse]
+title = "Unvalidated Momentum Transverse"
+output_name = "unvalidated_momentum_transverse"
+sources = [{ path = "Unvalidated/Unvalidated_Momentum_Transverse_Hist" }]
+
+[paint.unvalidated_momentum_z]
+title = "Unvalidated Momentum Z"
+output_name = "unvalidated_momentum_z"
+sources = [{ path = "Unvalidated/Unvalidated_Momentum_Z_Hist" }]
+
+[paint.unvalidated_pseudorapidity]
+title = "Unvalidated Pseudorapidity"
+output_name = "unvalidated_pseudorapidity"
+sources = [{ path = "Unvalidated/Unvalidated_Pseudorapidity_Hist" }]
+
+[paint.validated_count]
+title = "Validated Candidate Count"
+output_name = "validated_count"
+sources = [{ path = "Validated/ValidatedCountHist" }]
+
+[paint.validated_mass_invariant]
+title = "Validated Mass Invariant"
+output_name = "validated_mass_invariant"
+sources = [{ path = "Validated/Validated_Mass_Invariant_Hist" }]
+
+[paint.validated_energy_net]
+title = "Validated Energy Net"
+output_name = "validated_energy_net"
+sources = [{ path = "Validated/Validated_Energy_Net_Hist" }]
+
+[paint.validated_momentum_net]
+title = "Validated Momentum Net"
+output_name = "validated_momentum_net"
+sources = [{ path = "Validated/Validated_Momentum_Net_Hist" }]
+
+[paint.validated_momentum_transverse]
+title = "Validated Momentum Transverse"
+output_name = "validated_momentum_transverse"
+sources = [{ path = "Validated/Validated_Momentum_Transverse_Hist" }]
+
+[paint.validated_momentum_z]
+title = "Validated Momentum Z"
+output_name = "validated_momentum_z"
+sources = [{ path = "Validated/Validated_Momentum_Z_Hist" }]
+
+[paint.validated_pseudorapidity]
+title = "Validated Pseudorapidity"
+output_name = "validated_pseudorapidity"
+sources = [{ path = "Validated/Validated_Pseudorapidity_Hist" }]
+
+[paint.selected_count]
+title = "Selected Candidate Count"
+output_name = "selected_count"
+sources = [{ path = "Selected/SelectedCountHist" }]
+
+[paint.selected_mass_invariant]
+title = "Selected Mass Invariant"
+output_name = "selected_mass_invariant"
+sources = [{ path = "Selected/Selected_Mass_Invariant_Hist" }]
+
+[paint.selected_energy_net]
+title = "Selected Energy Net"
+output_name = "selected_energy_net"
+sources = [{ path = "Selected/Selected_Energy_Net_Hist" }]
+
+[paint.selected_momentum_net]
+title = "Selected Momentum Net"
+output_name = "selected_momentum_net"
+sources = [{ path = "Selected/Selected_Momentum_Net_Hist" }]
+
+[paint.selected_momentum_transverse]
+title = "Selected Momentum Transverse"
+output_name = "selected_momentum_transverse"
+sources = [{ path = "Selected/Selected_Momentum_Transverse_Hist" }]
+
+[paint.selected_momentum_z]
+title = "Selected Momentum Z"
+output_name = "selected_momentum_z"
+sources = [{ path = "Selected/Selected_Momentum_Z_Hist" }]
+
+[paint.selected_pseudorapidity]
+title = "Selected Pseudorapidity"
+output_name = "selected_pseudorapidity"
+sources = [{ path = "Selected/Selected_Pseudorapidity_Hist" }]

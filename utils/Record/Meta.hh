@@ -156,28 +156,22 @@ namespace Record::Meta {
     // Per-field; only overwrites when the key is present in `meta`.
     namespace detail {
         inline void applyMetadataTable(Record& r, const toml::table& meta) {
-            if (meta.get("dataset_name"))
-                r.dataset.name = meta["dataset_name"].value_or(std::string{});
-            if (meta.get("data_type"))
-                r.dataset.data_type = meta["data_type"].value_or(std::string{});
-            if (meta.get("run_period"))
-                r.dataset.run_period = meta["run_period"].value_or(std::string{});
-            if (meta.get("campaign"))
-                r.dataset.campaign = meta["campaign"].value_or(std::string{});
-            if (meta.get("experiment"))
-                r.dataset.experiment = meta["experiment"].value_or(std::string{});
-            if (meta.get("notes"))
-                r.notes.description = meta["notes"].value_or(std::string{});
-            if (meta.get("known_issues"))
-                r.notes.known_issues = meta["known_issues"].value_or(std::string{});
-            if (meta.get("contact"))
-                r.notes.contact = meta["contact"].value_or(std::string{});
-            if (meta.get("generator"))
-                r.physics.generator = meta["generator"].value_or(std::string{"Pythia8"});
-            if (meta.get("tune"))
-                r.physics.tune = meta["tune"].value_or(std::string{});
-            if (meta.get("pdf_set"))
-                r.physics.pdf_set = meta["pdf_set"].value_or(std::string{});
+            // Only overwrite when the key is present; dflt handles per-field defaults.
+            auto setStr = [&](const char* key, std::string& field,
+                              const std::string& dflt = {}) {
+                if (meta.get(key)) field = meta[key].value_or(dflt);
+            };
+            setStr("dataset_name", r.dataset.name);
+            setStr("data_type",    r.dataset.data_type);
+            setStr("run_period",   r.dataset.run_period);
+            setStr("campaign",     r.dataset.campaign);
+            setStr("experiment",   r.dataset.experiment);
+            setStr("notes",        r.notes.description);
+            setStr("known_issues", r.notes.known_issues);
+            setStr("contact",      r.notes.contact);
+            setStr("generator",    r.physics.generator, "Pythia8");
+            setStr("tune",         r.physics.tune);
+            setStr("pdf_set",      r.physics.pdf_set);
         }
 
         inline std::string readObjString(TDirectory* dir, const char* name) {
@@ -201,7 +195,7 @@ namespace Record::Meta {
     // alias is rejected by Config::rejectSectionAliases before Writer setup.
     inline void mergeFromToml(Record& r, const std::string& configPath) {
         try {
-            const auto cfg = toml::parse_file(configPath);
+            const auto cfg = Config::parseConfig(configPath);
             if (const auto* meta = cfg["record"]["metadata"].as_table())
                 detail::applyMetadataTable(r, *meta);
             if (const auto* lam = cfg["lambda"].as_table()) {
@@ -222,24 +216,29 @@ namespace Record::Meta {
         std::unique_ptr<TFile> f(TFile::Open(probeInputFile.c_str(), "READ"));
         if (!f || f->IsZombie()) return;
 
+        auto setS = [&](TDirectory* dir, const char* key, std::string& field) {
+            auto s = detail::readObjString(dir, key);
+            if (!s.empty()) field = s;
+        };
+        auto setD = [&](TDirectory* dir, const char* key, Double_t& field) {
+            Double_t d = 0;
+            if (detail::readPar<Double_t>(dir, key, d) && d > 0) field = d;
+        };
+
         if (auto* ds = f->GetDirectory("About/dataset")) {
-            auto s = detail::readObjString(ds, "name");        if (!s.empty()) r.dataset.name = s;
-            s = detail::readObjString(ds, "experiment");       if (!s.empty()) r.dataset.experiment = s;
-            s = detail::readObjString(ds, "data_type");        if (!s.empty()) r.dataset.data_type = s;
-            s = detail::readObjString(ds, "run_period");       if (!s.empty()) r.dataset.run_period = s;
-            s = detail::readObjString(ds, "campaign");         if (!s.empty()) r.dataset.campaign = s;
+            setS(ds, "name",        r.dataset.name);
+            setS(ds, "experiment",  r.dataset.experiment);
+            setS(ds, "data_type",   r.dataset.data_type);
+            setS(ds, "run_period",  r.dataset.run_period);
+            setS(ds, "campaign",    r.dataset.campaign);
         }
         if (auto* ph = f->GetDirectory("About/physics")) {
-            auto s = detail::readObjString(ph, "generator");   if (!s.empty()) r.physics.generator = s;
-            s = detail::readObjString(ph, "tune");             if (!s.empty()) r.physics.tune = s;
-            s = detail::readObjString(ph, "pdf_set");          if (!s.empty()) r.physics.pdf_set = s;
-            Double_t d = 0;
-            if (detail::readPar<Double_t>(ph, "center_of_mass_energy_gev", d) && d > 0)
-                r.physics.center_of_mass_energy_gev = d;
-            if (detail::readPar<Double_t>(ph, "cross_section_pb", d) && d > 0)
-                r.physics.cross_section_pb = d;
-            if (detail::readPar<Double_t>(ph, "filter_efficiency", d) && d > 0)
-                r.physics.filter_efficiency = d;
+            setS(ph, "generator",   r.physics.generator);
+            setS(ph, "tune",        r.physics.tune);
+            setS(ph, "pdf_set",     r.physics.pdf_set);
+            setD(ph, "center_of_mass_energy_gev", r.physics.center_of_mass_energy_gev);
+            setD(ph, "cross_section_pb",          r.physics.cross_section_pb);
+            setD(ph, "filter_efficiency",         r.physics.filter_efficiency);
         }
     }
 
@@ -274,8 +273,7 @@ namespace Record::Meta {
 
         if (r.physics.center_of_mass_energy_gev == 0.0) {
             try {
-                r.physics.center_of_mass_energy_gev =
-                    std::stod(std::string(root.beamEnergy.Data()));
+                r.physics.center_of_mass_energy_gev = std::stod(root.beamEnergy);
             } catch (...) {}
         }
 

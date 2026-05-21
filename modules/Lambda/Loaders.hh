@@ -17,7 +17,7 @@ namespace Lambda {
     inline void extractPhysics(const string& configPath,
                                Parameters& parameters,
                                const Record::HistConfig& hist) {
-        toml::table config = toml::parse_file(configPath);
+        toml::table config = Config::parseConfig(configPath);
 
         parameters.massTolerance     = config["lambda"]["delta_mass_gev"].value_or(0.1);
         parameters.thetaTolerance    = config["lambda"]["delta_theta_rad"].value_or(0.1);
@@ -55,12 +55,19 @@ namespace Lambda {
         }
 
         toml::table limitTable = toml::parse_file(hist.histLimitsFile.Data());
+        auto* limitsRoot = limitTable["record"]["limits"].as_table();
+        if (!limitsRoot) {
+            throw std::runtime_error(
+                "[Config] Limits file missing [record.limits] section: " +
+                string(hist.histLimitsFile.Data()));
+        }
         for (const auto& histogramSet : kHistogramSetMap) {
-            if (!limitTable.contains(histogramSet.tag) || !limitTable[histogramSet.tag].is_table()) {
+            if (!limitsRoot->contains(histogramSet.tag) ||
+                !(*limitsRoot)[histogramSet.tag].is_table()) {
                 throw std::runtime_error("Missing histogram set table: " + string(histogramSet.tag));
             }
 
-            toml::table& subTable = *limitTable[histogramSet.tag].as_table();
+            toml::table& subTable = *(*limitsRoot)[histogramSet.tag].as_table();
             Config::RangeSize defaultLevel = Config::RangeSize::Moderate;
             if (const auto dn = subTable["default"]; dn.is_string())
                 defaultLevel = Config::stringToLevel(dn.value<string>().value_or("Moderate"));

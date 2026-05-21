@@ -99,25 +99,14 @@ hist_limits = "tests/fixtures/lambda_fixture_limits.toml"
     // ── stale monitor histogram keys rejected ───────────────────────────────
     {
         const std::string cfg = writeTempConfig("bad_monitor_hist.toml", R"toml(
-[events]
-event_count = 10
-
-[record]
-writer_threads = 1
-
-[lambda]
-hist_limits = "tests/fixtures/lambda_fixture_limits.toml"
-
 [monitor]
 bin_count = 999
 )toml");
 
         bool rejected = false;
         try {
-            Config::Events   events;
-            Config::Watch    watch;
-            Config::Register reg;
-            Config::readConfigValues(cfg, kProject, events, watch, reg);
+            Monitor::AsyncLogger logger(false);
+            Monitor::configureMonitor(logger, cfg, kProject);
         } catch (const std::runtime_error&) {
             rejected = true;
         }
@@ -133,7 +122,6 @@ true_time_at_config = true
 
 [monitor.intervals]
 print_interval = 7
-check_interval = 11
 heartbeat_interval = 13
 terminal_refresh_interval = 0.5
 program_stall_threshold = 1.5
@@ -152,7 +140,6 @@ save_final_log = false
 
         const Monitor::PacingInfo& pacing = logger.pacingInfo();
         TEST_EQ(pacing.printInterval, std::size_t(7));
-        TEST_EQ(pacing.checkInterval, std::size_t(11));
         TEST_EQ(pacing.heartbeatMs.count(), Config::uSeconds(13000).count());
         TEST_EQ(pacing.terminalRefresh.count(), Config::Seconds(30).count());
         TEST_EQ(pacing.stallThreshold.count(), Config::Seconds(90).count());
@@ -171,17 +158,6 @@ print_interval = 7
 )toml");
 
         bool rejected = false;
-        try {
-            Config::Events   events;
-            Config::Watch    watch;
-            Config::Register reg;
-            Config::readConfigValues(cfg, kProject, events, watch, reg);
-        } catch (const std::runtime_error&) {
-            rejected = true;
-        }
-        TEST_TRUE(rejected);
-
-        rejected = false;
         try {
             Monitor::AsyncLogger logger(false);
             Monitor::configureMonitor(logger, cfg, kProject);
@@ -205,42 +181,21 @@ print_interval = 7
         TEST_EQ(probe.probe_threads,    std::size_t(4));
         TEST_EQ(probe.analysis_threads, std::size_t(2));
 
-        // Two collections: protons and pions
-        TEST_EQ(probe.collections.size(), std::size_t(2));
-        TEST_EQ(probe.collections[0].label, std::string("protons"));
-        TEST_EQ(probe.collections[1].label, std::string("pions"));
+        // Two event-particle specs: pions and protons (alphabetical toml++ order).
+        // Phase 11: usesNewToml removed; parseProbeConfig is now always used.
+        TEST_EQ(probe.probeSpec.eventParticles.size(), std::size_t(2));
+        const auto& ep = probe.probeSpec.eventParticles;
+        // toml++ iterates sub-table keys alphabetically: pions before protons.
+        TEST_TRUE(ep[0].label == "pions" || ep[1].label == "pions");
+        TEST_TRUE(ep[0].label == "protons" || ep[1].label == "protons");
+        // Both specs carry default index flags (true/true/true).
+        TEST_TRUE(ep[0].indexSorted && ep[0].indexAscending && ep[0].indexMonotonic);
 
-        // Fixture has no [probe.index] section → defaults (true/true/true) apply.
-        TEST_TRUE(probe.collections[0].indexSorted);
-        TEST_TRUE(probe.collections[0].indexAscending);
-        TEST_TRUE(probe.collections[0].indexMonotonic);
-
-        TEST_PASS("configureProbe reads probe/collections without creating directories (Phase 8)");
+        TEST_PASS("configureProbe reads probe/probeSpec without creating directories (Phase 10)");
     }
 
-    // ── [probe.index] round-trip via parseCollectionsFromToml ───────────────
-    {
-        const toml::table tbl = toml::parse(R"toml(
-[probe]
-event_particles = [
-    ["a", 0, "A", [["px","D"],["py","D"],["pz","D"],["e","D"]], [["idx","I"]]],
-    ["b", 0, "B", [["px","D"],["py","D"],["pz","D"],["e","D"]], [["idx","I"]]]
-]
-[probe.index]
-sorted    = [false, true]
-ascending = [false, false]
-monotonic = [true,  false]
-)toml");
-        auto specs = Probe::parseCollectionsFromToml(tbl);
-        TEST_EQ(specs.size(), std::size_t(2));
-        TEST_TRUE(specs[0].indexSorted    == false);
-        TEST_TRUE(specs[0].indexAscending == false);
-        TEST_TRUE(specs[0].indexMonotonic == true);
-        TEST_TRUE(specs[1].indexSorted    == true);
-        TEST_TRUE(specs[1].indexAscending == false);
-        TEST_TRUE(specs[1].indexMonotonic == false);
-        TEST_PASS("[probe.index] sorted/ascending/monotonic round-trip");
-    }
+    // (Phase 11: [probe.index] / parseCollectionsFromToml removed;
+    //  per-spec index flags are tested in test_probe_parallel.cc.)
 
     // ── thread count resolution ──────────────────────────────────────────────
     {
