@@ -19,18 +19,18 @@
 
 [threads]
 # ROOT reader threads. Feeds Config::ProbeConfig.probe_threads.
-probe    = 4
+probe    = 0
 
 # CollectorThread analysis threads. Feeds Config::ProbeConfig.analysis_threads.
 # Ignored when [probe].callback_mode = "WorkerThread".
-analysis = 4
+analysis = 0
 
 # Record writer-worker threads. Feeds Config::Register.writer_threads.
-writer   = 4
+writer   = 0
 
 # Pythia8 generator threads. Feeds Config::PythiaConfig.pythia_threads.
 # Unused in Probe pipelines.
-pythia   = 4
+pythia   = 0
 
 # =============================================================================
 # [events]
@@ -50,9 +50,9 @@ event_count = 1000
 [pythia]
 # Center-of-mass beam energy in GeV. Stored in Config::PythiaConfig.beamEnergy,
 # forwarded to Pythia8 as Beams:eCM, and mirrored to Config::Register.beamEnergy
-# for use in output file naming. Omitting this key falls back to the value
-# already in the loaded .cmnd file.
-beam_energy = 7000.0
+# for use in output file naming.
+# 0.0 = use the value already present in the loaded .cmnd file.
+beam_energy = 0.0
 
 # Pythia8 command file path. Passed to pythia.readFile().
 # Stored in Config::PythiaConfig.cmndFile.
@@ -83,15 +83,16 @@ hist_limits = "Lambda_Limits"
 # Mass-window half-width in GeV applied to proton+pion invariant mass.
 # Candidates with |M - M_Lambda| > delta_mass_gev are rejected.
 # Stored in Lambda::Parameters.massTolerance.
-delta_mass_gev = 0.15
+delta_mass_gev = 0.1
 
 # Opening-angle tolerance in radians. Stored in Lambda::Parameters.thetaTolerance
 # and cosThetaTolerance (cos is precomputed and used in the cut).
 delta_theta_rad = 0.1
 
 # Baseline beam protons subtracted from the event proton list before combinatorics.
-# For pp: 0. For Ne–Ne: 2 × 10 = 20. Stored in Lambda::Parameters.reservedProtons.
-reserved_protons = 0
+# Default 20 = 2 × Z = 10 for symmetric Ne–Ne. For pp set to 0 explicitly.
+# Stored in Lambda::Parameters.reservedProtons.
+reserved_protons = 20
 
 # Label matching the [probe.events.particles.*] sub-table name for protons.
 # Default "protons". Stored in Lambda::Parameters.protonLabel.
@@ -104,8 +105,9 @@ pion_label = "pions"
 [lambda.analysis]
 # Histogram sets for which a candidate TTree is also declared.
 # Accepted names: "Unvalidated", "Validated", "Selected".
+# Default [] = no TTrees. ["Selected"] is the typical single-set choice.
 # Stored in Lambda::Parameters.writeTree.
-writeTree = ["Selected"]
+writeTree = []
 
 # =============================================================================
 # HISTOGRAM LIMITS FILE FORMAT

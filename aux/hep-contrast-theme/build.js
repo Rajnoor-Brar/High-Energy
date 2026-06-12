@@ -2,7 +2,7 @@
 /**
  * HEP Contrast — theme build script
  *
- * Reads palette.toml, where every entry is [light_value, dark_value].
+ * Reads palette.yaml, where every entry is [light_value, dark_value].
  * Emits:
  *   themes/hep-contrast-light.json
  *   themes/hep-contrast-dark.json
@@ -15,21 +15,43 @@ const fs   = require("fs");
 const path = require("path");
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// TOML PARSER — handles exactly the subset used by palette.toml:
-//   [section]
-//   key = ["value1", "value2"]   (pairs only)
-//   # comments (ignored)
+// YAML PARSER — handles the subset used by palette.yaml (zero dependencies):
+//
+//   section:                                     ← section header (colon, no value)
+//     key: ["#RRGGBB", "#RRGGBB"]                ← opaque pair
+//     key: ["#RRGGBB", "#RRGGBB", n, m]          ← pair with separate alpha integers
+//   # full-line comments (ignored)
+//
+// Alpha integers 0-15 map to repeated-nibble hex:  n → nn  (0→00, 5→55, 15→ff)
+// The resulting C.key values are always full hex strings ready for VS Code JSON.
+// The format is valid YAML; js-yaml would produce the same result.
 // ═══════════════════════════════════════════════════════════════════════════════
 function parsePalette(src) {
+  // n ∈ [0,15]  →  hex string "nn"  (e.g. 5 → "55", 10 → "aa", 15 → "ff")
+  const alpha = n => n.toString(16).repeat(2);
+
   const result = {};
   let section = "_";
   for (const raw of src.split("\n")) {
-    const line = raw.replace(/#.*$/, "").trim(); // strip inline comments
-    if (!line) continue;
-    const sec = line.match(/^\[([^\]]+)\]$/);
+    const line = raw.trim();
+    // Skip blank lines and full-line comments.
+    // Do NOT strip "#" mid-line — hex values like "#0055CC" contain "#" and
+    // the pair regex stops at "]", so trailing YAML comments are harmless.
+    if (!line || line.startsWith("#")) continue;
+    // Section header:  word followed by colon and nothing else (besides optional comment)
+    const sec = line.match(/^(\w+):\s*(#.*)?$/);
     if (sec) { section = sec[1]; result[section] = {}; continue; }
-    const pair = line.match(/^(\w+)\s*=\s*\[\s*"([^"]*)"\s*,\s*"([^"]*)"\s*\]/);
-    if (pair) result[section][pair[1]] = [pair[2], pair[3]];
+    // Key-value pair — capture optional alpha integers after the two color strings
+    const pair = line.match(
+      /^(\w+):\s*\[\s*"([^"]*)"\s*,\s*"([^"]*)"(?:\s*,\s*(\d+)\s*,\s*(\d+))?\s*\]/
+    );
+    if (pair) {
+      const [, key, light, dark, la, da] = pair;
+      result[section][key] = [
+        la !== undefined ? light + alpha(+la) : light,
+        da !== undefined ? dark  + alpha(+da) : dark,
+      ];
+    }
   }
   return result;
 }
@@ -88,8 +110,8 @@ function buildTheme(C, type) {
       "editorGutter.addedBackground":               C.accentBlue,
       "editorGutter.modifiedBackground":            C.accentAmber,
       "editorGutter.deletedBackground":             C.accentOrange,
-      "diffEditor.insertedTextBackground":          C.diffAdded55,
-      "diffEditor.removedTextBackground":           C.diffRemoved55,
+      "diffEditor.insertedTextBackground":          C.diffAddedText,
+      "diffEditor.removedTextBackground":           C.diffRemovedText,
       "diffEditor.insertedLineBackground":          C.diffAddedLine,
       "diffEditor.removedLineBackground":           C.diffRemovedLine,
 
@@ -216,8 +238,8 @@ function buildTheme(C, type) {
       // ── Minimap ──────────────────────────────────────────────────────────
       "minimap.findMatchHighlight":                 C.findMatch,
       "minimap.selectionHighlight":                 C.selection,
-      "minimap.errorHighlight":                     C.errorBg66,
-      "minimap.warningHighlight":                   C.warnBg66,
+      "minimap.errorHighlight":                     C.errorGlow,
+      "minimap.warningHighlight":                   C.warnGlow,
       "minimapGutter.addedBackground":              C.accentBlue,
       "minimapGutter.modifiedBackground":           C.gitModified,
       "minimapGutter.deletedBackground":            C.gitDeleted,
@@ -233,7 +255,7 @@ function buildTheme(C, type) {
       // ── Peek view ────────────────────────────────────────────────────────
       "peekView.border":                            C.peekBorder,
       "peekViewEditor.background":                  C.peekEditor,
-      "peekViewEditor.matchHighlightBackground":    C.findMatch55,
+      "peekViewEditor.matchHighlightBackground":    C.findMatchGlow,
       "peekViewResult.background":                  C.peekResult,
       "peekViewResult.matchHighlightBackground":    C.selection,
       "peekViewResult.selectionBackground":         C.listActive,
@@ -606,7 +628,7 @@ function buildTheme(C, type) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN
 // ═══════════════════════════════════════════════════════════════════════════════
-const raw   = parsePalette(fs.readFileSync(path.join(__dirname, "palette.toml"), "utf8"));
+const raw   = parsePalette(fs.readFileSync(path.join(__dirname, "palette.yaml"), "utf8"));
 const light = flatten(raw, 0);
 const dark  = flatten(raw, 1);
 

@@ -1,7 +1,7 @@
 # Monitor configuration template.
 # Source readers:
-#   Config::validateMonitorSection  validates rejected/moved keys
-#   Monitor::configureMonitor       -> Monitor::AsyncLogger, Monitor::PacingInfo
+#   Monitor::detail::validateMonitorSchema  validates rejected/moved keys
+#   Monitor::configureMonitor               -> Monitor::AsyncLogger, Monitor::PacingInfo
 #
 # All [monitor.*] keys are optional. Absent keys use AsyncLogger defaults.
 # The following legacy top-level keys are REJECTED with a runtime error;
@@ -27,16 +27,16 @@ true_time_at_config = false
 [monitor.intervals]
 # Events between terminal status line updates.
 # Stored in Monitor::PacingInfo.printInterval.
-print_interval = 1000
+print_interval = 10
 
 # Milliseconds between heartbeat WatchRequests written to the ROOT file.
 # Only active when [monitor.logs].save_heartbeat = true.
 # Stored in Monitor::PacingInfo.heartbeatMs (as microseconds internally).
-heartbeat_interval = 2000
+heartbeat_interval = 1000
 
 # Minutes between terminal progress-bar and status full refreshes, in addition to refreshes by print_interval and progress of run.
 # Stored in Monitor::PacingInfo.terminalRefresh.
-terminal_refresh_interval = 2.0
+terminal_refresh_interval = 5.0
 
 # Minutes of no recorded events before a stall warning is emitted.
 # Stored in Monitor::PacingInfo.stallThreshold.

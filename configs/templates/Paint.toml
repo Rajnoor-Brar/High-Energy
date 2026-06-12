@@ -29,8 +29,9 @@ default_style = "configs/defaults/Paint.toml"
 root_file = "output/project/run.root"
 
 # Output directory prefix inherited by all results.
+# kResultDirDefault = "results" (no trailing slash).
 # Stored in Paint::RenderResult.resultDir.
-result_dir = "results/"
+result_dir = "results"
 
 # Ordered list of result names to render. Each name requires a [paint.<name>] table.
 # Stored as Paint::RenderPlan result names.
@@ -78,9 +79,9 @@ brush_scale = 1.0
 
 # ROOT object style. Stored in Paint::Style.
 line_color   = "kBlack"  # ROOT named color (kBlue, kRed, …) or +/- offset (kBlue-6)
-line_width   = 2          # integer line width in ROOT units
+line_width   = 1          # integer line width in ROOT units
 line_style   = 1          # ROOT line style code
-fill_color   = "kBlue-7"  # only visible when fill_style != 0
+fill_color   = 0          # 0 = transparent; only visible when fill_style != 0
 fill_style   = 0          # 0 = no fill; 1001 = solid; 3003/3004 = hatching
 marker_color = "kBlack"
 marker_style = 20         # ROOT marker style code
@@ -215,11 +216,13 @@ sources = [
 show = true
 
 [paint.overlay_plot]
-# Glob search for ROOT objects by name (not full path). Supports * and ?.
-# Cannot be combined with sources. Results are sorted lexicographically by
-# full path; the first match sets the X/Y axis range for the overlay.
-# Use sources = [...] instead when order matters.
-source_search = "*_Mass_Invariant*"
+# ECMAScript regex search over ROOT object names (not full path).
+# regex_search() is used — the pattern matches any substring by default.
+# Anchor with ^ / $ for full-name matching. Cannot be combined with sources.
+# Results are sorted lexicographically by full path; the first match sets the
+# X/Y axis range for the overlay. Use sources = [...] when order matters.
+# Examples: "_Mass_Invariant"  (substring)   "^Selected"  (prefix)
+source_search = "_Mass_Invariant"
 mode          = "overlay"
 palette       = ["kBlue-6", "kRed-6", "kGreen-6"]
 draw_option   = "HIST"
@@ -317,7 +320,7 @@ show = true
 # ── Grid of all momentum histograms ──────────────────────────────────────────
 #
 # [paint.momentum_grid]
-# source_search = "*Momentum*Hist"
+# source_search = "Momentum.*Hist"   # ECMAScript regex substring match
 # mode          = "grid"
 # cols          = 3      # 0 = auto-square; explicit cols forces row count
 # draw_option   = "HIST"

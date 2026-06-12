@@ -217,37 +217,35 @@ mappings, 965 SVGs) and `src/core/icons/folderIcons.ts` (490 folder mappings).
 
 ### 4.1 Approach
 Material is the right base:
-- Data-driven: all mappings live in two TypeScript source files; easy to fork
-- One SVG per icon, plus `_light` and `_open` variants — consistent 24 px grid
+- 1245 SVGs covering virtually every language and tool — a complete icon vocabulary
+- One SVG per icon, plus `_light` and `_open` variants — consistent grid
 - MIT license; you can fork, prune, extend, redistribute
 
-**Fork strategy.**
-1. Clone the repo; vendor the `icons/` SVG tree and the two mapping source
-   files into `aux/hep-icons/`.
-2. Prune the mapping files (§4.5) — strip JS/web framework noise.
-3. Add HEP and ML mappings to the mapping files (no new SVGs needed for
-   these — they point to existing or new icon names).
-4. Author new SVGs for HEP/ML formats that have no upstream equivalent (§4.3,
-   §4.4 — 25 SVGs total, far fewer than the original estimate).
-5. Optionally recolor new SVGs to match `hep-contrast-theme`'s palette.
-6. Bundle into a `.vsix`, install locally.
+**Extension strategy (not a replacement).**
+The theme is not a pruned fork — it is MIT with HEP additions layered on top.
+Every icon MIT provides is preserved. HEP-specific types get their own custom
+SVGs; everything else falls through to MIT's existing vocabulary.
 
-**Repo layout.**
+Implementation: `build.js` reads MIT's installed `dist/material-icons.json`,
+re-roots all icon paths from `dist/`-relative to extension-root-relative
+(`./icons/`), then merges in the HEP `iconDefinitions` and extension/folder
+name entries. The final `hep-icons.json` is fully self-contained.
+
 ```
 aux/hep-icons/
 ├── package.json
-├── README.md
-├── build.js                    # emit dist/hep-icons.json from src/
-├── icons/
-│   ├── _upstream/              # vendored from Material, untouched
-│   └── _hep/                   # new SVGs authored here
-├── src/
-│   ├── fileIcons.ts            # forked + pruned + extended
-│   ├── folderIcons.ts          # forked + pruned + extended
-│   └── languageIcons.ts        # forked, minor changes
-└── dist/
-    └── hep-icons.json          # generated VS Code theme manifest
+├── build.js          # merge MIT JSON + HEP additions → hep-icons.json
+├── hep-icons.json    # generated (do not edit directly)
+└── icons/
+    ├── [MIT SVGs — 1245 files with hash suffix, verbatim from MIT install]
+    └── [HEP SVGs — 13 custom, no hash suffix, authored in aux/icon-bank/]
 ```
+
+**Build steps.**
+1. `node build.js` — auto-detects latest installed MIT in `~/.vscode/extensions/`,
+   merges, writes `hep-icons.json`.
+2. `vsce package --no-dependencies` — produces `hep-icons-X.vsix`.
+3. `code --install-extension hep-icons-X.vsix`.
 
 ### 4.2 Material coverage — what we already get for free
 
@@ -419,47 +417,69 @@ That is smaller than the initial "30–40" estimate because a surprising number
 of ML extensions and folder names already exist in Material or can be handled
 by remapping to an existing icon.
 
-### 4.7 What to cut from Material
+### 4.7 `aux/icon-bank/` — asset assessment for V1
 
-Confirmed by reviewing `fileIcons.ts` and `folderIcons.ts`. Prune these
-blocks from the forked source files (the upstream SVGs can stay in
-`_upstream/` — they just won't be referenced):
+Candidate SVGs in the icon bank and their verdict for V1 authoring:
 
-| Category                                         | Approx. mapping entries |
-|--------------------------------------------------|------------------------|
-| Web frameworks (Angular, Vue, Svelte, Astro, Nuxt, Remix, Qwik, Solid, Stencil, Aurelia, Ember) | ~120 |
-| JS bundlers (Rollup, Parcel, Snowpack, Turbopack, esbuild, Webpack variants) | ~30 |
-| JS test/lint configs (Jest, Karma, Mocha, Cypress, Playwright, Storybook) | ~40 |
-| Game engines (Unity, Unreal, Godot, Phaser, GameMaker) | ~15 |
-| Blockchain (Solidity, Hardhat, Truffle, etc.) | ~10 |
-| Mobile (Cordova, Capacitor, NativeScript, Expo, React Native config files) | ~20 |
-| CMS / SaaS (Strapi, Sanity, Contentful, Netlify, Vercel, Supabase, etc.) | ~30 |
-| **Total pruned**                                 | **~265**               |
+| File                                             | Verdict | V1 use                                       |
+|--------------------------------------------------|---------|----------------------------------------------|
+| `atomic-science.svg`                             | ✅ Use  | Document + 3-orbit ellipse. 48×48 stroke. Perfect base for HEP data-file icons (`.spc`, `.yoda` concept). Recolor + resize. |
+| `atom-solid.svg`                                 | ✅ Use  | Solid 3-orbit atom, 36×36. Good generic "physics file" fallback. |
+| `filter-svgrepo-com.svg`                         | ✅ Use  | 16×16 funnel (4 horizontal bars narrowing). Could serve event-filter or preprocessing folders. |
+| `sound-lines-svgrepo-com.svg`                    | ✅ Use  | 24×24 horizontal dashes in a histogram-bar pattern. **Natural fit for `.yoda`** (YODA files are histogram data). Change stroke to a green tint. |
+| `stack-svgrepo-com.svg`                          | ✅ Use  | 15×15 stacked diamond layers. Already designated for `.safetensors`. Use as-is, recolor. |
+| `stack-simple-fill-svgrepo-com.svg`              | ⚠️ Alt  | Larger filled variant. Use if outline version is too thin at 16px. |
+| `particle-svgrepo-com.svg`                       | ✅ Use  | 24×24 variable-radius circles (quark-like). Good for `.spc` (SLHA particle spectrum). Recolor. |
+| `vecteezy_fireworks_36654756.svg`                | ⚠️ Rework | Single orange firework burst with radial gradient. Non-zero viewBox origin needs fixing. After flattening gradient → flat color, the burst shape could work as a standalone collision/shower symbol. Medium effort. |
+| `vecteezy_fireworks-vector-icon-design_16954781.svg` | ⚠️ Rework | 5 paths, gradient fills, ~3300×3300. More complex. Could yield a clean shower icon after gradient strip, but the fireworks aesthetic reads as "celebration" rather than "physics collision". |
+| `vecteezy_fireworks-vector-icon-design_21224994.svg` | ⚠️ Rework | Similar; deep purple tones. Same caveat. |
+| `vecteezy_brain-vector-icon-design_20857616.svg` | ⚠️ Rework | 4 paths, gradient fills. Brain = ML training folder concept. After gradient strip → flat `#1565C0` fill, this is usable as `folder-training` overlay. |
+| `vecteezy_dumbells-vector-icon-design_15726280.svg` | ⚠️ Rework | Non-square viewBox, gradient fills. Dumbbell = weights folder. Possible but needs bbox and color fix. The metaphor is good. |
+| `vecteezy_fuzzy-logic-vector-icon-design_16324069.svg` | ❌ Skip | 36 paths, all linear-gradient fills. Too complex to reduce to a 16px icon. |
+| `vecteezy_geometric-starburst-shape_36649055.svg` | ❌ Skip | 119 paths. Unsuitable for any icon work. |
+| `vecteezy_starburst-hand-drawn-vector-illustration_5719458.svg` | ❌ Skip | 167 paths + white background rect. |
+| `vecteezy_vector-flat-flags-icons_147297.svg`    | ❌ Skip | Flag sprite sheet. Not relevant. |
+| `arrow-cluster-svgrepo-com.svg`                  | ❌ Skip | 512×512, very complex paths. |
+| `distribute-vertical-line-svgrepo-com.svg`       | ❌ Maybe | 24×24 abstract (two lines + centered rect). No clear semantic fit yet. |
+| `molecule-svgrepo-com.svg`                       | ❌ Skip  | 512×512 network graph, too complex at 16px. |
+| `molecule-svgrepo-com-2.svg`                     | ❌ Skip  | 297×297 network, same problem. |
+| `flag-svgrepo-com.svg/2/3`                       | ✅ Use  | Simple flag shapes. Good for `folder-checkpoints` overlay (checkpoint = milestone = flag). |
 
-After pruning: ~350 extension mappings + ~225 folder mappings remain from
-upstream, plus ~30 new HEP/ML extension entries and ~20 new folder entries.
+**Recommended V1 sourcing plan:**
+- `.yoda`: derive from `sound-lines-svgrepo-com.svg` (already horizontal-bar histogram look)
+- `.spc` / SLHA: derive from `particle-svgrepo-com.svg`
+- `.safetensors`: derive from `stack-svgrepo-com.svg`
+- `folder-training/train`: derive from `vecteezy_brain` after gradient strip
+- `folder-weights/weight`: derive from `vecteezy_dumbells` after bbox + gradient fix
+- `folder-checkpoints`: derive from one of the `flag-svgrepo-com` variants
+- `.gdml` / `.mac`: author new (concentric arcs for GDML, terminal+gear for G4 macros)
+- `.h5/.hdf5` / `.npy`: author new (stacked rectangles for HDF5, grid for NumPy arrays)
 
 ### 4.8 Licensing & attribution
-- Material Icon Theme is MIT. Fork freely; keep their `LICENSE` file and
-  credit Philipp Kief in the README.
-- New SVGs authored in `icons/_hep/` are yours — recommend MIT to match.
-- Keep upstream and HEP SVGs in separate subdirectories so the boundary is
-  always visible (`icons/_upstream/` vs `icons/_hep/`).
+- Material Icon Theme is MIT. All 1245 SVGs and the full mapping JSON are vendored
+  verbatim into `icons/`; `build.js` auto-sources from the locally installed extension.
+  Credit Philipp Kief in the extension README.
+- New SVGs authored in `aux/icon-bank/` and committed to `icons/` are yours — MIT license to match.
+- The boundary is visible by filename: MIT SVGs have the `~[hash].svg` suffix; custom SVGs do not.
 
 ### 4.9 Build order
-1. Fork & vendor: clone `src/core/icons/` and `icons/`; confirm upstream
-   theme renders unchanged in VS Code before touching anything.
-2. Prune: remove the ~265 mapping entries from §4.7.
-3. Add name mappings (§4.3) — zero new SVGs, immediate visible wins.
-4. Add `.C` to the `cpp` fileExtensions list so ROOT macros get a C++ icon
-   on macOS.
-5. Author HEP file-icon SVGs (10 icons, start with `root`, `cmnd`, `lhe`).
-6. Author HEP folder-icon SVGs (9 icons, start with `folder-paint`,
-   `folder-monitor`, `folder-record`, `folder-probe`).
-7. Author ML file-icon SVGs (6 icons).
-8. Author ML/results folder-icon SVGs (5 icons).
-9. Recolor new SVGs for `hep-contrast` palette harmony (optional, ship without).
-10. Package `.vsix`, install, dogfood for a week, iterate.
+
+**MVP** ✅ done — 1258 icon definitions, 795 KB VSIX installed.
+
+**V1 iteration:**
+1. Author remaining HEP/ML file icons (see §4.7 sourcing plan). Drop SVG
+   source into `aux/icon-bank/`, finalize in `aux/hep-icons/icons/`.
+2. Add new `_hep_*` entries in `build.js` → `HEP_DEFS` and `HEP_FILE_EXTS`.
+3. Author remaining ML folder icons (`folder-weights`, `folder-training`,
+   `folder-checkpoints`, `folder-root-macros`). Add closed + open variants.
+4. Register new folders in `build.js` → `HEP_FOLDER_NAMES`.
+5. Run `node build.js`, confirm counts, repackage VSIX.
+6. Optional recolor pass: align all custom SVG fill colors with
+   `hep-contrast-theme`'s palette (`palette.toml`).
+
+**Maintenance:**
+- When MIT releases a new version: re-run `node build.js` (auto-detects
+  latest installed MIT). The HEP layer is fully additive — no merge conflicts.
 
 ---
 
@@ -468,16 +488,21 @@ upstream, plus ~30 new HEP/ML extension entries and ~20 new folder entries.
 1. **Polish round on existing two** (1–2 hrs)
    Fix the README/script-name & palette drift in `hep-contrast`, add the
    ANSI 16. Land the value-type scopes in `cmnd-syntax`.
-2. **Icon theme MVP** (1 weekend)
-   Fork Material, prune, confirm it renders, add name-only mappings (zero SVG
-   work). Then author 5 HEP file icons (`.root`, `.cmnd`, `.lhe`, `.hepmc`,
-   `.dec`) and 4 subsystem folder icons (`Paint`, `Monitor`, `Record`,
-   `Probe`). Total: 9 SVGs + 9 open-folder variants = 18 files. Ship.
-3. **Icon theme V1** (another weekend)
-   Remaining 16 SVGs: HEP formats (`.spc`, `.pwhg`, `.yoda`, `.gdml`,
-   `.mac`), ML formats (`.h5`, `.npy`, `.safetensors`, `.keras`, `.ckpt`,
-   `.tflite`), and ML/results folders (`weights`, `training`, `checkpoints`,
-   `results`, `root_macros`). Recolor pass optional.
+2. **Icon theme MVP** ✅ *shipped*
+   Full MIT icon vocabulary preserved as a base; HEP additions layered on top
+   via `build.js`. 5 HEP file icons (`.root`, `.cmnd`, `.lhe`, `.hepmc`,
+   `.dec`) + 4 subsystem folder icons (`paint`, `monitor`, `record`, `probe`)
+   authored. 33 HEP/ML folder names + 25 file extension mappings added.
+   Installed as `hep-icons-1.0.0.vsix` (795 KB, 1258 icon defs).
+3. **Icon theme V1** (next weekend)
+   Remaining 11 custom SVGs (+ open variants where needed): HEP formats
+   (`.spc`, `.yoda`, `.gdml`, `.mac`) using icon-bank sources where possible
+   (`particle-svgrepo-com.svg` → `.spc`, `sound-lines-svgrepo-com.svg` →
+   `.yoda`, `flag` variants → `folder-checkpoints`), ML formats
+   (`.safetensors` from `stack-svgrepo-com.svg`, `.h5`, `.npy`, `.keras`,
+   `.ckpt`, `.tflite`), and ML/results folder icons (`weights`, `training`,
+   `checkpoints`, `root_macros`). See §4.7 for full sourcing plan.
+   Recolor pass to align with `hep-contrast` palette optional but recommended.
 4. **Pythia hover provider** (a few evenings)
    Scrape the Pythia manual XML into `pythia-keys.json`, register hover and
    completion providers, fold the snippet pack into the same extension.

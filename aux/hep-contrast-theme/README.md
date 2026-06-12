@@ -19,7 +19,7 @@ F5  (with this folder open — launches Extension Development Host)
 ```bash
 npm install -g @vscode/vsce
 cd hep-contrast-theme
-node build.js         # regenerate themes/hep-contrast-light.json + themes/hep-contrast-dark.json from palette.toml
+node build.js         # regenerate themes/hep-contrast-light.json + themes/hep-contrast-dark.json from palette.yaml
 vsce package          # produces hep-contrast-2.0.0.vsix
 code --install-extension hep-contrast-2.0.0.vsix
 ```
@@ -30,7 +30,7 @@ Then: **Cmd/Ctrl+K → Cmd/Ctrl+T** → select **HEP Contrast Light** or **HEP C
 
 ## Palette
 
-All colors live in **`palette.toml`** as `[light, dark]` pairs. Edit there, run `node build.js`, done — both themes regenerate from the single source of truth.
+All colors live in **`palette.yaml`** as `[light, dark]` pairs. Edit there, run `node build.js`, done — both themes regenerate from the single source of truth.
 
 | Role                        | Light          | Dark       |
 |-----------------------------|----------------|------------|
@@ -82,10 +82,10 @@ Add to your `settings.json` for the best experience:
 
 ## Customization
 
-All colors are defined in **`palette.toml`** as `key = [light_value, dark_value]` pairs, grouped into named sections (`[syntax]`, `[bg_ramp]`, `[ansi]`, etc.).
+All colors are defined in **`palette.yaml`** as `key: [light_value, dark_value]` pairs, grouped into named sections (`syntax:`, `bg_ramp:`, `ansi:`, etc.).
 
 To change something:
-1. Edit the hex value(s) in `palette.toml`
+1. Edit the hex value(s) in `palette.yaml`
 2. Run `node build.js`
 3. VS Code picks up the change immediately if you're in Extension Development Host (F5)
 

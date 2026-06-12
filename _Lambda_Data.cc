@@ -1,4 +1,6 @@
 #include <chrono>
+#include <string>
+
 #include "Pythia8/Pythia.h"
 #include "Pythia8/PythiaParallel.h"
 
@@ -18,27 +20,31 @@ int main(int argc, char* argv[]) {
     Pythia8::PythiaParallel pythia;
 
     Record::Writer       writer;
-    Monitor::AsyncLogger logger;
+    Monitor::AsyncLogger asyncLogger;
 
-    Config::configure(configPath, project, pythia, writer, logger);
+    Config::configure(configPath, project, pythia, writer, asyncLogger);
 
     Lambda::declareDataObjects(writer);
 
-    writer.bind(logger,
+    writer.bind(asyncLogger,
                 []() { return Lambda::dataLogString(); },
                 [&pythia]() { pythia.stat(); },
                 [&pythia]() { pythia.settings.listChanged(); });
 
-    logger.initialise(writer);
+    asyncLogger.initialise(writer);
     pythia.init();
     writer.start();
 
-    Lambda::GenerationContext ctx{logger.watch(), logger, writer};
-    pythia.run(static_cast<long>(logger.watch().nEvents), [&](Pythia8::Pythia* worker) {
+    Lambda::GenerationContext ctx{asyncLogger.watch(), asyncLogger, writer};
+    pythia.run(static_cast<long>(asyncLogger.watch().nEvents), [&](Pythia8::Pythia* worker) {
         Lambda::dataGenerator(*worker, ctx);
     });
 
-    writer.finish(logger.watch().nEvents);
+    Record::Meta::integrityAddFileSha(writer.meta(), configPath);
+    Record::Meta::integrityAddFileSha(writer.meta(), writer.histConfig().histLimitsFile.Data());
+    writer.finish(asyncLogger.watch().nEvents);
+
+    Monitor::TimerRegistry::instance().dump(std::cout);
 
     return 0;
 }

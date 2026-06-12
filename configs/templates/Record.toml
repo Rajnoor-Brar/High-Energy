@@ -39,12 +39,14 @@ writer_queue_capacity = 0
 [record.paths]
 # Base output directory. Serialised to rootDirectory; if serialDirectory=true,
 # the padded serial suffix is appended before the trailing slash.
+# Runtime default: "output/<project>/" where <project> is the program name
+# passed to Config::configure() (e.g. "Lambda_Reconstruction").
 # Stored in Config::Register.rootDirectory -> Record::Paths.rootDirectory.
-directory = "output/project/"
+directory = "output/project/"   # sample — runtime-evaluated
 
 # Log file directory name. If logInSubDir=true, written as rootDirectory + this.
 # Stored in Config::Register.logDirectory -> Record::Paths.logDirectory.
-output_log_directory = "logs/"
+output_log_directory = "params/"
 
 # Checkpoint file directory name. If checkpointsInSubDir=true, written as
 # rootDirectory + this. Stored in Config::Register.checkpointDirectory.
