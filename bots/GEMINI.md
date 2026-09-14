@@ -1,7 +1,7 @@
 # High-Energy Project (Lambda Reconstruction)
 
 ## Project Overview
-This is a C++17 project for a Lambda baryon (Λ → p + π⁻) reconstruction simulation. The primary workflow involves generating events using Pythia8, storing the data in a ROOT TTree, and then running a reconstruction pass that produces histograms. 
+This is a C++17 project for a Lambda baryon (Λ → p + π⁻) reconstruction simulation. The primary workflow involves generating events using Pythia8, storing the data in a ROOT TTree, and then running a reconstruction pass that produces histograms.
 
 **Main Technologies:**
 - C++17
@@ -10,7 +10,7 @@ This is a C++17 project for a Lambda baryon (Λ → p + π⁻) reconstruction si
 - [toml++](https://marzer.github.io/tomlplusplus/) for configuration parsing
 
 **Architecture:**
-The codebase utilizes a strict **namespace + facade pattern**. It is primarily a header-only library with executable drivers (the top-level `_*.cc` files). 
+The codebase utilizes a strict **namespace + facade pattern**. It is primarily a header-only library with executable drivers in `sources/Lambda/`.
 - Every namespace `Foo` has a public facade file `Foo.hh` which acts as an include aggregator.
 - The actual implementation resides in a subdirectory `Foo/` (e.g., `Foo/Types.hh`, `Foo/Workers.hh`).
 - Cross-namespace code must **only** include the public facade (`#include "Foo.hh"`), never a sibling's submodule directly.
@@ -20,17 +20,17 @@ The build system uses GNU Make.
 
 **Building Executables:**
 ```sh
-make _Lambda_Data            # Builds _Lambda_Data.exe
-make _Lambda_Reconstruction  # Builds _Lambda_Reconstruction.exe
-make _Lambda_Parallel        # Builds _Lambda_Parallel.exe
+make Lambda/_Lambda_Data.exe            # Builds output/Lambda/_Lambda_Data.exe
+make Lambda/_Lambda_Reconstruction.exe  # Builds output/Lambda/_Lambda_Reconstruction.exe
+make Lambda/_Lambda_Parallel.exe        # Builds output/Lambda/_Lambda_Parallel.exe
 make clean                   # Removes all generated executables
 ```
 
 **Running Drivers:**
 Executables can optionally accept a `.toml` configuration file argument.
 ```sh
-./_Lambda_Data.exe [configs/Lambda_Generation.toml]
-./_Lambda_Reconstruction.exe [configs/Lambda_Reconstruction.toml]
+./output/Lambda/_Lambda_Data.exe [configs/Lambda_Generation.toml]
+./output/Lambda/_Lambda_Reconstruction.exe [configs/Lambda_Reconstruction.toml]
 ```
 
 **Testing:**

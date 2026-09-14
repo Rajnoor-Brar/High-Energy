@@ -26,7 +26,7 @@
 default_style = "configs/defaults/Paint.toml"
 
 # Input ROOT file. Stored in Paint::RenderPlan.rootFile.
-root_file = "output/project/run.root"
+root_file = "output/Lambda/project/run.root"
 
 # Output directory prefix inherited by all results.
 # kResultDirDefault = "results" (no trailing slash).
@@ -269,7 +269,7 @@ show = true
 # ── Single histogram, publication quality ─────────────────────────────────────
 #
 # [paint]
-# root_file   = "output/Lambda_Reconstruction/_42/Lambda_Recons_1M.root"
+# root_file   = "output/Lambda/Lambda_Reconstruction/_42/Lambda_Recons_1M.root"
 # result_dir  = "results/paper/"
 # results     = ["mass_signal"]
 # image_scale = 4        # 4× canvas for print resolution

@@ -1,0 +1,32 @@
+!Centre of mass energy sqrt(s) = 28.6 GeV
+Main:numberOfEvents = 10000	! 10K events
+Main:timesAllowErrors = 40          ! abort run after this many flawed events
+Random:setSeed = on
+Random:seed = 0
+
+Beams:frametype = 2    # Beams with different energies
+Beams:idA = 2212       # proton p+ 
+Beams:eA = 41.0   # p+ at 41 GeV
+Beams:idB = 11        # electron e-
+Beams:eB = 5.0     # e- at 5 GeV
+PDF:lepton2gamma = on # Allow for photon-from lepton
+Photon:ProcessType = 0      #Allow all photon processes
+Photon:Q2max = 1.0      # Maximal Q2
+HardQCD:all = on       # All dijet MEs
+PhotonParton:all = on              #All dijet MEs with photons
+PhaseSpace:pThatMin = 6.           #Minimal pT cut
+MultipartonInteractions:pT0Ref = 3.2 # Tuned ep value
+
+#Simplify printout.
+Init:showChangedSettings = on
+Init:showChangedParticleData = on
+Init:showMultipartonInteractions = on
+Next:numberShowInfo = 1
+Next:numberShowProcess = 1
+Next:numberShowEvent = 1
+Next:showScaleAndVertex = off
+
+#QED radiation off lepton not handled yet by the new procedure.
+TimeShower:QEDshowerByL = off
+PDF:lepton = off
+PDF:pSet = 15 #NNPDF2.3 QCD+QED NLO alpha_s(M_Z) = 0.119

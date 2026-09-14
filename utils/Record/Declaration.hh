@@ -34,17 +34,16 @@ template <typename Basis>
 inline void Writer::declareParticleCount(Basis basis,
                               std::string histName,
                               std::string title,
-                              int bins,
-                              double low,
-                              double high) {
+                              AxisSpec axis) {
         ParticleObjects& object = requireParticleGroupForDeclaration(basis, "particle count");
-        validateHistogramShape(histName, bins, low, high);
-        if (object.count.hist != nullptr)
+        validateHistogramShape(histName, axis);
+        if (object.count.master != nullptr)
             throw std::runtime_error("[Record::Writer] duplicate particle count for " +
                                      keyString(keyOf(basis)));
 
         object.dir->cd();
-        object.count.hist = new TH1D(histName.c_str(), title.c_str(), bins, low, high);
+        object.count.master = new TH1D(histName.c_str(), title.c_str(),
+                                       axis.bins, axis.low, axis.high);
     }
 
 template <typename Basis>
@@ -52,15 +51,13 @@ inline void Writer::declareParticleHist1D(Basis basis,
                                Physics::ParticleProperty property,
                                std::string histName,
                                std::string title,
-                               int bins,
-                               double low,
-                               double high) {
+                               AxisSpec axis) {
         ParticleObjects& object = requireParticleGroupForDeclaration(basis, "particle hist1D");
-        validateHistogramShape(histName, bins, low, high);
+        validateHistogramShape(histName, axis);
         ensureUniqueParticleName(object, histName);
         object.dir->cd();
         ParticleTH1 rec{};
-        rec.hist = new TH1D(histName.c_str(), title.c_str(), bins, low, high);
+        rec.master = new TH1D(histName.c_str(), title.c_str(), axis.bins, axis.low, axis.high);
         rec.property = property;
         object.hists1D.push_back(std::move(rec));
     }
@@ -71,20 +68,16 @@ inline void Writer::declareParticleHist2D(Basis basis,
                                Physics::ParticleProperty propertyY,
                                std::string histName,
                                std::string title,
-                               int binsX,
-                               double lowX,
-                               double highX,
-                               int binsY,
-                               double lowY,
-                               double highY) {
+                               AxisSpec x,
+                               AxisSpec y) {
         ParticleObjects& object = requireParticleGroupForDeclaration(basis, "particle hist2D");
-        validateHistogramShape(histName, binsX, lowX, highX);
-        validateHistogramShape(histName, binsY, lowY, highY);
+        validateHistogramShape(histName, x);
+        validateHistogramShape(histName, y);
         ensureUniqueParticleName(object, histName);
         object.dir->cd();
         ParticleTH2 rec{};
-        rec.hist = new TH2D(histName.c_str(), title.c_str(),
-                            binsX, lowX, highX, binsY, lowY, highY);
+        rec.master = new TH2D(histName.c_str(), title.c_str(),
+                              x.bins, x.low, x.high, y.bins, y.low, y.high);
         rec.propertyX = propertyX;
         rec.propertyY = propertyY;
         object.hists2D.push_back(std::move(rec));
@@ -104,7 +97,7 @@ inline void Writer::declareParticleGraph(Basis basis,
         graph->SetName(graphName.c_str());
         graph->SetTitle(title.c_str());
         ParticleGraph rec{};
-        rec.graph = graph;
+        rec.master = graph;
         rec.propertyX = propertyX;
         rec.propertyY = propertyY;
         object.graphs.push_back(std::move(rec));
@@ -116,15 +109,13 @@ inline void Writer::declareParticleProfile(Basis basis,
                                 Physics::ParticleProperty propertyY,
                                 std::string profileName,
                                 std::string title,
-                                int binsX,
-                                double lowX,
-                                double highX) {
+                                AxisSpec x) {
         ParticleObjects& object = requireParticleGroupForDeclaration(basis, "particle profile");
-        validateHistogramShape(profileName, binsX, lowX, highX);
+        validateHistogramShape(profileName, x);
         ensureUniqueParticleName(object, profileName);
         object.dir->cd();
         ParticleProfile rec{};
-        rec.profile = new TProfile(profileName.c_str(), title.c_str(), binsX, lowX, highX);
+        rec.master = new TProfile(profileName.c_str(), title.c_str(), x.bins, x.low, x.high);
         rec.propertyX = propertyX;
         rec.propertyY = propertyY;
         object.profiles.push_back(std::move(rec));
@@ -162,21 +153,19 @@ template <typename Basis>
 inline void Writer::declareHist1D(Basis basis,
                        std::string histName,
                        std::string title,
-                       int bins,
-                       double low,
-                       double high,
+                       AxisSpec axis,
                        DataType type) {
         requireEnumBasis<Basis>();
         requireOpenForDeclaration("hist1D");
         requireNotStarted("hist1D");
-        validateHistogramShape(histName, bins, low, high);
+        validateHistogramShape(histName, axis);
         requireNumeric(type, "hist1D");
         const RecordKey key = keyOf(basis);
         if (hists1D_.count(key))
             throw std::runtime_error("[Record::Writer] duplicate hist1D " + keyString(key));
         outFile_->cd();
         Hist1DRecord rec{};
-        rec.hist = new TH1D(histName.c_str(), title.c_str(), bins, low, high);
+        rec.master = new TH1D(histName.c_str(), title.c_str(), axis.bins, axis.low, axis.high);
         rec.type = type;
         hists1D_.emplace(key, std::move(rec));
     }
@@ -185,19 +174,15 @@ template <typename Basis>
 inline void Writer::declareHist2D(Basis basis,
                        std::string histName,
                        std::string title,
-                       int binsX,
-                       double lowX,
-                       double highX,
-                       int binsY,
-                       double lowY,
-                       double highY,
+                       AxisSpec x,
+                       AxisSpec y,
                        DataType typeX,
                        DataType typeY) {
         requireEnumBasis<Basis>();
         requireOpenForDeclaration("hist2D");
         requireNotStarted("hist2D");
-        validateHistogramShape(histName, binsX, lowX, highX);
-        validateHistogramShape(histName, binsY, lowY, highY);
+        validateHistogramShape(histName, x);
+        validateHistogramShape(histName, y);
         requireNumeric(typeX, "hist2D x");
         requireNumeric(typeY, "hist2D y");
         const RecordKey key = keyOf(basis);
@@ -205,8 +190,8 @@ inline void Writer::declareHist2D(Basis basis,
             throw std::runtime_error("[Record::Writer] duplicate hist2D " + keyString(key));
         outFile_->cd();
         Hist2DRecord rec{};
-        rec.hist = new TH2D(histName.c_str(), title.c_str(),
-                            binsX, lowX, highX, binsY, lowY, highY);
+        rec.master = new TH2D(histName.c_str(), title.c_str(),
+                              x.bins, x.low, x.high, y.bins, y.low, y.high);
         rec.typeX = typeX;
         rec.typeY = typeY;
         hists2D_.emplace(key, std::move(rec));
@@ -232,7 +217,7 @@ inline void Writer::declareGraph(Basis basis,
         graph->SetName(graphName.c_str());
         graph->SetTitle(title.c_str());
         GraphRecord rec{};
-        rec.graph = graph;
+        rec.master = graph;
         rec.typeX = typeX;
         rec.typeY = typeY;
         graphs_.emplace(key, std::move(rec));
@@ -242,15 +227,13 @@ template <typename Basis>
 inline void Writer::declareProfile(Basis basis,
                         std::string profileName,
                         std::string title,
-                        int binsX,
-                        double lowX,
-                        double highX,
+                        AxisSpec x,
                         DataType typeX,
                         DataType typeY) {
         requireEnumBasis<Basis>();
         requireOpenForDeclaration("profile");
         requireNotStarted("profile");
-        validateHistogramShape(profileName, binsX, lowX, highX);
+        validateHistogramShape(profileName, x);
         requireNumeric(typeX, "profile x");
         requireNumeric(typeY, "profile y");
         const RecordKey key = keyOf(basis);
@@ -258,7 +241,7 @@ inline void Writer::declareProfile(Basis basis,
             throw std::runtime_error("[Record::Writer] duplicate profile " + keyString(key));
         outFile_->cd();
         ProfileRecord rec{};
-        rec.profile = new TProfile(profileName.c_str(), title.c_str(), binsX, lowX, highX);
+        rec.master = new TProfile(profileName.c_str(), title.c_str(), x.bins, x.low, x.high);
         rec.typeX = typeX;
         rec.typeY = typeY;
         profiles_.emplace(key, std::move(rec));
@@ -329,9 +312,9 @@ inline void Writer::validateObjectName(const std::string& name, const std::strin
             throw std::runtime_error("[Record::Writer] " + kind + " name must not be empty");
     }
 
-inline void Writer::validateHistogramShape(const std::string& name, int bins, double low, double high) {
+inline void Writer::validateHistogramShape(const std::string& name, const AxisSpec& axis) {
         validateObjectName(name, "histogram");
-        if (bins <= 0 || !(high > low))
+        if (axis.bins <= 0 || !(axis.high > axis.low))
             throw std::runtime_error("[Record::Writer] invalid histogram shape for '" + name + "'");
     }
 
@@ -342,19 +325,19 @@ inline void Writer::requireNumeric(DataType type, const std::string& context) {
     }
 
 inline void Writer::ensureUniqueParticleName(const ParticleObjects& object, const std::string& name) {
-        if (object.count.hist && name == object.count.hist->GetName())
+        if (object.count.master && name == object.count.master->GetName())
             throw std::runtime_error("[Record::Writer] duplicate particle object '" + name + "'");
         for (const auto& record : object.hists1D)
-            if (record.hist && name == record.hist->GetName())
+            if (record.master && name == record.master->GetName())
                 throw std::runtime_error("[Record::Writer] duplicate particle object '" + name + "'");
         for (const auto& record : object.hists2D)
-            if (record.hist && name == record.hist->GetName())
+            if (record.master && name == record.master->GetName())
                 throw std::runtime_error("[Record::Writer] duplicate particle object '" + name + "'");
         for (const auto& record : object.graphs)
-            if (record.graph && name == record.graph->GetName())
+            if (record.master && name == record.master->GetName())
                 throw std::runtime_error("[Record::Writer] duplicate particle object '" + name + "'");
         for (const auto& record : object.profiles)
-            if (record.profile && name == record.profile->GetName())
+            if (record.master && name == record.master->GetName())
                 throw std::runtime_error("[Record::Writer] duplicate particle object '" + name + "'");
         if (object.tree.tree && name == object.tree.tree->GetName())
             throw std::runtime_error("[Record::Writer] duplicate particle object '" + name + "'");

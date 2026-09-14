@@ -56,6 +56,15 @@ namespace Paint {
             }
 
             canvas.Print(path.string().c_str());
+
+            // TCanvas::Print returns void and fails only via stderr; verify
+            // the file actually landed so failures stop the run.
+            std::error_code ec;
+            if (!std::filesystem::exists(path, ec) ||
+                std::filesystem::file_size(path, ec) == 0) {
+                throw std::runtime_error("Paint result '" + result.name
+                    + "': TCanvas::Print produced no output at " + path.string());
+            }
         }
     }
 

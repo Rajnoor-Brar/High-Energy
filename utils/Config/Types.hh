@@ -11,6 +11,7 @@
 
 #include "Physics/Types.hh"
 #include "Probe/Types.hh"
+#include "Utility/Time.hh"
 
 namespace Config {
 
@@ -30,9 +31,11 @@ namespace Config {
         Extreme
     };
 
-    using TimePoint = std::chrono::system_clock::time_point;
-    using uSeconds  = std::chrono::microseconds;
-    using Seconds   = std::chrono::seconds;
+    // Clock aliases live in Utility/Time.hh (bottom layer); re-exported here
+    // so existing Config::TimePoint call sites keep working.
+    using TimePoint = Utility::TimePoint;
+    using uSeconds  = Utility::uSeconds;
+    using Seconds   = Utility::Seconds;
 
     using LevelBounds    = std::map<RangeSize, Bounds>;
     using ParticleLimits = std::map<Physics::ParticleProperty, LevelBounds>;
@@ -119,9 +122,9 @@ namespace Config {
         Int_t   serial              = 0;
         std::size_t writer_threads        = 0;
         std::size_t writer_queue_capacity = 0;   // [record].writer_queue_capacity; 0 = Writer default
-        std::string rootDirectory       = "output/";
-        std::string logDirectory        = "output/params/";
-        std::string checkpointDirectory = "output/checkpoints/";
+        std::string rootDirectory       = "output/Lambda/";
+        std::string logDirectory        = "output/Lambda/params/";
+        std::string checkpointDirectory = "output/Lambda/checkpoints/";
         std::string beamEnergy;
         std::string outName;
         std::string logName;

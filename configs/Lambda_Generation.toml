@@ -22,7 +22,7 @@ bin_count   = 500
 hist_scaling = 1.0
 
 [record.paths]
-directory            = "output/Lambda_Generation/"
+directory            = "output/Lambda/Lambda_Generation/"
 output_log_directory = "logs/"
 checkpoint_directory = "checkpoints/"
 serialDirectory      = true

@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstddef>
 #include <fstream>
+#include <iostream>
 #include <pwd.h>
 #include <sstream>
 #include <string>
@@ -11,6 +12,7 @@
 #include <vector>
 
 #include "Config.hh"
+#include "Utility/Sha256.hh"
 #include "TDirectory.h"
 #include "TFile.h"
 #include "TParameter.h"
@@ -114,35 +116,15 @@ namespace Record::Meta {
                            std::istreambuf_iterator<char>());
     }
 
-    // Compute the SHA-256 of a file by shelling out to shasum/sha256sum.
-    // Returns "path:sha256hex" on success, "path:unavailable" if the tool
-    // is absent or the file cannot be read.
+    // Compute the SHA-256 of a file in-process (Utility/Sha256.hh).
+    // Returns "path:sha256hex" on success, "path:unavailable" if the file
+    // cannot be read. (Previously shelled out to shasum via popen — a shell
+    // injection hazard for paths containing quotes/$() and a silent failure
+    // on machines without the tool.)
     inline std::string sha256File(const std::string& path) {
         if (path.empty()) return {};
-        // Try shasum -a 256 (macOS/BSD) then sha256sum (Linux)
-        for (const char* cmd : {"shasum -a 256 ", "sha256sum "}) {
-            const std::string full = std::string(cmd) + "\"" + path + "\" 2>/dev/null";
-#ifdef _WIN32
-            FILE* pipe = _popen(full.c_str(), "r");
-#else
-            FILE* pipe = popen(full.c_str(), "r");  // NOLINT(cert-env33-c)
-#endif
-            if (!pipe) continue;
-            char buf[128] = {};
-            const bool ok = (fgets(buf, sizeof(buf), pipe) != nullptr);
-#ifdef _WIN32
-            _pclose(pipe);
-#else
-            pclose(pipe);
-#endif
-            if (!ok) continue;
-            // Output is "sha256hex  filename\n" — take first token.
-            std::string sha = buf;
-            const auto sp = sha.find(' ');
-            if (sp != std::string::npos) sha = sha.substr(0, sp);
-            return path + ":" + sha;
-        }
-        return path + ":unavailable";
+        const std::string sha = Utility::sha256File(path);
+        return path + ":" + (sha.empty() ? "unavailable" : sha);
     }
 
     // Append a "path:sha256" entry to record.integrity.file_shas.
@@ -203,7 +185,12 @@ namespace Record::Meta {
                 ss << *lam;
                 r.objects.selection_toml = ss.str();
             }
-        } catch (...) {}
+        } catch (const std::exception& e) {
+            // Metadata is best-effort, but a silent miss means missing
+            // provenance discovered months later — always say something.
+            std::cerr << "[Record::Meta] Skipping TOML metadata merge from '"
+                      << configPath << "': " << e.what() << "\n";
+        }
     }
 
     // ── Pass 3: Probe (extract from input ROOT file's About/ block) ─────────
@@ -214,7 +201,11 @@ namespace Record::Meta {
     inline void mergeFromProbe(Record& r, const std::string& probeInputFile) {
         if (probeInputFile.empty()) return;
         std::unique_ptr<TFile> f(TFile::Open(probeInputFile.c_str(), "READ"));
-        if (!f || f->IsZombie()) return;
+        if (!f || f->IsZombie()) {
+            std::cerr << "[Record::Meta] Skipping provenance merge: cannot open probe input '"
+                      << probeInputFile << "'\n";
+            return;
+        }
 
         auto setS = [&](TDirectory* dir, const char* key, std::string& field) {
             auto s = detail::readObjString(dir, key);
@@ -246,11 +237,14 @@ namespace Record::Meta {
     // Fields that have no source choice — always computed locally. Safe to
     // re-run (e.g. from Writer::shutdown to refresh event counts after the
     // run loop completes).
+    // beamEnergy: display string from Config::Register::beamEnergy (may be
+    // empty, e.g. on the finish()-time refresh — the CM-energy field is only
+    // filled when it is still unset and the string parses).
     inline void fillDerived(Record& r,
                             const std::string& analysisName,
                             const std::string& configPath,
                             const Config::Watch& log,
-                            const Config::Register& root)
+                            const std::string& beamEnergy = {})
     {
         if (r.dataset.file_uuid.empty()) r.dataset.file_uuid = TUUID().AsString();
         if (r.dataset.experiment.empty()) r.dataset.experiment = "Pythia8_standalone";
@@ -271,10 +265,13 @@ namespace Record::Meta {
         r.events.sum_weights         = static_cast<Double_t>(log.n_real_events.load(std::memory_order_relaxed));
         r.events.sum_weights_squared = static_cast<Double_t>(log.n_real_events.load(std::memory_order_relaxed));
 
-        if (r.physics.center_of_mass_energy_gev == 0.0) {
+        if (r.physics.center_of_mass_energy_gev == 0.0 && !beamEnergy.empty()) {
             try {
-                r.physics.center_of_mass_energy_gev = std::stod(root.beamEnergy);
-            } catch (...) {}
+                r.physics.center_of_mass_energy_gev = std::stod(beamEnergy);
+            } catch (const std::exception&) {
+                std::cerr << "[Record::Meta] Unparseable beam energy '"
+                          << beamEnergy << "' — leaving CM energy unset\n";
+            }
         }
 
         r.integrity.creation_timestamp = nowISO8601();

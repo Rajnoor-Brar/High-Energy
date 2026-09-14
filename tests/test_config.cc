@@ -21,7 +21,7 @@ namespace {
     const std::string kProject     = "test_config";
 
     std::string writeTempConfig(const std::string& name, const std::string& body) {
-        const std::filesystem::path dir = "output/test_config";
+        const std::filesystem::path dir = "output/Lambda/test_config";
         std::filesystem::create_directories(dir);
         const std::filesystem::path path = dir / name;
         std::ofstream out(path);
@@ -188,8 +188,6 @@ print_interval = 7
         // toml++ iterates sub-table keys alphabetically: pions before protons.
         TEST_TRUE(ep[0].label == "pions" || ep[1].label == "pions");
         TEST_TRUE(ep[0].label == "protons" || ep[1].label == "protons");
-        // Both specs carry default index flags (true/true/true).
-        TEST_TRUE(ep[0].indexSorted && ep[0].indexAscending && ep[0].indexMonotonic);
 
         TEST_PASS("configureProbe reads probe/probeSpec without creating directories (Phase 10)");
     }

@@ -166,13 +166,19 @@ inline ProbeConfig parseProbeConfig(const toml::table& cfg)
         spec.coords = detail::makeCoordSpec(tbl["spec"].value_or(0), std::move(kb), label);
     };
 
-    // Parse optional index + index-ordering flags into any spec that carries them.
+    // Parse the optional index branch into any spec that carries one.
+    // (The former index_sorted/index_ascending/index_monotonic keys were
+    // parsed but never consumed and have been removed — see Types.hh note.)
     auto parseIndexFlags = [](const toml::table& tbl, auto& spec) {
         if (const auto* arr = tbl["index"].as_array(); arr && arr->size() == 2)
             spec.indexBranches.push_back(detail::parseBranchPair(*arr));
-        spec.indexSorted    = tbl["index_sorted"].value_or(true);
-        spec.indexAscending = tbl["index_ascending"].value_or(true);
-        spec.indexMonotonic = tbl["index_monotonic"].value_or(true);
+        for (const char* removed : {"index_sorted", "index_ascending", "index_monotonic"})
+            if (tbl.contains(removed))
+                throw std::runtime_error(
+                    std::string("[Probe] config key '") + removed +
+                    "' was removed (it was parsed but never used); "
+                    "ascending index data is currently always required for "
+                    "CollectorThread event streams");
     };
 
     // Step 2: [probe.events.particles.*]

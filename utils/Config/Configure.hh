@@ -70,14 +70,9 @@ namespace Config {
 
         Monitor::configureMonitor(logger, configPath, project);
         Register reg;
+        // configurePythia resolves beamEnergy (TOML or cmnd-file Beams:eCM)
+        // before building output paths, so the file title embeds the energy.
         configurePythia(configPath, project, logger.watch(), reg, pythia);
-
-        // Beam-energy fallback: if [pythia].beam_energy was absent from TOML,
-        // read from the already-loaded Pythia settings (set by readFile).
-        if (reg.beamEnergy.empty()) {
-            const double ecm = pythia.settings.parm("Beams:eCM");
-            if (ecm > 0) reg.beamEnergy = Form("%.0f", ecm);
-        }
 
         Record::configureWriter(writer, project, configPath, logger.watch(), reg, "");
         writer.setRecordThreadCount(reg.writer_threads);

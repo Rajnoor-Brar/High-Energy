@@ -1,5 +1,8 @@
 #pragma once
 
+#include <filesystem>
+#include <iostream>
+
 #include "Record/Writer.hh"
 #include "TDirectory.h"
 #include "TH1.h"
@@ -15,7 +18,11 @@ inline void scaleAndWrite(TObject* object,
         if (object->InheritsFrom(TH1::Class())) {
             TH1* hist = static_cast<TH1*>(object);
             std::unique_ptr<TH1> snapshot(static_cast<TH1*>(hist->Clone(hist->GetName())));
-            if (!snapshot) return;
+            if (!snapshot) {
+                std::cerr << "[Record::Writer] Clone failed for '" << hist->GetName()
+                          << "' — object not written\n";
+                return;
+            }
             if (nEvents > 0) {
                 const Double_t scale = histScale / static_cast<Double_t>(nEvents);
                 if (width && !object->InheritsFrom(TH2::Class())) snapshot->Scale(scale, "width");
@@ -117,7 +124,7 @@ inline         void Writer::applyParticleRequest(const ParticleRequest& request,
                 fillParticleTreeLocked(object.tree, particle);
             }
         }
-        if (object.count.hist != nullptr)
+        if (object.count.master != nullptr)
             object.count.clones[workerIdx]->Fill(candidateCount);
     }
 
@@ -173,40 +180,55 @@ inline void Writer::applyTreeRowRequest(const TreeRowRequest& request, int /*wor
 
         // Single mutex covers both buffer writes and TTree::Fill().
         std::lock_guard<std::mutex> lock(*tree.mutex);
-        std::unordered_map<RecordKey, bool, RecordKeyHash> supplied;
-        supplied.reserve(tree.branchOrder.size());
+        // Zero-allocation completeness check (this runs per row): sizes match
+        // (above) and every declared branch appears among the supplied values,
+        // which together also rule out duplicates. Branch counts are small,
+        // so the linear scan beats the per-row hash map this replaced.
+        for (const RecordKey& branchKey : tree.branchOrder) {
+            bool found = false;
+            for (const auto& [suppliedKey, value] : request.values) {
+                if (suppliedKey == branchKey) { found = true; break; }
+            }
+            if (!found)
+                throw std::runtime_error("[Record::Writer] missing tree branch value " + keyString(branchKey));
+        }
         for (const auto& [branchKey, value] : request.values) {
             auto branchIt = tree.branches.find(branchKey);
             if (branchIt == tree.branches.end())
                 throw std::runtime_error("[Record::Writer] missing tree branch " + keyString(branchKey));
-            if (supplied[branchKey])
-                throw std::runtime_error("[Record::Writer] duplicate tree branch value " + keyString(branchKey));
-            supplied[branchKey] = true;
             setBranchBuffer(branchIt->second, value);
-        }
-        for (const RecordKey& branchKey : tree.branchOrder) {
-            if (!supplied[branchKey])
-                throw std::runtime_error("[Record::Writer] missing tree branch value " + keyString(branchKey));
         }
         tree.tree->Fill();
     }
 
 inline void Writer::writeCheckpointFile(std::size_t eventIndex) {
-        TFile cpFile(paths_.checkpointOutName.Data(), "RECREATE");
-        if (!cpFile.IsOpen() || cpFile.IsZombie())
-            throw std::runtime_error("[Record::Writer] failed to open checkpoint ROOT file: " +
-                                     std::string(paths_.checkpointOutName.Data()));
+        // Crash safety: write to a temp path and atomically rename over the
+        // previous checkpoint. "RECREATE" on the real path would truncate the
+        // old checkpoint first — a crash mid-write would destroy both.
+        const std::string finalPath = paths_.checkpointOutName.Data();
+        const std::string tempPath  = finalPath + ".tmp";
+        {
+            TFile cpFile(tempPath.c_str(), "RECREATE");
+            if (!cpFile.IsOpen() || cpFile.IsZombie())
+                throw std::runtime_error("[Record::Writer] failed to open checkpoint ROOT file: " +
+                                         tempPath);
 
-        for (auto& [key, object] : particleObjects_) {
-            (void)key;
-            if (object.dir == nullptr) continue;
-            TDirectory* cpDir = cpFile.mkdir(object.dir->GetName());
-            writeParticleObjectsToDir(object, cpDir, eventIndex, true);
+            for (auto& [key, object] : particleObjects_) {
+                (void)key;
+                if (object.dir == nullptr) continue;
+                TDirectory* cpDir = cpFile.mkdir(object.dir->GetName());
+                writeParticleObjectsToDir(object, cpDir, eventIndex, true);
+            }
+            cpFile.cd();
+            writeIndependentObjectsToDir(&cpFile, eventIndex, true);
+            cpFile.Write("", TObject::kOverwrite);
+            cpFile.Close();
         }
-        cpFile.cd();
-        writeIndependentObjectsToDir(&cpFile, eventIndex, true);
-        cpFile.Write("", TObject::kOverwrite);
-        cpFile.Close();
+        std::error_code ec;
+        std::filesystem::rename(tempPath, finalPath, ec);
+        if (ec)
+            throw std::runtime_error("[Record::Writer] failed to move checkpoint into place: " +
+                                     finalPath + " (" + ec.message() + ")");
     }
 
 inline void Writer::writeAllToCurrentFile(std::size_t eventCount, bool checkpoint) {
@@ -238,11 +260,11 @@ inline void Writer::writeParticleObjectsToDir(ParticleObjects& object,
                                    std::size_t eventCount,
                                    bool checkpoint) {
         if (dir == nullptr) return;
-        scaleAndWriteToDir(dir, object.count.hist, hist_.histScale, eventCount, false);
-        for (auto& hist : object.hists1D) scaleAndWriteToDir(dir, hist.hist, hist_.histScale, eventCount, true);
-        for (auto& hist : object.hists2D) scaleAndWriteToDir(dir, hist.hist, hist_.histScale, eventCount, false);
-        for (auto& graph : object.graphs) scaleAndWriteToDir(dir, graph.graph, hist_.histScale, eventCount, false);
-        for (auto& profile : object.profiles) scaleAndWriteToDir(dir, profile.profile, hist_.histScale, eventCount, false);
+        scaleAndWriteToDir(dir, object.count.master, hist_.histScale, eventCount, false);
+        for (auto& hist : object.hists1D) scaleAndWriteToDir(dir, hist.master, hist_.histScale, eventCount, true);
+        for (auto& hist : object.hists2D) scaleAndWriteToDir(dir, hist.master, hist_.histScale, eventCount, false);
+        for (auto& graph : object.graphs) scaleAndWriteToDir(dir, graph.master, hist_.histScale, eventCount, false);
+        for (auto& profile : object.profiles) scaleAndWriteToDir(dir, profile.master, hist_.histScale, eventCount, false);
         if (!checkpoint && object.tree.tree != nullptr)
             scaleAndWriteToDir(dir, object.tree.tree, hist_.histScale, eventCount, false);
     }
@@ -257,19 +279,19 @@ inline void Writer::writeIndependentObjectsToDir(TDirectory* dir,
         if (dir == nullptr) return;
         for (auto& [key, record] : hists1D_) {
             (void)key;
-            scaleAndWriteToDir(dir, record.hist, hist_.histScale, eventCount, true);
+            scaleAndWriteToDir(dir, record.master, hist_.histScale, eventCount, true);
         }
         for (auto& [key, record] : hists2D_) {
             (void)key;
-            scaleAndWriteToDir(dir, record.hist, hist_.histScale, eventCount, false);
+            scaleAndWriteToDir(dir, record.master, hist_.histScale, eventCount, false);
         }
         for (auto& [key, record] : graphs_) {
             (void)key;
-            scaleAndWriteToDir(dir, record.graph, hist_.histScale, eventCount, false);
+            scaleAndWriteToDir(dir, record.master, hist_.histScale, eventCount, false);
         }
         for (auto& [key, record] : profiles_) {
             (void)key;
-            scaleAndWriteToDir(dir, record.profile, hist_.histScale, eventCount, false);
+            scaleAndWriteToDir(dir, record.master, hist_.histScale, eventCount, false);
         }
         if (!checkpoint) {
             for (auto& [key, record] : trees_) {

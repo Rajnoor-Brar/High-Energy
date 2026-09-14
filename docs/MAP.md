@@ -1,6 +1,6 @@
 # Project Directory Map
 
-Updated: 2026-05-15.
+Updated: 2026-06-12.
 
 ---
 
@@ -8,19 +8,18 @@ Updated: 2026-05-15.
 
 ```
 High-Energy/
-├── _Lambda_Data.cc          entry: Pythia8 data generation (writes ROOT TTree)
-├── _Lambda_Parallel.cc      entry: parallel Probe-based Lambda reconstruction
-├── _Lambda_Reconstruction.cc entry: main reconstruction pipeline
-├── _Lambda_Test.cc          entry: quick integration smoke test
+├── sources/Lambda/          Lambda drivers: data, parallel, reconstruction, test
 ├── _Paint.cc                entry: standalone ROOT histogram renderer
-├── Time_Collect.cc          scratch: wall-time collection helper
+├── _ThreadBench.cc          entry: thread-count sweep benchmark
 ├── Makefile
 ├── configs/                 TOML config files + defaults/
 ├── datasets/                input ROOT files (not tracked)
-├── docs/                    design and reference documents
+├── docs/                    design and reference documents (archive/ = historical)
 ├── modules/                 domain logic (Lambda)
-├── output/  outputs/  results/  dump/   generated output directories
-├── tests/                   unit + integration tests
+├── output/Lambda/           Lambda datasets, test artifacts, and driver binaries (gitignored)
+├── archive/                 retired code kept for reference (gitignored)
+├── aux/  bots/  _vs/        local tooling/editor scratch — not part of the build
+├── tests/                   unit + integration tests (run_all.sh)
 └── utils/                   reusable library (no domain logic)
 ```
 
@@ -72,7 +71,7 @@ High-Energy/
 | `Types.hh` | Core config types: `Bounds`, `RangeSize`, `Watch`, `Register`, `Events`, `ParticleLimits`, `EventLimits`; imports `Probe::ProbeConfig` |
 | `TypeAid.hh` | `RangeSize`↔string; `Watch::recordEvent` inline |
 | `LimitAid.hh` | `resolveLimitsPath()` — bare name → `configs/*.toml` path |
-| `Defaults.hh` | `parseBoundsArray`, `limitExtractor` — TOML helpers for defaults |
+| `Limits.hh` | `parseBoundsArray`, `limitExtractor` — TOML helpers for defaults |
 | `Reader.hh` | `resolveThreadCount`, `readConfig` — full TOML parse into `Watch`/`Register`/`Events`; calls `parseProbeConfig` for `[probe.events.*]`/`[probe.feed.*]` |
 | `Configure.hh` | `configure<ProbePipeline>()`/`configure<PythiaPipeline>()` — single-call facade to configure Probe, Writer, and Monitor from a config path |
 
@@ -88,10 +87,10 @@ High-Energy/
 | `Readers.hh` | `EventReader`/`FeedReader` abstract bases; `FlatReader`, `VecReader`, `EventParticleReaderRowJoin`, `EventNodeReaderArray`; `FeedParticleReader`, `FeedNodeReader`; `EventStream`, `FeedStream` |
 | `Parallel.hh` | `ProbeParallel` — multi-threaded ROOT event reader; `streamEvents`, `streamFeed`, `stream` |
 | `ParallelIMT.hh` | `ProbeIMT` — ROOT IMT in-memory table reader; `run(callback)` |
-| `Administration.hh` | `ProbeParallel`/`ProbeIMT` constructors, getters, `activeMode()`, partition helpers |
+| `Lifecycle.hh` | `ProbeParallel`/`ProbeIMT` constructors, getters, `activeMode()`, partition helpers |
 | `Configuration.hh` | `ProbeParallel::configureProbe` (legacy `EventParticleSpec` and new `ProbeConfig` overloads); `ProbeIMT::configureProbe` |
 | `Methods.hh` | Reader ctor bodies, `EventStream`/`FeedStream` iteration; `FeedParticleReader`/`FeedNodeReader::readEntry`; ProbeIMT flush |
-| `Directives.hh` | `streamEvents`/`streamFeed`/`stream` implementations; `runWorkerThread`/`runCollectorThread` loop bodies |
+| `Threading.hh` | `streamEvents`/`streamFeed`/`stream` implementations; `runWorkerThread`/`runCollectorThread` loop bodies |
 
 ---
 
@@ -107,9 +106,9 @@ High-Energy/
 | `Writer.hh` | `Record::Writer` class declaration; aggregates all implementation fragments below |
 | `Declaration.hh` | `declareParticleGroup`, `declareTH1`/`TH2`/`Graph`/`Profile`/`Tree` method bodies |
 | `Recording.hh` | `fillParticleEvent`, `fillTH1`/`TH2`/`Graph`/`Profile`/`Tree`, `scaleAndWrite` |
-| `Directives.hh` | `pushFill`, worker loop, `applyParticleRequest` and per-type `applyXxxRequest` bodies |
+| `Threading.hh` | `pushFill`, worker loop, `applyParticleRequest` and per-type `applyXxxRequest` bodies |
 | `Cloning.hh` | `allocateAllClones`, `mergeAllClones`, and per-type `cloneXxxImpl`/`mergeXxxImpl` helpers |
-| `Administration.hh` | `open`, `start`, `finalize`, `checkpoint`, `cleanup` — Writer lifecycle; binds to `Monitor::AsyncLogger` |
+| `Lifecycle.hh` | `open`, `start`, `finalize`, `checkpoint`, `cleanup` — Writer lifecycle; binds to `Monitor::AsyncLogger` |
 
 ---
 
@@ -122,12 +121,12 @@ High-Energy/
 | `Methods.hh` | `updatedETA`, `formatProgress`, `statusLine` — pure string builders |
 | `Render.hh` | `renderStatus`, `renderBar` — terminal progress rendering (ANSI, `ioctl` terminal width) |
 | `Report.hh` | `writeRunStat` — writes run-stat JSON/text to file; `flushLog` |
-| `Directive.hh` | `AsyncLogger` main-loop body, heartbeat dispatch, `mergePending` |
-| `Administration.hh` | `AsyncLogger` constructor/destructor, `start`/`stop`, `bindWriter` |
+| `Threading.hh` | `AsyncLogger` main-loop body, heartbeat dispatch, `mergePending` |
+| `Lifecycle.hh` | `AsyncLogger` constructor/destructor, `start`/`stop`, `bindWriter` |
 | `Configure.hh` | `configureMonitor` — reads TOML pacing/stall keys into `AsyncLogger` |
 | `ConfigAid.hh` | Compatibility shim → re-exports `Monitor/Configure.hh` |
 | `Snapshot.hh` | Reserved (empty; `#pragma once` only) |
-| `Timer.hh` | `BlockTimer` — RAII wall-clock scope timer; appends to `output/timer.log` |
+| `Timer.hh` | `BlockTimer` — RAII wall-clock scope timer; appends to `output/Lambda/timer.log` |
 
 ---
 

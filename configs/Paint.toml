@@ -1,6 +1,6 @@
 [paint]
 default_style = "configs/defaults/Paint.toml"
-root_file     = "output/Lambda_Reconstruction/_27/Lambda_Recons_GeV_1M.root"
+root_file     = "output/Lambda/Lambda_Reconstruction/_27/Lambda_Recons_GeV_1M.root"
 result_dir    = "results/hist"
 results       = [
     "unvalidated_count",

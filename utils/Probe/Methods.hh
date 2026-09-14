@@ -387,6 +387,8 @@ namespace detail {
         return makeHandle<TTreeReaderArray>(r, n, t);
     }
 
+} // namespace detail
+
 inline AuxValue BranchHandle::readScalar() const {
     return std::visit([](const auto& uptr) -> AuxValue {
         using ReaderT = typename std::decay_t<decltype(uptr)>::element_type;
@@ -473,6 +475,17 @@ inline void EventParticleReaderArray::seekToEvent(Long64_t K) {
 
 inline void EventParticleReaderArray::readForEvent(Long64_t K, Event& out) {
     const std::size_t nParts = kinArrays_[0]->GetSize();
+    // All four coordinate arrays must agree — a mismatch (wrong branch in the
+    // config, schema drift) would otherwise read garbage kinematics silently.
+    for (int c = 1; c < 4; ++c) {
+        if (kinArrays_[c]->GetSize() != nParts)
+            throw std::runtime_error(
+                "[Probe] '" + label_ + "' event " + std::to_string(K) +
+                ": coordinate array sizes disagree (" +
+                std::to_string(nParts) + " vs " +
+                std::to_string(kinArrays_[c]->GetSize()) +
+                " for coordinate " + std::to_string(c) + ")");
+    }
     auto& pvec = out.particle[label_];
     pvec.clear();
     pvec.reserve(nParts);
@@ -672,6 +685,8 @@ inline void EventNodeReaderRowJoin::appendRow(std::unordered_map<std::string, Au
 
 // ── Phase 5: helpers ─────────────────────────────────────────────────────────
 
+namespace detail {
+
     // Convert AuxColumn (vector-only variant) into the matching AuxValue alternative.
     // AuxColumn.data holds vector<T>; AuxValue holds the same vector<T> alternatives
     // at indices 7–13, so visiting and moving works directly.
@@ -691,6 +706,8 @@ inline void EventNodeReaderRowJoin::appendRow(std::unordered_map<std::string, Au
                 throw std::runtime_error("[Probe] scalarToDouble: AuxValue holds a vector, not a scalar");
         }, v);
     }
+
+} // namespace detail
 
 // ── Phase 5: FeedParticleReader ───────────────────────────────────────────────
 
@@ -793,6 +810,8 @@ inline void FeedNodeReader::readEntry(Long64_t N, Feed& out) {
     out.index = N;
 }
 
+namespace detail {
+
     struct IMTValueBinder {
         virtual ~IMTValueBinder() = default;
         virtual double asDouble() = 0;
@@ -840,11 +859,13 @@ inline void FeedNodeReader::readEntry(Long64_t N, Feed& out) {
 
 inline void ProbeIMT::readSpecInto(const EventParticleSpec& spec,
                                    std::size_t specOrdinal,
-                                   BufferT& buffer) {
+                                   BufferT& buffer,
+                                   Long64_t windowFirstKey,
+                                   std::size_t windowCount) {
             using PartialMap = std::unordered_map<Long64_t, std::vector<Lorentz>>;
 
-            const Long64_t first = firstEventKey_;
-            const Long64_t last  = first + Long64_t(eventCount_) - 1;
+            const Long64_t first = windowFirstKey;
+            const Long64_t last  = first + Long64_t(windowCount) - 1;
 
             std::mutex collectMutex;
             std::vector<std::unique_ptr<PartialMap>> collected;

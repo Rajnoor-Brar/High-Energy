@@ -4,6 +4,8 @@
 #include <string>
 #include <stdexcept>
 
+#include "Utility/Paths.hh"
+
 namespace Config{
     inline std::string resolveLimitsPath(const std::string& limitsName) {
         if (limitsName.empty()) {
@@ -17,6 +19,10 @@ namespace Config{
             resolved = "configs/" + limitsName;
         else
             resolved = "configs/" + limitsName + ".toml";
+
+        // Anchor to the project root so binaries launched outside the repo
+        // root still find the limits file.
+        resolved = Utility::Paths::resolveProjectPath(resolved);
 
         std::clog << "[Config] histogram limits file: " << resolved << '\n';
         return resolved;

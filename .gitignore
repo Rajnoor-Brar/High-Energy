@@ -1,15 +1,25 @@
+# Build artifacts
 *.exe
+*.exe.d
+
+# Run outputs
 output/*
 outputs/*
+results/*
+logs/
+checkpoints/
+
+# Scratch / local-only
 dump
-examples
 archive/*
-legacy/
 /.claude
-.DS_Store
-output/Lambda_Reconstruction/.DS_Store
 datasets/*
 tests/tmp_paint/
-results/*
+
+# OS / profiler noise
+.DS_Store
 *.trace
 *.trace/*
+
+literature/*
+datasets/*

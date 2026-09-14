@@ -14,6 +14,7 @@
 
 #include "Probe/Types.hh"
 #include "Physics.hh"
+#include "Utility/RootAid.hh"
 #include "TBranch.h"
 #include "TFile.h"
 #include "TTree.h"
@@ -37,8 +38,8 @@ namespace Probe {
             // sporadic crashes inside FlatReader ctor and silent stat
             // counter corruption when this call is skipped. Do not
             // remove. See docs/Blueprint_Probe.md.
-            static std::once_flag flag;
-            std::call_once(flag, []{ ROOT::EnableThreadSafety(); });
+            // Single process-wide flag shared with Record via RootAid.
+            Utility::RootAid::enableThreadSafetyOnce();
         }
 
         inline TBranch* requireBranch(TTree* tree, const std::string& name, const std::string& file) {

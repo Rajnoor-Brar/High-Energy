@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "Config.hh"
-#include "Probe/Administration.hh"
+#include "Probe/Lifecycle.hh"
 #include "Probe/ConfigAid.hh"
 #include "Probe/Parallel.hh"
 #include "Probe/ParallelIMT.hh"

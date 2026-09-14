@@ -12,7 +12,6 @@
 namespace Physics {
 
     using Lorentz = ROOT::Math::PxPyPzEVector;
-    using Column  = std::vector<Double_t>;
 
     // ── Property enums ────────────────────────────────────────────────────────
     // The single source of truth for what a "particle property" or
@@ -64,6 +63,10 @@ namespace Physics {
         {ParticleProperty::Mass_Invariant,      "Mass_Invariant",      [](const Lorentz& p) -> Double_t { return p.M();  }},
         {ParticleProperty::Mass_Transverse,     "Mass_Transverse",     [](const Lorentz& p) -> Double_t { return p.Mt(); }},
         {ParticleProperty::Energy_Net,          "Energy_Net",          [](const Lorentz& p) -> Double_t { return p.E();  }},
+        // NOTE: this is the calorimeter-style ET = √(pT² + m²), numerically
+        // identical to Mt() for on-shell vectors. If you ever want the
+        // alternative definition ET = E·sinθ = E·pT/p, change it HERE and in
+        // any stored data's docs — the two differ for massive particles.
         {ParticleProperty::Energy_Transverse,   "Energy_Transverse",   [](const Lorentz& p) -> Double_t { return std::sqrt(p.Pt() * p.Pt() + p.M() * p.M()); }},
         {ParticleProperty::Momentum_Net,        "Momentum_Net",        [](const Lorentz& p) -> Double_t { return p.P();  }},
         {ParticleProperty::Momentum_Transverse, "Momentum_Transverse", [](const Lorentz& p) -> Double_t { return p.Pt(); }},
@@ -89,6 +92,11 @@ namespace Physics {
                   "kEventTraits size out of sync with EventProperty enum");
 
     inline const ParticleTraits& traitsOf(ParticleProperty p) {
+        // Bounds check before indexing: EventIndex (and any future branch-only
+        // property) deliberately has no extractor and is NOT in kParticleTraits.
+        if (toIndex(p) >= kParticleTraits.size())
+            throw std::logic_error("Physics::traitsOf: ParticleProperty has no extractor "
+                                   "(branch-only property such as EventIndex)");
         const auto& trait = kParticleTraits[toIndex(p)];
         if (trait.id != p)
             throw std::logic_error("Physics::kParticleTraits ordering does not match ParticleProperty enum");
@@ -96,6 +104,8 @@ namespace Physics {
     }
 
     inline const EventTraits& traitsOf(EventProperty p) {
+        if (toIndex(p) >= kEventTraits.size())
+            throw std::logic_error("Physics::traitsOf: EventProperty has no extractor");
         const auto& trait = kEventTraits[toIndex(p)];
         if (trait.id != p)
             throw std::logic_error("Physics::kEventTraits ordering does not match EventProperty enum");

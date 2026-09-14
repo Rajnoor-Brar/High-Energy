@@ -18,18 +18,12 @@ tree            = "Protons"
 spec            = 0
 branches        = [["pX","D"], ["pY","D"], ["pZ","D"], ["Energy","D"]]
 index           = ["event_index", "I"]
-index_sorted    = true
-index_ascending = true
-index_monotonic = true
 
 [probe.events.particles.pions]
 tree            = "Pions"
 spec            = 0
 branches        = [["pX","D"], ["pY","D"], ["pZ","D"], ["Energy","D"]]
 index           = ["event_index", "I"]
-index_sorted    = true
-index_ascending = true
-index_monotonic = true
 
 [record]
 serial     = 0
@@ -37,9 +31,9 @@ sr_padding = 1
 hist_scaling = 1.0
 
 [record.paths]
-directory            = "output/test/"
-output_log_directory = "output/test/logs/"
-checkpoint_directory = "output/test/checkpoints/"
+directory            = "output/Lambda/test/"
+output_log_directory = "output/Lambda/test/logs/"
+checkpoint_directory = "output/Lambda/test/checkpoints/"
 serialDirectory      = false
 logInSubDir          = true
 checkpointsInSubDir  = true

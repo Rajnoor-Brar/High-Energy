@@ -44,9 +44,10 @@ namespace Lambda {
                 histogramSet.id,
                 std::string(histogramSet.tag) + "CountHist",
                 "Count of Reconstructed Candidates",
-                static_cast<int>(multiplicityBounds.high - multiplicityBounds.low + 1),
-                multiplicityBounds.low - 0.5,
-                multiplicityBounds.high + 0.5
+                Record::AxisSpec{
+                    static_cast<int>(multiplicityBounds.high - multiplicityBounds.low + 1),
+                    multiplicityBounds.low - 0.5,
+                    multiplicityBounds.high + 0.5}
             );
 
             for (const auto& prop : Recorded_ParticleProperties) {
@@ -62,9 +63,7 @@ namespace Lambda {
                     prop,
                     std::string(histogramSet.tag) + "_" + propName + "_Hist",
                     propName + " Distribution",
-                    hist.binCount,
-                    bounds.low,
-                    bounds.high);
+                    Record::AxisSpec{hist.binCount, bounds.low, bounds.high});
             }
 
             const bool enableTree = std::find( parameters.writeTree.begin(), parameters.writeTree.end(), histogramSet.id) != parameters.writeTree.end();

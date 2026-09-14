@@ -64,8 +64,9 @@ int main() {
     Lambda::Parameters physParams;
     Lambda::configure(physParams, writer, kFixtureToml);
 
-    writer.bind(asyncLogger,
-                [&physParams]() { return Lambda::logString(physParams); });
+    Record::WriterHooks hooks;
+    hooks.programLog = [&physParams]() { return Lambda::logString(physParams); };
+    writer.bind(asyncLogger, std::move(hooks));
 
     asyncLogger.initialise(writer);
     writer.start();

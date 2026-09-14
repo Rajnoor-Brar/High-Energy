@@ -69,10 +69,4 @@ namespace Record {
         std::shared_ptr<BarrierState> barrier;   // present for Checkpoint, Finalize, Fatal
     };
 
-    template <typename Basis>
-    struct ParticleFillView {
-        Basis basis;
-        const std::vector<Physics::Lorentz>& particles;
-    };
-
 } // namespace Record

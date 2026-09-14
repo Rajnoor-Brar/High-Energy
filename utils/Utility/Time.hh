@@ -7,9 +7,18 @@
 #include <sstream>
 #include <string>
 
-#include "Config/Types.hh"
-
 namespace Utility {
+
+    // Canonical clock aliases for the whole utils layer. Config::Types.hh
+    // re-exports these as Config::TimePoint etc. for existing call sites;
+    // Utility itself must stay free of Config so it remains the bottom layer.
+    using TimePoint = std::chrono::system_clock::time_point;
+    using uSeconds  = std::chrono::microseconds;
+    using Seconds   = std::chrono::seconds;
+    // MonoPoint — monotonic clock for durations/stall detection. Wall-clock
+    // TimePoint is for display only: NTP/DST steps must never look like
+    // (or hide) a stall.
+    using MonoPoint = std::chrono::steady_clock::time_point;
 
     constexpr bool highlightTime = true;
     constexpr bool preciseSeconds = true;
@@ -30,11 +39,11 @@ namespace Utility {
         return stream.str();
     }
 
-    inline std::string timeString(const Config::TimePoint& timePoint, bool highlightClock = true) {
+    inline std::string timeString(const TimePoint& timePoint, bool highlightClock = true) {
         return timeString(std::chrono::system_clock::to_time_t(timePoint), highlightClock);
     }
 
-    inline std::string durationString(Config::uSeconds duration, bool preciseSecond = false) {
+    inline std::string durationString(uSeconds duration, bool preciseSecond = false) {
         using Seconds = std::chrono::seconds;
         std::ostringstream stream;
         const int totalSeconds    = std::chrono::duration_cast<Seconds>(duration).count();

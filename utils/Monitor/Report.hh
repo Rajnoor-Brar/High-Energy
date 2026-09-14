@@ -24,6 +24,11 @@ namespace Monitor {
     inline void writeTextFile(const TString& path, const std::string& text) {
         std::ofstream stream(path.Data(), std::ios::trunc);
         stream << text;
+        stream.flush();
+        // Warn rather than throw: callers include the emergency stall path,
+        // where throwing would mask the original failure being reported.
+        if (!stream)
+            std::cerr << "[Monitor] Failed to write log file '" << path.Data() << "'\n";
     }
 
     inline std::string buildLogText(const Record::Writer& writer,

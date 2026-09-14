@@ -14,27 +14,28 @@ with shared utility namespaces.
 
 ## Build & run
 
-Build system is GNU Make with a single pattern rule (`%.cc → %.exe`):
+Build system maps `sources/<folder>/<file>.cc` to
+`output/<folder>/<file>.exe`:
 
 ```sh
-make _Lambda_Data            # builds _Lambda_Data.exe
-make _Lambda_Reconstruction
-make clean                   # rm -f *.exe
+make Lambda/_Lambda_Data.exe            # builds output/Lambda/_Lambda_Data.exe
+make Lambda/_Lambda_Reconstruction.exe
+make clean                   # removes generated executables
 ```
 
 Toolchain (resolved via `root-config`, `pythia8-config`, `pkg-config tomlplusplus`):
 ROOT, Pythia8, toml++. `-I./utils -I./modules` are on the include path.
 
-Drivers (top-level `_*.cc`) and their default configs:
+Drivers (`sources/Lambda/_*.cc`) and their default configs:
 
 | Driver                       | Config                               | Purpose                              |
 | ---------------------------- | ------------------------------------ | ------------------------------------ |
-| `_Lambda_Data.exe`           | `configs/Lambda_Generation.toml`     | Pythia8 → ROOT file                  |
-| `_Lambda_Reconstruction.exe` | `configs/Lambda_Reconstruction.toml` | Read ROOT → reconstruct → histograms |
-| `_Lambda_Parallel.exe`       | `configs/Lambda_Generation.toml`     | Generation + analysis in one pass    |
-| `_Lambda_Test.exe`           | (hardcoded)                          | Smoke test                           |
+| `output/Lambda/_Lambda_Data.exe`           | `configs/Lambda_Generation.toml`     | Pythia8 → ROOT file                  |
+| `output/Lambda/_Lambda_Reconstruction.exe` | `configs/Lambda_Reconstruction.toml` | Read ROOT → reconstruct → histograms |
+| `output/Lambda/_Lambda_Parallel.exe`       | `configs/Lambda_Generation.toml`     | Generation + analysis in one pass    |
+| `output/Lambda/_Lambda_Test.exe`           | (hardcoded)                          | Smoke test                           |
 
-Run as `./_Lambda_Data.exe [config.toml]` — config arg optional; defaults exist.
+Run as `./output/Lambda/_Lambda_Data.exe [config.toml]` — config arg optional; defaults exist.
 
 > **Build status (2026-05-03):** ✗ drivers and `make test` do **not**
 > build. `Config::extractConfiguration` is referenced in 4 call sites

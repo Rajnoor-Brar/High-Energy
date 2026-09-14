@@ -41,6 +41,16 @@ namespace Monitor {
 
 namespace Record {
 
+    // WriterHooks — caller-supplied callbacks injected via Writer::bind.
+    // Bundled so bind() reads as (logger, hooks) instead of five positional
+    // std::function parameters.
+    struct WriterHooks {
+        std::function<std::string()> programLog;          // appended to final log
+        std::function<void()>        printStats;          // e.g. pythia.stat()
+        std::function<void()>        listChangedSettings; // e.g. settings.listChanged()
+        std::function<void()>        preCloseHook;        // last write before file close
+    };
+
     class Writer {
       public:
         Writer();
@@ -51,14 +61,10 @@ namespace Record {
         Writer(Writer&&)                 = delete;
         Writer& operator=(Writer&&)      = delete;
 
-        // Administration
+        // Lifecycle (Lifecycle.hh)
         void open(Paths paths, HistConfig hist, Meta::Record initialMeta);
         void setProjectInfo(std::string project, std::string configPath);
-        void bind(Monitor::AsyncLogger&        logger,
-                  std::function<std::string()> programLog,
-                  std::function<void()>         printStats   = {},
-                  std::function<void()>         listChanged  = {},
-                  std::function<void()>         preCloseHook = {});
+        void bind(Monitor::AsyncLogger& logger, WriterHooks hooks = {});
         void start();
         void checkpoint(std::size_t eventIndex);
         void signalWatch(WatchRequest req);
@@ -86,18 +92,14 @@ namespace Record {
         void declareParticleCount(Basis basis,
                                   std::string histName,
                                   std::string title,
-                                  int bins,
-                                  double low,
-                                  double high);
+                                  AxisSpec axis);
 
         template <typename Basis>
         void declareParticleHist1D(Basis basis,
                                    Physics::ParticleProperty property,
                                    std::string histName,
                                    std::string title,
-                                   int bins,
-                                   double low,
-                                   double high);
+                                   AxisSpec axis);
 
         template <typename Basis>
         void declareParticleHist2D(Basis basis,
@@ -105,12 +107,8 @@ namespace Record {
                                    Physics::ParticleProperty propertyY,
                                    std::string histName,
                                    std::string title,
-                                   int binsX,
-                                   double lowX,
-                                   double highX,
-                                   int binsY,
-                                   double lowY,
-                                   double highY);
+                                   AxisSpec x,
+                                   AxisSpec y);
 
         template <typename Basis>
         void declareParticleGraph(Basis basis,
@@ -125,9 +123,7 @@ namespace Record {
                                     Physics::ParticleProperty propertyY,
                                     std::string profileName,
                                     std::string title,
-                                    int binsX,
-                                    double lowX,
-                                    double highX);
+                                    AxisSpec x);
 
         template <typename Basis>
         void declareParticleTree(Basis basis,
@@ -139,21 +135,15 @@ namespace Record {
         void declareHist1D(Basis basis,
                            std::string histName,
                            std::string title,
-                           int bins,
-                           double low,
-                           double high,
+                           AxisSpec axis,
                            DataType type = DataType::Double);
 
         template <typename Basis>
         void declareHist2D(Basis basis,
                            std::string histName,
                            std::string title,
-                           int binsX,
-                           double lowX,
-                           double highX,
-                           int binsY,
-                           double lowY,
-                           double highY,
+                           AxisSpec x,
+                           AxisSpec y,
                            DataType typeX = DataType::Double,
                            DataType typeY = DataType::Double);
 
@@ -168,9 +158,7 @@ namespace Record {
         void declareProfile(Basis basis,
                             std::string profileName,
                             std::string title,
-                            int binsX,
-                            double lowX,
-                            double highX,
+                            AxisSpec x,
                             DataType typeX = DataType::Double,
                             DataType typeY = DataType::Double);
 
@@ -214,7 +202,7 @@ namespace Record {
         ParticleObjects& requireParticleGroupForDeclaration(Basis basis, const std::string& kind);
 
         static void validateObjectName(const std::string& name, const std::string& kind);
-        static void validateHistogramShape(const std::string& name, int bins, double low, double high);
+        static void validateHistogramShape(const std::string& name, const AxisSpec& axis);
         static void requireNumeric(DataType type, const std::string& context);
         static void ensureUniqueParticleName(const ParticleObjects& object, const std::string& name);
 
@@ -239,6 +227,7 @@ namespace Record {
         void drainAndStopWorkers();
         void joinWorkers();
         void setWriterException(std::exception_ptr error);
+        std::exception_ptr peekWriterException() const;
         void failPendingWatchBarriers(std::exception_ptr error);
 
         // Recording and writing
@@ -264,37 +253,25 @@ namespace Record {
                                           bool checkpoint);
         static bool hasBranchNamed(const ExplicitTreeRecord& record, const std::string& name);
 
-        // Administration cleanup
+        // Lifecycle cleanup (Lifecycle.hh)
         void clearRecords();
         void clearQueues();
         void closeFile();
         void cleanup();
 
-        // Cloning
+        // Cloning (CloneSet-based: one hist impl covers TH1/TH2/TProfile)
         void allocateAllClones();
 
         template <typename Rec>
-        void cloneTH1Impl(Rec& r);
-
-        template <typename Rec>
-        void cloneTH2Impl(Rec& r);
+        void cloneHistImpl(Rec& r);
 
         template <typename Rec>
         void cloneGraphImpl(Rec& r);
 
-        template <typename Rec>
-        void cloneProfileImpl(Rec& r);
-
         void mergeAllClones();
 
         template <typename Rec>
-        static void mergeTH1Impl(Rec& r);
-
-        template <typename Rec>
-        static void mergeTH2Impl(Rec& r);
-
-        template <typename Rec>
-        static void mergeProfileImpl(Rec& r);
+        static void mergeHistImpl(Rec& r);
 
         template <typename Rec>
         static void mergeGraphImpl(Rec& r);
@@ -371,6 +348,6 @@ namespace Record {
 
 #include "Record/Declaration.hh"
 #include "Record/Recording.hh"
-#include "Record/Directives.hh"
+#include "Record/Threading.hh"
 #include "Record/Cloning.hh"
-#include "Record/Administration.hh"
+#include "Record/Lifecycle.hh"

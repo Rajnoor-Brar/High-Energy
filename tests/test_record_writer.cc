@@ -20,14 +20,14 @@ namespace {
     enum class OtherHistId : std::size_t { Values };
 
     void openWriter(Record::Writer& writer, const std::string& stem) {
-        std::filesystem::create_directories("output/test_writer/checkpoints");
+        std::filesystem::create_directories("output/Lambda/test_writer/checkpoints");
 
         Record::Paths paths;
-        paths.outName = ("output/test_writer/" + stem + ".root").c_str();
-        paths.checkpointOutName = ("output/test_writer/checkpoints/" + stem + "_checkpoint.root").c_str();
-        paths.logName = ("output/test_writer/" + stem + ".log").c_str();
-        paths.runStatName = ("output/test_writer/" + stem + "_runstat.log").c_str();
-        paths.threadStatDirectory = "output/test_writer/threads/";
+        paths.outName = ("output/Lambda/test_writer/" + stem + ".root").c_str();
+        paths.checkpointOutName = ("output/Lambda/test_writer/checkpoints/" + stem + "_checkpoint.root").c_str();
+        paths.logName = ("output/Lambda/test_writer/" + stem + ".log").c_str();
+        paths.runStatName = ("output/Lambda/test_writer/" + stem + "_runstat.log").c_str();
+        paths.threadStatDirectory = "output/Lambda/test_writer/threads/";
         paths.fileTitle = stem.c_str();
 
         Record::HistConfig hist;
@@ -79,10 +79,10 @@ int main() {
     {
         Record::Writer writer;
         openWriter(writer, "declaration_errors");
-        writer.declareHist1D(HistId::Values, "values", "values", 10, 0.0, 10.0);
+        writer.declareHist1D(HistId::Values, "values", "values", Record::AxisSpec{10, 0.0, 10.0});
         bool duplicateRejected = false;
         try {
-            writer.declareHist1D(HistId::Values, "values2", "values2", 10, 0.0, 10.0);
+            writer.declareHist1D(HistId::Values, "values2", "values2", Record::AxisSpec{10, 0.0, 10.0});
         } catch (const std::runtime_error&) {
             duplicateRejected = true;
         }
@@ -91,7 +91,7 @@ int main() {
         writer.start();
         bool lateDeclarationRejected = false;
         try {
-            writer.declareHist1D(HistId::Missing, "late", "late", 10, 0.0, 10.0);
+            writer.declareHist1D(HistId::Missing, "late", "late", Record::AxisSpec{10, 0.0, 10.0});
         } catch (const std::runtime_error&) {
             lateDeclarationRejected = true;
         }
@@ -106,7 +106,7 @@ int main() {
             Record::Writer writer;
             openWriter(writer, "queued_fills");
             writer.setQueueCapacity(2);
-            writer.declareHist1D(HistId::Values, "values", "values", 10, 0.0, 10.0);
+            writer.declareHist1D(HistId::Values, "values", "values", Record::AxisSpec{10, 0.0, 10.0});
             writer.start();
 
             std::vector<std::thread> producers;
@@ -135,7 +135,7 @@ int main() {
     {
         Record::Writer writer;
         openWriter(writer, "worker_exception");
-        writer.declareHist1D(HistId::Values, "values", "values", 10, 0.0, 10.0);
+        writer.declareHist1D(HistId::Values, "values", "values", Record::AxisSpec{10, 0.0, 10.0});
         writer.start();
         writer.fillHist1D(HistId::Missing, Record::Value{1.0});
 
@@ -157,7 +157,7 @@ int main() {
         openWriter(writer, "checkpoint_backpressure");
         writer.setQueueCapacity(2);
         writer.setRecordThreadCount(2);
-        writer.declareHist1D(HistId::Values, "values", "values", 10, 0.0, 10.0);
+        writer.declareHist1D(HistId::Values, "values", "values", Record::AxisSpec{10, 0.0, 10.0});
         writer.start();
 
         std::atomic<bool> running{true};
@@ -187,7 +187,7 @@ int main() {
         Record::Writer writer;
         writer.setRecordThreadCount(2);
         openWriter(writer, "checkpoint_after_worker_exit");
-        writer.declareHist1D(HistId::Values, "values", "values", 10, 0.0, 10.0);
+        writer.declareHist1D(HistId::Values, "values", "values", Record::AxisSpec{10, 0.0, 10.0});
         writer.start();
 
         writer.fillHist1D(HistId::Missing, Record::Value{1.0});  // bad key → worker exits
@@ -208,7 +208,7 @@ int main() {
         // and the fill queue drains correctly without going through checkpoint().
         Record::Writer writer;
         openWriter(writer, "watch_checkpoint_barrier");
-        writer.declareHist1D(HistId::Values, "values", "values", 10, 0.0, 10.0);
+        writer.declareHist1D(HistId::Values, "values", "values", Record::AxisSpec{10, 0.0, 10.0});
         writer.start();
 
         for (int i = 0; i < 30; ++i)
@@ -232,7 +232,7 @@ int main() {
         // exception, not complete successfully with partial data.
         Record::Writer writer;
         openWriter(writer, "watch_finalize_exception");
-        writer.declareHist1D(HistId::Values, "values", "values", 10, 0.0, 10.0);
+        writer.declareHist1D(HistId::Values, "values", "values", Record::AxisSpec{10, 0.0, 10.0});
         writer.start();
 
         writer.fillHist1D(HistId::Missing, Record::Value{1.0});  // bad key
@@ -255,7 +255,7 @@ int main() {
         // fills are still in flight.
         Record::Writer writer;
         openWriter(writer, "fatal_write");
-        writer.declareHist1D(HistId::Values, "values", "values", 10, 0.0, 10.0);
+        writer.declareHist1D(HistId::Values, "values", "values", Record::AxisSpec{10, 0.0, 10.0});
         writer.start();
 
         for (int i = 0; i < 20; ++i)

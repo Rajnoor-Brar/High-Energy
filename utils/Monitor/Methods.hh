@@ -68,6 +68,7 @@ namespace Monitor {
             : 0.0;
         snapshot.phase          = phase;
         snapshot.lastUpdateTime = std::chrono::system_clock::now();
+        snapshot.lastUpdateMono = std::chrono::steady_clock::now();
         return snapshot;
     }
 

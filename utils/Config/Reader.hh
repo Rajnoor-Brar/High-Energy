@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <iomanip>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -12,72 +14,33 @@
 
 #include "Types.hh"
 #include "Utility.hh"
-#include "Defaults.hh"
+#include "Limits.hh"
 #include "Probe/ConfigAid.hh"
-
-namespace fs = std::filesystem;
 
 namespace Config {
 
+    namespace fs = std::filesystem;
+
     namespace detail {
-
-        // mergeTables — recursive TOML table merge (src into dst).
-        // Sub-tables are merged key-by-key; all other node types overwrite.
-        // Arrays are replaced wholesale (not element-merged) so that
-        //   results = ["a","b"]  in a later file replaces  results = ["x"]
-        // from an earlier file.
-        inline void mergeTables(toml::table& dst, const toml::table& src) {
-            for (const auto& [key, val] : src) {
-                const std::string k{key.str()};
-                toml::node* existing = dst.get(k);
-                if (existing && existing->is_table() && val.is_table())
-                    mergeTables(*existing->as_table(), *val.as_table());
-                else
-                    dst.insert_or_assign(k, val);
-            }
-        }
-
+        // Shared implementations live in Utility/Toml.hh; re-exported here so
+        // Config call sites read naturally.
+        using Utility::Toml::requirePositive;
+        using Utility::Toml::requireNonNegative;
+        using Utility::Toml::mergeTables;
     } // namespace detail
 
     // parseConfig — unified config loader used everywhere instead of bare
-    // toml::parse_file().
-    //
-    // If configPath is a regular file: equivalent to toml::parse_file(configPath).
-    //
-    // If configPath is a directory: reads every *.toml file in the directory
-    // (non-recursive, alphabetical by filename) and merges them left-to-right
-    // into a single master table.  Sub-tables are merged recursively, so
-    // splitting a config across files works naturally:
+    // toml::parse_file(). Accepts a single file or a directory of *.toml
+    // files merged alphabetically (later files override earlier keys), e.g.:
     //
     //   config/00_events.toml  -> [events] event_count = 100000
     //   config/01_probe.toml   -> [probe] input_file = "..."  [probe.events.particles.*]
     //   config/02_record.toml  -> [record] serial = 5  [record.paths] ...
     //   config/03_lambda.toml  -> [lambda] delta_mass_gev = 0.15
     //
-    // Keys in later files (alphabetically) overwrite the same keys from earlier
-    // files, allowing targeted per-run overrides without editing the base files.
+    // Implementation shared with Paint via Utility::Toml::parseConfigTable.
     inline toml::table parseConfig(const std::string& configPath) {
-        if (!fs::is_directory(configPath))
-            return toml::parse_file(configPath);
-
-        std::vector<std::string> paths;
-        for (const auto& entry : fs::directory_iterator(configPath)) {
-            if (entry.is_regular_file() && entry.path().extension() == ".toml")
-                paths.push_back(entry.path().string());
-        }
-
-        if (paths.empty())
-            throw std::runtime_error(
-                "[Config] directory '" + configPath + "' contains no .toml files");
-
-        std::sort(paths.begin(), paths.end());
-
-        toml::table master;
-        for (const auto& p : paths) {
-            toml::table t = toml::parse_file(p);
-            detail::mergeTables(master, t);
-        }
-        return master;
+        return Utility::Toml::parseConfigTable(configPath);
     }
 
     // resolveThreadCount — used by drivers that take a manual thread count.
@@ -141,7 +104,10 @@ namespace Config {
     inline void readEventsSection(const toml::table& config, Events& events, Watch& watch) {
         const auto evNode = config["events"]["event_count"];
         if (evNode) {
-            events.eventCount = static_cast<std::size_t>(evNode.value_or<int64_t>(1000));
+            // 0 is documented as "all events in file"; negatives would wrap
+            // through the size_t cast, so reject them here.
+            events.eventCount = static_cast<std::size_t>(detail::requireNonNegative(
+                evNode.value_or<int64_t>(1000), "events.event_count"));
             events.userEvents = true;
         } else {
             events.eventCount = 1000;
@@ -168,15 +134,20 @@ namespace Config {
         // sr_padding is a local in readPathsAndFile — not stored on Watch.
 
         if (hasRecord) {
-            reg.binCount  = config["record"]["bin_count"].value_or(reg.binCount);
-            reg.histScale = config["record"]["hist_scaling"].value_or(reg.histScale);
+            if (config["record"]["bin_count"])
+                reg.binCount = static_cast<int>(detail::requirePositive(
+                    config["record"]["bin_count"].value_or<int64_t>(0), "record.bin_count"));
+            if (config["record"]["hist_scaling"])
+                reg.histScale = detail::requirePositive(
+                    config["record"]["hist_scaling"].value_or(0.0), "record.hist_scaling");
             if (config["record"]["thread_count"]) {
                 throw std::runtime_error(
                     "[Config] '[record].thread_count' was renamed; use '[record].writer_threads'");
             }
             reg.writer_threads = resolveThreadKey(config, "writer", "record", "writer_threads");
-            reg.writer_queue_capacity = static_cast<std::size_t>(
-                config["record"]["writer_queue_capacity"].value_or(0));
+            reg.writer_queue_capacity = static_cast<std::size_t>(detail::requireNonNegative(
+                config["record"]["writer_queue_capacity"].value_or<int64_t>(0),
+                "record.writer_queue_capacity"));
         } else {
             reg.writer_threads = resolveThreadKey(config, "writer", "record", "writer_threads");
         }
@@ -200,15 +171,20 @@ namespace Config {
         const bool logSubDir    = fromPaths("logInSubDir",           true);
         const bool checkSubDir  = fromPaths("checkpointsInSubDir",   true);
         const bool serialSubDir = fromPaths("serialDirectory",        true);
-        const std::string baseRootDir   = fromPaths("directory",            "output/" + project + "/");
+        const std::string baseRootDir   = fromPaths("directory",            "output/Lambda/" + project + "/");
         const std::string logBasePath   = fromPaths("output_log_directory", std::string{"params/"});
         const std::string checkBasePath = fromPaths("checkpoint_directory", std::string{"checkpoints/"});
 
-        const std::size_t sr_padding = static_cast<std::size_t>(
-            config["record"]["sr_padding"].value_or(2));
+        const std::size_t sr_padding = static_cast<std::size_t>(detail::requireNonNegative(
+            config["record"]["sr_padding"].value_or<int64_t>(2), "record.sr_padding"));
+        if (sr_padding > 10)
+            throw std::runtime_error("[Config] 'record.sr_padding' must be <= 10 (got " +
+                                     std::to_string(sr_padding) + ")");
 
-        const std::string serialStr = Form(
-            ("_%0" + std::to_string((int)sr_padding) + "d").c_str(), (int)reg.serial);
+        std::ostringstream serialStream;
+        serialStream << '_' << std::setw(static_cast<int>(sr_padding))
+                     << std::setfill('0') << reg.serial;
+        const std::string serialStr = serialStream.str();
         const std::string rootDir = serialSubDir ? (baseRootDir + serialStr + "/") : baseRootDir;
 
         reg.rootDirectory       = rootDir;
@@ -287,7 +263,8 @@ namespace Config {
             ? Probe::CallbackMode::WorkerThread
             : Probe::CallbackMode::CollectorThread;
 
-        probe.queue_capacity = static_cast<std::size_t>(
-            config["probe"]["queue_capacity"].value_or(0));
+        probe.queue_capacity = static_cast<std::size_t>(detail::requireNonNegative(
+            config["probe"]["queue_capacity"].value_or<int64_t>(0),
+            "probe.queue_capacity"));
     }
 }

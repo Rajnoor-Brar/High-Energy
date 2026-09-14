@@ -70,30 +70,47 @@ namespace Record {
     void setBranchBuffer(BranchRecord& record, const Value& value);
     void declareBranch(TTree& tree, BranchRecord& record);
 
-    struct ParticleTH1 {
-        TH1*                                hist{};   // master
-        std::vector<std::unique_ptr<TH1>>   clones;   // [workerIdx]
+    // AxisSpec — one histogram axis. Bundling {bins, low, high} keeps the
+    // declare* signatures short and makes x/y axis groups impossible to
+    // misorder (declareParticleHist2D previously took 11 scalar parameters).
+    struct AxisSpec {
+        int      bins = 0;
+        double   low  = 0.0;
+        double   high = 0.0;
+    };
+
+    // ── CloneSet — the one master+per-worker-clones storage shape ───────────
+    // Replaces eight structurally identical structs (ParticleTH1/TH2/Graph/
+    // Profile + Hist1D/Hist2D/Graph/ProfileRecord storage). `master` is owned
+    // by the output TFile's directory; clones are detached per-worker copies
+    // merged back at finalize (Cloning.hh).
+    template <typename TObj>
+    struct CloneSet {
+        TObj*                              master{};
+        std::vector<std::unique_ptr<TObj>> clones;   // [workerIdx]
+    };
+
+    // Graph clones additionally track the next free point per worker.
+    template <typename TObj>
+    struct GraphCloneSet : CloneSet<TObj> {
+        std::vector<std::int32_t> nextPoint;   // [workerIdx]
+    };
+
+    struct ParticleTH1 : CloneSet<TH1> {
         Physics::ParticleProperty property{};
     };
 
-    struct ParticleTH2 {
-        TH2*                                hist{};
-        std::vector<std::unique_ptr<TH2>>   clones;
+    struct ParticleTH2 : CloneSet<TH2> {
         Physics::ParticleProperty propertyX{};
         Physics::ParticleProperty propertyY{};
     };
 
-    struct ParticleGraph {
-        TGraph*                                graph{};
-        std::vector<std::unique_ptr<TGraph>>   clones;
-        std::vector<std::int32_t>              nextPoint;   // [workerIdx]
+    struct ParticleGraph : GraphCloneSet<TGraph> {
         Physics::ParticleProperty propertyX{};
         Physics::ParticleProperty propertyY{};
     };
 
-    struct ParticleProfile {
-        TProfile*                                profile{};
-        std::vector<std::unique_ptr<TProfile>>   clones;
+    struct ParticleProfile : CloneSet<TProfile> {
         Physics::ParticleProperty propertyX{};
         Physics::ParticleProperty propertyY{};
     };
@@ -105,10 +122,7 @@ namespace Record {
         std::vector<BranchRecord> branches;
     };
 
-    struct ParticleCount {
-        TH1*                              hist{};
-        std::vector<std::unique_ptr<TH1>> clones;
-    };
+    using ParticleCount = CloneSet<TH1>;
 
     struct ParticleObjects {
         RecordKey basis{};
@@ -122,30 +136,21 @@ namespace Record {
         ParticleTree                 tree;
     };
 
-    struct Hist1DRecord {
-        TH1*                              hist{};
-        std::vector<std::unique_ptr<TH1>> clones;
+    struct Hist1DRecord : CloneSet<TH1> {
         DataType type = DataType::Double;
     };
 
-    struct Hist2DRecord {
-        TH2*                              hist{};
-        std::vector<std::unique_ptr<TH2>> clones;
+    struct Hist2DRecord : CloneSet<TH2> {
         DataType typeX = DataType::Double;
         DataType typeY = DataType::Double;
     };
 
-    struct GraphRecord {
-        TGraph*                              graph{};
-        std::vector<std::unique_ptr<TGraph>> clones;
-        std::vector<std::int32_t>            nextPoint;   // [workerIdx]
+    struct GraphRecord : GraphCloneSet<TGraph> {
         DataType typeX = DataType::Double;
         DataType typeY = DataType::Double;
     };
 
-    struct ProfileRecord {
-        TProfile*                              profile{};
-        std::vector<std::unique_ptr<TProfile>> clones;
+    struct ProfileRecord : CloneSet<TProfile> {
         DataType typeX = DataType::Double;
         DataType typeY = DataType::Double;
     };

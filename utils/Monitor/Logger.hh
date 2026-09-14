@@ -42,13 +42,8 @@ namespace Monitor {
         void configurePacing(PacingInfo pacing);
         void applyPacing(); // applies pacing_ to internal interval fields; call under mutex_
 
-        // Configures which WatchRequest kinds are emitted and at what cadences.
-        void configureWatchEmission(bool saveHeartbeat,
-                                    bool saveCheckpoints,
-                                    std::size_t checkpointInterval);
-
-        // Configures non-watch artifact emission (thread stats, final log).
-        void configureArtifactEmission(bool saveLogThreads, bool saveFinalLog);
+        // Configures which optional artifacts are emitted and at what cadence.
+        void configureEmission(EmissionPolicy policy);
 
         bool saveLogThreads() const;
         bool saveFinalLog() const;
@@ -81,9 +76,9 @@ namespace Monitor {
         void runLoop();
         void heartbeatTerminal(const RunSnapshot& snapshot);
 
-        Config::uSeconds terminalIdleFor(const RunSnapshot& snapshot, const Config::TimePoint& now) const;
-        bool isTerminalStalled(const RunSnapshot& snapshot, const Config::TimePoint& now) const;
-        bool isFatalStalled(const RunSnapshot& snapshot, const Config::TimePoint& now) const;
+        Config::uSeconds terminalIdleFor(const RunSnapshot& snapshot, const Utility::MonoPoint& now) const;
+        bool isTerminalStalled(const RunSnapshot& snapshot, const Utility::MonoPoint& now) const;
+        bool isFatalStalled(const RunSnapshot& snapshot, const Utility::MonoPoint& now) const;
 
         void renderStatusLine(const RunSnapshot& snapshot);
         void processUpdate(const RunSnapshot& snapshot, const PendingActions& actions);
@@ -98,7 +93,6 @@ namespace Monitor {
         Config::Watch                 watch_;
         PacingInfo                    pacing_;
 
-        // Phase 1 watch sink + emission config.
         WatchSink                     watchSink_;
         bool                          saveHeartbeat_      = false;
         bool                          saveCheckpoints_    = false;

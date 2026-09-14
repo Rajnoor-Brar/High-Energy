@@ -89,7 +89,7 @@ namespace Monitor {
                       << "\t\033[32;1m Finished\033[0m"
                       << "\033[E\033[2K";
         } else {
-            const auto now     = std::chrono::system_clock::now();
+            const auto now     = std::chrono::steady_clock::now();
             const bool stalled = isTerminalStalled(snapshot, now);
             std::cout << "\t Events processed : \033[32;1m"
                       << Utility::numberFormat(snapshot.eventIndex, eventWidth) << "\033[0m"

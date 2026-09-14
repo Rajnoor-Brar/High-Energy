@@ -18,7 +18,7 @@ event_count = 10000          # number of events to process (0 = all in file)
 # ── Probe ────────────────────────────────────────────────────────────────────
 
 [probe]
-input_file       = "output/Lambda_Data/_08/Lambda_Recons_7000GeV_10M.root"
+input_file       = "output/Lambda/Lambda_Data/_08/Lambda_Recons_7000GeV_10M.root"
 probe_threads    = 0         # reader threads  (0 = auto: ⌊(hw-2)/3⌋, min 1)
 analysis_threads = 0         # collector/callback threads (0 = same as probe_threads)
 callback_mode    = "CollectorThread"  # "CollectorThread" | "WorkerThread"
@@ -82,7 +82,7 @@ writer_threads       = 0       # fill-worker threads (0 = auto)
 writer_queue_capacity = 0      # fill-queue depth (0 = Writer default: 1024)
 
 [record.paths]
-directory            = "output/Lambda_Reconstruction/"
+directory            = "output/Lambda/Lambda_Reconstruction/"
 output_log_directory = "logs/"
 checkpoint_directory = "checkpoints/"
 serialDirectory      = true    # append serial to the output directory name
@@ -235,7 +235,7 @@ Extreme  = [0.0, 50000.0]
 
 [paint]
 default_style = "configs/defaults/Paint.toml"  # empty string disables default-style merge
-root_file     = "output/Lambda_Reconstruction/_08/Lambda_Recons_7000GeV_10M.root"
+root_file     = "output/Lambda/Lambda_Reconstruction/_08/Lambda_Recons_7000GeV_10M.root"
 result_dir    = "results/"
 results       = ["Mass_Invariant", "Energy_Net", "Momentum"]
 formats       = ["png"]      # inherited by results unless they override formats

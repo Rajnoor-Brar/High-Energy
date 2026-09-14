@@ -21,6 +21,7 @@
 #include "Paint/Save.hh"
 #include "Paint/Style.hh"
 #include "Paint/Types.hh"
+#include "Utility/RootAid.hh"
 
 namespace Paint {
 
@@ -319,10 +320,11 @@ namespace Paint {
     }
 
     inline void renderPlan(RenderPlan& plan) {
-        const Bool_t wasBatch = gROOT->IsBatch();
-        gROOT->SetBatch(kTRUE);
-        struct BatchRestore { Bool_t prev; ~BatchRestore() { gROOT->SetBatch(prev); } } guard{wasBatch};
+        Utility::RootAid::BatchGuard batchGuard;
         for (RenderResult& result : plan.results) {
+            // Per-result gStyle isolation: applyGlobalStyle mutates gStyle, so
+            // without this, one result's style residue leaks into the next.
+            Utility::RootAid::StyleGuard styleGuard;
             renderResult(result);
         }
     }

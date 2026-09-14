@@ -112,10 +112,10 @@ Probe/Readers        EventReader/FeedReader base classes; EventParticleReaderRow
                      EventStream, FeedStream
 Probe/Parallel       ProbeParallel class declaration
 Probe/ParallelIMT    ProbeIMT class declaration
-Probe/Administration Constructors, getters, activeMode(), partition helpers
+Probe/Lifecycle Constructors, getters, activeMode(), partition helpers
 Probe/Configuration  configureProbe() implementations for both classes
 Probe/Methods        Reader ctor bodies, EventStream/FeedStream iteration, IMT flush
-Probe/Directives     streamEvents/streamFeed/stream implementations;
+Probe/Threading     streamEvents/streamFeed/stream implementations;
                      runWorkerThread/runCollectorThread loop bodies
 ```
 
@@ -175,9 +175,9 @@ Record/Meta           Run provenance metadata; writeMeta()
 Record/Writer         Class declaration; aggregates all impl fragments
 Record/Declaration    declareXxx() — register histograms/graphs/trees
 Record/Recording      fillXxx() — create fill requests; scaleAndWrite
-Record/Directives     pushFill(), worker loop, applyXxxRequest bodies
+Record/Threading     pushFill(), worker loop, applyXxxRequest bodies
 Record/Cloning        allocateAllClones(), mergeAllClones(), *Impl helpers
-Record/Administration open/start/finalize/checkpoint lifecycle;
+Record/Lifecycle open/start/finalize/checkpoint lifecycle;
                       binds Monitor::AsyncLogger as the watchdog
 ```
 
@@ -208,7 +208,7 @@ AsyncLogger::stop()
 join heartbeat thread
 ```
 
-`WatchRequest` variants are emitted by the watchdog in `Record::Administration`
+`WatchRequest` variants are emitted by the watchdog in `Record::Lifecycle`
 and queued in Logger's slot vector. The heartbeat loop drains them.
 
 ### Pacing (`PacingInfo`)
@@ -230,8 +230,8 @@ Monitor/Logger         AsyncLogger class declaration (no method bodies)
 Monitor/Methods        String builders: updatedETA, formatProgress, statusLine
 Monitor/Render         renderStatus, renderBar (ANSI terminal, ioctl width)
 Monitor/Report         writeRunStat, flushLog
-Monitor/Directive      Main loop body, heartbeat dispatch, mergePending
-Monitor/Administration Constructor/destructor, start/stop, bindWriter
+Monitor/Threading      Main loop body, heartbeat dispatch, mergePending
+Monitor/Lifecycle Constructor/destructor, start/stop, bindWriter
 Monitor/Configure      configureMonitor() — TOML → AsyncLogger pacing/stall
 Monitor/ConfigAid      Compatibility shim → Configure.hh
 Monitor/Timer          ScopeTimer RAII helper + TimerRegistry (in-memory accumulator; CSV dump at shutdown)

@@ -11,7 +11,7 @@
 #include <toml++/toml.hpp>
 
 #include "Config/Types.hh"
-#include "Monitor/Administration.hh"
+#include "Monitor/Lifecycle.hh"
 
 namespace Monitor {
 
@@ -124,10 +124,10 @@ namespace Monitor {
 
         logger.configurePacing(std::move(p));
 
-        // docs/WriterMT.md Phase 1/5: the four [monitor.logs].save_* flags drive
-        // which optional artifacts the logger produces.
+        // The four [monitor.logs].save_* flags drive which optional artifacts
+        // the logger produces (see Monitor::EmissionPolicy):
         //
-        //   save_heartbeat   — emit Heartbeat WatchRequests at print_interval
+        //   save_heartbeat   — periodic runstat file writes on the heartbeat cadence
         //   save_checkpoints — emit Checkpoint WatchRequests at checkpoint_interval
         //   save_log_threads — accept publishThreadStats and write per-thread logs
         //   save_final_log   — write the final summary log at Writer::finish
@@ -135,15 +135,15 @@ namespace Monitor {
         // When a flag is false the corresponding code path becomes a no-op
         // (publishThreadStats early-returns, outputLog is skipped, etc.).
         if (monitor) {
-            const bool        saveHeartbeat   = logs ? (*logs)["save_heartbeat"].value_or(false)   : false;
-            const bool        saveCheckpoints = logs ? (*logs)["save_checkpoints"].value_or(false) : false;
-            const bool        saveLogThreads  = logs ? (*logs)["save_log_threads"].value_or(false) : false;
-            const bool        saveFinalLog    = logs ? (*logs)["save_final_log"].value_or(true)    : true;
-            const std::size_t cpInterval      = static_cast<std::size_t>(
+            EmissionPolicy emission;
+            emission.saveHeartbeat   = logs ? (*logs)["save_heartbeat"].value_or(false)   : false;
+            emission.saveCheckpoints = logs ? (*logs)["save_checkpoints"].value_or(false) : false;
+            emission.saveLogThreads  = logs ? (*logs)["save_log_threads"].value_or(false) : false;
+            emission.saveFinalLog    = logs ? (*logs)["save_final_log"].value_or(true)    : true;
+            emission.checkpointInterval = static_cast<std::size_t>(
                 intervals ? (*intervals)["checkpoint_interval"].value_or(static_cast<int64_t>(kDefaultCheckpointInterval))
-                          : static_cast<int64_t>(100000));
-            logger.configureWatchEmission(saveHeartbeat, saveCheckpoints, cpInterval);
-            logger.configureArtifactEmission(saveLogThreads, saveFinalLog);
+                          : static_cast<int64_t>(kDefaultCheckpointInterval));
+            logger.configureEmission(emission);
         }
     }
 

@@ -188,6 +188,29 @@ int main() {
     }
 
     {
+        // Chunked windows: a window smaller than the event count must deliver
+        // exactly the same events (memory-bounded read path).
+        Probe::ProbeIMT probe;
+        probe.configureProbe(kFixtureRoot, cfg, 4, kNEvents, true);
+        probe.setChunkEvents(7);   // 50 events → 8 windows, last one partial
+
+        std::vector<Long64_t>    seen;
+        std::mutex               seenMutex;
+        std::atomic<std::size_t> totalProtons{0};
+        probe.run([&](const Probe::Event& ev, int) {
+            TEST_EQ(ev.n("protons"), std::size_t(4));
+            std::lock_guard<std::mutex> lock(seenMutex);
+            seen.push_back(ev.index);
+        });
+
+        std::set<Long64_t> unique(seen.begin(), seen.end());
+        TEST_EQ(unique.size(), static_cast<std::size_t>(kNEvents));
+        TEST_EQ(*unique.begin(),  Long64_t(1));
+        TEST_EQ(*unique.rbegin(), Long64_t(kNEvents));
+        TEST_PASS("ProbeIMT chunked windows deliver identical event set");
+    }
+
+    {
         // Output equivalence: ProbeIMT and ProbeParallel must produce the
         // same per-event particle 4-momenta sums.  Sum components to avoid
         // depending on within-event particle order.
@@ -460,7 +483,7 @@ branches = ["only_three", "branches", "here"]
         TEST_PASS("parseProbeConfig rule 8: particle with != 4 branches throws");
     }
     {
-        // Per-section index flags parsed correctly
+        // Removed index-ordering flags are rejected, not silently ignored.
         const auto cfg = toml::parse(R"toml(
 [probe]
 
@@ -470,14 +493,15 @@ spec            = 2
 branches        = ["a", "b", "c", "d"]
 index           = ["idx", "I"]
 index_sorted    = false
-index_ascending = true
-index_monotonic = false
 )toml");
-        const auto pc = Probe::parseProbeConfig(cfg);
-        TEST_TRUE(pc.eventParticles[0].indexSorted    == false);
-        TEST_TRUE(pc.eventParticles[0].indexAscending == true);
-        TEST_TRUE(pc.eventParticles[0].indexMonotonic == false);
-        TEST_PASS("parseProbeConfig: per-section index flags");
+        bool threw = false;
+        try {
+            (void)Probe::parseProbeConfig(cfg);
+        } catch (const std::runtime_error&) {
+            threw = true;
+        }
+        TEST_TRUE(threw);
+        TEST_PASS("parseProbeConfig: removed index_* keys are rejected");
     }
 
     // ── Phase 4: EventParticleReaderRowJoin via EventReader interface ─────────

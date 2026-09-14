@@ -33,15 +33,20 @@ namespace Probe {
 
     // EventParticleSpec — per-particle collection within the Events bucket.
     // Identical to the former CollectionSpec; CollectionSpec is now an alias.
+    //
+    // NOTE on index ordering: readers currently assume (and CollectorThread
+    // mode verifies) ascending index data. The removed index_sorted/
+    // index_ascending/index_monotonic flags were intended to select the
+    // event-clustering algorithm per spec (sorted+monotonic → binary-search
+    // cluster starts; monotonic non-sorted → stride-sampled lookup table) —
+    // re-introduce them together with those algorithms if a non-ascending
+    // dataset ever needs supporting (likely the Ingest phase).
     struct EventParticleSpec {
         std::string              label;
         std::string              tree;
         CoordSpec                coords;
         std::vector<BranchSpec>  indexBranches;   // empty → per-entry array source
         std::vector<BranchSpec>  auxBranches;     // per-particle aux columns
-        bool indexSorted    = true;
-        bool indexAscending = true;
-        bool indexMonotonic = true;
     };
 
     // EventNodeSpec — independent column group within the Events bucket.
@@ -50,9 +55,6 @@ namespace Probe {
         std::string              tree;
         std::vector<BranchSpec>  indexBranches;   // empty → per-entry array source
         std::vector<BranchSpec>  branches;
-        bool indexSorted    = true;
-        bool indexAscending = true;
-        bool indexMonotonic = true;
     };
 
     // FeedParticleSpec — per-entry scalar particle within the Feed bucket.
@@ -80,6 +82,10 @@ namespace Probe {
     enum class CallbackMode { WorkerThread, CollectorThread };
 
     // ── ProbeConfig ───────────────────────────────────────────────────────────
+    // Mixed mode (event + feed buckets both populated): the Event stream
+    // drives iteration — when it is exhausted, remaining Feed rows are NOT
+    // delivered. Feed data is per-event auxiliary context, not an independent
+    // stream, in Mixed mode. Feed-only configs drain the Feed fully.
     struct ProbeConfig {
         StreamMode                       requestedMode = StreamMode::Auto;
         std::vector<EventParticleSpec>   eventParticles;

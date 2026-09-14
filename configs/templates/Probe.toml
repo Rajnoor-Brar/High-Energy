@@ -19,7 +19,7 @@
 
 [probe]
 # Input ROOT file path. Stored in Config::ProbeConfig.inputFile.
-input_file = "output/input.root"
+input_file = "output/Lambda/input.root"
 
 # Stream mode hint. Accepted literals: "auto", "events", "feed".
 #   "auto"   — inferred from which buckets are populated (default).
@@ -81,18 +81,12 @@ index = ["event_index", "I"]
 
 # Index property hints that allow ProbeParallel to skip binary search.
 # Stored as bool flags on EventParticleSpec.
-index_sorted    = true   # entries are sorted by index value
-index_ascending = true   # sort order is ascending
-index_monotonic = true   # each index value appears in one contiguous run
 
 [probe.events.particles.pions]
 tree            = "Pions"
 spec            = 0
 branches        = [["pX","D"], ["pY","D"], ["pZ","D"], ["Energy","D"]]
 index           = ["event_index", "I"]
-index_sorted    = true
-index_ascending = true
-index_monotonic = true
 
 # ── Event bucket: nodes ───────────────────────────────────────────────────────
 # Non-particle per-event columns (hit arrays, weights keyed by event index, …).
@@ -102,9 +96,6 @@ index_monotonic = true
 # tree     = "Hits"
 # branches = [["energy","F"], { name = "channel", type = "I" }]
 # index    = ["event_index", "I"]
-# index_sorted    = true
-# index_ascending = true
-# index_monotonic = true
 
 # ── Feed bucket: particles ────────────────────────────────────────────────────
 # Per-entry scalar four-vectors (NTuple rows, not event-grouped).
@@ -131,25 +122,19 @@ index_monotonic = true
 # ── Standard two-species reconstruction (proton + pion from same file) ────────
 #
 # [probe]
-# input_file = "output/Lambda_Data/_08/Lambda.root"
+# input_file = "output/Lambda/Lambda_Data/_08/Lambda.root"
 #
 # [probe.events.particles.protons]
 # tree     = "Protons"
 # spec     = 0
 # branches = [["pX","D"],["pY","D"],["pZ","D"],["Energy","D"]]
 # index    = ["event_index","I"]
-# index_sorted = true
-# index_ascending = true
-# index_monotonic = true
 #
 # [probe.events.particles.pions]
 # tree     = "Pions"
 # spec     = 0
 # branches = [["pX","D"],["pY","D"],["pZ","D"],["Energy","D"]]
 # index    = ["event_index","I"]
-# index_sorted = true
-# index_ascending = true
-# index_monotonic = true
 
 # ── External file with different index branch name ────────────────────────────
 #
@@ -158,9 +143,6 @@ index_monotonic = true
 # spec  = 0
 # branches = [["pX","D"],["pY","D"],["pZ","D"],["Energy","D"]]
 # index = ["Index","I"]     # external files may use "Index" not "event_index"
-# index_sorted = true
-# index_ascending = true
-# index_monotonic = true
 
 # ── CMS-style pt/eta/phi/mass NTuple with auxiliary charge column ─────────────
 #
@@ -170,9 +152,6 @@ index_monotonic = true
 # branches = ["Muon_pt","Muon_eta","Muon_phi","Muon_mass"]
 # aux      = [["Muon_charge","I"], { name = "Muon_isGlobal", type = "O" }]
 # index    = ["event_number","I"]
-# index_sorted = true
-# index_ascending = true
-# index_monotonic = true
 
 # ── Manual thread tuning for a CPU-bound analysis callback ───────────────────
 #

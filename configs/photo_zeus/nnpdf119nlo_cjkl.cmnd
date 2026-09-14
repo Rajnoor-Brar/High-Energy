@@ -1,0 +1,32 @@
+#CMND file for NNPDF_as_119_NLO x CJKL PDFs
+Main:numberOfEvents = 1000000
+Main:timesAllowErrors = 40
+Random:setSeed = on
+Random:seed = 0
+
+Beams:frametype = 2
+Beams:idA = 2212
+Beams:eA = 920.0
+Beams:idB = -11
+Beams:eB = 27.5
+PDF:lepton2gamma = on
+Photon:ProcessType = 0
+Photon:Q2max = 1.0
+HardQCD:all = on
+PhotonParton:all = on
+PhaseSpace:pThatMin = 6.
+MultipartonInteractions:pT0Ref = 3.2
+
+#Simplify printout
+Init:showChangedSettings = on
+Init:showChangedParticleData = on
+Init:showMultipartonInteractions = on
+Next:numberShowInfo = 1
+Next:numberShowProcess = 1
+Next:numberShowEvent = 1
+Next:showScaleAndVertex = off
+
+#QED radiation off lepton not handled yet by the new procedure
+TimeShower:QEDshowerByL = off
+PDF:lepton = off
+PDF:pSet = 15

@@ -8,7 +8,7 @@
 //   ./_ThreadBench.exe [binary] [configPath] [nEvents]
 //
 // Defaults:
-//   binary     = ./_Lambda_Reconstruction.exe
+//   binary     = ./output/Lambda/_Lambda_Reconstruction.exe
 //   configPath = configs/Lambda_Reconstruction.toml
 //   nEvents    = 10000
 //
@@ -115,7 +115,7 @@ static std::string buildTempToml(const toml::table& base,
 // ── main ──────────────────────────────────────────────────────────────────────
 
 int main(int argc, char* argv[]) {
-    const std::string binary  = argc > 1 ? argv[1] : "./_Lambda_Reconstruction.exe";
+    const std::string binary  = argc > 1 ? argv[1] : "./output/Lambda/_Lambda_Reconstruction.exe";
     const std::string baseCfg = argc > 2 ? argv[2] : "configs/Lambda_Reconstruction.toml";
     const std::size_t nEvents = argc > 3
         ? static_cast<std::size_t>(std::stoul(argv[3]))

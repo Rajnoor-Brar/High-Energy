@@ -263,6 +263,22 @@ namespace Paint {
             }
         }
 
+        // globToRegex — translate a shell-style glob ("*_Hist", "Mass_*") into
+        // an anchored ECMAScript regex: '*' → ".*", '?' → ".", everything else
+        // escaped literally.
+        inline std::string globToRegex(const std::string& glob) {
+            static const std::string special = R"(.^$|()[]{}+\)";
+            std::string out = "^";
+            for (const char c : glob) {
+                if (c == '*')      out += ".*";
+                else if (c == '?') out += '.';
+                else if (special.find(c) != std::string::npos) { out += '\\'; out += c; }
+                else               out += c;
+            }
+            out += '$';
+            return out;
+        }
+
         // source_search uses ECMAScript regex matched with regex_search (substring
         // by default). Anchor with ^ / $ for full-name matching.
         // Examples:  "Mass"        → any name containing "Mass"
@@ -270,13 +286,22 @@ namespace Paint {
         //            "Net$"        → names ending with "Net"
         //            "Mass_.*"     → "Mass_" followed by anything
         //            "Net|Transverse" → either substring
+        // Patterns that are not valid regex are retried as shell-style globs,
+        // so "*_Hist" matches every name ending in "_Hist".
         inline std::vector<std::string> searchObjects(TFile& file, const std::string& pattern) {
             std::regex needle;
             try {
                 needle = std::regex(pattern, std::regex::ECMAScript | std::regex::optimize);
-            } catch (const std::regex_error& e) {
-                throw std::runtime_error(
-                    "Paint source_search: invalid regex '" + pattern + "': " + e.what());
+            } catch (const std::regex_error& regexError) {
+                try {
+                    needle = std::regex(globToRegex(pattern),
+                                        std::regex::ECMAScript | std::regex::optimize);
+                } catch (const std::regex_error&) {
+                    throw std::runtime_error(
+                        "Paint source_search: '" + pattern +
+                        "' is neither a valid regex (" + regexError.what() +
+                        ") nor a usable glob pattern");
+                }
             }
             std::vector<std::string> matches;
             searchDirectory(&file, needle, "", matches);

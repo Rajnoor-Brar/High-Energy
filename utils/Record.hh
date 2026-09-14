@@ -7,15 +7,15 @@
 // Submodules:
 //   Types.hh      — RecordKey, branch buffers, and Writer-owned records
 //   Type_Methods.hh — inline helper definitions for Types.hh
-//   Requests.hh   — queue payloads, barrier states, and ParticleFillView
+//   Requests.hh   — queue payloads and barrier states
 //   Configs.hh    — HistConfig (binCount, histScale, limits maps, file paths)
 //   Meta.hh       — Record::Meta: capture/merge provenance and write
 //                   About/ directory to TFile
 //   Writer.hh     — Record::Writer declarations and implementation includes
-//   Administration.hh — lifecycle, state, configuration, and configureWriter
-//   Declaration.hh — Writer data-object declaration methods
+//   Lifecycle.hh  — open/start/checkpoint/finish/close, state, configureWriter
+//   Declaration.hh — Writer data-object declaration methods (declareHist1D, …)
 //   Recording.hh  — fill request methods and ROOT writing
-//   Directives.hh — worker/watchdog loops and queue management
+//   Threading.hh  — worker/watchdog loops and queue management
 //   Cloning.hh    — worker-local clone allocation and merge-back
 // ─────────────────────────────────────────────────────────────────────────────
 

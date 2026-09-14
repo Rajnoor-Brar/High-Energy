@@ -39,10 +39,10 @@ writer_queue_capacity = 0
 [record.paths]
 # Base output directory. Serialised to rootDirectory; if serialDirectory=true,
 # the padded serial suffix is appended before the trailing slash.
-# Runtime default: "output/<project>/" where <project> is the program name
+# Runtime default: "output/Lambda/<project>/" where <project> is the program name
 # passed to Config::configure() (e.g. "Lambda_Reconstruction").
 # Stored in Config::Register.rootDirectory -> Record::Paths.rootDirectory.
-directory = "output/project/"   # sample — runtime-evaluated
+directory = "output/Lambda/project/"   # sample — runtime-evaluated
 
 # Log file directory name. If logInSubDir=true, written as rootDirectory + this.
 # Stored in Config::Register.logDirectory -> Record::Paths.logDirectory.
@@ -53,15 +53,15 @@ output_log_directory = "params/"
 checkpoint_directory = "checkpoints/"
 
 # Append "_NN" serial sub-directory to the base directory.
-# true  -> output/project/_00/   false -> output/project/
+# true  -> output/Lambda/project/_00/   false -> output/Lambda/project/
 serialDirectory = true
 
 # Resolve log path relative to rootDirectory.
-# true  -> output/project/_00/logs/   false -> logs/  (relative to cwd)
+# true  -> output/Lambda/project/_00/logs/   false -> logs/  (relative to cwd)
 logInSubDir = true
 
 # Resolve checkpoint path relative to rootDirectory.
-# true  -> output/project/_00/checkpoints/   false -> checkpoints/
+# true  -> output/Lambda/project/_00/checkpoints/   false -> checkpoints/
 checkpointsInSubDir = true
 
 [record.file]
@@ -127,7 +127,7 @@ pdf_set = ""
 # bin_count  = 100
 #
 # [record.paths]
-# directory       = "output/dev/"
+# directory       = "output/Lambda/dev/"
 # serialDirectory = false
 # logInSubDir     = false
 # checkpointsInSubDir = false
@@ -146,7 +146,7 @@ pdf_set = ""
 # bin_count  = 400
 #
 # [record.paths]
-# directory            = "output/Lambda_Reconstruction/"
+# directory            = "output/Lambda/Lambda_Reconstruction/"
 # output_log_directory = "logs/"
 # checkpoint_directory = "checkpoints/"
 # serialDirectory      = true

@@ -11,7 +11,7 @@ writer   = 4   # Record fill-worker pool
 pythia   = 4   # Pythia generator threads (unused in Probe pipelines)
 
 [probe]
-input_file = "output/Lambda_Data/_08/Lambda_Recons_7000GeV_10M.root"
+input_file = "output/Lambda/Lambda_Data/_08/Lambda_Recons_7000GeV_10M.root"
 
 # ── Phase 10: new [probe.events.particles.<label>] format ────────────────────
 # Index branch name is input-file-specific — specify whatever the source ROOT
@@ -23,18 +23,12 @@ tree            = "Protons"
 spec            = 0
 branches        = [["pX","D"], ["pY","D"], ["pZ","D"], ["Energy","D"]]
 index           = ["Index", "I"]
-index_sorted    = true
-index_ascending = true
-index_monotonic = true
 
 [probe.events.particles.pions]
 tree            = "Pions"
 spec            = 0
 branches        = [["pX","D"], ["pY","D"], ["pZ","D"], ["Energy","D"]]
 index           = ["Index", "I"]
-index_sorted    = true
-index_ascending = true
-index_monotonic = true
 
 [record]
 serial     = 41
@@ -43,7 +37,7 @@ bin_count = 400
 
 
 [record.paths]
-directory            = "output/Lambda_Reconstruction/"
+directory            = "output/Lambda/Lambda_Reconstruction/"
 output_log_directory = "logs/"
 checkpoint_directory = "checkpoints/"
 serialDirectory      = true

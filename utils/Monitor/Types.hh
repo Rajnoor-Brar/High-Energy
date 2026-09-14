@@ -20,6 +20,17 @@ namespace Monitor {
         Config::Seconds  stallThreshold  = Config::Seconds(kDefaultStallThresholdSeconds);
     };
 
+    // EmissionPolicy — which optional artifacts the logger produces
+    // ([monitor.logs].save_* flags). Replaces the former pair of
+    // configureWatchEmission/configureArtifactEmission calls.
+    struct EmissionPolicy {
+        bool saveHeartbeat   = false;  // periodic runstat file writes
+        bool saveCheckpoints = false;  // Checkpoint WatchRequests at checkpointInterval
+        bool saveLogThreads  = false;  // per-thread stat logs via publishThreadStats
+        bool saveFinalLog    = true;   // final summary log at Writer::finish
+        std::size_t checkpointInterval = kDefaultCheckpointInterval;  // events
+    };
+
     constexpr bool RenderStatus    = true;
     constexpr bool RenderBar       = true;
     constexpr bool WriteRunStat    = true;
@@ -41,7 +52,10 @@ namespace Monitor {
         std::string       eta           = "--";
         double            progress      = 0.0;
         RunPhase          phase         = RunPhase::Starting;
-        Config::TimePoint lastUpdateTime = Config::TimePoint{};
+        // lastUpdateTime: wall clock, display only. lastUpdateMono: monotonic,
+        // drives stall detection (immune to NTP/DST wall-clock steps).
+        Config::TimePoint  lastUpdateTime = Config::TimePoint{};
+        Utility::MonoPoint lastUpdateMono = Utility::MonoPoint{};
         bool              fatalStall    = false;
         Config::uSeconds  stallDuration = Config::uSeconds(0);
         Config::Seconds   stallThreshold = Config::Seconds(0);

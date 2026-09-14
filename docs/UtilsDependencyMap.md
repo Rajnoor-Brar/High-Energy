@@ -38,7 +38,7 @@ utils/
 |   |-- Config/TypeAid.hh
 |   |   `-- Config/Types.hh
 |   |-- Config/LimitAid.hh
-|   |-- Config/Defaults.hh
+|   |-- Config/Limits.hh
 |   |   |-- Config/Types.hh
 |   |   |-- Config/TypeAid.hh
 |   |   |-- Config/LimitAid.hh
@@ -69,13 +69,13 @@ utils/
 |   |   `-- Probe/BranchControl.hh
 |   |-- Probe/ParallelIMT.hh
 |   |   `-- Probe/Types.hh
-|   |-- Probe/Administration.hh
+|   |-- Probe/Lifecycle.hh
 |   |   |-- Probe/Parallel.hh
 |   |   |-- Probe/ParallelIMT.hh
 |   |   `-- Probe/BranchControl.hh
 |   |-- Probe/Configuration.hh
 |   |   |-- Config/Reader.hh
-|   |   |-- Probe/Administration.hh
+|   |   |-- Probe/Lifecycle.hh
 |   |   |-- Probe/ConfigAid.hh
 |   |   |-- Probe/Parallel.hh
 |   |   |-- Probe/ParallelIMT.hh
@@ -84,8 +84,8 @@ utils/
 |   |   |-- Probe/Readers.hh
 |   |   |-- Probe/ParallelIMT.hh
 |   |   `-- Probe/BranchControl.hh
-|   `-- Probe/Directives.hh
-|       |-- Probe/Administration.hh
+|   `-- Probe/Threading.hh
+|       |-- Probe/Lifecycle.hh
 |       |-- Probe/Methods.hh
 |       |-- Probe/Parallel.hh
 |       |-- Probe/ParallelIMT.hh
@@ -122,17 +122,17 @@ utils/
 |       |   |-- Utility/RootTypes.hh
 |       |   |-- Record/Type_Methods.hh
 |       |   `-- Record/Meta.hh
-|       |-- Record/Directives.hh
+|       |-- Record/Threading.hh
 |       |   `-- Record/Writer.hh
 |       |-- Record/Cloning.hh
 |       |   `-- Record/Writer.hh
-|       `-- Record/Administration.hh
+|       `-- Record/Lifecycle.hh
 |           |-- Record/Writer.hh
 |           |-- Record/Configs.hh
 |           |-- Record/Meta.hh
 |           |-- Config/Types.hh
-|           |-- Monitor/Administration.hh
-|           |-- Monitor/Directive.hh
+|           |-- Monitor/Lifecycle.hh
+|           |-- Monitor/Threading.hh
 |           `-- Monitor/Report.hh
 |
 |-- Monitor.hh
@@ -154,20 +154,20 @@ utils/
 |   |   |-- Record/Writer.hh
 |   |   |-- Monitor/Methods.hh
 |   |   `-- Monitor/Render.hh
-|   |-- Monitor/Administration.hh
+|   |-- Monitor/Lifecycle.hh
 |   |   |-- Record/Writer.hh
 |   |   |-- Monitor/Logger.hh
 |   |   |-- Monitor/Methods.hh
 |   |   `-- Monitor/Render.hh
-|   |-- Monitor/Directive.hh
+|   |-- Monitor/Threading.hh
 |   |   |-- Monitor/Logger.hh
 |   |   |-- Monitor/Methods.hh
 |   |   |-- Monitor/Render.hh
 |   |   `-- Monitor/Report.hh
 |   |-- Monitor/Configure.hh
 |   |   |-- Config/Types.hh
-|   |   |-- Monitor/Administration.hh
-|   |   `-- Monitor/Directive.hh
+|   |   |-- Monitor/Lifecycle.hh
+|   |   `-- Monitor/Threading.hh
 |   |-- Monitor/ConfigAid.hh
 |   |   `-- Monitor/Configure.hh
 |   |-- Monitor/Snapshot.hh
@@ -192,7 +192,7 @@ utils/
     |-- Probe/Parallel.hh
     |-- Probe/ParallelIMT.hh
     |-- Probe/Configuration.hh
-    |-- Probe/Administration.hh
+    |-- Probe/Lifecycle.hh
     |-- Record/Writer.hh
     |-- Monitor/Logger.hh
     `-- Monitor/Configure.hh
@@ -236,10 +236,10 @@ flowchart TD
         PrReaders[Probe/Readers]
         PrParallel[Probe/Parallel]
         PrParallelIMT[Probe/ParallelIMT]
-        PrAdministration[Probe/Administration]
+        PrLifecycle[Probe/Lifecycle]
         PrConfiguration[Probe/Configuration]
         PrMethods[Probe/Methods]
-        PrDirectives[Probe/Directives]
+        PrThreading[Probe/Threading]
     end
 
     subgraph RecordModule[Record]
@@ -251,9 +251,9 @@ flowchart TD
         RWriter[Record/Writer]
         RDeclaration[Record/Declaration]
         RRecording[Record/Recording]
-        RDirectives[Record/Directives]
+        RThreading[Record/Threading]
         RCloning[Record/Cloning]
-        RAdministration[Record/Administration]
+        RLifecycle[Record/Lifecycle]
     end
 
     subgraph MonitorModule[Monitor]
@@ -262,8 +262,8 @@ flowchart TD
         MMethods[Monitor/Methods]
         MRender[Monitor/Render]
         MReport[Monitor/Report]
-        MAdministration[Monitor/Administration]
-        MDirective[Monitor/Directive]
+        MLifecycle[Monitor/Lifecycle]
+        MThreading[Monitor/Threading]
         MConfigure[Monitor/Configure]
         MTimer[Monitor/Timer]
     end
@@ -305,14 +305,14 @@ flowchart TD
     PrBranchControl --> PrReaders
     PrBranchControl --> PrParallel
     PrTypes --> PrParallelIMT
-    PrParallel --> PrAdministration
-    PrParallelIMT --> PrAdministration
+    PrParallel --> PrLifecycle
+    PrParallelIMT --> PrLifecycle
     CReader --> PrConfiguration
-    PrAdministration --> PrConfiguration
+    PrLifecycle --> PrConfiguration
     PrReaders --> PrMethods
     PrParallelIMT --> PrMethods
-    PrAdministration --> PrDirectives
-    PrMethods --> PrDirectives
+    PrLifecycle --> PrThreading
+    PrMethods --> PrThreading
 
     %% Record
     RTypes --> RTypeMethods
@@ -327,19 +327,19 @@ flowchart TD
     RDeclaration --> RWriter
     RWriter --> RRecording
     RRecording --> RWriter
-    RWriter --> RDirectives
-    RDirectives --> RWriter
+    RWriter --> RThreading
+    RThreading --> RWriter
     RWriter --> RCloning
     RCloning --> RWriter
-    RWriter --> RAdministration
-    RAdministration --> RWriter
+    RWriter --> RLifecycle
+    RLifecycle --> RWriter
     PProperties --> RDeclaration
     PProperties --> RRecording
     RTypeMethods --> RRecording
     RMeta --> RRecording
-    MAdministration --> RAdministration
-    MDirective --> RAdministration
-    MReport --> RAdministration
+    MLifecycle --> RLifecycle
+    MThreading --> RLifecycle
+    MReport --> RLifecycle
 
     %% Monitor
     RRequests --> MLogger
@@ -352,16 +352,16 @@ flowchart TD
     RWriter --> MReport
     MMethods --> MReport
     MRender --> MReport
-    RWriter --> MAdministration
-    MLogger --> MAdministration
-    MMethods --> MAdministration
-    MRender --> MAdministration
-    MLogger --> MDirective
-    MMethods --> MDirective
-    MRender --> MDirective
-    MReport --> MDirective
-    MAdministration --> MConfigure
-    MDirective --> MConfigure
+    RWriter --> MLifecycle
+    MLogger --> MLifecycle
+    MMethods --> MLifecycle
+    MRender --> MLifecycle
+    MLogger --> MThreading
+    MMethods --> MThreading
+    MRender --> MThreading
+    MReport --> MThreading
+    MLifecycle --> MConfigure
+    MThreading --> MConfigure
     MConfigure --> CConfigure
 
     %% Paint
@@ -380,19 +380,19 @@ flowchart TD
     class PTypes,PTypeAid,PKinematics,PProperties physics
     class UNumber,URootTypes,UTime utility
     class CLimitAid,CTypes,CTypeAid,CDefaults,CReader,CConfigure config
-    class PrTypes,PrBranchControl,PrConfigAid,PrReaders,PrParallel,PrParallelIMT,PrAdministration,PrConfiguration,PrMethods,PrDirectives probe
-    class RTypes,RTypeMethods,RRequests,RConfigs,RMeta,RWriter,RDeclaration,RRecording,RDirectives,RCloning,RAdministration record
-    class MTypes,MLogger,MMethods,MRender,MReport,MAdministration,MDirective,MConfigure,MTimer monitor
+    class PrTypes,PrBranchControl,PrConfigAid,PrReaders,PrParallel,PrParallelIMT,PrLifecycle,PrConfiguration,PrMethods,PrThreading probe
+    class RTypes,RTypeMethods,RRequests,RConfigs,RMeta,RWriter,RDeclaration,RRecording,RThreading,RCloning,RLifecycle record
+    class MTypes,MLogger,MMethods,MRender,MReport,MLifecycle,MThreading,MConfigure,MTimer monitor
     class PaTypes,PaStyle,PaApply,PaSave paint
 ```
 
 ## Top-level Umbrellas
 
 - `utils/Config.hh` -> `Config/Types.hh`, `Config/TypeAid.hh`,
-  `Config/LimitAid.hh`, `Config/Defaults.hh`, `Config/Reader.hh`
+  `Config/LimitAid.hh`, `Config/Limits.hh`, `Config/Reader.hh`
 - `utils/Monitor.hh` -> `Monitor/Types.hh`, `Monitor/Logger.hh`,
   `Monitor/Methods.hh`, `Monitor/Render.hh`, `Monitor/Report.hh`,
-  `Monitor/Administration.hh`, `Monitor/Directive.hh`,
+  `Monitor/Lifecycle.hh`, `Monitor/Threading.hh`,
   `Monitor/Configure.hh`, `Monitor/Timer.hh`
 - `utils/Paint.hh` -> `Paint/Types.hh`, `Paint/Style.hh`,
   `Paint/Apply.hh`, `Paint/Save.hh`
@@ -401,7 +401,7 @@ flowchart TD
 - `utils/Probe.hh` -> `Probe/Types.hh`, `Probe/BranchControl.hh`,
   `Probe/ConfigAid.hh`, `Probe/Readers.hh`, `Probe/Parallel.hh`,
   `Probe/ParallelIMT.hh`, `Probe/Methods.hh`, `Probe/Configuration.hh`,
-  `Probe/Administration.hh`, `Probe/Directives.hh`
+  `Probe/Lifecycle.hh`, `Probe/Threading.hh`
 - `utils/Record.hh` -> `Record/Types.hh`, `Record/Requests.hh`,
   `Record/Configs.hh`, `Record/Meta.hh`, `Record/Writer.hh`
 - `utils/Utility.hh` -> `Utility/Number.hh`, `Utility/Time.hh`,
@@ -425,13 +425,13 @@ flowchart TD
 - `Config/LimitAid.hh` -> none
 - `Config/Types.hh` -> `Physics/Types.hh`, `Probe/Types.hh`
 - `Config/TypeAid.hh` -> `Config/Types.hh`
-- `Config/Defaults.hh` -> `Config/Types.hh`, `Config/TypeAid.hh`,
+- `Config/Limits.hh` -> `Config/Types.hh`, `Config/TypeAid.hh`,
   `Config/LimitAid.hh`, `Physics/TypeAid.hh`
 - `Config/Reader.hh` -> `Config/Types.hh`, `Utility/Number.hh`,
   `Probe/ConfigAid.hh`
 - `Config/Configure.hh` -> `Config.hh`, `Config/Types.hh`,
   `Config/Reader.hh`, `Probe/Parallel.hh`, `Probe/ParallelIMT.hh`,
-  `Probe/Configuration.hh`, `Probe/Administration.hh`,
+  `Probe/Configuration.hh`, `Probe/Lifecycle.hh`,
   `Record/Writer.hh`, `Monitor/Logger.hh`, `Monitor/Configure.hh`
 
 ## `utils/Probe`
@@ -443,14 +443,14 @@ flowchart TD
 - `Probe/Readers.hh` -> `Probe/Types.hh`, `Probe/BranchControl.hh`
 - `Probe/Parallel.hh` -> `Probe/Types.hh`, `Probe/BranchControl.hh`
 - `Probe/ParallelIMT.hh` -> `Probe/Types.hh`
-- `Probe/Administration.hh` -> `Probe/Parallel.hh`,
+- `Probe/Lifecycle.hh` -> `Probe/Parallel.hh`,
   `Probe/ParallelIMT.hh`, `Probe/BranchControl.hh`
 - `Probe/Configuration.hh` -> `Config/Reader.hh`,
-  `Probe/Administration.hh`, `Probe/ConfigAid.hh`, `Probe/Parallel.hh`,
+  `Probe/Lifecycle.hh`, `Probe/ConfigAid.hh`, `Probe/Parallel.hh`,
   `Probe/ParallelIMT.hh`, `Probe/BranchControl.hh`
 - `Probe/Methods.hh` -> `Probe/Readers.hh`, `Probe/ParallelIMT.hh`,
   `Probe/BranchControl.hh`
-- `Probe/Directives.hh` -> `Probe/Administration.hh`,
+- `Probe/Threading.hh` -> `Probe/Lifecycle.hh`,
   `Probe/Methods.hh`, `Probe/Parallel.hh`, `Probe/ParallelIMT.hh`,
   `Probe/Readers.hh`, `Probe/BranchControl.hh`
 
@@ -464,18 +464,18 @@ flowchart TD
 - `Record/Meta.hh` -> `Config/Types.hh`
 - `Record/Writer.hh` -> `Config/Types.hh`, `Record/Configs.hh`,
   `Record/Meta.hh`, `Record/Requests.hh`, `Record/Types.hh`,
-  `Record/Declaration.hh`, `Record/Recording.hh`, `Record/Directives.hh`,
-  `Record/Cloning.hh`, `Record/Administration.hh`
+  `Record/Declaration.hh`, `Record/Recording.hh`, `Record/Threading.hh`,
+  `Record/Cloning.hh`, `Record/Lifecycle.hh`
 - `Record/Declaration.hh` -> `Record/Writer.hh`,
   `Physics/Properties.hh`, `Utility/RootTypes.hh`
 - `Record/Recording.hh` -> `Record/Writer.hh`,
   `Physics/Properties.hh`, `Utility/RootTypes.hh`,
   `Record/Type_Methods.hh`, `Record/Meta.hh`
-- `Record/Directives.hh` -> `Record/Writer.hh`
+- `Record/Threading.hh` -> `Record/Writer.hh`
 - `Record/Cloning.hh` -> `Record/Writer.hh`
-- `Record/Administration.hh` -> `Record/Writer.hh`,
+- `Record/Lifecycle.hh` -> `Record/Writer.hh`,
   `Record/Configs.hh`, `Record/Meta.hh`, `Config/Types.hh`,
-  `Monitor/Administration.hh`, `Monitor/Directive.hh`,
+  `Monitor/Lifecycle.hh`, `Monitor/Threading.hh`,
   `Monitor/Report.hh`
 
 ## `utils/Monitor`
@@ -490,12 +490,12 @@ flowchart TD
 - `Monitor/Report.hh` -> `Config/Types.hh`, `Record/Writer.hh`,
   `Utility/Number.hh`, `Utility/Time.hh`, `Monitor/Methods.hh`,
   `Monitor/Render.hh`
-- `Monitor/Administration.hh` -> `Record/Writer.hh`, `Monitor/Logger.hh`,
+- `Monitor/Lifecycle.hh` -> `Record/Writer.hh`, `Monitor/Logger.hh`,
   `Monitor/Methods.hh`, `Monitor/Render.hh`
-- `Monitor/Directive.hh` -> `Monitor/Logger.hh`, `Monitor/Methods.hh`,
+- `Monitor/Threading.hh` -> `Monitor/Logger.hh`, `Monitor/Methods.hh`,
   `Monitor/Render.hh`, `Monitor/Report.hh`
-- `Monitor/Configure.hh` -> `Config/Types.hh`, `Monitor/Administration.hh`,
-  `Monitor/Directive.hh`
+- `Monitor/Configure.hh` -> `Config/Types.hh`, `Monitor/Lifecycle.hh`,
+  `Monitor/Threading.hh`
 - `Monitor/ConfigAid.hh` -> `Monitor/Configure.hh`
 - `Monitor/Snapshot.hh` -> `Monitor/Methods.hh`
 - `Monitor/Timer.hh` -> none
@@ -525,12 +525,12 @@ flowchart TD
 
 - `Record/Types.hh` <-> `Record/Type_Methods.hh`: type declarations and their
   inline method definitions are split but mutually include each other.
-- `Record/Writer.hh` <-> `Record/{Declaration,Recording,Directives,Cloning,Administration}.hh`:
+- `Record/Writer.hh` <-> `Record/{Declaration,Recording,Threading,Cloning,Lifecycle}.hh`:
   `Writer.hh` declares the class, then includes implementation fragments; each
   fragment includes `Writer.hh`.
-- `Monitor/Administration.hh` / `Monitor/Directive.hh` -> `Record/Writer.hh`
-  -> `Record/Administration.hh` -> `Monitor/Administration.hh` /
-  `Monitor/Directive.hh`: logger and writer are coupled through bind/fatal-stall
+- `Monitor/Lifecycle.hh` / `Monitor/Threading.hh` -> `Record/Writer.hh`
+  -> `Record/Lifecycle.hh` -> `Monitor/Lifecycle.hh` /
+  `Monitor/Threading.hh`: logger and writer are coupled through bind/fatal-stall
   wiring, while `Monitor/Logger.hh` stays declaration-only.
 - Package-level `Config` <-> `Probe`: `Config/Types.hh` stores
   `Probe::CollectionSpec`, while `Probe/Configuration.hh` uses
@@ -540,7 +540,7 @@ flowchart TD
 
 ## Broad Includes Narrowed By This Map
 
-- `Config/Reader.hh` directly includes `Config/Defaults.hh`, but no symbol in
+- `Config/Reader.hh` directly includes `Config/Limits.hh`, but no symbol in
   the current file body depends on it.
 - `Probe/Types.hh` and `Probe/BranchControl.hh` include `Physics.hh`, but the
   used symbols come from `Physics/Types.hh`.
