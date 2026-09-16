@@ -1,0 +1,39 @@
+[analysis]
+riv_plugin = "photo_5x41"
+cmnd_file = "eic_5x41.cmnd"
+event_count = 1_000_000
+seed = 270403
+pdf_sets = [
+  "LHAPDF6:MSTW2008lo68cl",
+  "LHAPDF6:NNPDF23_lo_as_0130_qed",
+  "LHAPDF6:NNPDF23_nlo_as_0119_qed",
+  "LHAPDF6:PDF4LHC21_40",
+]
+pdf_alias = [
+  "MSTW 2008 LO",
+  "NNPDF 2.3 QCD+QED LO",
+  "NNPDF 2.3 QCD+QED NLO",
+  "PDF4 LHC21.40",
+]
+alias_suffix = ["MSTW", "NNLO", "NNNLO", "LHC21"]
+use_pdf = 0
+pdf_suffix = 0
+
+[yoda]
+pdf_legend = 1
+plot_merge_type = 1
+use_data = false
+data_hist = true
+data_file = "datasets/zeus_eic.yoda"
+data_legend = "Data"
+data_reference = true
+
+[rivpyth]
+project = "PhotoProduction"
+generator = "generator.exe"
+serial = 1
+hepmc_file = "eic_28.hepmc"
+yoda_file = "eic28.yoda"
+plugin_dir = "."
+threads = 20
+path_literal = false

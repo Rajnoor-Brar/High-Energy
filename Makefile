@@ -1,119 +1,73 @@
 SHELL := /bin/sh
+.DEFAULT_GOAL := all
+
 CXX ?= g++
 
-BASE_CXXFLAGS := -O2 -march=native -std=c++17 -I./utils -I./modules
-TOML_FLAGS   := $(shell pkg-config --cflags --libs tomlplusplus)
+SOURCE_ROOT := sources
+OUTPUT_ROOT := output
 
-ROOT_FLAGS   := $(shell root-config --cflags --ldflags --glibs)
-PYTHIA_FLAGS := $(shell pythia8-config --cxxflags --ldflags)
+BASE_CXXFLAGS := -O2 -std=c++17 -I./utils -I./modules
 
-# ── Full HEP toolset ─────────────────────────────────────────────────────────
-# Link the optional stack with `make HEP_TOOLSET=1 <target>`.  Keeping it
-# opt-in preserves the ROOT/Pythia8 build on machines without every package.
-HEP_ENV_LOADED ?= 0
-ifeq ($(HEP_ENV_LOADED),1)
+TOML_FLAGS    := $(shell pkg-config --cflags --libs tomlplusplus)
+ROOT_FLAGS    := $(shell root-config --cflags --ldflags --glibs)
+PYTHIA_FLAGS  := $(shell pythia8-config --cxxflags --ldflags)
 HEPMC3_FLAGS  := $(shell HepMC3-config --cflags --libs)
 FASTJET_FLAGS := $(shell fastjet-config --cxxflags --libs --plugins=yes)
-YODA_FLAGS    := $(shell yoda-config --cflags --libs)
+YODA_FLAGS    := $(shell yoda-config --cxxflags --libs)
 LHAPDF_FLAGS  := $(shell lhapdf-config --cppflags --ldflags)
 
 ONNX_DIR      ?= $(ONNXRUNTIME_DIR)
 ONNX_FLAGS    := -I$(ONNX_DIR)/include -L$(ONNX_DIR)/lib -lonnxruntime -Wl,-rpath,$(ONNX_DIR)/lib
+
 DELPHES_DIR   ?= $(HEP_INSTALL)/delphes
 DELPHES_FLAGS := -I$(DELPHES_DIR)/include -L$(DELPHES_DIR)/lib -lDelphes -Wl,-rpath,$(DELPHES_DIR)/lib
-else
-HEPMC3_FLAGS  :=
-FASTJET_FLAGS :=
-YODA_FLAGS    :=
-LHAPDF_FLAGS  :=
-ONNX_FLAGS    :=
-DELPHES_FLAGS :=
-endif
 
-ALL_LIB_FLAGS := $(ROOT_FLAGS) $(PYTHIA_FLAGS) $(HEPMC3_FLAGS) $(FASTJET_FLAGS) $(YODA_FLAGS) $(LHAPDF_FLAGS) $(ONNX_FLAGS) $(DELPHES_FLAGS) $(TOML_FLAGS)
+ALL_LIB_FLAGS := $(ROOT_FLAGS) $(PYTHIA_FLAGS) $(HEPMC3_FLAGS) \
+                 $(FASTJET_FLAGS) $(YODA_FLAGS) $(LHAPDF_FLAGS) \
+                 $(ONNX_FLAGS) $(DELPHES_FLAGS) $(TOML_FLAGS)
 
-# ── Reproducibility defines ───────────────────────────────────────────────────
-# Bake the git state into every binary so Meta::Record::integrity can report
-# the exact source revision.  Falls back gracefully outside a git repo.
-_GIT_SHA   := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
-_GIT_DIRTY := $(shell git diff --quiet 2>/dev/null && echo 0 || echo 1)
-GIT_DEFINES := -DGIT_SHA=\"$(_GIT_SHA)\" -DGIT_DIRTY=$(_GIT_DIRTY)
+GIT_SHA     := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+GIT_DIRTY   := $(shell git diff --quiet 2>/dev/null && echo 0 || echo 1)
+GIT_DEFINES := -DGIT_SHA=\"$(GIT_SHA)\" -DGIT_DIRTY=$(GIT_DIRTY)
 
-SOURCE_ROOT := sources
-OUTPUT_ROOT := output
-SOURCE_CC_SOURCES := $(shell find $(SOURCE_ROOT) -name '*.cc')
-SOURCE_EXE_ALIASES := $(patsubst $(SOURCE_ROOT)/%.cc,%.exe,$(SOURCE_CC_SOURCES))
-SOURCE_SO_ALIASES  := $(patsubst $(SOURCE_ROOT)/%.cc,%.so,$(SOURCE_CC_SOURCES))
+COMPILE_DB ?= $(OUTPUT_ROOT)/compile_commands.json
+CLEAN_FILES ?=
+
+.PHONY: all clean compiledb FORCE
 
 all:
-	@echo "Usage: make <folder>/<program>.exe"
-	@echo "       sources/<folder>/<program>.cc --> output/<folder>/<program>.exe"
-	@echo "       make <folder>/<program>.so for Rivet analysis plugins"
+	@echo "make folder/file.exe"
+	@echo "make folder/file.so"
 
-# Source-tree executables: `make Lambda/_Lambda_Data.exe` maps to
-# `sources/Lambda/_Lambda_Data.cc` and emits `output/Lambda/_Lambda_Data.exe`.
-$(OUTPUT_ROOT)/%.exe: $(SOURCE_ROOT)/%.cc
-	@mkdir -p $(dir $@)
-	@$(CXX) $< -o $@ -MF $@.d $(ALL_LIB_FLAGS) $(BASE_CXXFLAGS) $(GIT_DEFINES)
-	@echo "$< --> $@"
+FORCE:
 
-# Public source-tree target aliases, e.g. `make Lambda/_Lambda_Data.exe`.
-.PHONY: $(SOURCE_EXE_ALIASES) $(SOURCE_SO_ALIASES)
-$(SOURCE_EXE_ALIASES): %.exe: $(OUTPUT_ROOT)/%.exe
-	@true
+%.exe: FORCE
+	@src="$(SOURCE_ROOT)/$(basename $@).cc"; \
+	[ -f "$$src" ] || src="$(basename $@).cc"; \
+	[ -f "$$src" ] || { echo "Missing source: $(SOURCE_ROOT)/$(basename $@).cc or $(basename $@).cc"; exit 2; }; \
+	dest="$(OUTPUT_ROOT)/$(dir $@)$(notdir $@)"; \
+	mkdir -p "$$(dirname "$$dest")"; \
+	if [ ! -e "$$dest" ] || [ "$$src" -nt "$$dest" ] || [ Makefile -nt "$$dest" ]; then \
+		$(CXX) "$$src" -o "$$dest" $(BASE_CXXFLAGS) $(ALL_LIB_FLAGS) $(GIT_DEFINES) || exit $$?; \
+		echo "$$src -> $$dest"; \
+	fi
 
-# Existing root-level programs continue to build beside their sources.
-%.exe: %.cc
-	@$(CXX) $< -o $@ -MF $@.d $(ALL_LIB_FLAGS) $(BASE_CXXFLAGS) $(GIT_DEFINES)
-	@echo "$< --> $@"
+%.so: FORCE
+	@src="$(SOURCE_ROOT)/$(basename $@).cc"; \
+	[ -f "$$src" ] || src="$(basename $@).cc"; \
+	[ -f "$$src" ] || { echo "Missing source: $(SOURCE_ROOT)/$(basename $@).cc or $(basename $@).cc"; exit 2; }; \
+	dest="$(OUTPUT_ROOT)/$(dir $@)Rivet_$(notdir $@)"; \
+	mkdir -p "$$(dirname "$$dest")"; \
+	if [ ! -e "$$dest" ] || [ "$$src" -nt "$$dest" ] || [ Makefile -nt "$$dest" ]; then \
+		rivet-build "$$dest" "$$src" $(BASE_CXXFLAGS) $(GIT_DEFINES) > /dev/null || exit $$?; \
+		echo "$$src -> $$dest"; \
+	fi
 
-# Allow `make myprog` to build `myprog.exe`
-%: %.exe
-	@true
-
-# Rivet plugins follow the same source/output mapping.  Rivet's analysis name
-# is defined in the source, so the library filename remains exactly requested.
-$(OUTPUT_ROOT)/%.so: $(SOURCE_ROOT)/%.cc
-	@mkdir -p $(dir $@)
-	@rivet-build $@ $< $(BASE_CXXFLAGS) $(GIT_DEFINES)
-	@echo "$< --> $@ (Rivet plugin)"
-
-$(SOURCE_SO_ALIASES): %.so: $(OUTPUT_ROOT)/%.so
-	@true
-
-# ── Test targets ─────────────────────────────────────────────────────────────
-# Tests that need the full driver stack (ROOT + Pythia8 + toml++)
-TEST_EXES := tests/test_reconstructCandidates.exe tests/test_probe_parallel.exe tests/test_record_writer.exe tests/test_rootAnalysis_smoke.exe tests/test_paint.exe tests/test_config.exe tests/test_utils_hardening.exe
-
-tests/%.exe: tests/%.cc
-	@$(CXX) $< -o $@ -MF $@.d $(ALL_LIB_FLAGS) $(BASE_CXXFLAGS) $(GIT_DEFINES)
-	@echo "$< --> $@"
-
-# Fixture generator — ROOT only, no Pythia8
-tests/fixtures/%.exe: tests/fixtures/%.cc
-	@$(CXX) $< -o $@ -MF $@.d $(ROOT_FLAGS) $(TOML_FLAGS) $(BASE_CXXFLAGS) $(GIT_DEFINES)
-	@echo "$< --> $@"
-
-# Header-dependency files generated by -MMD (one per executable)
-SOURCE_DEP_FILES := $(shell find $(OUTPUT_ROOT) -name '*.exe.d' -print 2>/dev/null)
--include $(wildcard *.exe.d tests/*.exe.d tests/fixtures/*.exe.d) $(SOURCE_DEP_FILES)
-
-.PHONY: test
-test: $(TEST_EXES)
-	@sh tests/run_all.sh
-
-.PHONY: clean
-clean:
-	@rm -f *.exe tests/*.exe tests/fixtures/*.exe *.exe.d tests/*.exe.d tests/fixtures/*.exe.d
-	@find $(OUTPUT_ROOT) -type f \( -name '*.exe' -o -name '*.exe.d' -o -name '*.so' \) -delete
-	@echo "Executables removed"
-
-# ── Compile database (for clangd/IDE tooling) ────────────────────────────────
-ROOT_CC_SOURCES   := $(shell find . -maxdepth 1 -name '*.cc')
-ALL_EXES := $(ROOT_CC_SOURCES:.cc=.exe) $(patsubst $(SOURCE_ROOT)/%.cc,$(OUTPUT_ROOT)/%.exe,$(SOURCE_CC_SOURCES))
-COMPILE_DB := output/Lambda/compile_commands.json
-
-.PHONY: compiledb
 compiledb:
+	@test -n "$(TARGETS)" || { echo "Usage: make compiledb TARGETS='folder/a.exe folder/b.so'"; exit 2; }
 	@mkdir -p $(dir $(COMPILE_DB))
-	@bear --output $(COMPILE_DB) -- $(MAKE) $(ALL_EXES)
+	@bear --output $(COMPILE_DB) -- $(MAKE) $(TARGETS)
+
+clean:
+	@rm -f $(CLEAN_FILES)
+	@rm -rf $(OUTPUT_ROOT)
