@@ -120,6 +120,9 @@ built-in defaults  <  machine file  <  extends chain (left→right)  <  this fil
   - The allow-list stops a machine file from silently changing physics.
 - **`extends`:**
   - tables merge deeply; arrays and scalars replace;
+  - "deeply" stops at a key that holds one value: an inline table on such a key (for example the per-tool
+    `[quantity.<q>].key = { pythia = "PDF:pSet" }`) replaces as a whole, while a *free* table — `[settle.gen]`,
+    `[rivet].options`, `[plot.data].map` — merges key by key (P1-S02);
   - paths are resolved relative to the file that wrote them;
   - cycles are an error.
 - **`--set key=value`:** a CLI escape hatch for any scalar. It is recorded in provenance as an override.

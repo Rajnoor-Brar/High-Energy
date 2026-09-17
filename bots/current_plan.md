@@ -1,37 +1,39 @@
-# Current plan — P1-S01 package-skeleton
+# Current plan — P1-S02 config-schema
 
-> Mirror of the step being executed (per bots/BOT.md). Source: `docs/rework/steps/P1-S01_package-skeleton.md`.
-> Step index: `docs/rework/steps/README.md`. Status: **in-progress** (2026-09-18). First step of P1.
+> Mirror of the step being executed (per bots/BOT.md). Source: `docs/rework/steps/P1-S02_config-schema.md`.
+> Step index: `docs/rework/steps/README.md`. Status: **in-progress** (2026-09-18).
+> Note: this mirror was written mid-step, not before it started (recorded in the step Log).
 
 ## Goal
 
-`pip install -e utils/python` gives a working `hep` command from any directory; errors use one type; a pytest
-guard fails any test that writes into `results/` or `configs/` (00/B18).
+Any run TOML loads into typed dataclasses with origin tracking; unknown keys, wrong types and
+out-of-range values fail with file:key, a did-you-mean hint and a fix; `extends`, the machine file and
+`--set` layer in a defined order (03 §1–2, §6).
 
-## Plan
+## Modules
 
-- `utils/python/pyproject.toml`: package `hekit`, entry point `hep = hekit.cli:main`, deps click/rich/tomli_w,
-  extras `plot`/`ml`/`proc`.
-- `hekit/errors.py`: one `HepError(message, where=, hint=)` with a plain renderer; `hekit/__init__.py` version.
-- `hekit/env/paths.py`: `HEKIT_ROOT` (validated) else walk up from the package to a repo marker;
-  `HEKIT_RESULTS` override; `configs/`, `sources/`, `output/`, `output/scratch/`, per-project helpers
-  (idea from `legacy/utils/Utility/Paths.hh:25-54`).
-- `hekit/prov/git.py`: short sha + dirty flag for `hep --version`.
-- `hekit/cli.py`: click group with **lazy** subcommand loading (no rich/yoda import for `--help`); every command
-  of 08 §2 listed, each mapped to the step that implements it, with a clear "arrives in step X" error until then.
-- `tests/conftest.py`: the write guard (snapshot of `results/` and `configs/`), applied to **all** test
-  directories; `tests/python/conftest.py`: `HEKIT_RESULTS` → tmp_path.
-- `env/hep_env.sh`: cached shell completion, interactive shells only.
+- `hekit/config/fields.py` — `Field` (kind, default, doc, range, choices, item, free) and the value checks;
+  `Section`; duration parsing.
+- `hekit/config/schema.py` — every section of 03 §1 as a field table; the section dataclasses are
+  generated from those tables (one source of truth for defaults, types and docs).
+- `hekit/config/load.py` — TOML reading, a line scanner for origins (`tomllib` gives no line numbers),
+  schema-aware flattening, layers, the machine allow-list, `extends` with cycle detection, `--set`.
+- `hekit/config/model.py` — `Config`, `Study`, `load_config()`, `origin()`, `explain()`.
+- `hekit/config/validate.py` — schema version (schema-1 files get a migration hint), quantity shape,
+  cross-section rules; warnings collected rather than printed.
 
 ## Verification
 
 | Check | Expected |
 |---|---|
-| `cd / && hep --version` | version + git sha |
-| `pytest tests/python -q` | guard tests pass (planted write detected on a fake tree) |
-| `time hep --help` | < 0.3 s |
-| `pytest tests/golden` | still 55 passed, now under the guard |
+| `[plot] min_entry` | error suggests `min_entries`, with file:line |
+| `[run] threads = -1` | range error, no wrap; `threads = true` is a type error |
+| extends a↔b | cycle error naming both files |
+| machine file sets `generator.card` | refused, listing the allow-list |
+| origin chain | `default → extends → file → cli` for `run.threads` |
+| `pytest tests/python tests/golden` | green |
 
 ## Next
 
-P1-S02 `config-schema` (schema-2 loader with strict validation and layering).
+P1-S03 `sweep-engine` (quantities, across, settle, studies, pins, overlay, naming, with fixes for
+00/B6, B7, B9, B22).
