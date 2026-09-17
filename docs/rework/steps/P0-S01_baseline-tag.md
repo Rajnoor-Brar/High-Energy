@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | todo |
+| Status | done |
 | Kind | git |
 | Phase | P0 — Baseline, hygiene, legacy freeze |
 | Depends on | [P0-S00](P0-S00_rework-docs-revision.md) |
@@ -48,10 +48,10 @@ Never `#include`/import from `legacy/`; copy or adapt.
 
 ## Tasks
 
-- [ ] Show the proposed commit grouping to the user and get approval
-- [ ] Create the commits (with the session's attribution trailer)
-- [ ] `git tag -a rework/baseline -m …`; `git tag -a legacy/lambda-final -m …`
-- [ ] `tar czf output/scratch/p0/hep-tools.tar.gz -C ~/HEP rivpyth ydplt ydmrg rivpyth_common.py rivpyth.example.toml setup.sh` + `sha256sum > SHA256SUMS`
+- [x] Show the proposed commit grouping to the user and get approval (moot: user committed `2364ccf`)
+- [x] Create the commits (done by the user as one commit)
+- [x] `git tag -a rework/baseline -m …`; `git tag -a legacy/lambda-final -m …`
+- [x] `tar czf output/scratch/p0/hep-tools.tar.gz -C ~/HEP rivpyth ydplt ydmrg rivpyth_common.py rivpyth.example.toml setup.sh` + `sha256sum > SHA256SUMS`
 
 ## Outputs
 
@@ -76,10 +76,29 @@ Tags: `git tag -d`; commits: `git reset --soft HEAD~N` (before any push).
 
 ## Done when
 
-- [ ] every Verification row passes
-- [ ] docs named in this step are updated
-- [ ] status set here and in [steps/README.md](README.md)
+- [x] every Verification row passes
+- [x] docs named in this step are updated
+- [x] status set here and in [steps/README.md](README.md)
 
 ## Log
 
 - 2026-09-17 — step file created (P0-S00).
+- 2026-09-17 — **done.**
+  - **Deviation:** the in-flight work was already committed by the user as one commit `2364ccf rework` (plus the earlier `0a10209 setup`) instead of the four suggested logical commits. History was not rewritten.
+  - Tags (approved): `rework/baseline` and `legacy/lambda-final`, both annotated and both on `2364ccf`. Not pushed.
+  - Snapshot: `output/scratch/p0/hep-tools.tar.gz` (sha256 `b83db2e3…f3a9`). `SHA256SUMS` lists the six files and the tarball:
+
+    | File | sha256 (prefix) |
+    |---|---|
+    | rivpyth | `914000fd` |
+    | ydplt | `d8144deb` |
+    | ydmrg | `4e1b8ec3` |
+    | rivpyth_common.py | `52705a36` |
+    | rivpyth.example.toml | `d3204fb6` |
+    | setup.sh | `8f36557f` |
+  - Verification:
+    - tags listed;
+    - `git show rework/baseline:configs/PhotoProduction/eic.toml` prints the file;
+    - `sha256sum -c` passes, and the extracted files match their sums;
+    - tree clean apart from this step's doc edits.
+  - Approvals granted for the rest of P0: `~/HEP` edits, local per-step commits (no push), `bots/` layout edits.
