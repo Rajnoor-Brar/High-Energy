@@ -1,9 +1,9 @@
 {
- "captured": "2026-09-17",
+ "captured": "2026-09-18",
  "config": "configs/PhotoProduction/legacy_mini.toml",
  "inputs": {
-  "legacy_mini.toml": "d2b8ada27c0c817f240b7bbcf8fc4614728a4903ee6e074fc23443d232ca6f97",
-  "photo_ep.cmnd": "54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8",
+  "legacy_mini.toml": "343c0ef7aec201f5bf0c74c3c97c974b3fc4bd0ec06a79903184380555d871c8",
+  "photo_ep.cmnd": "63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2",
   "datasets/zeus_eic.yoda": "625723465b10ea69fe5956adcfd0f67f789ab3707ba2aa20162780857d868ea9"
  },
  "statuses": {

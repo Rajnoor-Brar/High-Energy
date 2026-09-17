@@ -59,3 +59,6 @@ setting = "PDF:pSet"
 values  = ["LHAPDF6:MSTW2008lo68cl", "LHAPDF6:NNPDF23_lo_as_0130_qed"]
 labels  = ["MSTW 2008 LO", "NNPDF 2.3 QCD+QED LO"]
 tags    = ["MSTW", "NNLO"]
+
+# Note: use_data = true deliberately exercises the legacy data-remap path (00/B5); eic.toml has it
+# off, because the ZEUS reference is a different observable that only shares histogram names.

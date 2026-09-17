@@ -1,7 +1,7 @@
 ! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win
 ! run config : configs/PhotoProduction/legacy_mini.toml
 ! base cmnd  : configs/PhotoProduction/photo_ep.cmnd
-! base sha256: 54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8
+! base sha256: 63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2
 ! point      : 2 27x920_ep_NNLO
 ! analysis   : photo_eic
 

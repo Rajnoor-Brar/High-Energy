@@ -95,7 +95,7 @@
     "analysis": "ZEUS_2012_I1116258"
    },
    "ydplt_dir": "results/PhotoProduction/01_zeus_ep_allproc",
-   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/zeus_validation.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8\n! point      : 1 ep_allproc\n! analysis   : ZEUS_2012_I1116258\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270403\n\n! from [settle.cmnd]\nBeams:frameType = 2\nBeams:eA = 920\nBeams:eB = 27.5\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.process\nPhoton:ProcessType = 0\n"
+   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/zeus_validation.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2\n! point      : 1 ep_allproc\n! analysis   : ZEUS_2012_I1116258\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270403\n\n! from [settle.cmnd]\nBeams:frameType = 2\nBeams:eA = 920\nBeams:eB = 27.5\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.process\nPhoton:ProcessType = 0\n"
   },
   {
    "number": 2,
@@ -127,7 +127,7 @@
     ],
     [
      "Random:seed",
-     "270404",
+     "270423",
      "[analysis].seed"
     ],
     [
@@ -166,78 +166,7 @@
     "analysis": "ZEUS_2012_I1116258"
    },
    "ydplt_dir": "results/PhotoProduction/01_zeus_ep_resolved",
-   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/zeus_validation.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8\n! point      : 2 ep_resolved\n! analysis   : ZEUS_2012_I1116258\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270404\n\n! from [settle.cmnd]\nBeams:frameType = 2\nBeams:eA = 920\nBeams:eB = 27.5\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.process\nPhoton:ProcessType = 1\n"
-  },
-  {
-   "number": 3,
-   "suffix": "ep_direct",
-   "legend": "direct",
-   "curve_legend": "direct",
-   "analysis": "ZEUS_2012_I1116258",
-   "plugin": "ZEUS_2012_I1116258",
-   "choice": {
-    "cmnd.lepton": 1,
-    "cmnd.process": 2
-   },
-   "page": [],
-   "settings": [
-    [
-     "Main:numberOfEvents",
-     "1000000",
-     "[analysis].event_count"
-    ],
-    [
-     "Parallelism:numThreads",
-     "20",
-     "[rivpyth].threads"
-    ],
-    [
-     "Random:setSeed",
-     "on",
-     "[analysis].seed"
-    ],
-    [
-     "Random:seed",
-     "270405",
-     "[analysis].seed"
-    ],
-    [
-     "Beams:frameType",
-     "2",
-     "[settle.cmnd]"
-    ],
-    [
-     "Beams:eA",
-     "920",
-     "[settle.cmnd]"
-    ],
-    [
-     "Beams:eB",
-     "27.5",
-     "[settle.cmnd]"
-    ],
-    [
-     "Beams:idB",
-     "-11",
-     "cmnd.lepton"
-    ],
-    [
-     "Photon:ProcessType",
-     "2",
-     "cmnd.process"
-    ]
-   ],
-   "plan": {
-    "generator": "output/PhotoProduction/generator.exe",
-    "base_cmnd": "configs/PhotoProduction/photo_ep.cmnd",
-    "point_cmnd": "results/PhotoProduction/cmnd/01_zeus_ep_direct.cmnd",
-    "hepmc_file": "",
-    "yoda_file": "results/PhotoProduction/01_zeus_ep_direct.yoda",
-    "plugin_dir": "output/PhotoProduction",
-    "analysis": "ZEUS_2012_I1116258"
-   },
-   "ydplt_dir": "results/PhotoProduction/01_zeus_ep_direct",
-   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/zeus_validation.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8\n! point      : 3 ep_direct\n! analysis   : ZEUS_2012_I1116258\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270405\n\n! from [settle.cmnd]\nBeams:frameType = 2\nBeams:eA = 920\nBeams:eB = 27.5\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.process\nPhoton:ProcessType = 2\n"
+   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/zeus_validation.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2\n! point      : 2 ep_resolved\n! analysis   : ZEUS_2012_I1116258\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270423\n\n! from [settle.cmnd]\nBeams:frameType = 2\nBeams:eA = 920\nBeams:eB = 27.5\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.process\nPhoton:ProcessType = 1\n"
   }
  ],
  "pages": [
@@ -248,13 +177,11 @@
    "analysis": "ZEUS_2012_I1116258",
    "members": [
     1,
-    2,
-    3
+    2
    ],
    "legends": [
     "resolved + direct",
-    "resolved",
-    "direct"
+    "resolved"
    ]
   }
  ]

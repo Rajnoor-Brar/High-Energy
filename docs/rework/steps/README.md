@@ -59,7 +59,7 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P0-S02 | [Version and fix the shell environment](P0-S02_env-setup-fixes.md) | env | P0-S01 | 0.25 d | done |
 | P0-S03 | [Move the ~/HEP tools into the repo](P0-S03_tools-into-repo.md) | code | P0-S02 | 0.2 d | done |
 | P0-S04 | [Capture golden fixtures of the legacy workflow](P0-S04_golden-fixtures.md) | test | P0-S03 | 0.5 d | done |
-| P0-S05 | [Hotfix the physics-relevant defects in the legacy tools](P0-S05_legacy-hotfixes.md) | code | P0-S04 | 0.5 d | todo |
+| P0-S05 | [Hotfix the physics-relevant defects in the legacy tools](P0-S05_legacy-hotfixes.md) | code | P0-S04 | 0.5 d | done |
 | P0-S06 | [Archive Lambda, old utils and stale docs into legacy/](P0-S06_legacy-archive.md) | git | P0-S01, P0-S04 | 0.5 d | todo |
 | P0-S07 | [Reduce the Makefile to what is still built](P0-S07_makefile-hygiene.md) | code | P0-S06 | 0.2 d | todo |
 | P1-S01 | [Create the hekit package, CLI entry point and test guard](P1-S01_package-skeleton.md) | code | P0-S07 | 0.3 d | todo |
@@ -323,6 +323,8 @@ flowchart LR
 | 00/B26 orientation η range | P4-S05 |  |
 | 00/B27 pTHatMin bias | P0-S05 | record only (D-B27) |
 | 00/B28 obsolete README_ZEUS | P0-S06 | archived |
+| 00/B29 YODA reader resets LC_ALL | P0-S05, P1-S01 | encodings named explicitly |
+| 00/B30 direct photon unreachable | P0-S05 | comments corrected; physics work later |
 | photo_eic `Reentrant: false` | P4-S05 |  |
 | setup.sh issues (00 §4.6) | P0-S02 |  |
 | Makefile / tests issues (00 §4.4) | P0-S07, P2-S01, P4-S06 |  |

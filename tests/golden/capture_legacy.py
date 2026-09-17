@@ -56,13 +56,16 @@ EXTRA_CASES: dict[str, list[tuple[str, dict[str, Any]]]] = {
 }
 
 
+# yoda.read() resets LC_ALL to "C" and does not restore it, which makes the locale default
+# encoding ASCII (00/B29). Every text read and write below therefore names its encoding.
+
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def write_json(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n")
+    path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 @contextlib.contextmanager
@@ -125,7 +128,7 @@ def expand_case(config_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 "settings": [list(item) for item in point.settings],
                 "plan": plan,
                 "ydplt_dir": str(Path("results") / config["project"] / Path(plan["yoda_file"]).stem),
-                "point_cmnd": scratch_cmnd.read_text(),
+                "point_cmnd": scratch_cmnd.read_text(encoding="utf-8"),
             })
         result["pages"] = []
         if sweep.across:   # ydmrg refuses a sweep without scanned quantities
@@ -172,7 +175,7 @@ def capture_plan() -> None:
 
 
 def run_logged(command: list[str], log: Path, env: dict[str, str] | None = None) -> int:
-    with log.open("a") as handle:
+    with log.open("a", encoding="utf-8") as handle:
         handle.write(f"$ {' '.join(command)}\n")
         handle.flush()
         return subprocess.run(command, stdout=handle, stderr=subprocess.STDOUT, env=env).returncode
@@ -241,7 +244,7 @@ def capture_mini() -> None:
                           "ranges": relative(str(ranges)) if ranges else None,
                           "inputs": [relative(item) for item in arguments]}
 
-    text = log.read_text()
+    text = log.read_text(encoding="utf-8")
     generated = [dict(zip(("generated", "threads", "written"), map(int, match)))
                  for match in re.findall(r"Generated (\d+) events across (\d+) threads; wrote (\d+)", text)]
     import yoda
@@ -289,7 +292,7 @@ def yoda_summary(path: Path) -> dict[str, Any]:
 
 
 def cmnd_summary(path: Path) -> dict[str, Any]:
-    text = path.read_text(errors="replace")
+    text = path.read_text(encoding="utf-8", errors="replace")
     header = dict(re.findall(r"^! (run config|base cmnd|base sha256|point|analysis)\s*: (.*)$", text, re.M))
     events = re.findall(r"^Main:numberOfEvents\s*=\s*(\d+)", text, re.M)
     return {"sha256": sha256(path), "header": header, "numberOfEvents": int(events[-1]) if events else None,
@@ -342,7 +345,7 @@ def capture_inventory() -> None:
     for path in sorted(p for p in root.iterdir() if p.is_dir() and p.name != "cmnd"):
         files = [f for f in path.rglob("*") if f.is_file()]
         index = path / "index.html"
-        index_text = index.read_text(errors="replace") if index.is_file() else ""
+        index_text = index.read_text(encoding="utf-8", errors="replace") if index.is_file() else ""
         directories.append({
             "path": str(path.relative_to(REPO)), "files": len(files), "bytes": sum(f.stat().st_size for f in files),
             "analyses": sorted(p.name for p in path.iterdir() if p.is_dir()),

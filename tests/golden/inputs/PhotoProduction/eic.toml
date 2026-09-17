@@ -4,8 +4,8 @@
 #   ydmrg   configs/PhotoProduction/eic.toml --study <name>     # overlay plot pages
 #   ydplt   configs/PhotoProduction/eic.toml --study <name>     # one page per point
 #
-# Without --study the file runs a single point: every quantity at its catalogue `use` default
-# (5x41 GeV, e-, pT0Ref 3.2, MPI on).
+# Without --study the file scans [sweep].across (the PDF set) with every other quantity at its
+# pinned or catalogue value: 27x920 GeV e+p ([settle.use]), pT0Ref 3.2, MPI on.
 # One-offs: --pin cmnd.beams=10x100, --across "cmnd.beams,cmnd.pdf", --overlay cmnd.pdf
 # The same physics point always gets the same file name, so studies share runs
 # (e.g. study "energies" point 18x275 = study "single").
@@ -16,10 +16,13 @@ event_count = 1_000_000                   # Main:numberOfEvents
 seed        = 270403                      # seed + (point-1) * seed_step
 
 [yoda]
-use_data        = true                   
+# use_data = false: datasets/zeus_eic.yoda holds the ZEUS_2012_I1116258 reference, whose
+# histogram names (d01…) match photo_eic's but describe different observables and binning
+# (00/B5). Overlaying it produced silently trimmed, mismatched "data" curves.
+use_data        = false
 plot_merge_type = 1                       # 1 = overlay; 2 = yodamerge (seed studies only)
-void_empty      = false                    # blank bins empty in every curve
-min_entries     = 1                      # blank bins with < 10 raw entries in any curve
+void_empty      = false                   # true = blank bins that are zero in every curve
+min_entries     = 1                       # blank bins with fewer than this many raw entries in any curve
 auto_range      = true                    # clip x axes to bins with content
 range_pad       = 1                       # keep one empty bin each side
 data_hist       = true
@@ -44,11 +47,11 @@ plugin = "photo_eic"                      # options: YMIN YMAX WMIN WMAX Q2MAX E
 "cmnd.beams" = "27x920"
 "cmnd.lepton" = "ep"
 
-[sweep]                                   # default scan: none (a single run)
+[sweep]                                   # default scan: the PDF sets
 across       = ["cmnd.pdf"]
 tag_style    = "tag"
 yoda_legends = "label"
-seed_step    = 1
+seed_step    = 20                         # >= [rivpyth].threads: Pythia gives thread i seed+i (00/B2)
 
 
 # ── Quantity catalogue ──
@@ -58,9 +61,9 @@ seed_step    = 1
 [sweep.cmnd.beams]
 type   = "beams"                          # [eA, eB] → frameType 2; single eCM → frameType 1
 values = [[41, 5], [100, 10], [275, 18], [920, 27.5]]
-labels = ["5x41 GeV ($\\sqrt{s}$ = 28.6 GeV)", "10x100 GeV ($\\sqrt{s}$ = 63.2 GeV)", "18x275 GeV ($\\sqrt{s}$ = 140.7 GeV)", "27x920 GeV ($\\sqrt{s}$ = 95.6 GeV)"]
+labels = ["5x41 GeV ($\\sqrt{s}$ = 28.6 GeV)", "10x100 GeV ($\\sqrt{s}$ = 63.2 GeV)", "18x275 GeV ($\\sqrt{s}$ = 140.7 GeV)", "27x920 GeV ($\\sqrt{s}$ = 318.1 GeV)"]
 tags   = ["5x41", "10x100", "18x275","27x920"]
-use    = 1                                # default energy for the PDF scan
+use    = 1                                # catalogue default; [settle.use] pins 27x920
 
 [sweep.cmnd.lepton]
 type    = "pythia"
@@ -68,7 +71,7 @@ setting = "Beams:idB"
 values  = [11, -11]
 labels  = ["$e^-$", "$e^+$"]
 tags    = ["em", "ep"]
-use    = 1                                # default lepton for the PDF scan
+use    = 1                                # catalogue default; [settle.use] pins ep
 
 [sweep.cmnd.pdf]
 type    = "pythia"
@@ -80,8 +83,10 @@ values  = [
   "LHAPDF6:PDF4LHC21_40",
 ]
 labels  = ["MSTW 2008 LO", "NNPDF 2.3 QCD+QED LO", "NNPDF 2.3 QCD+QED NLO", "PDF4 LHC21.40"]
+# The tags are historical labels, not orders: NNLO = NNPDF2.3 LO, NNNLO = NNPDF2.3 NLO (00/B12;
+# renamed with an alias map in the schema-2 migration, P1-S06).
 tags    = ["MSTW", "NNLO", "NNNLO", "LHC21"]
-use = 2
+use = 2                                   # NNPDF2.3 QCD+QED LO while not scanned
 
 [sweep.cmnd.pt0ref]
 type    = "pythia"
@@ -107,14 +112,21 @@ labels  = ["$\\hat{p}_T > 2$ GeV", "$\\hat{p}_T > 3$ GeV", "$\\hat{p}_T > 4$ GeV
 tags    = ["pth2", "pth3", "pth4", "pth6"]
 
 [sweep.cmnd.process]
+# Measured with this base cmnd (proton = beam A, photon from the lepton = beam B), Pythia 8.317,
+# 400 events at 27x920 (00/B13):
+#   0 (mix) and 1 (resolved-resolved) give identical events and sigma (74261.7 pb): every hard
+#     process is resolved-resolved HardQCD (codes 111-124). PhotonParton:all never contributes.
+#   2 (resolved-direct = the direct contribution when the hadron is beam A) fails init().
+#   3 (direct-resolved) initialises, switches MPI off ("unresolved photon"), and still produces
+#     only HardQCD codes; sigma differs by about 1 %.
+# So the direct contribution is NOT reachable with this card, and this study is currently a null
+# comparison (two independent samples of the same physics, since the seeds differ). Enabling the
+# direct contribution needs a separate card; see the P0-S05 log.
 type    = "pythia"
 setting = "Photon:ProcessType"
-values  = [0, 1]                          # 0 = all photon processes, 1 = resolved only
+values  = [0, 1]                          # identical here; kept until the direct card exists
 labels  = ["resolved + direct", "resolved"]
 tags    = ["allproc", "resolved"]
-# Direct-only is not available here: with the photon from the lepton (beam B), Pythia 8.317
-# fails init() for ProcessType = 2 ("all processes have vanishing cross sections"), and
-# ProcessType = 3 only generates HardQCD (resolved) processes. Needs a physics check before use.
 
 [sweep.rivet.radius]
 type    = "option"
@@ -133,15 +145,15 @@ tags    = ["et4", "et5", "et6"]
 # ── Studies (--study <name>) ──
 
 [study.single]
-description = "One run at the default beams (eic63/eic140: --pin cmnd.beams=10x100 / 18x275)"
+description = "One run at the pinned beams (other energies: --pin cmnd.beams=10x100 / 18x275)"
 across      = []
 
 [study.pdf]
-description = "Proton-PDF comparison at 5x41 GeV (was eic28.toml)"
+description = "Proton-PDF comparison at the pinned beams (formerly eic28.toml)"
 across      = ["cmnd.pdf"]
 
 [study.energies]
-description = "Beam-energy comparison (was eic_energies.toml)"
+description = "Beam-energy comparison at the pinned PDF (formerly eic_energies.toml)"
 across      = ["cmnd.beams"]
 
 [study.energy_pdf]
@@ -150,7 +162,7 @@ across      = ["cmnd.beams", "cmnd.pdf"]
 overlay     = "cmnd.pdf"
 
 [study.mpi]
-description = "MPI pT0Ref scan at 18x275 with MPI on (was eic_mpi.toml)"
+description = "MPI pT0Ref scan at 18x275 with MPI on (formerly eic_mpi.toml)"
 across      = ["cmnd.pt0ref"]
 pin         = { "cmnd.beams" = "18x275" }
 
@@ -166,11 +178,11 @@ overlay     = "cmnd.pt0ref"
 pin         = { "cmnd.beams" = "18x275" }
 
 [study.pthatmin]
-description = "Generation-cut stability at 5x41 (base pTHatMin = 6 GeV is above the jet ETMIN = 5 GeV)"
+description = "Generation-cut stability at the pinned beams; the base pTHatMin = 6 GeV sits above the jet ETMIN = 5 GeV, which biases the lowest-ET jets (00/B27) - this study measures that"
 across      = ["cmnd.pthatmin"]
 
 [study.process]
-description = "All photon processes vs resolved only at 18x275 (direct-only unavailable, see catalogue)"
+description = "Photon:ProcessType 0 vs 1 at 18x275 - a null comparison with this card, see the catalogue note (00/B13)"
 across      = ["cmnd.process"]
 pin         = { "cmnd.beams" = "18x275" }
 

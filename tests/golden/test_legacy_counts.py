@@ -68,12 +68,12 @@ def test_every_case_has_a_fixture():
 
 @pytest.mark.parametrize(("config", "case", "arguments"), CASES, ids=CASE_IDS)
 def test_fixture_matches_legacy_planner(config, case, arguments):
-    stored = json.loads((cl.PLAN_DIR / config / f"{case}.json").read_text())
+    stored = json.loads((cl.PLAN_DIR / config / f"{case}.json").read_text(encoding="utf-8"))
     assert normalised(cl.expand_case(config, arguments)) == stored
 
 
 def test_inputs_are_the_fixture_inputs():
-    manifest = json.loads((cl.PLAN_DIR / "MANIFEST.json").read_text())
+    manifest = json.loads((cl.PLAN_DIR / "MANIFEST.json").read_text(encoding="utf-8"))
     assert manifest["inputs"] == {name: cl.sha256(cl.INPUTS / cl.PROJECT / name) for name in cl.INPUT_FILES}
     stale = [name for name in cl.INPUT_FILES
              if cl.sha256(cl.INPUTS / cl.PROJECT / name) != cl.sha256(cl.REPO / "configs" / cl.PROJECT / name)]
@@ -83,7 +83,7 @@ def test_inputs_are_the_fixture_inputs():
 
 def test_mini_run_is_complete():
     yoda = pytest.importorskip("yoda")
-    run = json.loads((cl.RUN_DIR / "run.json").read_text())
+    run = json.loads((cl.RUN_DIR / "run.json").read_text(encoding="utf-8"))
     assert run["statuses"] == {"rivpyth": 0, "ydmrg": 0, "ydplt": 0}
     assert len(run["generator"]) == len(run["yoda"]) == 2
     for generator, (name, recorded) in zip(run["generator"], run["yoda"].items()):

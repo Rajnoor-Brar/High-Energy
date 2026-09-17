@@ -1,12 +1,12 @@
 {
- "captured": "2026-09-17",
+ "captured": "2026-09-18",
  "tool": {
-  "tools/rivpyth_common.py": "52705a36384a60d167da27bd381746da382491e7ea5bbfe100930db51c41f2f3"
+  "tools/rivpyth_common.py": "e4b780cc863bd0841563402d2bb693c0806b492b210f9e6ae516a199250b0564"
  },
  "inputs": {
-  "eic.toml": "7bc217f58239cb7c5e7d5889ea2082eb399a8cf5a16695cd8697ee70765c5c2d",
-  "zeus_validation.toml": "a55c4ae5767222f7bb2bd5d4c9c3d7e92257f43fb51fbfd3f6471767489eb8cc",
-  "photo_ep.cmnd": "54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8"
+  "eic.toml": "97effd94707880059d43d7b464f50a6a5f5fb711abab46d48345559f50114d4e",
+  "zeus_validation.toml": "f81424f21b7acb39b39b329c33ea27e85bbaf7cbd225726c6299c2916c83f664",
+  "photo_ep.cmnd": "63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2"
  },
  "cases": {
   "eic/default": "4 points, 1 pages",
@@ -26,6 +26,6 @@
   "eic/cli_across_together": "4 points, 1 pages",
   "eic/cli_couple_mismatch": "Coupled quantities need equal value counts (cmnd.beams=4, cmnd.lepton=2)",
   "zeus_validation/default": "4 points, 1 pages",
-  "zeus_validation/cli_across_process": "3 points, 1 pages"
+  "zeus_validation/cli_across_process": "2 points, 1 pages"
  }
 }

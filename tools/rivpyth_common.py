@@ -166,6 +166,16 @@ def validate_config(config: dict[str, Any]) -> None:
                           "every scanned quantity must have type = \"seed\"")
     if not config["riv_plugin"] and not any(q.type == "plugin" for q in sweep.quantities):
         raise ConfigError("[settle.rivet].plugin is required unless a [sweep.rivet.*] plugin quantity sets it")
+    # Pythia seeds parallel instance i with seed+i (Parallelism:seeds is unset), so points whose base
+    # seeds are closer together than the thread count share random-number streams (00/B2).
+    offset_seeds = config["seed"] and not config["settle"].has_seed \
+        and not any(quantity.type == "seed" for quantity in sweep.across)
+    if offset_seeds and config["threads"] > 1 and sweep.seed_step < config["threads"]:
+        raise ConfigError(
+            f"[sweep].seed_step = {sweep.seed_step} is smaller than [rivpyth].threads = {config['threads']}: "
+            f"Pythia gives thread i the seed seed+i, so neighbouring points would share "
+            f"{config['threads'] - sweep.seed_step} of {config['threads']} random-number streams. "
+            f"Set seed_step >= threads (e.g. {config['threads']}).")
 
 
 # ── Variation sweeps ─────────────────────────────────────────────────────────
@@ -825,7 +835,7 @@ def write_point_cmnd(config: dict[str, Any], plan: dict[str, str], point: Point)
         lines.append(f"{key} = {value}")
     destination = Path(plan["point_cmnd"])
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text("\n".join(lines) + "\n")
+    destination.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def plot_file_for(config: dict[str, Any], analysis: str) -> Path | None:
@@ -971,7 +981,7 @@ def auto_range_plot(config: dict[str, Any], analysis: str, yodas: list[Path], wo
     blocks = [f"# BEGIN PLOT {key}\nXMin={low:g}\nXMax={high:g}\n# END PLOT\n"
               for key, (low, high) in sorted(spans.items())]
     destination = workdir / "auto_range.plot"
-    destination.write_text("\n".join(blocks))
+    destination.write_text("\n".join(blocks), encoding="utf-8")
     return destination
 
 

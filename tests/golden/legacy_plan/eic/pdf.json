@@ -108,7 +108,7 @@
     "analysis": "photo_eic"
    },
    "ydplt_dir": "results/PhotoProduction/03_eic_27x920_ep_MSTW_pt32_mpi",
-   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/eic.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8\n! point      : 1 27x920_ep_MSTW_pt32_mpi\n! analysis   : photo_eic\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270403\n\n! from cmnd.beams\nBeams:frameType = 2\nBeams:eA = 920\nBeams:eB = 27.5\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.pdf\nPDF:pSet = LHAPDF6:MSTW2008lo68cl\n\n! from cmnd.pt0ref\nMultipartonInteractions:pT0Ref = 3.2\n\n! from cmnd.mpi\nPartonLevel:MPI = on\n"
+   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/eic.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2\n! point      : 1 27x920_ep_MSTW_pt32_mpi\n! analysis   : photo_eic\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270403\n\n! from cmnd.beams\nBeams:frameType = 2\nBeams:eA = 920\nBeams:eB = 27.5\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.pdf\nPDF:pSet = LHAPDF6:MSTW2008lo68cl\n\n! from cmnd.pt0ref\nMultipartonInteractions:pT0Ref = 3.2\n\n! from cmnd.mpi\nPartonLevel:MPI = on\n"
   },
   {
    "number": 2,
@@ -143,7 +143,7 @@
     ],
     [
      "Random:seed",
-     "270404",
+     "270423",
      "[analysis].seed"
     ],
     [
@@ -192,7 +192,7 @@
     "analysis": "photo_eic"
    },
    "ydplt_dir": "results/PhotoProduction/03_eic_27x920_ep_NNLO_pt32_mpi",
-   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/eic.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8\n! point      : 2 27x920_ep_NNLO_pt32_mpi\n! analysis   : photo_eic\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270404\n\n! from cmnd.beams\nBeams:frameType = 2\nBeams:eA = 920\nBeams:eB = 27.5\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.pdf\nPDF:pSet = LHAPDF6:NNPDF23_lo_as_0130_qed\n\n! from cmnd.pt0ref\nMultipartonInteractions:pT0Ref = 3.2\n\n! from cmnd.mpi\nPartonLevel:MPI = on\n"
+   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/eic.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2\n! point      : 2 27x920_ep_NNLO_pt32_mpi\n! analysis   : photo_eic\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270423\n\n! from cmnd.beams\nBeams:frameType = 2\nBeams:eA = 920\nBeams:eB = 27.5\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.pdf\nPDF:pSet = LHAPDF6:NNPDF23_lo_as_0130_qed\n\n! from cmnd.pt0ref\nMultipartonInteractions:pT0Ref = 3.2\n\n! from cmnd.mpi\nPartonLevel:MPI = on\n"
   },
   {
    "number": 3,
@@ -227,7 +227,7 @@
     ],
     [
      "Random:seed",
-     "270405",
+     "270443",
      "[analysis].seed"
     ],
     [
@@ -276,7 +276,7 @@
     "analysis": "photo_eic"
    },
    "ydplt_dir": "results/PhotoProduction/03_eic_27x920_ep_NNNLO_pt32_mpi",
-   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/eic.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8\n! point      : 3 27x920_ep_NNNLO_pt32_mpi\n! analysis   : photo_eic\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270405\n\n! from cmnd.beams\nBeams:frameType = 2\nBeams:eA = 920\nBeams:eB = 27.5\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.pdf\nPDF:pSet = LHAPDF6:NNPDF23_nlo_as_0119_qed\n\n! from cmnd.pt0ref\nMultipartonInteractions:pT0Ref = 3.2\n\n! from cmnd.mpi\nPartonLevel:MPI = on\n"
+   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/eic.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2\n! point      : 3 27x920_ep_NNNLO_pt32_mpi\n! analysis   : photo_eic\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270443\n\n! from cmnd.beams\nBeams:frameType = 2\nBeams:eA = 920\nBeams:eB = 27.5\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.pdf\nPDF:pSet = LHAPDF6:NNPDF23_nlo_as_0119_qed\n\n! from cmnd.pt0ref\nMultipartonInteractions:pT0Ref = 3.2\n\n! from cmnd.mpi\nPartonLevel:MPI = on\n"
   },
   {
    "number": 4,
@@ -311,7 +311,7 @@
     ],
     [
      "Random:seed",
-     "270406",
+     "270463",
      "[analysis].seed"
     ],
     [
@@ -360,7 +360,7 @@
     "analysis": "photo_eic"
    },
    "ydplt_dir": "results/PhotoProduction/03_eic_27x920_ep_LHC21_pt32_mpi",
-   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/eic.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8\n! point      : 4 27x920_ep_LHC21_pt32_mpi\n! analysis   : photo_eic\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270406\n\n! from cmnd.beams\nBeams:frameType = 2\nBeams:eA = 920\nBeams:eB = 27.5\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.pdf\nPDF:pSet = LHAPDF6:PDF4LHC21_40\n\n! from cmnd.pt0ref\nMultipartonInteractions:pT0Ref = 3.2\n\n! from cmnd.mpi\nPartonLevel:MPI = on\n"
+   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/eic.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2\n! point      : 4 27x920_ep_LHC21_pt32_mpi\n! analysis   : photo_eic\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270463\n\n! from cmnd.beams\nBeams:frameType = 2\nBeams:eA = 920\nBeams:eB = 27.5\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.pdf\nPDF:pSet = LHAPDF6:PDF4LHC21_40\n\n! from cmnd.pt0ref\nMultipartonInteractions:pT0Ref = 3.2\n\n! from cmnd.mpi\nPartonLevel:MPI = on\n"
   }
  ],
  "pages": [

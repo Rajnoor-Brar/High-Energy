@@ -158,6 +158,8 @@ A **Keep** verdict means the *idea* moves into the new layout, rewritten to fit 
 | 00/B26 | η acceptance inverted if `orientation = −1` (unverified) | `photo_eic.cc:126` | P4-S05 |
 | 00/B27 | Base `pTHatMin = 6` > jet `ETMIN = 5` biases the first E_T bin | `photo_ep.cmnd`, `photo_eic.cc` | Record only (the pthatmin study measures it) |
 | 00/B28 | `configs/photo_zeus/README_ZEUS.txt` describes deleted files and an old workflow | file | Archive (P0-S06) |
+| 00/B29 | `yoda.read()` resets `LC_ALL` to `C` and never restores it, so the locale default encoding becomes ASCII and later locale-dependent text I/O fails on non-ASCII content (the point-cmnd header holds an em dash) | measured in P0-S05 | Old tools: restore the locale and name every encoding. hekit: never rely on the locale default (P1-S01) |
+| 00/B30 | `Photon:ProcessType` 0 and 1 give identical events with this base cmnd, 2 fails `init()`, 3 only changes MPI handling, so the direct contribution is unreachable and the `process` study is a null comparison | measured in P0-S05 (400 events, 27x920) | Comments corrected (P0-S05); a direct-photon card is future physics work |
 
 B8 and B16 are unused: B8 is covered by §4.4, B16 by §4.5 / the P0-S04 inventory.
 
@@ -194,6 +196,8 @@ B8 and B16 are unused: B8 is covered by §4.4, B16 by §4.5 / the P0-S04 invento
 6. Exit codes: 2 = usage, 1 = card/init failure.
 
 **Gaps:** σ is a per-thread running estimate; HepMC write failures exit 0 (00/B21); no signal handling; `GIT_SHA` is unused.
+
+**Event counts (measured, P0-S04):** `Main:numberOfEvents` counts `next()` *attempts*. `PythiaParallel::run()` increments its per-thread counter before the success check and invokes the callback only for successful events (`PythiaParallel.cc:186-208`), so written events are fewer than attempts: about 2 % fewer at 5x41, 0.23 % at 10x100, 0.04 % at 18x275, 0.01 % at 27x920. Any completeness check must compare the analysis count with the *written* count.
 
 ### 4.4 Build and tests
 - **Makefile:**
