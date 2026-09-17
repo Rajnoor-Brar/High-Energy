@@ -218,11 +218,9 @@ def cross_check(config: Any) -> None:
         if config.sweep.overlay not in swept:
             raise HepError(f"[sweep] overlay '{config.sweep.overlay}' is not in across", where=where,
                            hint=f"across lists: {', '.join(swept) or 'nothing'}")
-    if config.plot.merge == "yodamerge":
-        kinds = {config.quantity(name).type for name in swept}
-        if not swept or kinds != {"seed"}:
-            raise HepError("[plot] merge = \"yodamerge\" only combines statistically equivalent runs",
-                           where=where, hint="every scanned quantity must have type = \"seed\"")
+    # merge = "yodamerge" depends on *which* scan runs, so it is checked after a study and the pins are
+    # applied (hekit.sweep.select.validate_selection), not here: a file may carry a default scan it never
+    # runs (00/B7).
     if config.plot.data.show is False and config.plot.data.reference is False and config.plot.data.file:
         raise HepError("[plot.data] show = false needs reference = true", where=where,
                        hint="otherwise the data is neither drawn nor used as the ratio denominator")

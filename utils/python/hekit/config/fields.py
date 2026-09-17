@@ -129,19 +129,27 @@ def check_scalar(kind: str, value: Any, where: str) -> Any:
 
 
 def check(spec: Field, value: Any, where: str) -> Any:
-    """Check one configuration value against its field description and return it."""
+    """Check one configuration value against its field description and return it.
+
+    The type is always checked. Choices and ranges are not applied to the field's own default, because
+    several keys use an "unset" default that is deliberately outside them: `[sweep].style = ""` names no
+    style, and `[beams].ids = []` means "not given" while a given list must hold exactly two ids. What
+    makes an unset value unacceptable is the rule that needs it, which lives in `validate.py`.
+    """
     if spec.kind == "list":
         items = check_scalar("list", value, where)
         checked = [check_scalar(spec.item or "any", item, f"{where}[{index}]")
                    for index, item in enumerate(items, start=1)]
-        _range_checked(spec, checked, where)
+        if checked != spec.default_value():
+            _range_checked(spec, checked, where)
         return checked
     if spec.kind == "table":
         table = check_scalar("table", value, where)
         return {key: check_scalar(spec.value_kind, item, f"{where}.{key}") for key, item in table.items()}
     checked = check_scalar(spec.kind, value, where)
-    # The default always passes: several keys use "" for "not set" while still listing choices.
-    if spec.choices and checked != spec.default and checked not in spec.choices:
+    if checked == spec.default_value() and not isinstance(checked, bool):
+        return checked
+    if spec.choices and checked not in spec.choices:
         allowed = ", ".join(repr(choice) for choice in spec.choices)
         raise HepError(f"{checked!r} is not allowed", where=where, hint=f"use one of: {allowed}")
     _range_checked(spec, checked, where)

@@ -199,7 +199,15 @@ These are unchanged in meaning from the current design, which has proven itself 
   - `+` couples quantities by index; commas or list entries form a grid;
   - `overlay = "pdf"` picks the curve quantity; other combinations become pages.
 - **`[settle]`:** fixed values that are not scanned.
-  - `[settle.use]` pins catalogue indices;
+  - `[settle.use]` pins a quantity to one of its values;
+  - **Selector rule** (D-B22, P1-S03), used by `[settle.use]`, a study's `pin` and `--pin`, in this order:
+    1. a declared **tag** (`energies=18x275`);
+    2. an exact **value**, compared as text and numerically when both sides are numbers, so
+       `pthatmin=6` finds a stored `6.0` — the legacy rule read every all-digit selector as a position,
+       which made numeric values unpinnable (00/B22);
+    3. `#N`, an explicit 1-based **index** (`pdf=#2`).
+    A selector that matches nothing lists the tags and values that exist. `[quantity.<q>].use` stays a
+    1-based index, because it is a catalogue field rather than a selector;
   - `[settle.<section>]` fixes raw keys (`[settle.gen] "PhaseSpace:pTHatMin" = 4`);
   - a clash with a quantity is an error.
 - **`[study.<name>]`:** `description`, `across`, `overlay`, `pin`, plus any section override (`[study.x.run] events = 1e5`).

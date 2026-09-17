@@ -401,14 +401,14 @@ def test_xsec_is_generator_or_a_number(write):
         load(write(variant(('options  = { R = 1.0 }', 'xsec = "whatever"'))))
 
 
-def test_yodamerge_needs_a_seed_only_sweep(write):
-    with pytest.raises(HepError, match="statistically equivalent runs"):
-        load(write(MINIMAL + '\n[plot]\nmerge = "yodamerge"\n'))
+def test_yodamerge_is_not_judged_at_load_time(write):
+    """00/B7: the scan that runs decides, and a study can change it (checked in hekit.sweep)."""
+    assert load(write(MINIMAL + '\n[plot]\nmerge = "yodamerge"\n')).plot.merge == "yodamerge"
     seeds = variant(("[quantity.pdf]", "[quantity.replica]"), ('across = ["pdf"]', 'across = ["replica"]'),
                     ('type   = "setting"', 'type   = "seed"'), ('key    = "PDF:pSet"\n', ""),
                     ('values = ["LHAPDF6:MSTW2008lo68cl", "LHAPDF6:NNPDF23_lo_as_0130_qed"]',
                      "values = [11, 22]"))
-    assert load(write(seeds + '\n[plot]\nmerge = "yodamerge"\n')).plot.merge == "yodamerge"
+    assert load(write(seeds + '\n[plot]\nmerge = "yodamerge"\n')).quantities["replica"].type == "seed"
 
 
 def test_overlay_must_be_scanned(write):
