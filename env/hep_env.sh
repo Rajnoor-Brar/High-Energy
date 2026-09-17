@@ -180,5 +180,18 @@ export ONNXRUNTIME_DIR="$HEP_INSTALL/onnxruntime"
 export HEP_ENV_LOADED=1
 hash -r
 
+# hep completion, cached: generating it costs a Python start-up, so it is only regenerated when the
+# entry point is newer than the cache. Interactive shells only.
+_hep_load_completion() {
+    local hep_bin cache="${XDG_CACHE_HOME:-$HOME/.cache}/hekit/hep-complete.bash"
+    hep_bin=$(command -v hep 2>/dev/null) || return 0
+    if [ ! -s "$cache" ] || [ "$hep_bin" -nt "$cache" ]; then
+        mkdir -p "$(dirname "$cache")"
+        _HEP_COMPLETE=bash_source hep > "$cache" 2>/dev/null || { rm -f "$cache"; return 0; }
+    fi
+    source "$cache" 2>/dev/null
+}
+[[ $- == *i* ]] && _hep_load_completion
+
 [[ $- == *i* ]] && echo "HEP env loaded — $HEP (hep_status for versions, hep_help for commands)"
 return 0

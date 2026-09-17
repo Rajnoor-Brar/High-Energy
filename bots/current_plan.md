@@ -1,34 +1,37 @@
-# Current plan — P0-S07 makefile-hygiene
+# Current plan — P1-S01 package-skeleton
 
-> Mirror of the step being executed (per bots/BOT.md). Source: `docs/rework/steps/P0-S07_makefile-hygiene.md`.
-> Step index: `docs/rework/steps/README.md`. Status: **in-progress** (2026-09-18). Last P0 step.
-> Approved by the user for P0: tags, `~/HEP` edits, local per-step commits (no push), `bots/` layout edits.
+> Mirror of the step being executed (per bots/BOT.md). Source: `docs/rework/steps/P1-S01_package-skeleton.md`.
+> Step index: `docs/rework/steps/README.md`. Status: **in-progress** (2026-09-18). First step of P1.
 
 ## Goal
 
-The interim Makefile builds only `generator.exe` and Rivet plugins, with per-target libraries, lazy flag
-evaluation and visible errors (plans 0.3 reduced, 00 §4.4, F11).
+`pip install -e utils/python` gives a working `hep` command from any directory; errors use one type; a pytest
+guard fails any test that writes into `results/` or `configs/` (00/B18).
 
-## Changes
+## Plan
 
-- Recursive `=` for every `*-config` / `pkg-config` call, so nothing runs until a build actually needs it.
-- Per-target link flags: `LIBS_<target>`; `generator.exe` gets Pythia + HepMC3 only.
-- Drop ROOT, toml++, ONNX, Delphes, FastJet, YODA and LHAPDF from the generic rule, and the stale
-  `-I./utils -I./modules` (both directories are gone after P0-S06).
-- `.so`: `rivet-build` only; a failing metadata copy now fails the rule (was `; true`).
-- `make test` prints where the tests live; `make help` lists the targets.
-- `clean` removes build products only and keeps `output/scratch/` (the golden-fixture scratch) —
-  `distclean` still removes the whole output tree.
+- `utils/python/pyproject.toml`: package `hekit`, entry point `hep = hekit.cli:main`, deps click/rich/tomli_w,
+  extras `plot`/`ml`/`proc`.
+- `hekit/errors.py`: one `HepError(message, where=, hint=)` with a plain renderer; `hekit/__init__.py` version.
+- `hekit/env/paths.py`: `HEKIT_ROOT` (validated) else walk up from the package to a repo marker;
+  `HEKIT_RESULTS` override; `configs/`, `sources/`, `output/`, `output/scratch/`, per-project helpers
+  (idea from `legacy/utils/Utility/Paths.hh:25-54`).
+- `hekit/prov/git.py`: short sha + dirty flag for `hep --version`.
+- `hekit/cli.py`: click group with **lazy** subcommand loading (no rich/yoda import for `--help`); every command
+  of 08 §2 listed, each mapped to the step that implements it, with a clear "arrives in step X" error until then.
+- `tests/conftest.py`: the write guard (snapshot of `results/` and `configs/`), applied to **all** test
+  directories; `tests/python/conftest.py`: `HEKIT_RESULTS` → tmp_path.
+- `env/hep_env.sh`: cached shell completion, interactive shells only.
 
 ## Verification
 
 | Check | Expected |
 |---|---|
-| `make -n PhotoProduction/generator.exe \| grep -c onnx` | 0 |
-| `env -u ONNXRUNTIME_DIR make PhotoProduction/generator.exe` | builds |
-| `make PhotoProduction/photo_eic.so && ls output/PhotoProduction/photo_eic.info` | exists |
-| unreadable `.plot` in scratch | the rule exits non-zero |
+| `cd / && hep --version` | version + git sha |
+| `pytest tests/python -q` | guard tests pass (planted write detected on a fake tree) |
+| `time hep --help` | < 0.3 s |
+| `pytest tests/golden` | still 55 passed, now under the guard |
 
 ## Next
 
-P0 exit checks, then P1-S01 `package-skeleton` (first step of the Python core).
+P1-S02 `config-schema` (schema-2 loader with strict validation and layering).
