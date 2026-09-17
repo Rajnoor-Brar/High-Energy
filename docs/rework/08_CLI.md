@@ -93,6 +93,11 @@ Changes:
 | Add `hep_cd PROJECT` → `cd $HEKIT_ROOT/{configs,results}/PROJECT` | shell-only (changes the cwd) |
 | Don't print the status banner on every source; print the one-line tool summary cached by `hep doctor` | faster shell start-up (the version probes of Herwig and Sherpa are slow) |
 
+**Implemented in P0-S02:**
+- `quit` removes only the elements recorded in `_HEP_ADDED`.
+- `hep_refresh` re-sources `$HEP_SETUP`, the file that loaded the environment.
+- Deferred until `hekit` exists (P1): `hep_bootstrap`, completion, the `hep doctor --brief` alias, and the cached one-line summary.
+
 **After the move, `~/HEP` contains:**
 - `setup.sh` (stub) and `setup.sh.pre-rework`;
 - `install/`, `build/`, `src/`, `.venv/`;

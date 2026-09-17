@@ -1,43 +1,46 @@
+# Interim Makefile — builds the two things that are still built by hand:
+#   make PhotoProduction/generator.exe     # sources/<project>/<name>.cc -> output/<project>/<name>.exe
+#   make PhotoProduction/photo_eic.so      # Rivet plugin  -> output/<project>/Rivet_<name>.so (+ .info/.plot)
+#
+# CMake replaces this in P2-S01, and this file becomes a thin wrapper in P4-S06.
+# Everything needs the HEP environment first: `load_hep` (env/hep_env.sh).
+
 SHELL := /bin/sh
-.DEFAULT_GOAL := all
+.DEFAULT_GOAL := help
 
 CXX ?= g++
 
 SOURCE_ROOT := sources
 OUTPUT_ROOT := output
 
-BASE_CXXFLAGS := -O2 -std=c++17 -I./utils -I./modules
+BASE_CXXFLAGS := -O2 -std=c++17
 
-TOML_FLAGS    := $(shell pkg-config --cflags --libs tomlplusplus)
-ROOT_FLAGS    := $(shell root-config --cflags --ldflags --glibs)
-PYTHIA_FLAGS  := $(shell pythia8-config --cxxflags --ldflags)
-HEPMC3_FLAGS  := $(shell HepMC3-config --cflags --libs)
-FASTJET_FLAGS := $(shell fastjet-config --cxxflags --libs --plugins=yes)
-YODA_FLAGS    := $(shell yoda-config --cxxflags --libs)
-LHAPDF_FLAGS  := $(shell lhapdf-config --cppflags --ldflags)
+# Recursive (=), not immediate (:=): these shell out, so they must run only when a build needs them.
+PYTHIA_FLAGS  = $(shell pythia8-config --cxxflags --ldflags)
+HEPMC3_FLAGS  = $(shell HepMC3-config --cflags --libs)
+GIT_SHA       = $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+GIT_DIRTY     = $(shell git diff --quiet 2>/dev/null && echo 0 || echo 1)
+GIT_DEFINES   = -DGIT_SHA=\"$(GIT_SHA)\" -DGIT_DIRTY=$(GIT_DIRTY)
 
-ONNX_DIR      ?= $(ONNXRUNTIME_DIR)
-ONNX_FLAGS    := -I$(ONNX_DIR)/include -L$(ONNX_DIR)/lib -lonnxruntime -Wl,-rpath,$(ONNX_DIR)/lib
-
-DELPHES_DIR   ?= $(HEP_INSTALL)/delphes
-DELPHES_FLAGS := -I$(DELPHES_DIR)/include -L$(DELPHES_DIR)/lib -lDelphes -Wl,-rpath,$(DELPHES_DIR)/lib
-
-ALL_LIB_FLAGS := $(ROOT_FLAGS) $(PYTHIA_FLAGS) $(HEPMC3_FLAGS) \
-                 $(FASTJET_FLAGS) $(YODA_FLAGS) $(LHAPDF_FLAGS) \
-                 $(ONNX_FLAGS) $(DELPHES_FLAGS) $(TOML_FLAGS)
-
-GIT_SHA     := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
-GIT_DIRTY   := $(shell git diff --quiet 2>/dev/null && echo 0 || echo 1)
-GIT_DEFINES := -DGIT_SHA=\"$(GIT_SHA)\" -DGIT_DIRTY=$(GIT_DIRTY)
+# Per-target link flags. Add a line per executable; the default covers a Pythia + HepMC3 generator.
+# Rivet plugins need none: rivet-build supplies Rivet, YODA and FastJet itself.
+LIBS_DEFAULT                          = $(PYTHIA_FLAGS) $(HEPMC3_FLAGS)
+LIBS_PhotoProduction/generator.exe    = $(PYTHIA_FLAGS) $(HEPMC3_FLAGS)
+TARGET_LIBS                           = $(if $(LIBS_$@),$(LIBS_$@),$(LIBS_DEFAULT))
 
 COMPILE_DB ?= $(OUTPUT_ROOT)/compile_commands.json
-CLEAN_FILES ?=
 
-.PHONY: all clean compiledb FORCE
+.PHONY: help all test clean distclean compiledb FORCE
 
-all:
-	@echo "make folder/file.exe"
-	@echo "make folder/file.so"
+help:
+	@echo "make <project>/<name>.exe    build an executable from $(SOURCE_ROOT)/<project>/<name>.cc"
+	@echo "make <project>/<name>.so     build a Rivet plugin (+ copy its .info/.plot)"
+	@echo "make test                    where the tests are"
+	@echo "make clean                   remove built executables and plugins (keeps output/scratch)"
+	@echo "make distclean               remove $(OUTPUT_ROOT) entirely"
+	@echo "make compiledb TARGETS='...'  compile_commands.json via bear"
+
+all: help
 
 FORCE:
 
@@ -48,7 +51,7 @@ FORCE:
 	dest="$(OUTPUT_ROOT)/$(dir $@)$(notdir $@)"; \
 	mkdir -p "$$(dirname "$$dest")"; \
 	if [ ! -e "$$dest" ] || [ "$$src" -nt "$$dest" ] || [ Makefile -nt "$$dest" ]; then \
-		$(CXX) "$$src" -o "$$dest" $(BASE_CXXFLAGS) $(ALL_LIB_FLAGS) $(GIT_DEFINES) || exit $$?; \
+		$(CXX) "$$src" -o "$$dest" $(BASE_CXXFLAGS) $(TARGET_LIBS) $(GIT_DEFINES) || exit $$?; \
 		echo "$$src -> $$dest"; \
 	fi
 
@@ -64,14 +67,24 @@ FORCE:
 	fi; \
 	for ext in info plot yoda; do \
 		meta="$${src%.cc}.$$ext"; \
-		[ -f "$$meta" ] && cp -p "$$meta" "$$(dirname "$$dest")/"; \
-	done; true
+		if [ -f "$$meta" ]; then \
+			cp -p "$$meta" "$$(dirname "$$dest")/" || { echo "Failed to copy $$meta"; exit 1; }; \
+		fi; \
+	done
+
+test:
+	@echo "Python tests:  pytest tests/golden        (legacy golden fixtures)"
+	@echo "C++ tests:     none yet - ctest arrives with CMake in P2-S01"
+	@echo "The archived C++ tests are in legacy/tests/ and are not built."
+
+# Build products only; output/scratch holds the golden-fixture scratch areas.
+clean:
+	@find $(OUTPUT_ROOT) -mindepth 2 -maxdepth 2 \( -name '*.exe' -o -name 'Rivet_*.so' \) -print -delete 2>/dev/null || true
+
+distclean:
+	@rm -rf $(OUTPUT_ROOT)
 
 compiledb:
 	@test -n "$(TARGETS)" || { echo "Usage: make compiledb TARGETS='folder/a.exe folder/b.so'"; exit 2; }
 	@mkdir -p $(dir $(COMPILE_DB))
 	@bear --output $(COMPILE_DB) -- $(MAKE) $(TARGETS)
-
-clean:
-	@rm -f $(CLEAN_FILES)
-	@rm -rf $(OUTPUT_ROOT)

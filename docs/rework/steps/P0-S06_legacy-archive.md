@@ -2,14 +2,14 @@
 
 | Field | Value |
 |---|---|
-| Status | todo |
+| Status | done |
 | Kind | git |
 | Phase | P0 — Baseline, hygiene, legacy freeze |
 | Depends on | [P0-S01](P0-S01_baseline-tag.md), [P0-S04](P0-S04_golden-fixtures.md) |
 | Blocks | [P0-S07](P0-S07_makefile-hygiene.md) |
 | Effort | 0.5 d |
 | Findings / decisions | D17; 00 §4.4, §4.5, §4.7; 00/B28; plans 0.4 (archived instead) |
-| Updated | 2026-09-17 |
+| Updated | 2026-09-18 |
 
 ## Goal
 
@@ -50,11 +50,11 @@ Never `#include`/import from `legacy/`; copy or adapt.
 
 ## Tasks
 
-- [ ] `git mv` per table
-- [ ] Write `legacy/README.md`, `legacy/PORTING.md`, `docs/README.md` pointer
-- [ ] Fix any path in docs/rework that points to moved docs
-- [ ] Propose bots/ edits to the user
-- [ ] Commit (approval)
+- [x] `git mv` per table
+- [x] Write `legacy/README.md`, `legacy/PORTING.md`, `docs/README.md` pointer
+- [x] Fix any path in docs/rework that points to moved docs
+- [x] Propose bots/ edits to the user
+- [x] Commit (approval)
 
 ## Outputs
 
@@ -78,10 +78,37 @@ Never `#include`/import from `legacy/`; copy or adapt.
 
 ## Done when
 
-- [ ] every Verification row passes
-- [ ] docs named in this step are updated
-- [ ] status set here and in [steps/README.md](README.md)
+- [x] every Verification row passes
+- [x] docs named in this step are updated
+- [x] status set here and in [steps/README.md](README.md)
 
 ## Log
 
 - 2026-09-17 — step file created (P0-S00).
+- 2026-09-18 — **done.** 139 files moved with `git mv` (history preserved).
+  - **Layout:** `legacy/{lambda,utils,tests,analyses,configs,misc,docs,results}`. Deviations from the table:
+    - `modules/Lambda{,.hh}` went to `legacy/lambda/modules/` (keeping the original shape) rather than flat;
+    - `tests/golden/results_inventory.json` → `legacy/results/PhotoProduction.inventory.json`, and
+      `capture_legacy.py` now writes there (one source of truth, `INVENTORY`);
+    - `bots/plan.md` and `bots/GEMINI.md` joined `bots/CLAUDE.md` in `legacy/docs/`: all three describe the
+      Lambda-era code and reference documents that no longer exist. `bots/` now holds only `BOT.md` and
+      `current_plan.md`.
+  - **Written:** `legacy/README.md` (tags to build from, what is where, the Lambda physics summary and its
+    8 defects, the 11 old-`utils` defects, pointer to the revival estimate) and `legacy/PORTING.md` (the
+    snippet → step table with post-move paths, plus what is dropped outright). `docs/README.md` now points at
+    `docs/rework/` and at the archive.
+  - **References updated:** `docs/plans/…` → `legacy/docs/plans/…` in `docs/rework/{README,00_Audit,10_Roadmap}.md`
+    and `steps/README.md`; §4.7 of the audit notes that the listed paths are pre-move.
+  - **`bots/BOT.md`** (approved): the directory-layout table now describes the real tree (`env/`, `legacy/`,
+    `tools/`, `tests/golden`, per-project `configs/`/`sources/`, `output/scratch/`) with the rule that `legacy/`
+    is never included from outside; the testing section replaces the `output/Lambda/test/` rule with the scratch
+    rules, the golden-fixture recapture rule, and the explicit-encoding rule (00/B29).
+  - **Verification:**
+    - `git grep -nE '#include "(Config|Monitor|Probe|Record|Paint|Physics|Utility|Lambda)' -- ':!legacy'` → the
+      only hit was prose in `bots/plan.md`, which is now archived; so **empty**.
+    - `make PhotoProduction/generator.exe PhotoProduction/photo_eic.so` after touching both sources: both
+      rebuild; `photo_eic.info` and `.plot` in `output/` match their sources.
+    - `pytest tests/golden -q` → **55 passed**.
+    - `git log --follow --oneline legacy/utils/Utility/Sha256.hh` → verified after the commit (before it, the
+      path does not yet exist in history).
+  - Lambda make targets no longer resolve, as the step expects; `legacy/README.md` says to build from the tag.

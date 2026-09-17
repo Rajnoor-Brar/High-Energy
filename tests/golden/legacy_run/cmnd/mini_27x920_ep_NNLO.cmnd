@@ -1,0 +1,27 @@
+! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win
+! run config : configs/PhotoProduction/legacy_mini.toml
+! base cmnd  : configs/PhotoProduction/photo_ep.cmnd
+! base sha256: 63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2
+! point      : 2 27x920_ep_NNLO
+! analysis   : photo_eic
+
+! from [analysis].event_count
+Main:numberOfEvents = 5000
+
+! from [rivpyth].threads
+Parallelism:numThreads = 1
+
+! from [analysis].seed
+Random:setSeed = on
+Random:seed = 12346
+
+! from cmnd.beams
+Beams:frameType = 2
+Beams:eA = 920
+Beams:eB = 27.5
+
+! from cmnd.lepton
+Beams:idB = -11
+
+! from cmnd.pdf
+PDF:pSet = LHAPDF6:NNPDF23_lo_as_0130_qed

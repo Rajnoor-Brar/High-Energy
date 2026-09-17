@@ -1,0 +1,1531 @@
+{
+ "config": "configs/PhotoProduction/eic.toml",
+ "arguments": {
+  "study": "energy_pdf"
+ },
+ "sweep": {
+  "groups": [
+   [
+    "cmnd.beams"
+   ],
+   [
+    "cmnd.pdf"
+   ]
+  ],
+  "overlay": [
+   "cmnd.pdf"
+  ],
+  "uses": {
+   "cmnd.beams": 4,
+   "cmnd.lepton": 2,
+   "cmnd.pdf": 2,
+   "cmnd.pt0ref": 2,
+   "cmnd.mpi": 1,
+   "cmnd.pthatmin": 0,
+   "cmnd.process": 0,
+   "rivet.radius": 0,
+   "rivet.etmin": 0
+  },
+  "constant_suffix": "ep_pt32_mpi"
+ },
+ "points": [
+  {
+   "number": 1,
+   "suffix": "5x41_ep_MSTW_pt32_mpi",
+   "legend": "5x41 GeV ($\\sqrt{s}$ = 28.6 GeV), MSTW 2008 LO",
+   "curve_legend": "MSTW 2008 LO",
+   "analysis": "photo_eic",
+   "plugin": "photo_eic",
+   "choice": {
+    "cmnd.beams": 0,
+    "cmnd.lepton": 1,
+    "cmnd.pdf": 0,
+    "cmnd.pt0ref": 1,
+    "cmnd.mpi": 0
+   },
+   "page": [
+    [
+     "cmnd.beams",
+     0
+    ]
+   ],
+   "settings": [
+    [
+     "Main:numberOfEvents",
+     "1000000",
+     "[analysis].event_count"
+    ],
+    [
+     "Parallelism:numThreads",
+     "20",
+     "[rivpyth].threads"
+    ],
+    [
+     "Random:setSeed",
+     "on",
+     "[analysis].seed"
+    ],
+    [
+     "Random:seed",
+     "270403",
+     "[analysis].seed"
+    ],
+    [
+     "Beams:frameType",
+     "2",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eA",
+     "41",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eB",
+     "5",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:idB",
+     "-11",
+     "cmnd.lepton"
+    ],
+    [
+     "PDF:pSet",
+     "LHAPDF6:MSTW2008lo68cl",
+     "cmnd.pdf"
+    ],
+    [
+     "MultipartonInteractions:pT0Ref",
+     "3.2",
+     "cmnd.pt0ref"
+    ],
+    [
+     "PartonLevel:MPI",
+     "on",
+     "cmnd.mpi"
+    ]
+   ],
+   "plan": {
+    "generator": "output/PhotoProduction/generator.exe",
+    "base_cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+    "point_cmnd": "results/PhotoProduction/cmnd/03_eic_5x41_ep_MSTW_pt32_mpi.cmnd",
+    "hepmc_file": "",
+    "yoda_file": "results/PhotoProduction/03_eic_5x41_ep_MSTW_pt32_mpi.yoda",
+    "plugin_dir": "output/PhotoProduction",
+    "analysis": "photo_eic"
+   },
+   "ydplt_dir": "results/PhotoProduction/03_eic_5x41_ep_MSTW_pt32_mpi",
+   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/eic.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2\n! point      : 1 5x41_ep_MSTW_pt32_mpi\n! analysis   : photo_eic\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270403\n\n! from cmnd.beams\nBeams:frameType = 2\nBeams:eA = 41\nBeams:eB = 5\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.pdf\nPDF:pSet = LHAPDF6:MSTW2008lo68cl\n\n! from cmnd.pt0ref\nMultipartonInteractions:pT0Ref = 3.2\n\n! from cmnd.mpi\nPartonLevel:MPI = on\n"
+  },
+  {
+   "number": 2,
+   "suffix": "5x41_ep_NNLO_pt32_mpi",
+   "legend": "5x41 GeV ($\\sqrt{s}$ = 28.6 GeV), NNPDF 2.3 QCD+QED LO",
+   "curve_legend": "NNPDF 2.3 QCD+QED LO",
+   "analysis": "photo_eic",
+   "plugin": "photo_eic",
+   "choice": {
+    "cmnd.beams": 0,
+    "cmnd.lepton": 1,
+    "cmnd.pdf": 1,
+    "cmnd.pt0ref": 1,
+    "cmnd.mpi": 0
+   },
+   "page": [
+    [
+     "cmnd.beams",
+     0
+    ]
+   ],
+   "settings": [
+    [
+     "Main:numberOfEvents",
+     "1000000",
+     "[analysis].event_count"
+    ],
+    [
+     "Parallelism:numThreads",
+     "20",
+     "[rivpyth].threads"
+    ],
+    [
+     "Random:setSeed",
+     "on",
+     "[analysis].seed"
+    ],
+    [
+     "Random:seed",
+     "270423",
+     "[analysis].seed"
+    ],
+    [
+     "Beams:frameType",
+     "2",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eA",
+     "41",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eB",
+     "5",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:idB",
+     "-11",
+     "cmnd.lepton"
+    ],
+    [
+     "PDF:pSet",
+     "LHAPDF6:NNPDF23_lo_as_0130_qed",
+     "cmnd.pdf"
+    ],
+    [
+     "MultipartonInteractions:pT0Ref",
+     "3.2",
+     "cmnd.pt0ref"
+    ],
+    [
+     "PartonLevel:MPI",
+     "on",
+     "cmnd.mpi"
+    ]
+   ],
+   "plan": {
+    "generator": "output/PhotoProduction/generator.exe",
+    "base_cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+    "point_cmnd": "results/PhotoProduction/cmnd/03_eic_5x41_ep_NNLO_pt32_mpi.cmnd",
+    "hepmc_file": "",
+    "yoda_file": "results/PhotoProduction/03_eic_5x41_ep_NNLO_pt32_mpi.yoda",
+    "plugin_dir": "output/PhotoProduction",
+    "analysis": "photo_eic"
+   },
+   "ydplt_dir": "results/PhotoProduction/03_eic_5x41_ep_NNLO_pt32_mpi",
+   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/eic.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2\n! point      : 2 5x41_ep_NNLO_pt32_mpi\n! analysis   : photo_eic\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270423\n\n! from cmnd.beams\nBeams:frameType = 2\nBeams:eA = 41\nBeams:eB = 5\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.pdf\nPDF:pSet = LHAPDF6:NNPDF23_lo_as_0130_qed\n\n! from cmnd.pt0ref\nMultipartonInteractions:pT0Ref = 3.2\n\n! from cmnd.mpi\nPartonLevel:MPI = on\n"
+  },
+  {
+   "number": 3,
+   "suffix": "5x41_ep_NNNLO_pt32_mpi",
+   "legend": "5x41 GeV ($\\sqrt{s}$ = 28.6 GeV), NNPDF 2.3 QCD+QED NLO",
+   "curve_legend": "NNPDF 2.3 QCD+QED NLO",
+   "analysis": "photo_eic",
+   "plugin": "photo_eic",
+   "choice": {
+    "cmnd.beams": 0,
+    "cmnd.lepton": 1,
+    "cmnd.pdf": 2,
+    "cmnd.pt0ref": 1,
+    "cmnd.mpi": 0
+   },
+   "page": [
+    [
+     "cmnd.beams",
+     0
+    ]
+   ],
+   "settings": [
+    [
+     "Main:numberOfEvents",
+     "1000000",
+     "[analysis].event_count"
+    ],
+    [
+     "Parallelism:numThreads",
+     "20",
+     "[rivpyth].threads"
+    ],
+    [
+     "Random:setSeed",
+     "on",
+     "[analysis].seed"
+    ],
+    [
+     "Random:seed",
+     "270443",
+     "[analysis].seed"
+    ],
+    [
+     "Beams:frameType",
+     "2",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eA",
+     "41",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eB",
+     "5",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:idB",
+     "-11",
+     "cmnd.lepton"
+    ],
+    [
+     "PDF:pSet",
+     "LHAPDF6:NNPDF23_nlo_as_0119_qed",
+     "cmnd.pdf"
+    ],
+    [
+     "MultipartonInteractions:pT0Ref",
+     "3.2",
+     "cmnd.pt0ref"
+    ],
+    [
+     "PartonLevel:MPI",
+     "on",
+     "cmnd.mpi"
+    ]
+   ],
+   "plan": {
+    "generator": "output/PhotoProduction/generator.exe",
+    "base_cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+    "point_cmnd": "results/PhotoProduction/cmnd/03_eic_5x41_ep_NNNLO_pt32_mpi.cmnd",
+    "hepmc_file": "",
+    "yoda_file": "results/PhotoProduction/03_eic_5x41_ep_NNNLO_pt32_mpi.yoda",
+    "plugin_dir": "output/PhotoProduction",
+    "analysis": "photo_eic"
+   },
+   "ydplt_dir": "results/PhotoProduction/03_eic_5x41_ep_NNNLO_pt32_mpi",
+   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/eic.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2\n! point      : 3 5x41_ep_NNNLO_pt32_mpi\n! analysis   : photo_eic\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270443\n\n! from cmnd.beams\nBeams:frameType = 2\nBeams:eA = 41\nBeams:eB = 5\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.pdf\nPDF:pSet = LHAPDF6:NNPDF23_nlo_as_0119_qed\n\n! from cmnd.pt0ref\nMultipartonInteractions:pT0Ref = 3.2\n\n! from cmnd.mpi\nPartonLevel:MPI = on\n"
+  },
+  {
+   "number": 4,
+   "suffix": "5x41_ep_LHC21_pt32_mpi",
+   "legend": "5x41 GeV ($\\sqrt{s}$ = 28.6 GeV), PDF4 LHC21.40",
+   "curve_legend": "PDF4 LHC21.40",
+   "analysis": "photo_eic",
+   "plugin": "photo_eic",
+   "choice": {
+    "cmnd.beams": 0,
+    "cmnd.lepton": 1,
+    "cmnd.pdf": 3,
+    "cmnd.pt0ref": 1,
+    "cmnd.mpi": 0
+   },
+   "page": [
+    [
+     "cmnd.beams",
+     0
+    ]
+   ],
+   "settings": [
+    [
+     "Main:numberOfEvents",
+     "1000000",
+     "[analysis].event_count"
+    ],
+    [
+     "Parallelism:numThreads",
+     "20",
+     "[rivpyth].threads"
+    ],
+    [
+     "Random:setSeed",
+     "on",
+     "[analysis].seed"
+    ],
+    [
+     "Random:seed",
+     "270463",
+     "[analysis].seed"
+    ],
+    [
+     "Beams:frameType",
+     "2",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eA",
+     "41",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eB",
+     "5",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:idB",
+     "-11",
+     "cmnd.lepton"
+    ],
+    [
+     "PDF:pSet",
+     "LHAPDF6:PDF4LHC21_40",
+     "cmnd.pdf"
+    ],
+    [
+     "MultipartonInteractions:pT0Ref",
+     "3.2",
+     "cmnd.pt0ref"
+    ],
+    [
+     "PartonLevel:MPI",
+     "on",
+     "cmnd.mpi"
+    ]
+   ],
+   "plan": {
+    "generator": "output/PhotoProduction/generator.exe",
+    "base_cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+    "point_cmnd": "results/PhotoProduction/cmnd/03_eic_5x41_ep_LHC21_pt32_mpi.cmnd",
+    "hepmc_file": "",
+    "yoda_file": "results/PhotoProduction/03_eic_5x41_ep_LHC21_pt32_mpi.yoda",
+    "plugin_dir": "output/PhotoProduction",
+    "analysis": "photo_eic"
+   },
+   "ydplt_dir": "results/PhotoProduction/03_eic_5x41_ep_LHC21_pt32_mpi",
+   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/eic.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2\n! point      : 4 5x41_ep_LHC21_pt32_mpi\n! analysis   : photo_eic\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270463\n\n! from cmnd.beams\nBeams:frameType = 2\nBeams:eA = 41\nBeams:eB = 5\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.pdf\nPDF:pSet = LHAPDF6:PDF4LHC21_40\n\n! from cmnd.pt0ref\nMultipartonInteractions:pT0Ref = 3.2\n\n! from cmnd.mpi\nPartonLevel:MPI = on\n"
+  },
+  {
+   "number": 5,
+   "suffix": "10x100_ep_MSTW_pt32_mpi",
+   "legend": "10x100 GeV ($\\sqrt{s}$ = 63.2 GeV), MSTW 2008 LO",
+   "curve_legend": "MSTW 2008 LO",
+   "analysis": "photo_eic",
+   "plugin": "photo_eic",
+   "choice": {
+    "cmnd.beams": 1,
+    "cmnd.lepton": 1,
+    "cmnd.pdf": 0,
+    "cmnd.pt0ref": 1,
+    "cmnd.mpi": 0
+   },
+   "page": [
+    [
+     "cmnd.beams",
+     1
+    ]
+   ],
+   "settings": [
+    [
+     "Main:numberOfEvents",
+     "1000000",
+     "[analysis].event_count"
+    ],
+    [
+     "Parallelism:numThreads",
+     "20",
+     "[rivpyth].threads"
+    ],
+    [
+     "Random:setSeed",
+     "on",
+     "[analysis].seed"
+    ],
+    [
+     "Random:seed",
+     "270483",
+     "[analysis].seed"
+    ],
+    [
+     "Beams:frameType",
+     "2",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eA",
+     "100",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eB",
+     "10",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:idB",
+     "-11",
+     "cmnd.lepton"
+    ],
+    [
+     "PDF:pSet",
+     "LHAPDF6:MSTW2008lo68cl",
+     "cmnd.pdf"
+    ],
+    [
+     "MultipartonInteractions:pT0Ref",
+     "3.2",
+     "cmnd.pt0ref"
+    ],
+    [
+     "PartonLevel:MPI",
+     "on",
+     "cmnd.mpi"
+    ]
+   ],
+   "plan": {
+    "generator": "output/PhotoProduction/generator.exe",
+    "base_cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+    "point_cmnd": "results/PhotoProduction/cmnd/03_eic_10x100_ep_MSTW_pt32_mpi.cmnd",
+    "hepmc_file": "",
+    "yoda_file": "results/PhotoProduction/03_eic_10x100_ep_MSTW_pt32_mpi.yoda",
+    "plugin_dir": "output/PhotoProduction",
+    "analysis": "photo_eic"
+   },
+   "ydplt_dir": "results/PhotoProduction/03_eic_10x100_ep_MSTW_pt32_mpi",
+   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/eic.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2\n! point      : 5 10x100_ep_MSTW_pt32_mpi\n! analysis   : photo_eic\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270483\n\n! from cmnd.beams\nBeams:frameType = 2\nBeams:eA = 100\nBeams:eB = 10\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.pdf\nPDF:pSet = LHAPDF6:MSTW2008lo68cl\n\n! from cmnd.pt0ref\nMultipartonInteractions:pT0Ref = 3.2\n\n! from cmnd.mpi\nPartonLevel:MPI = on\n"
+  },
+  {
+   "number": 6,
+   "suffix": "10x100_ep_NNLO_pt32_mpi",
+   "legend": "10x100 GeV ($\\sqrt{s}$ = 63.2 GeV), NNPDF 2.3 QCD+QED LO",
+   "curve_legend": "NNPDF 2.3 QCD+QED LO",
+   "analysis": "photo_eic",
+   "plugin": "photo_eic",
+   "choice": {
+    "cmnd.beams": 1,
+    "cmnd.lepton": 1,
+    "cmnd.pdf": 1,
+    "cmnd.pt0ref": 1,
+    "cmnd.mpi": 0
+   },
+   "page": [
+    [
+     "cmnd.beams",
+     1
+    ]
+   ],
+   "settings": [
+    [
+     "Main:numberOfEvents",
+     "1000000",
+     "[analysis].event_count"
+    ],
+    [
+     "Parallelism:numThreads",
+     "20",
+     "[rivpyth].threads"
+    ],
+    [
+     "Random:setSeed",
+     "on",
+     "[analysis].seed"
+    ],
+    [
+     "Random:seed",
+     "270503",
+     "[analysis].seed"
+    ],
+    [
+     "Beams:frameType",
+     "2",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eA",
+     "100",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eB",
+     "10",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:idB",
+     "-11",
+     "cmnd.lepton"
+    ],
+    [
+     "PDF:pSet",
+     "LHAPDF6:NNPDF23_lo_as_0130_qed",
+     "cmnd.pdf"
+    ],
+    [
+     "MultipartonInteractions:pT0Ref",
+     "3.2",
+     "cmnd.pt0ref"
+    ],
+    [
+     "PartonLevel:MPI",
+     "on",
+     "cmnd.mpi"
+    ]
+   ],
+   "plan": {
+    "generator": "output/PhotoProduction/generator.exe",
+    "base_cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+    "point_cmnd": "results/PhotoProduction/cmnd/03_eic_10x100_ep_NNLO_pt32_mpi.cmnd",
+    "hepmc_file": "",
+    "yoda_file": "results/PhotoProduction/03_eic_10x100_ep_NNLO_pt32_mpi.yoda",
+    "plugin_dir": "output/PhotoProduction",
+    "analysis": "photo_eic"
+   },
+   "ydplt_dir": "results/PhotoProduction/03_eic_10x100_ep_NNLO_pt32_mpi",
+   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/eic.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2\n! point      : 6 10x100_ep_NNLO_pt32_mpi\n! analysis   : photo_eic\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270503\n\n! from cmnd.beams\nBeams:frameType = 2\nBeams:eA = 100\nBeams:eB = 10\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.pdf\nPDF:pSet = LHAPDF6:NNPDF23_lo_as_0130_qed\n\n! from cmnd.pt0ref\nMultipartonInteractions:pT0Ref = 3.2\n\n! from cmnd.mpi\nPartonLevel:MPI = on\n"
+  },
+  {
+   "number": 7,
+   "suffix": "10x100_ep_NNNLO_pt32_mpi",
+   "legend": "10x100 GeV ($\\sqrt{s}$ = 63.2 GeV), NNPDF 2.3 QCD+QED NLO",
+   "curve_legend": "NNPDF 2.3 QCD+QED NLO",
+   "analysis": "photo_eic",
+   "plugin": "photo_eic",
+   "choice": {
+    "cmnd.beams": 1,
+    "cmnd.lepton": 1,
+    "cmnd.pdf": 2,
+    "cmnd.pt0ref": 1,
+    "cmnd.mpi": 0
+   },
+   "page": [
+    [
+     "cmnd.beams",
+     1
+    ]
+   ],
+   "settings": [
+    [
+     "Main:numberOfEvents",
+     "1000000",
+     "[analysis].event_count"
+    ],
+    [
+     "Parallelism:numThreads",
+     "20",
+     "[rivpyth].threads"
+    ],
+    [
+     "Random:setSeed",
+     "on",
+     "[analysis].seed"
+    ],
+    [
+     "Random:seed",
+     "270523",
+     "[analysis].seed"
+    ],
+    [
+     "Beams:frameType",
+     "2",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eA",
+     "100",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eB",
+     "10",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:idB",
+     "-11",
+     "cmnd.lepton"
+    ],
+    [
+     "PDF:pSet",
+     "LHAPDF6:NNPDF23_nlo_as_0119_qed",
+     "cmnd.pdf"
+    ],
+    [
+     "MultipartonInteractions:pT0Ref",
+     "3.2",
+     "cmnd.pt0ref"
+    ],
+    [
+     "PartonLevel:MPI",
+     "on",
+     "cmnd.mpi"
+    ]
+   ],
+   "plan": {
+    "generator": "output/PhotoProduction/generator.exe",
+    "base_cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+    "point_cmnd": "results/PhotoProduction/cmnd/03_eic_10x100_ep_NNNLO_pt32_mpi.cmnd",
+    "hepmc_file": "",
+    "yoda_file": "results/PhotoProduction/03_eic_10x100_ep_NNNLO_pt32_mpi.yoda",
+    "plugin_dir": "output/PhotoProduction",
+    "analysis": "photo_eic"
+   },
+   "ydplt_dir": "results/PhotoProduction/03_eic_10x100_ep_NNNLO_pt32_mpi",
+   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/eic.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2\n! point      : 7 10x100_ep_NNNLO_pt32_mpi\n! analysis   : photo_eic\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270523\n\n! from cmnd.beams\nBeams:frameType = 2\nBeams:eA = 100\nBeams:eB = 10\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.pdf\nPDF:pSet = LHAPDF6:NNPDF23_nlo_as_0119_qed\n\n! from cmnd.pt0ref\nMultipartonInteractions:pT0Ref = 3.2\n\n! from cmnd.mpi\nPartonLevel:MPI = on\n"
+  },
+  {
+   "number": 8,
+   "suffix": "10x100_ep_LHC21_pt32_mpi",
+   "legend": "10x100 GeV ($\\sqrt{s}$ = 63.2 GeV), PDF4 LHC21.40",
+   "curve_legend": "PDF4 LHC21.40",
+   "analysis": "photo_eic",
+   "plugin": "photo_eic",
+   "choice": {
+    "cmnd.beams": 1,
+    "cmnd.lepton": 1,
+    "cmnd.pdf": 3,
+    "cmnd.pt0ref": 1,
+    "cmnd.mpi": 0
+   },
+   "page": [
+    [
+     "cmnd.beams",
+     1
+    ]
+   ],
+   "settings": [
+    [
+     "Main:numberOfEvents",
+     "1000000",
+     "[analysis].event_count"
+    ],
+    [
+     "Parallelism:numThreads",
+     "20",
+     "[rivpyth].threads"
+    ],
+    [
+     "Random:setSeed",
+     "on",
+     "[analysis].seed"
+    ],
+    [
+     "Random:seed",
+     "270543",
+     "[analysis].seed"
+    ],
+    [
+     "Beams:frameType",
+     "2",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eA",
+     "100",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eB",
+     "10",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:idB",
+     "-11",
+     "cmnd.lepton"
+    ],
+    [
+     "PDF:pSet",
+     "LHAPDF6:PDF4LHC21_40",
+     "cmnd.pdf"
+    ],
+    [
+     "MultipartonInteractions:pT0Ref",
+     "3.2",
+     "cmnd.pt0ref"
+    ],
+    [
+     "PartonLevel:MPI",
+     "on",
+     "cmnd.mpi"
+    ]
+   ],
+   "plan": {
+    "generator": "output/PhotoProduction/generator.exe",
+    "base_cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+    "point_cmnd": "results/PhotoProduction/cmnd/03_eic_10x100_ep_LHC21_pt32_mpi.cmnd",
+    "hepmc_file": "",
+    "yoda_file": "results/PhotoProduction/03_eic_10x100_ep_LHC21_pt32_mpi.yoda",
+    "plugin_dir": "output/PhotoProduction",
+    "analysis": "photo_eic"
+   },
+   "ydplt_dir": "results/PhotoProduction/03_eic_10x100_ep_LHC21_pt32_mpi",
+   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/eic.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2\n! point      : 8 10x100_ep_LHC21_pt32_mpi\n! analysis   : photo_eic\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270543\n\n! from cmnd.beams\nBeams:frameType = 2\nBeams:eA = 100\nBeams:eB = 10\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.pdf\nPDF:pSet = LHAPDF6:PDF4LHC21_40\n\n! from cmnd.pt0ref\nMultipartonInteractions:pT0Ref = 3.2\n\n! from cmnd.mpi\nPartonLevel:MPI = on\n"
+  },
+  {
+   "number": 9,
+   "suffix": "18x275_ep_MSTW_pt32_mpi",
+   "legend": "18x275 GeV ($\\sqrt{s}$ = 140.7 GeV), MSTW 2008 LO",
+   "curve_legend": "MSTW 2008 LO",
+   "analysis": "photo_eic",
+   "plugin": "photo_eic",
+   "choice": {
+    "cmnd.beams": 2,
+    "cmnd.lepton": 1,
+    "cmnd.pdf": 0,
+    "cmnd.pt0ref": 1,
+    "cmnd.mpi": 0
+   },
+   "page": [
+    [
+     "cmnd.beams",
+     2
+    ]
+   ],
+   "settings": [
+    [
+     "Main:numberOfEvents",
+     "1000000",
+     "[analysis].event_count"
+    ],
+    [
+     "Parallelism:numThreads",
+     "20",
+     "[rivpyth].threads"
+    ],
+    [
+     "Random:setSeed",
+     "on",
+     "[analysis].seed"
+    ],
+    [
+     "Random:seed",
+     "270563",
+     "[analysis].seed"
+    ],
+    [
+     "Beams:frameType",
+     "2",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eA",
+     "275",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eB",
+     "18",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:idB",
+     "-11",
+     "cmnd.lepton"
+    ],
+    [
+     "PDF:pSet",
+     "LHAPDF6:MSTW2008lo68cl",
+     "cmnd.pdf"
+    ],
+    [
+     "MultipartonInteractions:pT0Ref",
+     "3.2",
+     "cmnd.pt0ref"
+    ],
+    [
+     "PartonLevel:MPI",
+     "on",
+     "cmnd.mpi"
+    ]
+   ],
+   "plan": {
+    "generator": "output/PhotoProduction/generator.exe",
+    "base_cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+    "point_cmnd": "results/PhotoProduction/cmnd/03_eic_18x275_ep_MSTW_pt32_mpi.cmnd",
+    "hepmc_file": "",
+    "yoda_file": "results/PhotoProduction/03_eic_18x275_ep_MSTW_pt32_mpi.yoda",
+    "plugin_dir": "output/PhotoProduction",
+    "analysis": "photo_eic"
+   },
+   "ydplt_dir": "results/PhotoProduction/03_eic_18x275_ep_MSTW_pt32_mpi",
+   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/eic.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2\n! point      : 9 18x275_ep_MSTW_pt32_mpi\n! analysis   : photo_eic\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270563\n\n! from cmnd.beams\nBeams:frameType = 2\nBeams:eA = 275\nBeams:eB = 18\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.pdf\nPDF:pSet = LHAPDF6:MSTW2008lo68cl\n\n! from cmnd.pt0ref\nMultipartonInteractions:pT0Ref = 3.2\n\n! from cmnd.mpi\nPartonLevel:MPI = on\n"
+  },
+  {
+   "number": 10,
+   "suffix": "18x275_ep_NNLO_pt32_mpi",
+   "legend": "18x275 GeV ($\\sqrt{s}$ = 140.7 GeV), NNPDF 2.3 QCD+QED LO",
+   "curve_legend": "NNPDF 2.3 QCD+QED LO",
+   "analysis": "photo_eic",
+   "plugin": "photo_eic",
+   "choice": {
+    "cmnd.beams": 2,
+    "cmnd.lepton": 1,
+    "cmnd.pdf": 1,
+    "cmnd.pt0ref": 1,
+    "cmnd.mpi": 0
+   },
+   "page": [
+    [
+     "cmnd.beams",
+     2
+    ]
+   ],
+   "settings": [
+    [
+     "Main:numberOfEvents",
+     "1000000",
+     "[analysis].event_count"
+    ],
+    [
+     "Parallelism:numThreads",
+     "20",
+     "[rivpyth].threads"
+    ],
+    [
+     "Random:setSeed",
+     "on",
+     "[analysis].seed"
+    ],
+    [
+     "Random:seed",
+     "270583",
+     "[analysis].seed"
+    ],
+    [
+     "Beams:frameType",
+     "2",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eA",
+     "275",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eB",
+     "18",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:idB",
+     "-11",
+     "cmnd.lepton"
+    ],
+    [
+     "PDF:pSet",
+     "LHAPDF6:NNPDF23_lo_as_0130_qed",
+     "cmnd.pdf"
+    ],
+    [
+     "MultipartonInteractions:pT0Ref",
+     "3.2",
+     "cmnd.pt0ref"
+    ],
+    [
+     "PartonLevel:MPI",
+     "on",
+     "cmnd.mpi"
+    ]
+   ],
+   "plan": {
+    "generator": "output/PhotoProduction/generator.exe",
+    "base_cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+    "point_cmnd": "results/PhotoProduction/cmnd/03_eic_18x275_ep_NNLO_pt32_mpi.cmnd",
+    "hepmc_file": "",
+    "yoda_file": "results/PhotoProduction/03_eic_18x275_ep_NNLO_pt32_mpi.yoda",
+    "plugin_dir": "output/PhotoProduction",
+    "analysis": "photo_eic"
+   },
+   "ydplt_dir": "results/PhotoProduction/03_eic_18x275_ep_NNLO_pt32_mpi",
+   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/eic.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2\n! point      : 10 18x275_ep_NNLO_pt32_mpi\n! analysis   : photo_eic\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270583\n\n! from cmnd.beams\nBeams:frameType = 2\nBeams:eA = 275\nBeams:eB = 18\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.pdf\nPDF:pSet = LHAPDF6:NNPDF23_lo_as_0130_qed\n\n! from cmnd.pt0ref\nMultipartonInteractions:pT0Ref = 3.2\n\n! from cmnd.mpi\nPartonLevel:MPI = on\n"
+  },
+  {
+   "number": 11,
+   "suffix": "18x275_ep_NNNLO_pt32_mpi",
+   "legend": "18x275 GeV ($\\sqrt{s}$ = 140.7 GeV), NNPDF 2.3 QCD+QED NLO",
+   "curve_legend": "NNPDF 2.3 QCD+QED NLO",
+   "analysis": "photo_eic",
+   "plugin": "photo_eic",
+   "choice": {
+    "cmnd.beams": 2,
+    "cmnd.lepton": 1,
+    "cmnd.pdf": 2,
+    "cmnd.pt0ref": 1,
+    "cmnd.mpi": 0
+   },
+   "page": [
+    [
+     "cmnd.beams",
+     2
+    ]
+   ],
+   "settings": [
+    [
+     "Main:numberOfEvents",
+     "1000000",
+     "[analysis].event_count"
+    ],
+    [
+     "Parallelism:numThreads",
+     "20",
+     "[rivpyth].threads"
+    ],
+    [
+     "Random:setSeed",
+     "on",
+     "[analysis].seed"
+    ],
+    [
+     "Random:seed",
+     "270603",
+     "[analysis].seed"
+    ],
+    [
+     "Beams:frameType",
+     "2",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eA",
+     "275",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eB",
+     "18",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:idB",
+     "-11",
+     "cmnd.lepton"
+    ],
+    [
+     "PDF:pSet",
+     "LHAPDF6:NNPDF23_nlo_as_0119_qed",
+     "cmnd.pdf"
+    ],
+    [
+     "MultipartonInteractions:pT0Ref",
+     "3.2",
+     "cmnd.pt0ref"
+    ],
+    [
+     "PartonLevel:MPI",
+     "on",
+     "cmnd.mpi"
+    ]
+   ],
+   "plan": {
+    "generator": "output/PhotoProduction/generator.exe",
+    "base_cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+    "point_cmnd": "results/PhotoProduction/cmnd/03_eic_18x275_ep_NNNLO_pt32_mpi.cmnd",
+    "hepmc_file": "",
+    "yoda_file": "results/PhotoProduction/03_eic_18x275_ep_NNNLO_pt32_mpi.yoda",
+    "plugin_dir": "output/PhotoProduction",
+    "analysis": "photo_eic"
+   },
+   "ydplt_dir": "results/PhotoProduction/03_eic_18x275_ep_NNNLO_pt32_mpi",
+   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/eic.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2\n! point      : 11 18x275_ep_NNNLO_pt32_mpi\n! analysis   : photo_eic\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270603\n\n! from cmnd.beams\nBeams:frameType = 2\nBeams:eA = 275\nBeams:eB = 18\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.pdf\nPDF:pSet = LHAPDF6:NNPDF23_nlo_as_0119_qed\n\n! from cmnd.pt0ref\nMultipartonInteractions:pT0Ref = 3.2\n\n! from cmnd.mpi\nPartonLevel:MPI = on\n"
+  },
+  {
+   "number": 12,
+   "suffix": "18x275_ep_LHC21_pt32_mpi",
+   "legend": "18x275 GeV ($\\sqrt{s}$ = 140.7 GeV), PDF4 LHC21.40",
+   "curve_legend": "PDF4 LHC21.40",
+   "analysis": "photo_eic",
+   "plugin": "photo_eic",
+   "choice": {
+    "cmnd.beams": 2,
+    "cmnd.lepton": 1,
+    "cmnd.pdf": 3,
+    "cmnd.pt0ref": 1,
+    "cmnd.mpi": 0
+   },
+   "page": [
+    [
+     "cmnd.beams",
+     2
+    ]
+   ],
+   "settings": [
+    [
+     "Main:numberOfEvents",
+     "1000000",
+     "[analysis].event_count"
+    ],
+    [
+     "Parallelism:numThreads",
+     "20",
+     "[rivpyth].threads"
+    ],
+    [
+     "Random:setSeed",
+     "on",
+     "[analysis].seed"
+    ],
+    [
+     "Random:seed",
+     "270623",
+     "[analysis].seed"
+    ],
+    [
+     "Beams:frameType",
+     "2",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eA",
+     "275",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eB",
+     "18",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:idB",
+     "-11",
+     "cmnd.lepton"
+    ],
+    [
+     "PDF:pSet",
+     "LHAPDF6:PDF4LHC21_40",
+     "cmnd.pdf"
+    ],
+    [
+     "MultipartonInteractions:pT0Ref",
+     "3.2",
+     "cmnd.pt0ref"
+    ],
+    [
+     "PartonLevel:MPI",
+     "on",
+     "cmnd.mpi"
+    ]
+   ],
+   "plan": {
+    "generator": "output/PhotoProduction/generator.exe",
+    "base_cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+    "point_cmnd": "results/PhotoProduction/cmnd/03_eic_18x275_ep_LHC21_pt32_mpi.cmnd",
+    "hepmc_file": "",
+    "yoda_file": "results/PhotoProduction/03_eic_18x275_ep_LHC21_pt32_mpi.yoda",
+    "plugin_dir": "output/PhotoProduction",
+    "analysis": "photo_eic"
+   },
+   "ydplt_dir": "results/PhotoProduction/03_eic_18x275_ep_LHC21_pt32_mpi",
+   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/eic.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2\n! point      : 12 18x275_ep_LHC21_pt32_mpi\n! analysis   : photo_eic\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270623\n\n! from cmnd.beams\nBeams:frameType = 2\nBeams:eA = 275\nBeams:eB = 18\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.pdf\nPDF:pSet = LHAPDF6:PDF4LHC21_40\n\n! from cmnd.pt0ref\nMultipartonInteractions:pT0Ref = 3.2\n\n! from cmnd.mpi\nPartonLevel:MPI = on\n"
+  },
+  {
+   "number": 13,
+   "suffix": "27x920_ep_MSTW_pt32_mpi",
+   "legend": "27x920 GeV ($\\sqrt{s}$ = 318.1 GeV), MSTW 2008 LO",
+   "curve_legend": "MSTW 2008 LO",
+   "analysis": "photo_eic",
+   "plugin": "photo_eic",
+   "choice": {
+    "cmnd.beams": 3,
+    "cmnd.lepton": 1,
+    "cmnd.pdf": 0,
+    "cmnd.pt0ref": 1,
+    "cmnd.mpi": 0
+   },
+   "page": [
+    [
+     "cmnd.beams",
+     3
+    ]
+   ],
+   "settings": [
+    [
+     "Main:numberOfEvents",
+     "1000000",
+     "[analysis].event_count"
+    ],
+    [
+     "Parallelism:numThreads",
+     "20",
+     "[rivpyth].threads"
+    ],
+    [
+     "Random:setSeed",
+     "on",
+     "[analysis].seed"
+    ],
+    [
+     "Random:seed",
+     "270643",
+     "[analysis].seed"
+    ],
+    [
+     "Beams:frameType",
+     "2",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eA",
+     "920",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eB",
+     "27.5",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:idB",
+     "-11",
+     "cmnd.lepton"
+    ],
+    [
+     "PDF:pSet",
+     "LHAPDF6:MSTW2008lo68cl",
+     "cmnd.pdf"
+    ],
+    [
+     "MultipartonInteractions:pT0Ref",
+     "3.2",
+     "cmnd.pt0ref"
+    ],
+    [
+     "PartonLevel:MPI",
+     "on",
+     "cmnd.mpi"
+    ]
+   ],
+   "plan": {
+    "generator": "output/PhotoProduction/generator.exe",
+    "base_cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+    "point_cmnd": "results/PhotoProduction/cmnd/03_eic_27x920_ep_MSTW_pt32_mpi.cmnd",
+    "hepmc_file": "",
+    "yoda_file": "results/PhotoProduction/03_eic_27x920_ep_MSTW_pt32_mpi.yoda",
+    "plugin_dir": "output/PhotoProduction",
+    "analysis": "photo_eic"
+   },
+   "ydplt_dir": "results/PhotoProduction/03_eic_27x920_ep_MSTW_pt32_mpi",
+   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/eic.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2\n! point      : 13 27x920_ep_MSTW_pt32_mpi\n! analysis   : photo_eic\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270643\n\n! from cmnd.beams\nBeams:frameType = 2\nBeams:eA = 920\nBeams:eB = 27.5\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.pdf\nPDF:pSet = LHAPDF6:MSTW2008lo68cl\n\n! from cmnd.pt0ref\nMultipartonInteractions:pT0Ref = 3.2\n\n! from cmnd.mpi\nPartonLevel:MPI = on\n"
+  },
+  {
+   "number": 14,
+   "suffix": "27x920_ep_NNLO_pt32_mpi",
+   "legend": "27x920 GeV ($\\sqrt{s}$ = 318.1 GeV), NNPDF 2.3 QCD+QED LO",
+   "curve_legend": "NNPDF 2.3 QCD+QED LO",
+   "analysis": "photo_eic",
+   "plugin": "photo_eic",
+   "choice": {
+    "cmnd.beams": 3,
+    "cmnd.lepton": 1,
+    "cmnd.pdf": 1,
+    "cmnd.pt0ref": 1,
+    "cmnd.mpi": 0
+   },
+   "page": [
+    [
+     "cmnd.beams",
+     3
+    ]
+   ],
+   "settings": [
+    [
+     "Main:numberOfEvents",
+     "1000000",
+     "[analysis].event_count"
+    ],
+    [
+     "Parallelism:numThreads",
+     "20",
+     "[rivpyth].threads"
+    ],
+    [
+     "Random:setSeed",
+     "on",
+     "[analysis].seed"
+    ],
+    [
+     "Random:seed",
+     "270663",
+     "[analysis].seed"
+    ],
+    [
+     "Beams:frameType",
+     "2",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eA",
+     "920",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eB",
+     "27.5",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:idB",
+     "-11",
+     "cmnd.lepton"
+    ],
+    [
+     "PDF:pSet",
+     "LHAPDF6:NNPDF23_lo_as_0130_qed",
+     "cmnd.pdf"
+    ],
+    [
+     "MultipartonInteractions:pT0Ref",
+     "3.2",
+     "cmnd.pt0ref"
+    ],
+    [
+     "PartonLevel:MPI",
+     "on",
+     "cmnd.mpi"
+    ]
+   ],
+   "plan": {
+    "generator": "output/PhotoProduction/generator.exe",
+    "base_cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+    "point_cmnd": "results/PhotoProduction/cmnd/03_eic_27x920_ep_NNLO_pt32_mpi.cmnd",
+    "hepmc_file": "",
+    "yoda_file": "results/PhotoProduction/03_eic_27x920_ep_NNLO_pt32_mpi.yoda",
+    "plugin_dir": "output/PhotoProduction",
+    "analysis": "photo_eic"
+   },
+   "ydplt_dir": "results/PhotoProduction/03_eic_27x920_ep_NNLO_pt32_mpi",
+   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/eic.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2\n! point      : 14 27x920_ep_NNLO_pt32_mpi\n! analysis   : photo_eic\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270663\n\n! from cmnd.beams\nBeams:frameType = 2\nBeams:eA = 920\nBeams:eB = 27.5\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.pdf\nPDF:pSet = LHAPDF6:NNPDF23_lo_as_0130_qed\n\n! from cmnd.pt0ref\nMultipartonInteractions:pT0Ref = 3.2\n\n! from cmnd.mpi\nPartonLevel:MPI = on\n"
+  },
+  {
+   "number": 15,
+   "suffix": "27x920_ep_NNNLO_pt32_mpi",
+   "legend": "27x920 GeV ($\\sqrt{s}$ = 318.1 GeV), NNPDF 2.3 QCD+QED NLO",
+   "curve_legend": "NNPDF 2.3 QCD+QED NLO",
+   "analysis": "photo_eic",
+   "plugin": "photo_eic",
+   "choice": {
+    "cmnd.beams": 3,
+    "cmnd.lepton": 1,
+    "cmnd.pdf": 2,
+    "cmnd.pt0ref": 1,
+    "cmnd.mpi": 0
+   },
+   "page": [
+    [
+     "cmnd.beams",
+     3
+    ]
+   ],
+   "settings": [
+    [
+     "Main:numberOfEvents",
+     "1000000",
+     "[analysis].event_count"
+    ],
+    [
+     "Parallelism:numThreads",
+     "20",
+     "[rivpyth].threads"
+    ],
+    [
+     "Random:setSeed",
+     "on",
+     "[analysis].seed"
+    ],
+    [
+     "Random:seed",
+     "270683",
+     "[analysis].seed"
+    ],
+    [
+     "Beams:frameType",
+     "2",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eA",
+     "920",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eB",
+     "27.5",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:idB",
+     "-11",
+     "cmnd.lepton"
+    ],
+    [
+     "PDF:pSet",
+     "LHAPDF6:NNPDF23_nlo_as_0119_qed",
+     "cmnd.pdf"
+    ],
+    [
+     "MultipartonInteractions:pT0Ref",
+     "3.2",
+     "cmnd.pt0ref"
+    ],
+    [
+     "PartonLevel:MPI",
+     "on",
+     "cmnd.mpi"
+    ]
+   ],
+   "plan": {
+    "generator": "output/PhotoProduction/generator.exe",
+    "base_cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+    "point_cmnd": "results/PhotoProduction/cmnd/03_eic_27x920_ep_NNNLO_pt32_mpi.cmnd",
+    "hepmc_file": "",
+    "yoda_file": "results/PhotoProduction/03_eic_27x920_ep_NNNLO_pt32_mpi.yoda",
+    "plugin_dir": "output/PhotoProduction",
+    "analysis": "photo_eic"
+   },
+   "ydplt_dir": "results/PhotoProduction/03_eic_27x920_ep_NNNLO_pt32_mpi",
+   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/eic.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2\n! point      : 15 27x920_ep_NNNLO_pt32_mpi\n! analysis   : photo_eic\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270683\n\n! from cmnd.beams\nBeams:frameType = 2\nBeams:eA = 920\nBeams:eB = 27.5\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.pdf\nPDF:pSet = LHAPDF6:NNPDF23_nlo_as_0119_qed\n\n! from cmnd.pt0ref\nMultipartonInteractions:pT0Ref = 3.2\n\n! from cmnd.mpi\nPartonLevel:MPI = on\n"
+  },
+  {
+   "number": 16,
+   "suffix": "27x920_ep_LHC21_pt32_mpi",
+   "legend": "27x920 GeV ($\\sqrt{s}$ = 318.1 GeV), PDF4 LHC21.40",
+   "curve_legend": "PDF4 LHC21.40",
+   "analysis": "photo_eic",
+   "plugin": "photo_eic",
+   "choice": {
+    "cmnd.beams": 3,
+    "cmnd.lepton": 1,
+    "cmnd.pdf": 3,
+    "cmnd.pt0ref": 1,
+    "cmnd.mpi": 0
+   },
+   "page": [
+    [
+     "cmnd.beams",
+     3
+    ]
+   ],
+   "settings": [
+    [
+     "Main:numberOfEvents",
+     "1000000",
+     "[analysis].event_count"
+    ],
+    [
+     "Parallelism:numThreads",
+     "20",
+     "[rivpyth].threads"
+    ],
+    [
+     "Random:setSeed",
+     "on",
+     "[analysis].seed"
+    ],
+    [
+     "Random:seed",
+     "270703",
+     "[analysis].seed"
+    ],
+    [
+     "Beams:frameType",
+     "2",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eA",
+     "920",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:eB",
+     "27.5",
+     "cmnd.beams"
+    ],
+    [
+     "Beams:idB",
+     "-11",
+     "cmnd.lepton"
+    ],
+    [
+     "PDF:pSet",
+     "LHAPDF6:PDF4LHC21_40",
+     "cmnd.pdf"
+    ],
+    [
+     "MultipartonInteractions:pT0Ref",
+     "3.2",
+     "cmnd.pt0ref"
+    ],
+    [
+     "PartonLevel:MPI",
+     "on",
+     "cmnd.mpi"
+    ]
+   ],
+   "plan": {
+    "generator": "output/PhotoProduction/generator.exe",
+    "base_cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+    "point_cmnd": "results/PhotoProduction/cmnd/03_eic_27x920_ep_LHC21_pt32_mpi.cmnd",
+    "hepmc_file": "",
+    "yoda_file": "results/PhotoProduction/03_eic_27x920_ep_LHC21_pt32_mpi.yoda",
+    "plugin_dir": "output/PhotoProduction",
+    "analysis": "photo_eic"
+   },
+   "ydplt_dir": "results/PhotoProduction/03_eic_27x920_ep_LHC21_pt32_mpi",
+   "point_cmnd": "! rivpyth point cmnd (generated) — applied after the base cmnd; later settings win\n! run config : configs/PhotoProduction/eic.toml\n! base cmnd  : configs/PhotoProduction/photo_ep.cmnd\n! base sha256: 63c1c13a95c1475305ac2ea235e6c626f344809eb89cee702ee985a93072e0b2\n! point      : 16 27x920_ep_LHC21_pt32_mpi\n! analysis   : photo_eic\n\n! from [analysis].event_count\nMain:numberOfEvents = 1000000\n\n! from [rivpyth].threads\nParallelism:numThreads = 20\n\n! from [analysis].seed\nRandom:setSeed = on\nRandom:seed = 270703\n\n! from cmnd.beams\nBeams:frameType = 2\nBeams:eA = 920\nBeams:eB = 27.5\n\n! from cmnd.lepton\nBeams:idB = -11\n\n! from cmnd.pdf\nPDF:pSet = LHAPDF6:PDF4LHC21_40\n\n! from cmnd.pt0ref\nMultipartonInteractions:pT0Ref = 3.2\n\n! from cmnd.mpi\nPartonLevel:MPI = on\n"
+  }
+ ],
+ "pages": [
+  {
+   "suffix": "ep_pt32_mpi_5x41_by_pdf",
+   "yoda_file": "results/PhotoProduction/03_eic_ep_pt32_mpi_5x41_by_pdf.yoda",
+   "output_dir": "results/PhotoProduction/03_eic_ep_pt32_mpi_5x41_by_pdf",
+   "analysis": "photo_eic",
+   "members": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "legends": [
+    "MSTW 2008 LO",
+    "NNPDF 2.3 QCD+QED LO",
+    "NNPDF 2.3 QCD+QED NLO",
+    "PDF4 LHC21.40"
+   ]
+  },
+  {
+   "suffix": "ep_pt32_mpi_10x100_by_pdf",
+   "yoda_file": "results/PhotoProduction/03_eic_ep_pt32_mpi_10x100_by_pdf.yoda",
+   "output_dir": "results/PhotoProduction/03_eic_ep_pt32_mpi_10x100_by_pdf",
+   "analysis": "photo_eic",
+   "members": [
+    5,
+    6,
+    7,
+    8
+   ],
+   "legends": [
+    "MSTW 2008 LO",
+    "NNPDF 2.3 QCD+QED LO",
+    "NNPDF 2.3 QCD+QED NLO",
+    "PDF4 LHC21.40"
+   ]
+  },
+  {
+   "suffix": "ep_pt32_mpi_18x275_by_pdf",
+   "yoda_file": "results/PhotoProduction/03_eic_ep_pt32_mpi_18x275_by_pdf.yoda",
+   "output_dir": "results/PhotoProduction/03_eic_ep_pt32_mpi_18x275_by_pdf",
+   "analysis": "photo_eic",
+   "members": [
+    9,
+    10,
+    11,
+    12
+   ],
+   "legends": [
+    "MSTW 2008 LO",
+    "NNPDF 2.3 QCD+QED LO",
+    "NNPDF 2.3 QCD+QED NLO",
+    "PDF4 LHC21.40"
+   ]
+  },
+  {
+   "suffix": "ep_pt32_mpi_27x920_by_pdf",
+   "yoda_file": "results/PhotoProduction/03_eic_ep_pt32_mpi_27x920_by_pdf.yoda",
+   "output_dir": "results/PhotoProduction/03_eic_ep_pt32_mpi_27x920_by_pdf",
+   "analysis": "photo_eic",
+   "members": [
+    13,
+    14,
+    15,
+    16
+   ],
+   "legends": [
+    "MSTW 2008 LO",
+    "NNPDF 2.3 QCD+QED LO",
+    "NNPDF 2.3 QCD+QED NLO",
+    "PDF4 LHC21.40"
+   ]
+  }
+ ]
+}

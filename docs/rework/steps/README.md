@@ -9,7 +9,7 @@ Date: 2026-09-17 · Source: [10_Roadmap.md](../10_Roadmap.md) · 55 steps in 11 
 - **Ready rule:** a step is ready when all its *Depends on* steps are `done` (or `dropped` with a note).
 - **Working state:** every phase ends in a working state; nothing is removed before its replacement passes (roadmap rule 1).
 - **Approval:** commits, tags, moves of `results/`, edits to `bots/` and `~/HEP` only with user approval.
-- **Citations:** findings `00/Bn` ([00_Audit §4](../00_Audit.md#4-current-workflow-defects-2026-09-17)) and `plans/Bn` (`docs/plans`, archived in P0-S06); decisions `Dn` ([10 §2](../10_Roadmap.md#2-decision-log)) and `D-…` (register below).
+- **Citations:** findings `00/Bn` ([00_Audit §4](../00_Audit.md#4-current-workflow-defects-2026-09-17)) and `plans/Bn` (`legacy/docs/plans`, archived in P0-S06); decisions `Dn` ([10 §2](../10_Roadmap.md#2-decision-log)) and `D-…` (register below).
 - **Test bed:** PhotoProduction physics must be correct; specifics are not blockers (D20).
 
 ## 2. How to execute a step
@@ -29,19 +29,19 @@ Date: 2026-09-17 · Source: [10_Roadmap.md](../10_Roadmap.md) · 55 steps in 11 
 
 ## 4. Phases
 
-| Phase | Name | Goal | Exit criteria | Depends on | Effort | Steps |
-|---|---|---|---|---|---|---|
-| P0 | Baseline, hygiene, legacy freeze | Current workflow versioned, physics-correct and reproducible from a tag; golden fixtures captured; Lambda and old utils frozen. | Clean tree + tags; env idempotent and `import ROOT, pythia8, rich` work; `rivpyth` runs from `tools/`; hotfix tests pass in scratch; `pytest tests/golden` green; PhotoProduction make targets build. | — | 2.5 d | 8 |
-| P1 | Python core (hekit: config, sweep, plan) | `hep plan` reproduces legacy planning on schema 2 with identity seeds and hashes. | `hep plan --json` matches the legacy fixtures except the changes listed in `EXPECTED_DELTAS.md`; pytest < 5 s; `hep doctor` works. | P0 | 4.5 d | 7 |
-| P2 | C++ core, CMake, hep-run v1 | Pythia + serial in-process Rivet with merged σ, status on fd 3, atomic outputs. | Full and minimal CMake builds; ctest green including the `slow` equivalence gate against the legacy FIFO pipeline; decisions D-Q1/D-Q2/D-SEEDS recorded. | P1 | 4.5 d | 6 |
-| P3 | Supervision, results layout, terminal | `hep run` end-to-end with a live view, provenance, and skip/partial rules. | e2e mini run in scratch; Ctrl-C → partial result + exit 6; fake-stage suite green; `hep watch` works; legacy tools still work. | P2 | 3.4 d | 5 |
-| P4 | Plotting, compare, retirement of the legacy tools | `hep plot`/`hep compare` replace `ydplt`/`ydmrg`; `photo_eic` is re-entrant; legacy tools retired. | Golden page comparisons pass; real-study cross-check passes; tools in `legacy/`; v2 configs canonical; Makefile wraps CMake. | P3 | 4.25 d | 6 |
-| P5 | HepMC3 event store and replay | Sharded HepMC3 store with an index; `tool = "store"` replay into any sinks. | Write → replay reproduces the in-process YODA; σ comes from the index; one reader per shard. | P3 (can run alongside P4) | 2.5 d | 3 |
-| P6 | Throughput | Sharded Rivet, event groups, benchmark. | Serial ≡ sharded; the radius study needs one generation; `hep bench` recommends a mode. | P4-S05, P5 | 2 d | 3 |
-| P7 | External generators and Delphes | Sherpa, Whizard, MadGraph, Herwig (gated) and external Delphes through the same pipeline. | Sherpa and MG+Pythia points via `hep run`; prepare cache hit on a seed study; `delphes.root` produced; Herwig runs or is explicitly gated. | P3, P5-S02 | 7 d | 8 |
-| P8 | Modules, YODA results, Phys, ML | User C++ modules book YODA into `analysis.yoda`; physics helpers; ONNX inference. | Toy module exact at 1/4/20 threads; ONNX toy works; derived-tables decision recorded. | P2, P5-S01, P6-S01 | 3 d | 4 |
-| P9 | ROOT processing layer | `hep proc` fits and RDataFrame histograms → `fits.json` + YODA. | Minuit2 ≡ scipy on synthetic fits; RDF ≡ uproot on `delphes.root`. | P4 (+ P7-S08 for S02) | 2.5 d | 2 |
-| P10 | Cleanup, docs, release | No transitional code; documentation matches reality. | Clean greps; minimal build green; tag `rework/v1`. | P4 (+ whichever optional phases are done) | 1.25 d | 3 |
+| Phase | Name | Goal | Exit criteria | Depends on | Effort | Steps | Status |
+|---|---|---|---|---|---|---|---|
+| P0 | Baseline, hygiene, legacy freeze | Current workflow versioned, physics-correct and reproducible from a tag; golden fixtures captured; Lambda and old utils frozen. | Clean tree + tags; env idempotent and `import ROOT, pythia8, rich` work; `rivpyth` runs from `tools/`; hotfix tests pass in scratch; `pytest tests/golden` green; PhotoProduction make targets build. | — | 2.5 d | 8 | done |
+| P1 | Python core (hekit: config, sweep, plan) | `hep plan` reproduces legacy planning on schema 2 with identity seeds and hashes. | `hep plan --json` matches the legacy fixtures except the changes listed in `EXPECTED_DELTAS.md`; pytest < 5 s; `hep doctor` works. | P0 | 4.5 d | 7 | todo |
+| P2 | C++ core, CMake, hep-run v1 | Pythia + serial in-process Rivet with merged σ, status on fd 3, atomic outputs. | Full and minimal CMake builds; ctest green including the `slow` equivalence gate against the legacy FIFO pipeline; decisions D-Q1/D-Q2/D-SEEDS recorded. | P1 | 4.5 d | 6 | todo |
+| P3 | Supervision, results layout, terminal | `hep run` end-to-end with a live view, provenance, and skip/partial rules. | e2e mini run in scratch; Ctrl-C → partial result + exit 6; fake-stage suite green; `hep watch` works; legacy tools still work. | P2 | 3.4 d | 5 | todo |
+| P4 | Plotting, compare, retirement of the legacy tools | `hep plot`/`hep compare` replace `ydplt`/`ydmrg`; `photo_eic` is re-entrant; legacy tools retired. | Golden page comparisons pass; real-study cross-check passes; tools in `legacy/`; v2 configs canonical; Makefile wraps CMake. | P3 | 4.25 d | 6 | todo |
+| P5 | HepMC3 event store and replay | Sharded HepMC3 store with an index; `tool = "store"` replay into any sinks. | Write → replay reproduces the in-process YODA; σ comes from the index; one reader per shard. | P3 (can run alongside P4) | 2.5 d | 3 | todo |
+| P6 | Throughput | Sharded Rivet, event groups, benchmark. | Serial ≡ sharded; the radius study needs one generation; `hep bench` recommends a mode. | P4-S05, P5 | 2 d | 3 | todo |
+| P7 | External generators and Delphes | Sherpa, Whizard, MadGraph, Herwig (gated) and external Delphes through the same pipeline. | Sherpa and MG+Pythia points via `hep run`; prepare cache hit on a seed study; `delphes.root` produced; Herwig runs or is explicitly gated. | P3, P5-S02 | 7 d | 8 | todo |
+| P8 | Modules, YODA results, Phys, ML | User C++ modules book YODA into `analysis.yoda`; physics helpers; ONNX inference. | Toy module exact at 1/4/20 threads; ONNX toy works; derived-tables decision recorded. | P2, P5-S01, P6-S01 | 3 d | 4 | todo |
+| P9 | ROOT processing layer | `hep proc` fits and RDataFrame histograms → `fits.json` + YODA. | Minuit2 ≡ scipy on synthetic fits; RDF ≡ uproot on `delphes.root`. | P4 (+ P7-S08 for S02) | 2.5 d | 2 | todo |
+| P10 | Cleanup, docs, release | No transitional code; documentation matches reality. | Clean greps; minimal build green; tag `rework/v1`. | P4 (+ whichever optional phases are done) | 1.25 d | 3 | todo |
 
 ```
 P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬──────────────► P10
@@ -55,13 +55,13 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | ID | Title | Kind | Depends on | Effort | Status |
 |---|---|---|---|---|---|
 | P0-S00 | [Revise the rework docs and write the step files](P0-S00_rework-docs-revision.md) | docs | — | 0.5 d | done |
-| P0-S01 | [Commit the in-flight work and tag the baseline](P0-S01_baseline-tag.md) | git | P0-S00 | 0.1 d | todo |
-| P0-S02 | [Version and fix the shell environment](P0-S02_env-setup-fixes.md) | env | P0-S01 | 0.25 d | todo |
-| P0-S03 | [Move the ~/HEP tools into the repo](P0-S03_tools-into-repo.md) | code | P0-S02 | 0.2 d | todo |
-| P0-S04 | [Capture golden fixtures of the legacy workflow](P0-S04_golden-fixtures.md) | test | P0-S03 | 0.5 d | todo |
-| P0-S05 | [Hotfix the physics-relevant defects in the legacy tools](P0-S05_legacy-hotfixes.md) | code | P0-S04 | 0.5 d | todo |
-| P0-S06 | [Archive Lambda, old utils and stale docs into legacy/](P0-S06_legacy-archive.md) | git | P0-S01, P0-S04 | 0.5 d | todo |
-| P0-S07 | [Reduce the Makefile to what is still built](P0-S07_makefile-hygiene.md) | code | P0-S06 | 0.2 d | todo |
+| P0-S01 | [Commit the in-flight work and tag the baseline](P0-S01_baseline-tag.md) | git | P0-S00 | 0.1 d | done |
+| P0-S02 | [Version and fix the shell environment](P0-S02_env-setup-fixes.md) | env | P0-S01 | 0.25 d | done |
+| P0-S03 | [Move the ~/HEP tools into the repo](P0-S03_tools-into-repo.md) | code | P0-S02 | 0.2 d | done |
+| P0-S04 | [Capture golden fixtures of the legacy workflow](P0-S04_golden-fixtures.md) | test | P0-S03 | 0.5 d | done |
+| P0-S05 | [Hotfix the physics-relevant defects in the legacy tools](P0-S05_legacy-hotfixes.md) | code | P0-S04 | 0.5 d | done |
+| P0-S06 | [Archive Lambda, old utils and stale docs into legacy/](P0-S06_legacy-archive.md) | git | P0-S01, P0-S04 | 0.5 d | done |
+| P0-S07 | [Reduce the Makefile to what is still built](P0-S07_makefile-hygiene.md) | code | P0-S06 | 0.2 d | done |
 | P1-S01 | [Create the hekit package, CLI entry point and test guard](P1-S01_package-skeleton.md) | code | P0-S07 | 0.3 d | todo |
 | P1-S02 | [Implement the schema-2 loader with strict validation and layering](P1-S02_config-schema.md) | code | P1-S01 | 1 d | todo |
 | P1-S03 | [Port quantities, across, settle, studies and pins (with fixes)](P1-S03_sweep-engine.md) | code | P1-S02 | 1 d | todo |
@@ -323,6 +323,8 @@ flowchart LR
 | 00/B26 orientation η range | P4-S05 |  |
 | 00/B27 pTHatMin bias | P0-S05 | record only (D-B27) |
 | 00/B28 obsolete README_ZEUS | P0-S06 | archived |
+| 00/B29 YODA reader resets LC_ALL | P0-S05, P1-S01 | encodings named explicitly |
+| 00/B30 direct photon unreachable | P0-S05 | comments corrected; physics work later |
 | photo_eic `Reentrant: false` | P4-S05 |  |
 | setup.sh issues (00 §4.6) | P0-S02 |  |
 | Makefile / tests issues (00 §4.4) | P0-S07, P2-S01, P4-S06 |  |
@@ -362,3 +364,10 @@ flowchart LR
 ## 10. Change log
 
 - 2026-09-17 — created by P0-S00 (roadmap revision b).
+- 2026-09-18 — **P0 complete** (S01-S07). Exit criteria verified: clean tree; tags `rework/baseline` and
+  `legacy/lambda-final`; env idempotent with `import ROOT, pythia8, rich, yoda, rivet, lhapdf, tomli_w, pytest`
+  working; `rivpyth` runs from `tools/`; `pytest tests/golden` 55 passed; both PhotoProduction make targets build.
+  New findings recorded: 00/B29 (YODA's reader resets `LC_ALL`), 00/B30 (the direct photon contribution is
+  unreachable with the current card, so the `process` study is a null comparison). P0-S05's B3 and B21 designs
+  were corrected: `PythiaParallel::run()` counts attempts, not written events, and YODA rejects a `.yoda.part`
+  extension.

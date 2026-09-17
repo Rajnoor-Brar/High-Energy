@@ -7,7 +7,10 @@
 !   [sweep.cmnd.pdf]    → PDF:pSet
 ! Defaults below correspond to the EIC 18x275 GeV configuration.
 
-! Run control (event count and threads come from the generator command line)
+! Run control. Every sweep overrides these from the point cmnd (rivpyth passes it after this
+! file, and later settings win): Main:numberOfEvents, Parallelism:numThreads and Random:seed.
+! Main:numberOfEvents counts next() attempts, not written events: failed events never reach the
+! output (about 2 % at 5x41 GeV, 1e-4 at 27x920).
 Main:numberOfEvents = 100000
 Main:timesAllowErrors = 40          ! abort run after this many flawed events
 Random:setSeed = on
@@ -22,7 +25,9 @@ Beams:eB = 18.0
 
 ! Photoproduction
 PDF:lepton2gamma = on               ! photons emitted from the lepton
-Photon:ProcessType = 0              ! all photon processes (resolved + direct)
+! With the proton as beam A and the photon from the lepton, 0 and 1 give identical events here,
+! 2 fails init(), and 3 turns MPI off; the direct contribution needs its own card (00/B13).
+Photon:ProcessType = 0              ! mix of available photon processes
 Photon:Q2max = 1.0                  ! maximal photon virtuality (GeV^2)
 HardQCD:all = on                    ! all dijet matrix elements
 PhotonParton:all = on               ! all dijet matrix elements with photons

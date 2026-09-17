@@ -1,0 +1,761 @@
+{
+ "captured": "2026-09-17",
+ "root": "results/PhotoProduction",
+ "totals": {
+  "yoda": 25,
+  "directories": 7,
+  "files": 541,
+  "bytes": 15955700
+ },
+ "serial_configs": {
+  "01": [
+   "?",
+   "configs/PhotoProduction/eic28.toml"
+  ],
+  "02": [
+   "configs/PhotoProduction/eic.toml"
+  ],
+  "03": [
+   "configs/PhotoProduction/eic.toml"
+  ],
+  "04": [
+   "configs/PhotoProduction/eic.toml"
+  ]
+ },
+ "orphan_cmnds": [],
+ "yoda": [
+  {
+   "path": "results/PhotoProduction/01_eic28_5x41_em_LHC21.yoda",
+   "bytes": 82564,
+   "sha256": "aafe06b04d53957919303d0e4380b2f1488bcc1012b3548da25046ed6e20c737",
+   "serial": "01",
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_5x41"
+   ],
+   "numEntries": 977047.0,
+   "sumW": 977047.0,
+   "xsec_pb": 22.65553,
+   "cmnd": {
+    "sha256": "353e34449f16798fbf54c0bdf427b1b48b8e599b225583e4697894054b60da67",
+    "header": {
+     "run config": "configs/PhotoProduction/eic28.toml",
+     "base cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+     "base sha256": "54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8",
+     "point": "4 5x41_em_LHC21",
+     "analysis": "photo_5x41"
+    },
+    "numberOfEvents": 1000000,
+    "reconstructed": true
+   },
+   "missing_fraction": 0.022953,
+   "flags": [
+    "cmnd_reconstructed"
+   ]
+  },
+  {
+   "path": "results/PhotoProduction/01_eic28_5x41_em_MSTW.yoda",
+   "bytes": 82564,
+   "sha256": "9528dbb4c88c4ccbd8ebcb631a47e3b70871f25bbc6504d8023c54869f89b876",
+   "serial": "01",
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_5x41"
+   ],
+   "numEntries": 979630.0,
+   "sumW": 979630.0,
+   "xsec_pb": 23.77938,
+   "cmnd": {
+    "sha256": "c0eee7619adb3505e9d4ed75e09b4a30d2e9964166f23c820eff9acfb2c2b228",
+    "header": {
+     "run config": "configs/PhotoProduction/eic28.toml",
+     "base cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+     "base sha256": "54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8",
+     "point": "1 5x41_em_MSTW",
+     "analysis": "photo_5x41"
+    },
+    "numberOfEvents": 1000000,
+    "reconstructed": true
+   },
+   "missing_fraction": 0.02037,
+   "flags": [
+    "cmnd_reconstructed"
+   ]
+  },
+  {
+   "path": "results/PhotoProduction/01_eic28_5x41_em_NNLO.yoda",
+   "bytes": 83501,
+   "sha256": "a8c499c8ac49cbdfe55e78b699f9c3c80814a2d4ded93a3fcb01293e5e353c68",
+   "serial": "01",
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_5x41"
+   ],
+   "numEntries": 979135.0,
+   "sumW": 979135.0,
+   "xsec_pb": 25.76314,
+   "cmnd": {
+    "sha256": "3aa490dd8b530329d4906d79cb6fea6a785a0ecf66f33c1fa449d575fd20c150",
+    "header": {
+     "run config": "configs/PhotoProduction/eic28.toml",
+     "base cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+     "base sha256": "54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8",
+     "point": "2 5x41_em_NNLO",
+     "analysis": "photo_5x41"
+    },
+    "numberOfEvents": 1000000,
+    "reconstructed": true
+   },
+   "missing_fraction": 0.020865,
+   "flags": [
+    "cmnd_reconstructed"
+   ]
+  },
+  {
+   "path": "results/PhotoProduction/01_eic28_5x41_em_NNNLO.yoda",
+   "bytes": 82564,
+   "sha256": "4c938cd638de834ce4ff7375e8324afbd38ced4f4bd9513d6e364c2910246acd",
+   "serial": "01",
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_5x41"
+   ],
+   "numEntries": 981029.0,
+   "sumW": 981029.0,
+   "xsec_pb": 20.30517,
+   "cmnd": {
+    "sha256": "26ce6e2211eb7398febe6518eeceaf10d1e07c3a0d348853993be9d051055432",
+    "header": {
+     "run config": "configs/PhotoProduction/eic28.toml",
+     "base cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+     "base sha256": "54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8",
+     "point": "3 5x41_em_NNNLO",
+     "analysis": "photo_5x41"
+    },
+    "numberOfEvents": 1000000,
+    "reconstructed": true
+   },
+   "missing_fraction": 0.018971,
+   "flags": [
+    "cmnd_reconstructed"
+   ]
+  },
+  {
+   "path": "results/PhotoProduction/01_eic28_p01.yoda",
+   "bytes": 82564,
+   "sha256": "f3a52175f2303c5833ca7ec21b0553de338295024ee80b9473535fdf12db1f58",
+   "serial": "01",
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_5x41"
+   ],
+   "numEntries": 979630.0,
+   "sumW": 979630.0,
+   "xsec_pb": 23.8418,
+   "cmnd": null,
+   "flags": [
+    "positional_name",
+    "no_cmnd"
+   ]
+  },
+  {
+   "path": "results/PhotoProduction/01_eic28_p02.yoda",
+   "bytes": 83501,
+   "sha256": "5d1b47817e00bf5a68a9332476e4d556c31744d335e2f301683c093cd78176fb",
+   "serial": "01",
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_5x41"
+   ],
+   "numEntries": 979135.0,
+   "sumW": 979135.0,
+   "xsec_pb": 25.71598,
+   "cmnd": null,
+   "flags": [
+    "positional_name",
+    "no_cmnd"
+   ]
+  },
+  {
+   "path": "results/PhotoProduction/01_eic28_p03.yoda",
+   "bytes": 82564,
+   "sha256": "6dcc8b903da4c40f744be60a8a001c862a7c52635845a7e4521b4de0eb15b150",
+   "serial": "01",
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_5x41"
+   ],
+   "numEntries": 981029.0,
+   "sumW": 981029.0,
+   "xsec_pb": 20.33601,
+   "cmnd": null,
+   "flags": [
+    "positional_name",
+    "no_cmnd"
+   ]
+  },
+  {
+   "path": "results/PhotoProduction/01_eic28_p04.yoda",
+   "bytes": 82564,
+   "sha256": "25855cec95aa58116a7aab554dadf086ce6d015b737ffcec430678573962c94e",
+   "serial": "01",
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_5x41"
+   ],
+   "numEntries": 977047.0,
+   "sumW": 977047.0,
+   "xsec_pb": 22.6809,
+   "cmnd": null,
+   "flags": [
+    "positional_name",
+    "no_cmnd"
+   ]
+  },
+  {
+   "path": "results/PhotoProduction/02_eic_5x41_em_LHC21_pt32_mpi.yoda",
+   "bytes": 82496,
+   "sha256": "20ccdc67af2e7a3c347fcec17e1a0039f2873fd33a359692a85c85f6bef0c309",
+   "serial": "02",
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_eic"
+   ],
+   "numEntries": 977047.0,
+   "sumW": 977047.0,
+   "xsec_pb": 22.75976,
+   "cmnd": {
+    "sha256": "ab133f31458aad8a2f1e6ef550b36371835f8a82e7210e2161477905cef48d57",
+    "header": {
+     "run config": "configs/PhotoProduction/eic.toml",
+     "base cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+     "base sha256": "54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8",
+     "point": "4 5x41_em_LHC21_pt32_mpi",
+     "analysis": "photo_eic"
+    },
+    "numberOfEvents": 1000000,
+    "reconstructed": false
+   },
+   "missing_fraction": 0.022953,
+   "flags": []
+  },
+  {
+   "path": "results/PhotoProduction/02_eic_5x41_em_MSTW_pt32_mpi.yoda",
+   "bytes": 82496,
+   "sha256": "d8053d9d997c9e3d92100bb88c2099a9dc77c5f37966fa1aa8cbb2da38ff9e7b",
+   "serial": "02",
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_eic"
+   ],
+   "numEntries": 979630.0,
+   "sumW": 979630.0,
+   "xsec_pb": 23.78817,
+   "cmnd": {
+    "sha256": "8010ac9b90b72bd9cd756e1e3be3cda73c45ffc339d8c47ee350c15a73a8bf25",
+    "header": {
+     "run config": "configs/PhotoProduction/eic.toml",
+     "base cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+     "base sha256": "54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8",
+     "point": "1 5x41_em_MSTW_pt32_mpi",
+     "analysis": "photo_eic"
+    },
+    "numberOfEvents": 1000000,
+    "reconstructed": false
+   },
+   "missing_fraction": 0.02037,
+   "flags": []
+  },
+  {
+   "path": "results/PhotoProduction/02_eic_5x41_em_NNLO_pt32_mpi.yoda",
+   "bytes": 83433,
+   "sha256": "bf2a8799b67a7ae1522b10419bfc92376f815c7742227b75319bc1104b5b347c",
+   "serial": "02",
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_eic"
+   ],
+   "numEntries": 979135.0,
+   "sumW": 979135.0,
+   "xsec_pb": 25.75875,
+   "cmnd": {
+    "sha256": "dff0a49e252ac2354a107880910cc90876c221e2a2dc1b350c24f865536099e2",
+    "header": {
+     "run config": "configs/PhotoProduction/eic.toml",
+     "base cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+     "base sha256": "54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8",
+     "point": "2 5x41_em_NNLO_pt32_mpi",
+     "analysis": "photo_eic"
+    },
+    "numberOfEvents": 1000000,
+    "reconstructed": false
+   },
+   "missing_fraction": 0.020865,
+   "flags": []
+  },
+  {
+   "path": "results/PhotoProduction/02_eic_5x41_em_NNNLO_pt32_mpi.yoda",
+   "bytes": 82496,
+   "sha256": "8b4ce7315d143a39bae043e0f9e0f12658a68d4431617e282172f3b744e4adb4",
+   "serial": "02",
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_eic"
+   ],
+   "numEntries": 981029.0,
+   "sumW": 981029.0,
+   "xsec_pb": 20.29633,
+   "cmnd": {
+    "sha256": "146778d559261f7bf90ca38d63328d5a2fc318e24876891587cfd97e4105bdb3",
+    "header": {
+     "run config": "configs/PhotoProduction/eic.toml",
+     "base cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+     "base sha256": "54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8",
+     "point": "3 5x41_em_NNNLO_pt32_mpi",
+     "analysis": "photo_eic"
+    },
+    "numberOfEvents": 1000000,
+    "reconstructed": false
+   },
+   "missing_fraction": 0.018971,
+   "flags": []
+  },
+  {
+   "path": "results/PhotoProduction/03_eic_27x920_em_LHC21_pt32_mpi.yoda",
+   "bytes": 84370,
+   "sha256": "f9c9c5f8a9c797b1fd2e161adb63a586bc652335f1864b4e5e04331429f154e1",
+   "serial": "03",
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_eic"
+   ],
+   "numEntries": 999895.0,
+   "sumW": 999895.0,
+   "xsec_pb": 73968.08,
+   "cmnd": {
+    "sha256": "9ba68c62b89dc6bccb763f82bbace442bc6f365a954021b98906e4a118639860",
+    "header": {
+     "run config": "configs/PhotoProduction/eic.toml",
+     "base cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+     "base sha256": "54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8",
+     "point": "4 27x920_em_LHC21_pt32_mpi",
+     "analysis": "photo_eic"
+    },
+    "numberOfEvents": 1000000,
+    "reconstructed": false
+   },
+   "missing_fraction": 0.000105,
+   "flags": []
+  },
+  {
+   "path": "results/PhotoProduction/03_eic_27x920_em_MSTW_pt32_mpi.yoda",
+   "bytes": 84370,
+   "sha256": "98785103a9807725cce924a1f000ed3cd4dc80f75cf94a6222edb89a6a7b0848",
+   "serial": "03",
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_eic"
+   ],
+   "numEntries": 999903.0,
+   "sumW": 999903.0,
+   "xsec_pb": 71361.39,
+   "cmnd": {
+    "sha256": "aa503f5a60051808d463a6dff55dd9ac8a4465721d80d842ec0b96e3476fedaf",
+    "header": {
+     "run config": "configs/PhotoProduction/eic.toml",
+     "base cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+     "base sha256": "54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8",
+     "point": "1 27x920_em_MSTW_pt32_mpi",
+     "analysis": "photo_eic"
+    },
+    "numberOfEvents": 1000000,
+    "reconstructed": false
+   },
+   "missing_fraction": 9.7e-05,
+   "flags": []
+  },
+  {
+   "path": "results/PhotoProduction/03_eic_27x920_em_NNLO_pt32_mpi.yoda",
+   "bytes": 84370,
+   "sha256": "9ba0ff73a0fa869e1fe56abf97693f99fd7c567850e714dd738571052a1bc352",
+   "serial": "03",
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_eic"
+   ],
+   "numEntries": 999914.0,
+   "sumW": 999914.0,
+   "xsec_pb": 73146.69,
+   "cmnd": {
+    "sha256": "5b0c4b5298fc50a03e88abc730d37b0cb02fa8e116a8f2e024e4eaef3aca340c",
+    "header": {
+     "run config": "configs/PhotoProduction/eic.toml",
+     "base cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+     "base sha256": "54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8",
+     "point": "2 27x920_em_NNLO_pt32_mpi",
+     "analysis": "photo_eic"
+    },
+    "numberOfEvents": 1000000,
+    "reconstructed": false
+   },
+   "missing_fraction": 8.6e-05,
+   "flags": []
+  },
+  {
+   "path": "results/PhotoProduction/03_eic_27x920_em_NNNLO_pt32_mpi.yoda",
+   "bytes": 84370,
+   "sha256": "91b8f9055afe92014ad2133783de66b1363e63ba6fe6fa7c0305af74236db6d7",
+   "serial": "03",
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_eic"
+   ],
+   "numEntries": 999911.0,
+   "sumW": 999911.0,
+   "xsec_pb": 75121.62,
+   "cmnd": {
+    "sha256": "c556d37034dcdc89c687404c4927836627cbf3496c36e4d9075049d7b334598e",
+    "header": {
+     "run config": "configs/PhotoProduction/eic.toml",
+     "base cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+     "base sha256": "54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8",
+     "point": "3 27x920_em_NNNLO_pt32_mpi",
+     "analysis": "photo_eic"
+    },
+    "numberOfEvents": 1000000,
+    "reconstructed": false
+   },
+   "missing_fraction": 8.9e-05,
+   "flags": []
+  },
+  {
+   "path": "results/PhotoProduction/03_eic_27x920_ep_LHC21_pt32_mpi.yoda",
+   "bytes": 84371,
+   "sha256": "57a38939003fe30b2787476fb9a20115dd9b257004da59c9be08f1269a3b2a2e",
+   "serial": "03",
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_eic"
+   ],
+   "numEntries": 999895.0,
+   "sumW": 999895.0,
+   "xsec_pb": 73737.74,
+   "cmnd": {
+    "sha256": "327bc023a79c1111f8dfb3bf902f2b452ca78ef980143d190dcf591aef08ee5f",
+    "header": {
+     "run config": "configs/PhotoProduction/eic.toml",
+     "base cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+     "base sha256": "54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8",
+     "point": "4 27x920_ep_LHC21_pt32_mpi",
+     "analysis": "photo_eic"
+    },
+    "numberOfEvents": 1000000,
+    "reconstructed": false
+   },
+   "missing_fraction": 0.000105,
+   "flags": []
+  },
+  {
+   "path": "results/PhotoProduction/03_eic_27x920_ep_MSTW_pt32_mpi.yoda",
+   "bytes": 84371,
+   "sha256": "2d2b4d8a04e81a70d25b0d568d5613303dfa615c56d4d9a51210a58464b2340b",
+   "serial": "03",
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_eic"
+   ],
+   "numEntries": 999903.0,
+   "sumW": 999903.0,
+   "xsec_pb": 71416.59,
+   "cmnd": {
+    "sha256": "f790de981999984b9a920ecfba00bb23de2b9fc229a45421358dcefa55530f28",
+    "header": {
+     "run config": "configs/PhotoProduction/eic.toml",
+     "base cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+     "base sha256": "54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8",
+     "point": "1 27x920_ep_MSTW_pt32_mpi",
+     "analysis": "photo_eic"
+    },
+    "numberOfEvents": 1000000,
+    "reconstructed": false
+   },
+   "missing_fraction": 9.7e-05,
+   "flags": []
+  },
+  {
+   "path": "results/PhotoProduction/03_eic_27x920_ep_NNLO_pt32_mpi.yoda",
+   "bytes": 84371,
+   "sha256": "2376f8a55610598c5812a71203fd40f032f349b35a740da1c7e9ee26c5c9992f",
+   "serial": "03",
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_eic"
+   ],
+   "numEntries": 999914.0,
+   "sumW": 999914.0,
+   "xsec_pb": 73154.68,
+   "cmnd": {
+    "sha256": "d379da5910ea4c995bfd1f4c2b763a75b524e11762001146e29dd94cca8cb188",
+    "header": {
+     "run config": "configs/PhotoProduction/eic.toml",
+     "base cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+     "base sha256": "54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8",
+     "point": "2 27x920_ep_NNLO_pt32_mpi",
+     "analysis": "photo_eic"
+    },
+    "numberOfEvents": 1000000,
+    "reconstructed": false
+   },
+   "missing_fraction": 8.6e-05,
+   "flags": []
+  },
+  {
+   "path": "results/PhotoProduction/03_eic_27x920_ep_NNNLO_pt32_mpi.yoda",
+   "bytes": 84371,
+   "sha256": "68cc07db5ab07b90ed4b6b76adb0ece078bd176a1d90e374e4895f0e5847d680",
+   "serial": "03",
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_eic"
+   ],
+   "numEntries": 999911.0,
+   "sumW": 999911.0,
+   "xsec_pb": 75293.2,
+   "cmnd": {
+    "sha256": "21159453656c7d08d5dcec6121b8713bcd14efcca5742299b8eb2398910250d6",
+    "header": {
+     "run config": "configs/PhotoProduction/eic.toml",
+     "base cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+     "base sha256": "54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8",
+     "point": "3 27x920_ep_NNNLO_pt32_mpi",
+     "analysis": "photo_eic"
+    },
+    "numberOfEvents": 1000000,
+    "reconstructed": false
+   },
+   "missing_fraction": 8.9e-05,
+   "flags": []
+  },
+  {
+   "path": "results/PhotoProduction/04_eic_10x100_em_NNLO_pt32_mpi.yoda",
+   "bytes": 84370,
+   "sha256": "33fe608bc20e5cd28a09b6e0172479cc95a70f765981a5ea622bc4b754e66e42",
+   "serial": "04",
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_eic"
+   ],
+   "numEntries": 997680.0,
+   "sumW": 997681.3,
+   "xsec_pb": 1161.827,
+   "cmnd": {
+    "sha256": "16799c3a91b8412056c68f60de4fe666579e75012789bec23bc9256280b91802",
+    "header": {
+     "run config": "configs/PhotoProduction/eic.toml",
+     "base cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+     "base sha256": "54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8",
+     "point": "2 10x100_em_NNLO_pt32_mpi",
+     "analysis": "photo_eic"
+    },
+    "numberOfEvents": 1000000,
+    "reconstructed": false
+   },
+   "missing_fraction": 0.00232,
+   "flags": []
+  },
+  {
+   "path": "results/PhotoProduction/04_eic_18x275_em_NNLO_pt32_mpi.yoda",
+   "bytes": 84370,
+   "sha256": "c8242b35fbd8443d5fda23e1dbd4c16d6c20bc1b9ebbf8c36b683bbb7252d4de",
+   "serial": "04",
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_eic"
+   ],
+   "numEntries": 999576.0,
+   "sumW": 999576.0,
+   "xsec_pb": 11977.9,
+   "cmnd": {
+    "sha256": "db11ef70c55f64f6851cda6305a554d52af6ab0340b54e8042b3c206f969ec2f",
+    "header": {
+     "run config": "configs/PhotoProduction/eic.toml",
+     "base cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+     "base sha256": "54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8",
+     "point": "3 18x275_em_NNLO_pt32_mpi",
+     "analysis": "photo_eic"
+    },
+    "numberOfEvents": 1000000,
+    "reconstructed": false
+   },
+   "missing_fraction": 0.000424,
+   "flags": []
+  },
+  {
+   "path": "results/PhotoProduction/04_eic_5x41_em_NNLO_pt32_mpi.yoda",
+   "bytes": 83433,
+   "sha256": "62782c4b1f2012d4336e339829b9c18e301650b892990e9c8439b94fb7eb513b",
+   "serial": "04",
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_eic"
+   ],
+   "numEntries": 979091.0,
+   "sumW": 979091.0,
+   "xsec_pb": 25.67847,
+   "cmnd": {
+    "sha256": "ebfdadd26bdeb2892f36d70ccd0d2ae224f73d10f6d535183f84a96a2c85de26",
+    "header": {
+     "run config": "configs/PhotoProduction/eic.toml",
+     "base cmnd": "configs/PhotoProduction/photo_ep.cmnd",
+     "base sha256": "54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8",
+     "point": "1 5x41_em_NNLO_pt32_mpi",
+     "analysis": "photo_eic"
+    },
+    "numberOfEvents": 1000000,
+    "reconstructed": false
+   },
+   "missing_fraction": 0.020909,
+   "flags": []
+  },
+  {
+   "path": "results/PhotoProduction/eic28.yoda",
+   "bytes": 82564,
+   "sha256": "17cc2df4c85f24204ff02a84f4fbd41fb4ce6097a121db199a4b0da0c074a912",
+   "serial": null,
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_5x41"
+   ],
+   "numEntries": 980564.0,
+   "sumW": 980564.0,
+   "xsec_pb": 20.33943,
+   "cmnd": null,
+   "flags": [
+    "no_serial",
+    "no_cmnd"
+   ]
+  },
+  {
+   "path": "results/PhotoProduction/eic63.yoda",
+   "bytes": 84574,
+   "sha256": "25e70fe791340ad0026ae068eb0ce7bd57453ec5e098f1bf25ee3a7a1ee46e1a",
+   "serial": null,
+   "readable": true,
+   "objects": 39,
+   "analyses": [
+    "photo_10x100"
+   ],
+   "numEntries": 997837.0,
+   "sumW": 997837.4,
+   "xsec_pb": 1074.218,
+   "cmnd": null,
+   "flags": [
+    "no_serial",
+    "no_cmnd"
+   ]
+  }
+ ],
+ "directories": [
+  {
+   "path": "results/PhotoProduction/01_eic28",
+   "files": 71,
+   "bytes": 2129834,
+   "analyses": [
+    "photo_5x41"
+   ],
+   "index_sha256": "2026fe6375a2030912e8d9d55eafda48c000fb9d6dcfc55d3254bf410a1c32c1",
+   "index_mentions_tmp": false,
+   "has_yoda": false
+  },
+  {
+   "path": "results/PhotoProduction/01_eic28_5x41_em_pdf",
+   "files": 71,
+   "bytes": 1569700,
+   "analyses": [
+    "photo_5x41"
+   ],
+   "index_sha256": "e305f74f4647e646c1042a5df6828c7f5edc3937c9d064d5899c62084a40b1e4",
+   "index_mentions_tmp": true,
+   "has_yoda": false
+  },
+  {
+   "path": "results/PhotoProduction/02_eic_5x41_em_pt32_mpi_by_pdf",
+   "files": 71,
+   "bytes": 2070662,
+   "analyses": [
+    "photo_eic"
+   ],
+   "index_sha256": "b0c6f0b55686a1469ac91a1ec1998ebb4ab0b2b483e15827f0f00e5981807f60",
+   "index_mentions_tmp": true,
+   "has_yoda": false
+  },
+  {
+   "path": "results/PhotoProduction/03_eic_27x920_em_pt32_mpi_by_pdf",
+   "files": 71,
+   "bytes": 2366946,
+   "analyses": [
+    "photo_eic"
+   ],
+   "index_sha256": "30ddd6aa956d5298b84d0f1b91f830a9a0274bf7370d871775c5a102109d0e5e",
+   "index_mentions_tmp": true,
+   "has_yoda": false
+  },
+  {
+   "path": "results/PhotoProduction/03_eic_27x920_ep_pt32_mpi_by_pdf",
+   "files": 71,
+   "bytes": 2365282,
+   "analyses": [
+    "photo_eic"
+   ],
+   "index_sha256": "a7e83e62a03bbb7ac38ed0c3fe5bc3593aa07ba988f57a086e51e95161e5b297",
+   "index_mentions_tmp": true,
+   "has_yoda": false
+  },
+  {
+   "path": "results/PhotoProduction/04_eic_em_NNLO_pt32_mpi_by_beams",
+   "files": 71,
+   "bytes": 1910492,
+   "analyses": [
+    "photo_eic"
+   ],
+   "index_sha256": "e5d169e82fb04ad67ebaaee72b8225fe7f18c0f6159df64c61052275bc883299",
+   "index_mentions_tmp": true,
+   "has_yoda": false
+  },
+  {
+   "path": "results/PhotoProduction/eic28",
+   "files": 71,
+   "bytes": 1440939,
+   "analyses": [
+    "photo_5x41"
+   ],
+   "index_sha256": "ea3b885405fbb7417edea2a4d232e093aa7ec2dca94b10b6425305292141186e",
+   "index_mentions_tmp": false,
+   "has_yoda": true
+  }
+ ]
+}

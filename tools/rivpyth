@@ -1,0 +1,323 @@
+#!/usr/bin/env python3
+"""Run a Pythia generator and Rivet concurrently for every point of a TOML sweep.
+
+Exit codes: 0 success, 2 configuration error, 5 missing or incomplete analysis output,
+130 interrupted; any other non-zero status is the first real failure of the generator or of Rivet.
+"""
+
+import argparse
+import locale
+import os
+import re
+import shlex
+import shutil
+import signal
+import stat
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+from pathlib import Path
+from typing import Any
+
+from rivpyth_common import (
+    ConfigError, Point, apply_overrides, execution_plan, expand_points, read_config, write_point_cmnd,
+)
+
+
+# Annotated example RUN.toml, shown in --help; kept as a separate file next to this script.
+EXAMPLE_FILE = Path(__file__).resolve().with_name("rivpyth.example.toml")
+
+
+def example_text() -> str:
+    try:
+        return EXAMPLE_FILE.read_text(encoding="utf-8")
+    except OSError:
+        return f"(example file not found: {EXAMPLE_FILE})\n"
+
+
+def parse_arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="rivpyth", formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="Generate events for each sweep point and analyse them with Rivet.",
+        epilog="Example RUN.toml:\n\n" + example_text())
+    parser.add_argument("config", type=Path, metavar="RUN.toml")
+    parser.add_argument("index", type=int, nargs="?", metavar="INDEX",
+                        help="run only this one-based sweep point")
+    parser.add_argument("-p", "--print-command", action="store_true",
+                        help="print the commands (point cmnd files go to a temporary directory)")
+    parser.add_argument("--across", help="scanned groups, e.g. 'cmnd.beams+rivet.ymax,cmnd.pdf' "
+                        "('+' couples, ',' separates groups; overrides [sweep].across)")
+    parser.add_argument("--style", choices=("together", "grid"),
+                        help="for a flat --across list: together = one coupled group, grid = one group each")
+    parser.add_argument("--study", help="named scan from [study.<name>] (replaces [sweep].across/overlay, adds pins)")
+    parser.add_argument("--pin", action="append", metavar="QUANTITY=TAG", default=[],
+                        help="hold a quantity at a tag or one-based index while not scanned (repeatable)")
+    parser.add_argument("--overlay", help="quantity whose group is drawn as curves (overrides [sweep].overlay)")
+    arguments = parser.parse_args()
+    if arguments.index is not None and arguments.index < 1:
+        parser.error("INDEX must be a positive integer")
+    return arguments
+
+
+def terminate(process: subprocess.Popen[Any] | None) -> None:
+    if process is None or process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+
+
+def partial_output(yoda_file: str) -> str:
+    """Path Rivet writes to while the run is unfinished.
+
+    The marker goes before the extension: YODA picks its format from the extension and rejects
+    "<name>.yoda.part". A killed or failed run leaves only this file, so `skip_existing` (which
+    looks for the final name) reruns the point instead of skipping a partial result.
+    """
+    path = Path(yoda_file)
+    return str(path.with_name(path.stem + ".part" + path.suffix))
+
+
+def commands(config: dict[str, Any], plan: dict[str, str]) -> tuple[list[str], list[str]]:
+    generator = [plan["generator"], plan["hepmc_file"], plan["base_cmnd"], plan["point_cmnd"]]
+    rivet = ["rivet", f"--analysis={plan['analysis']}", "-o", partial_output(plan["yoda_file"]),
+             plan["hepmc_file"]]
+    return generator, rivet
+
+
+FIFO_NAME = "events.hepmc"
+
+# The generator's summary line: "Generated N events across T threads; wrote W to FILE".
+GENERATOR_SUMMARY = re.compile(r"Generated (\d+) events across \d+ threads; wrote (\d+) ")
+
+
+class GeneratorOutput:
+    """Relay the generator's stdout and keep its final counts.
+
+    Main:numberOfEvents counts next() attempts, and PythiaParallel skips the callback for failed
+    events, so the number of events actually written is the only meaningful target for the analysis.
+    """
+
+    def __init__(self, stream: Any) -> None:
+        self.attempted: int | None = None
+        self.written: int | None = None
+        self._thread = threading.Thread(target=self._relay, args=(stream,), daemon=True)
+        self._thread.start()
+
+    def _relay(self, stream: Any) -> None:
+        for line in stream:
+            match = GENERATOR_SUMMARY.search(line)
+            if match:
+                self.attempted, self.written = int(match.group(1)), int(match.group(2))
+            sys.stdout.write(line)
+        sys.stdout.flush()
+
+    def wait(self, timeout: float = 5.0) -> None:
+        self._thread.join(timeout)
+
+
+def analysed_events(path: Path) -> float | None:
+    """Number of events Rivet analysed, or None when it cannot be determined.
+
+    YODA's reader resets LC_ALL to "C" and does not restore it, which would leave the locale
+    default encoding at ASCII and break the next point's cmnd file (00/B29); restore it here.
+    """
+    saved = locale.setlocale(locale.LC_ALL)
+    try:
+        import yoda
+        objects = yoda.read(str(path))
+    except Exception as error:                                     # noqa: BLE001 - diagnostic only
+        print(f"rivpyth: cannot read {path} to check the event count ({error})", file=sys.stderr)
+        return None
+    finally:
+        try:
+            locale.setlocale(locale.LC_ALL, saved)
+        except locale.Error:
+            pass
+    counter = objects.get("/RAW/_EVTCOUNT")
+    if counter is not None:
+        return float(counter.numEntries())
+    estimate = objects.get("/_EVTCOUNT")
+    return float(estimate.val()) if estimate is not None else None
+
+
+def finish_output(plan: dict[str, str], generator: GeneratorOutput) -> int:
+    """Promote the partial output to its final name once it is known to be complete."""
+    partial, final = Path(partial_output(plan["yoda_file"])), Path(plan["yoda_file"])
+    if not partial.is_file():
+        print(f"rivpyth: rivet wrote no output to {partial}", file=sys.stderr)
+        return 5
+    analysed = analysed_events(partial)
+    if generator.written is not None and analysed is not None and analysed != generator.written:
+        print(f"rivpyth: incomplete result: rivet analysed {analysed:.0f} events, the generator wrote "
+              f"{generator.written}; keeping {partial}", file=sys.stderr)
+        return 5
+    os.replace(partial, final)
+    return 0
+
+
+# Statuses that only mean "we stopped it": a generator killed by SIGPIPE when Rivet died, or
+# either process terminated by us. They never explain a failure on their own.
+KNOCK_ON = {-signal.SIGPIPE, -signal.SIGTERM, -signal.SIGKILL}
+
+
+def first_failure(generator_status: int | None, rivet_status: int | None) -> tuple[str, int]:
+    """Attribute a failed point: a real error beats the knock-on death of the other process.
+
+    Rivet is considered first, because a Rivet that exits early (unknown analysis, bad options)
+    leaves the generator writing into a closed pipe, which used to mask Rivet's own status.
+    """
+    candidates = [("rivet", rivet_status or 0), ("generator", generator_status or 0)]
+    real = [(name, status) for name, status in candidates if status and status not in KNOCK_ON]
+    if real:
+        return real[0]
+    stopped = [(name, status) for name, status in candidates if status]
+    return stopped[0] if stopped else ("", 0)
+
+
+def print_point(config: dict[str, Any], point: Point, plan: dict[str, str]) -> None:
+    if not plan["hepmc_file"]:
+        plan = {**plan, "hepmc_file": f"<tmp fifo>/{FIFO_NAME}"}
+    generator, rivet = commands(config, plan)
+    print(f"# point {point.number}: {point.legend or point.suffix or 'base'}")
+    for key, value, origin in point.settings:
+        print(f"#   {key} = {value}    ({origin})")
+    print(f"#   rivet analysis: {point.analysis}")
+    print(f"{' '.join(shlex.quote(arg) for arg in generator)} &")
+    print(" ".join(shlex.quote(arg) for arg in rivet))
+
+
+def supervise(generator: subprocess.Popen[Any], rivet: subprocess.Popen[Any],
+              grace: float = 10.0) -> tuple[int | None, int | None]:
+    """Wait for both processes and return both statuses.
+
+    Rivet blocks while opening the FIFO until the generator opens it, so a generator that
+    fails early (bad cmnd, rejected setting, init failure) must be detected here rather
+    than by waiting on Rivet alone. When one side fails, the other gets `grace` seconds to
+    finish on its own before being stopped, so that its real status is still observed.
+    """
+    while generator.poll() is None or rivet.poll() is None:
+        if (generator.poll() or 0) or (rivet.poll() or 0):
+            deadline = time.monotonic() + grace
+            while time.monotonic() < deadline and (generator.poll() is None or rivet.poll() is None):
+                time.sleep(0.1)
+            terminate(rivet)
+            terminate(generator)
+            break
+        time.sleep(0.2)
+    return generator.poll(), rivet.poll()
+
+
+def run(config: dict[str, Any], plan: dict[str, str]) -> int:
+    """Run one point; events flow through a FIFO (a private temporary one unless path_literal)."""
+    fifo_dir = None
+    if not plan["hepmc_file"]:
+        # One directory per run: concurrent rivpyth invocations never share a pipe.
+        fifo_dir = Path(tempfile.mkdtemp(prefix="rivpyth-fifo-"))
+        plan = {**plan, "hepmc_file": str(fifo_dir / FIFO_NAME)}
+    try:
+        return run_with_fifo(config, plan)
+    finally:
+        if fifo_dir is not None:
+            shutil.rmtree(fifo_dir, ignore_errors=True)
+
+
+def run_with_fifo(config: dict[str, Any], plan: dict[str, str]) -> int:
+    hepmc_file, yoda_file = Path(plan["hepmc_file"]), Path(plan["yoda_file"])
+    hepmc_file.parent.mkdir(parents=True, exist_ok=True)
+    yoda_file.parent.mkdir(parents=True, exist_ok=True)
+    created_fifo = False
+    if os.path.lexists(hepmc_file):
+        if not stat.S_ISFIFO(os.stat(hepmc_file).st_mode):
+            raise ConfigError(f"HepMC path exists but is not a FIFO: {hepmc_file}")
+    else:
+        os.mkfifo(hepmc_file)
+        created_fifo = True
+
+    generator_process: subprocess.Popen[Any] | None = None
+    rivet_process: subprocess.Popen[Any] | None = None
+
+    def interrupted(_signum: int, _frame: Any) -> None:
+        raise KeyboardInterrupt
+
+    previous_int = signal.signal(signal.SIGINT, interrupted)
+    previous_term = signal.signal(signal.SIGTERM, interrupted)
+    try:
+        environment = os.environ.copy()
+        inherited = environment.get("RIVET_ANALYSIS_PATH", "")
+        environment["RIVET_ANALYSIS_PATH"] = f"{plan['plugin_dir']}{os.pathsep}{inherited}" if inherited else plan["plugin_dir"]
+        generator_args, rivet_args = commands(config, plan)
+        generator_process = subprocess.Popen(generator_args, stdout=subprocess.PIPE, text=True,
+                                             errors="replace")
+        generator_output = GeneratorOutput(generator_process.stdout)
+        rivet_process = subprocess.Popen(rivet_args, env=environment)
+        generator_status, rivet_status = supervise(generator_process, rivet_process)
+        generator_output.wait()
+        who, status = first_failure(generator_status, rivet_status)
+        if status:
+            print(f"rivpyth: {who} failed with status {status} "
+                  f"(generator {generator_status}, rivet {rivet_status})", file=sys.stderr)
+            return status
+        return finish_output(plan, generator_output)
+    except FileNotFoundError as error:
+        raise ConfigError(f"Command not found: {error.filename}") from None
+    finally:
+        terminate(rivet_process)
+        terminate(generator_process)
+        signal.signal(signal.SIGINT, previous_int)
+        signal.signal(signal.SIGTERM, previous_term)
+        if created_fifo:
+            try:
+                hepmc_file.unlink()
+            except FileNotFoundError:
+                pass
+
+
+def main() -> int:
+    arguments = parse_arguments()
+    try:
+        config = read_config(arguments.config)
+        apply_overrides(config, arguments.across, arguments.style, arguments.overlay,
+                        arguments.study, arguments.pin)
+        points = expand_points(config, arguments.index)
+        # A dry run must not overwrite the provenance cmnds of existing results.
+        dry_dir = None
+        if arguments.print_command:
+            # One reusable directory per user, replaced on every dry run.
+            dry_dir = Path(tempfile.gettempdir()) / f"rivpyth-dry-{os.getuid()}"
+            shutil.rmtree(dry_dir, ignore_errors=True)
+            dry_dir.mkdir(parents=True)
+            print(f"# point cmnd files written to {dry_dir}")
+        for point in points:
+            plan = execution_plan(config, point)
+            if dry_dir:
+                plan["point_cmnd"] = str(dry_dir / Path(plan["point_cmnd"]).name)
+            if config["sweep"].skip_existing and not arguments.print_command and Path(plan["yoda_file"]).is_file():
+                print(f"rivpyth: skipping point {point.number}, {plan['yoda_file']} exists", file=sys.stderr)
+                continue
+            write_point_cmnd(config, plan, point)
+            if arguments.print_command:
+                print_point(config, point, plan)
+                continue
+            print(f"rivpyth: point {point.number}/{len(points)} {point.legend or point.suffix} "
+                  f"-> {plan['yoda_file']}", file=sys.stderr)
+            status = run(config, plan)
+            if status:
+                print(f"rivpyth: point {point.number} failed with status {status}", file=sys.stderr)
+                return status
+        return 0
+    except ConfigError as error:
+        print(f"rivpyth: {error}", file=sys.stderr)
+        return 2
+    except KeyboardInterrupt:
+        print("rivpyth: interrupted", file=sys.stderr)
+        return 130
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -66,10 +66,10 @@ These are also the P0 steps.
     - HepMC3 gzip works with compile-time flags.
     - `PythiaParallel` balances load by default, so the event set is deterministic for a fixed seed and thread count.
 
-## Relation to `docs/plans/`
+## Relation to `legacy/docs/plans/`
 
-`docs/plans/` (2026-09-16) asked how to **integrate** the new tools into the *existing* module stack.
-- This rework answers the from-scratch question and **supersedes** it. The mapping of its items to steps is in `docs/plans/README.md`.
+`legacy/docs/plans/` (2026-09-16, archived in P0-S06) asked how to **integrate** the new tools into the *existing* module stack.
+- This rework answers the from-scratch question and **supersedes** it. The mapping of its items to steps is in `legacy/docs/plans/README.md`.
 - In-process Rivet (plans B) and sinks (plans C) are kept.
 - Unified configuration (plans A) is realised by validating in Python.
 - The old modules are archived, not adapted.

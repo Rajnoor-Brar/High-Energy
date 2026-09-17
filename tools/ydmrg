@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+"""Overlay (or, for seed replicas, yodamerge) the Yoda outputs of a TOML sweep, one page per plot group."""
+
+import argparse
+import os
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+from rivpyth_common import (
+    ConfigError, apply_overrides, common_analysis, curve_legend, execution_plan, expand_points,
+    group_pages, page_suffix, plot_arguments, plot_file_for, read_config, resolve_yoda_file, unify_yodas, void_bins, auto_range_plot,
+)
+
+
+def plotting_environment(plugin_dir: str) -> dict[str, str]:
+    environment = os.environ.copy()
+    inherited = environment.get("RIVET_ANALYSIS_PATH", "")
+    environment["RIVET_ANALYSIS_PATH"] = f"{plugin_dir}{os.pathsep}{inherited}" if inherited else plugin_dir
+    environment.setdefault("MPLCONFIGDIR", "/tmp/matplotlib-rivpyth")
+    environment["PYTHONUTF8"] = "1"   # rivet-mkhtml writes legend text into its HTML index
+    return environment
+
+
+def parse_arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="ydmrg",
+        description="Compare sweep points: [yoda].plot_merge_type 1 overlays curves, "
+                    "2 yodamerges seed replicas. Grid sweeps give one page per non-overlay combination.")
+    parser.add_argument("config", type=Path, metavar="RUN.toml")
+    parser.add_argument("--across", help="scanned groups, e.g. 'cmnd.beams+rivet.ymax,cmnd.pdf' "
+                        "('+' couples, ',' separates groups; overrides [sweep].across)")
+    parser.add_argument("--style", choices=("together", "grid"),
+                        help="for a flat --across list: together = one coupled group, grid = one group each")
+    parser.add_argument("--study", help="named scan from [study.<name>] (replaces [sweep].across/overlay, adds pins)")
+    parser.add_argument("--pin", action="append", metavar="QUANTITY=TAG", default=[],
+                        help="hold a quantity at a tag or one-based index while not scanned (repeatable)")
+    parser.add_argument("--overlay", help="quantity whose group is drawn as curves (overrides [sweep].overlay)")
+    return parser.parse_args()
+
+
+def main() -> int:
+    arguments = parse_arguments()
+    try:
+        config = read_config(arguments.config)
+        if config["path_literal"]:
+            raise ConfigError("ydmrg requires path_literal = false")
+        apply_overrides(config, arguments.across, arguments.style, arguments.overlay,
+                        arguments.study, arguments.pin)
+        if not config["sweep"].across:
+            raise ConfigError("ydmrg needs a sweep: list quantities in [sweep].across (or pass --across)")
+        points = expand_points(config)
+        plans = {point.number: execution_plan(config, point) for point in points}
+        missing = [plans[p.number]["yoda_file"] for p in points if not Path(plans[p.number]["yoda_file"]).is_file()]
+        if missing:
+            raise ConfigError("Missing Yoda file(s) (run rivpyth first):\n" + "\n".join(missing))
+
+        for page, page_points in group_pages(points).items():
+            analysis = common_analysis(config, page_points)
+            plot_file = plot_file_for(config, analysis)
+            page_yoda = Path(resolve_yoda_file(config, page_suffix(config, page)))
+            output_dir = page_yoda.parent / page_yoda.stem
+            output_dir.parent.mkdir(parents=True, exist_ok=True)
+            environment = plotting_environment(plans[page_points[0].number]["plugin_dir"])
+            with tempfile.TemporaryDirectory(prefix="ydmrg-") as workdir:
+                inputs = [Path(plans[p.number]["yoda_file"]) for p in page_points]
+                yodas = unify_yodas(page_points, inputs, analysis, Path(workdir))
+                if config["plot_merge_type"] == 2:
+                    status = subprocess.run(["yodamerge", "-o", str(page_yoda), *map(str, yodas)]).returncode
+                    if status:
+                        return status
+                    curves = [(void_bins(config, [page_yoda], Path(workdir))[0], None)]
+                else:
+                    yodas = void_bins(config, yodas, Path(workdir))
+                    curves = [(path, curve_legend(config, point)) for path, point in zip(yodas, page_points)]
+                plot_inputs = plot_arguments(config, curves, analysis, Path(workdir))
+                ranges = auto_range_plot(config, analysis,
+                                         [path for path, _ in curves] + list(Path(workdir).glob("*_data.yoda")),
+                                         Path(workdir))
+                print(f"ydmrg: page {output_dir} ({len(page_points)} curves)", file=sys.stderr)
+                status = subprocess.run([
+                    "rivet-mkhtml", "-o", str(output_dir),
+                    *(["-c", str(plot_file)] if plot_file else []),
+                    *(["-c", str(ranges)] if ranges else []), *plot_inputs,
+                ], env=environment).returncode
+            if status:
+                return status
+        return 0
+    except ConfigError as error:
+        print(f"ydmrg: {error}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

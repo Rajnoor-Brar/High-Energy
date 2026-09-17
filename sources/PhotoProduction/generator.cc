@@ -19,7 +19,13 @@
 // Usage:
 //   generator.exe <output.hepmc> <base.cmnd> [more.cmnd ...]
 //
-// Exit codes: 0 success, 1 cmnd/initialisation failure, 2 bad arguments.
+// Exit codes: 0 success, 1 cmnd/initialisation failure, 2 bad arguments,
+//             4 HepMC3 output could not be opened or an event could not be written.
+//
+// Note on counts: Main:numberOfEvents is the number of next() *attempts*.
+// PythiaParallel::run returns per-thread attempt counts and invokes the callback
+// only for successful events, so "wrote" is normally below "generated" (about
+// 2 % at 5x41 GeV, 1e-4 at 27x920). Only a write failure is an error.
 // Output is opened only after a successful init(), so rivpyth must watch
 // this process as well as Rivet (Rivet blocks until the stream opens).
 //
@@ -65,12 +71,18 @@ int main(int argc, char* argv[]) {
   }
 
   Pythia8ToHepMC toHepMC(outFile);
-  long nWritten = 0;
+  // Catch an unwritable destination now, rather than after a full run.
+  if (toHepMC.output().failed()) {
+    std::cerr << "ERROR: could not open HepMC3 output '" << outFile << "'\n";
+    return 4;
+  }
+  long nWritten = 0, nWriteFailed = 0;
 
   // Serial callback (processAsync = off): no locking needed around the writer.
   auto onEvent = [&](Pythia* pythiaPtr) {
     if (toHepMC.writeNextEvent(*pythiaPtr)) ++nWritten;
-    else std::cerr << "WARNING: HepMC3 conversion/write failed for an event.\n";
+    else if (++nWriteFailed <= 5)
+      std::cerr << "WARNING: HepMC3 conversion/write failed for an event.\n";
   };
 
   // run(callback) generates Main:numberOfEvents events.
@@ -83,6 +95,13 @@ int main(int argc, char* argv[]) {
 
   std::cout << "Generated " << nGenerated << " events across " << perThreadCounts.size()
             << " threads; wrote " << nWritten << " to " << outFile << "\n";
+  std::cout.flush();
+
+  // A write failure means the analysis downstream saw fewer events than were generated.
+  if (nWriteFailed) {
+    std::cerr << "ERROR: " << nWriteFailed << " event(s) could not be written to " << outFile << "\n";
+    return 4;
+  }
 
   return 0;
 }

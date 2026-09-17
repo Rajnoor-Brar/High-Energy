@@ -20,6 +20,7 @@ beams = [920, 27.5]                       # HERA; not part of the EIC beams cata
 across       = ["cmnd.pdf"]
 tag_style    = "tag"
 yoda_legends = "label"
+seed_step    = 20                         # >= [rivpyth].threads: Pythia gives thread i seed+i (00/B2)
 
 # ── Quantity catalogue (use = 0: applied only when scanned or pinned in [settle.use]) ──
 
@@ -70,11 +71,14 @@ labels  = ["$\\hat{p}_T > 2$ GeV", "$\\hat{p}_T > 3$ GeV", "$\\hat{p}_T > 4$ GeV
 tags    = ["pth2", "pth3", "pth4", "pth6"]
 
 [sweep.cmnd.process]
+# Same base cmnd as the EIC studies, so the same measured behaviour applies (00/B13): with the
+# proton as beam A and the photon from the lepton, ProcessType 2 fails init(), and 0 and 1 give
+# identical events. The direct contribution needs a separate card.
 type    = "pythia"
 setting = "Photon:ProcessType"
-values  = [0, 1, 2]                       # proton is beam A: 2 = direct photon
-labels  = ["resolved + direct", "resolved", "direct"]
-tags    = ["allproc", "resolved", "direct"]
+values  = [0, 1]
+labels  = ["resolved + direct", "resolved"]
+tags    = ["allproc", "resolved"]
 
 [sweep.rivet.radius]
 type    = "option"
