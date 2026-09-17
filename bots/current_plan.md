@@ -1,18 +1,16 @@
-# Current plan — P1-S03 sweep-engine (done) → next P1-S04
+# Current plan — P1-S04 identity-seeds-hash (done) → next P1-S05
 
-> Mirror of the step being executed (per bots/BOT.md). Source: `docs/rework/steps/P1-S03_sweep-engine.md`.
-> Step index: `docs/rework/steps/README.md`. Status: **done** (2026-09-18).
+> Source: `docs/rework/steps/P1-S04_identity-seeds-hash.md`. Index: `docs/rework/steps/README.md`.
+> Status: **done** (2026-09-18).
 
-## What P1-S03 delivered
+## What P1-S04 delivered
 
-`hekit.sweep` = quantity behaviour, selection (across/overlay/settle/study/pins), expansion into points,
-pages and event groups. The four legacy sweep bugs are fixed with tests that first reproduce the old
-behaviour through `tools/rivpyth_common`: 00/B6 (overlay no longer uncouples a group), 00/B7 (sweep rules
-are judged on the scan that runs), 00/B9 (lossless values), 00/B22 (tag → value → `#N`, decided as D-B22).
-The golden comparison reproduces all 17 legacy cases on points, pages and legends.
+`hekit.plan.hashing` (identity hash of the effective generation settings, aliases, skip rule) and
+`hekit.plan.seeds` (identity-derived, block-allocated seeds with a plan-level disjointness check, plus a
+test-only legacy policy). 00/B1, 00/B2 and 00/B15 are fixed and verified on the real catalogue.
 
-## Next: P1-S04 identity-seeds-hash
+## Next: P1-S05 plan-render
 
-Canonical hash of the effective generation settings; identity seeds with disjoint per-thread
-`Parallelism:seeds` blocks; replica index; collision check; equal-hash aliases; skip rule inputs;
-test-only `seed_policy = "legacy"` (00/B1, B2, B15; 03 §5).
+`hep plan` / `hep studies`: points → groups → stage chains → spec-v2 `run.toml` + `point.cmnd` (in tmp);
+the Pythia adapter (header, ids/energies, rejects `Beams:*` and `processAsync` in cards, √s warning);
+Rivet options validated against the `.info` (00/B14); `plan/spec_v2.json` as the shared contract.

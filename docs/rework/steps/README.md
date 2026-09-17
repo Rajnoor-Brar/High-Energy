@@ -65,7 +65,7 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P1-S01 | [Create the hekit package, CLI entry point and test guard](P1-S01_package-skeleton.md) | code | P0-S07 | 0.3 d | done |
 | P1-S02 | [Implement the schema-2 loader with strict validation and layering](P1-S02_config-schema.md) | code | P1-S01 | 1 d | done |
 | P1-S03 | [Port quantities, across, settle, studies and pins (with fixes)](P1-S03_sweep-engine.md) | code | P1-S02 | 1 d | done |
-| P1-S04 | [Identity hashing and disjoint seed blocks](P1-S04_identity-seeds-hash.md) | code | P1-S03 | 0.5 d | todo |
+| P1-S04 | [Identity hashing and disjoint seed blocks](P1-S04_identity-seeds-hash.md) | code | P1-S03 | 0.5 d | done |
 | P1-S05 | [Plan groups, stage chains, resolved specs and point cards](P1-S05_plan-render.md) | code | P1-S04 | 1 d | todo |
 | P1-S06 | [Migration tool and schema-2 configs](P1-S06_config-migrate.md) | code | P1-S05 | 0.5 d | todo |
 | P1-S07 | [hep doctor and hep pdf](P1-S07_doctor-pdf.md) | code | P1-S01, P1-S05 | 0.5 d | todo |

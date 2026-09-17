@@ -23,6 +23,12 @@ RUN = Section("run", doc="Run control: how much, how parallel, where to.", machi
     "threads": Field("int", 0, "worker threads; 0 = all cores, resolved by hep", minimum=0, maximum=4096),
     "skip_existing": Field("bool", False, "skip a point whose name, hash and complete output all match"),
     "label": Field("str", "", "free text kept in manifests; never used in a path"),
+    "seed_policy": Field("str", "identity", "how point seeds are chosen: from the point's identity "
+                                            "(03 §5), or the pre-rework position-based scheme, which "
+                                            "exists only to reproduce old results in tests",
+                         choices=("identity", "legacy")),
+    "legacy_seed_step": Field("int", 20, "seed spacing used by seed_policy = \"legacy\" only",
+                              minimum=1, maximum=900_000_000),
 })
 
 GENERATOR = Section("generator", doc="Which generator, and its native card.", fields={
