@@ -1,42 +1,41 @@
-# Current plan — P0-S02 env-setup-fixes
+# Current plan — P0-S03 tools-into-repo
 
-> Mirror of the step being executed (per bots/BOT.md). Source: `docs/rework/steps/P0-S02_env-setup-fixes.md`.
+> Mirror of the step being executed (per bots/BOT.md). Source: `docs/rework/steps/P0-S03_tools-into-repo.md`.
 > Step index: `docs/rework/steps/README.md`. Status: **in-progress** (2026-09-17).
 > Approved by the user for P0: tags, `~/HEP` edits, local per-step commits (no push), `bots/` layout edits.
 
 ## Goal
 
-The shell layer lives in the repo as `env/hep_env.sh`; `~/HEP/setup.sh` is a stub that sources it; path handling is
-idempotent; `import ROOT` and `import pythia8` work; `rich`, `tomli_w`, `pytest` are installed.
+`rivpyth`, `ydplt`, `ydmrg`, `rivpyth_common.py`, `rivpyth.example.toml` are versioned under `tools/` and are the
+ones on PATH; debris is gone (plans 0.1, 00/B24, D18).
 
-## Changes (08 §3, 00 §4.6)
+## Plan
 
-- `env/hep_env.sh` (tracked) from `~/HEP/setup.sh`, with:
-  - idempotent `_hep_prepend` (only existing dirs, no duplicates, no empty elements); records what it added;
-  - PYTHONPATH += `$HEP_INSTALL/root/lib`, `$HEP_INSTALL/pythia8/lib`; python version detected, not hard-coded;
-  - no hard-coded `RIVET_ANALYSIS_PATH` (the legacy tools prepend `plugin_dir` per run — verified in
-    `rivpyth:204-206`, `ydplt:17-20`, `ydmrg:17-20`);
-  - `hep_status` on demand only; one-line hint when an interactive shell sources it;
-  - `quit` removes what was added and restores the scalars, does not unset itself, and is a no-op when not loaded;
-  - `hep_refresh` = quit + source the stub; `hep_cd PROJECT [dir]` added;
-  - `$HEP` stays on PATH until P0-S03 moves the tools to `$HEKIT_ROOT/tools`.
-- `~/HEP/setup.sh` → stub (`HEP`, `HEP_INSTALL`, `HEKIT_ROOT`, source the repo file); backup `setup.sh.pre-rework`.
-- `pip install rich tomli_w pytest` into `~/HEP/.venv`.
-
-## Out of scope
-
-`tools/` on PATH (P0-S03); `hep` completion / `hep_bootstrap` / `hep doctor` alias (after P1).
+1. Scratch CWD `output/scratch/legacy/` (symlinks `configs`, `output`, `datasets`, `sources` → repo; own `results/`),
+   also reused by P0-S04.
+2. "Before" snapshot: run the P0-S01 tarball copy of the tools (`output/scratch/p0/snapshot/`) with
+   `rivpyth -p` for eic.toml (default + 10 studies) and zeus_validation.toml; keep stdout and the dry point cmnds.
+3. Commit 1: verbatim copy into `tools/` (+x).
+4. Commit 2:
+   - `rivpyth` `EXAMPLE` reads `rivpyth.example.toml` next to the script (removes the duplicate text);
+   - `env/hep_env.sh`: `$HEKIT_ROOT/tools` replaces `$HEP` on PATH;
+   - `.gitignore`: `__pycache__/`;
+   - remove `~/HEP/__pycache__` and the stale FIFOs in `output/PhotoProduction` (after `test -p`);
+   - rename the `~/HEP` copies to `*.moved`.
+5. "After" run with `tools/` on PATH; diff against the snapshot (stdout + point cmnds), and `--help` epilog equal.
 
 ## Verification
 
 | Check | Expected |
 |---|---|
-| source twice + `hep_refresh` twice → duplicate count for PATH, LD_LIBRARY_PATH, PYTHONPATH | 0 0 0 |
-| `[[ ":$PYTHONPATH:" != *"::"* ]]` | ok |
-| `python -c 'import ROOT, pythia8, yoda, rivet, lhapdf, rich, tomli_w, pytest'` | no error |
-| `RIVET_ANALYSIS_PATH=$HEKIT_ROOT/output/PhotoProduction rivet --list-analyses photo_eic` | listed |
-| `quit; quit; hep_refresh` | no "command not found" |
+| `which rivpyth ydplt ydmrg` | all under `$HEKIT_ROOT/tools/` |
+| `rivpyth -p` for every study vs snapshot | identical (the dry-dir line is the same path) |
+| FIFOs in `output/PhotoProduction`; `~/HEP/__pycache__` | none; absent |
+
+## Out of scope
+
+Behaviour changes (P0-S05).
 
 ## Next
 
-P0-S03 `tools-into-repo`.
+P0-S04 `golden-fixtures`.

@@ -153,8 +153,8 @@ fi
 # Activate the Python venv
 source "$HEP/.venv/bin/activate"
 
-# Tools still kept in ~/HEP (moved to $HEKIT_ROOT/tools in P0-S03)
-_hep_prepend PATH "$HEP"
+# Versioned legacy tools (rivpyth, ydplt, ydmrg) until hep replaces them (P4-S06)
+_hep_prepend PATH "$HEKIT_ROOT/tools"
 
 _hep_pyver=$("$HEP/.venv/bin/python" -c 'import sys; print("%d.%d" % sys.version_info[:2])')
 for pkg in $_HEP_PACKAGES; do

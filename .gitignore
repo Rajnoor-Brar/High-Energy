@@ -10,6 +10,8 @@ logs/
 checkpoints/
 
 # Scratch / local-only
+__pycache__/
+*.pyc
 dump
 archive/*
 /.claude
