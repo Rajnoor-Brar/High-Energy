@@ -2,14 +2,14 @@
 
 | Field | Value |
 |---|---|
-| Status | todo |
+| Status | done |
 | Kind | code |
 | Phase | P1 — Python core (hekit: config, sweep, plan) |
 | Depends on | [P1-S03](P1-S03_sweep-engine.md) |
 | Blocks | [P1-S05](P1-S05_plan-render.md), [P3-S03](P3-S03_results-provenance.md) |
 | Effort | 0.5 d |
 | Findings / decisions | 00/B1, B2, B15; D21 |
-| Updated | 2026-09-17 |
+| Updated | 2026-09-18 |
 
 ## Goal
 
@@ -48,8 +48,8 @@ Never `#include`/import from `legacy/`; copy or adapt.
 
 ## Tasks
 
-- [ ] Write `hekit/plan/{hashing,seeds}.py`
-- [ ] Property tests (hypothesis-free: enumerate all eic points)
+- [x] Write `hekit/plan/{hashing,seeds}.py`
+- [x] Property tests (hypothesis-free: enumerate all eic points)
 
 ## Outputs
 
@@ -73,10 +73,51 @@ Revert.
 
 ## Done when
 
-- [ ] every Verification row passes
-- [ ] docs named in this step are updated
-- [ ] status set here and in [steps/README.md](README.md)
+- [x] every Verification row passes
+- [x] docs named in this step are updated
+- [x] status set here and in [steps/README.md](README.md)
 
 ## Log
 
 - 2026-09-17 — step file created (P0-S00).
+- 2026-09-18 — **done.**
+  - **The seed function** (as the design note asks, stated exactly):
+
+        stride    = smallest power of two ≥ max(threads, 1) and ≥ 1024
+        blocks    = (900_000_000 − 1) // stride
+        index     = int.from_bytes(sha256(b"hekit-seed/v1|" + run_seed + b"|" + hash)[:8], "big") % blocks
+        base_seed = 1 + index · stride
+        instances = [base_seed + i for i in range(threads)]        → `Parallelism:seeds`
+
+    Blocks are aligned and `stride` wide, so two points share either their whole block or no seed at
+    all. `stride ≥ 1024` means raising the thread count extends a block instead of moving it, so seeds
+    are stable when a user re-runs with more threads. The domain prefix keeps these seeds from ever
+    coinciding with another use of the same hash.
+  - **Collisions.** 9·10⁸ seeds cannot hold 2²⁵⁶ hashes, so `assign()` checks the plan: the smaller hash
+    keeps the block and the other probes upwards, deterministically by hash order rather than by point
+    order. This is the only case where a seed depends on the rest of the plan; it is recorded as
+    `SeedBlock.displaced` for provenance. For a 16-point plan the chance is about 1 in 7000.
+  - **The hash** covers the base card's bytes, each extra card fragment, the **effective** overrides,
+    the tool and its version, beams, energies, events, the replica, and (for a replay point) the store
+    hash plus the analyses. `RECIPE_VERSION = 1` is part of it, so a future change to the input set can
+    never compare equal to an old hash. Numbers hash by value (6 and 6.0 are one sample) and booleans
+    match however the card spells them (`on`/`true`/`1`).
+  - **Effective overrides (00/B15):** a setting equal to what the base card already says is dropped
+    before hashing, so `pth6` hashes like the base point — verified on the real catalogue. The Pythia
+    card parser lives in `hashing.card_defaults` for now; P1-S05 moves it into the adapter, and an
+    unknown tool simply recognises nothing as redundant (a conservative hash, never a wrong one).
+  - **Aliases:** `group_by_identity` returns one entry per generation with every name that maps to it.
+  - **Skip rule:** `skip_decision(identity, name, existing)` → run / skip / conflict; a partial output is
+    never complete, and a name with a different hash is a conflict with a message naming both hashes and
+    pointing at `--rerun` (used by P3-S03).
+  - **New config keys:** `[run].seed_policy = "identity" | "legacy"` and `[run].legacy_seed_step`
+    (default 20). The legacy policy reproduces `seed + (position − 1)·step` and Pythia's own `seed + i`
+    instance seeds, so P2-S06 can reproduce old results; it is documented as test-only.
+  - **Verification** (on the frozen eic catalogue, translated to schema 2):
+    | Check | Result |
+    |---|---|
+    | Stable across studies | `eic_18x275_ep_NNLO_pt32_mpi` and every other shared point hash identically in all 10 studies; the same point gets the same block from `single` and from `energies` |
+    | Disjoint blocks | all points of all 10 studies (25 distinct generations) at 20 threads: no shared instance seed, all within 1…900000000 |
+    | Order independence | shuffling the quantity tables leaves every hash unchanged (the *names* follow the catalogue, as intended) |
+    | Aliases | `pth6` and the base point are one generation with two names: 4 generations for 5 points |
+    | Whole suite | `pytest tests/python tests/golden -q` → **233 passed in 2.7 s** (24 new) |

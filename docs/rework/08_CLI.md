@@ -96,7 +96,13 @@ Changes:
 **Implemented in P0-S02:**
 - `quit` removes only the elements recorded in `_HEP_ADDED`.
 - `hep_refresh` re-sources `$HEP_SETUP`, the file that loaded the environment.
-- Deferred until `hekit` exists (P1): `hep_bootstrap`, completion, the `hep doctor --brief` alias, and the cached one-line summary.
+
+**Implemented in P1-S01:**
+- Completion: `_hep_load_completion` caches `_HEP_COMPLETE=bash_source hep` in
+  `${XDG_CACHE_HOME:-~/.cache}/hekit/hep-complete.bash` and regenerates it only when the `hep` entry point is
+  newer. Interactive shells only, so sourcing stays at ~20 ms.
+- Still deferred: `hep_bootstrap` (the editable install is a one-off), the `hep doctor --brief` alias and the
+  cached one-line tool summary (P1-S07).
 
 **After the move, `~/HEP` contains:**
 - `setup.sh` (stub) and `setup.sh.pre-rework`;

@@ -80,7 +80,7 @@ Remove `tools/` from PATH and rename `~/HEP/*.moved` back.
 
 - 2026-09-17 — step file created (P0-S00).
 - 2026-09-17 — **done.**
-  - **Commit 1** (`73658d0`): verbatim copy. The sha256 sums equal the P0-S01 snapshot.
+  - **Commit 1** (`18db967`): verbatim copy. The sha256 sums equal the P0-S01 snapshot.
   - **Commit 2:**
     - `rivpyth` reads its `--help` example from `rivpyth.example.toml` next to the resolved script path (the text was byte-identical before). A missing file gives a note, not a crash.
     - `env/hep_env.sh` puts `$HEKIT_ROOT/tools` on PATH instead of `$HEP`, so the `~/HEP` stub is no longer on PATH.

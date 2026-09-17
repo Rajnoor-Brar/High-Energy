@@ -37,7 +37,7 @@ _hep_strip() {
 # --- status report (on demand; several version probes are slow) ---
 # Strips version strings down to the number for most tools, with two exceptions: Sherpa keeps its
 # codename ("3.0.5 (Erebus)"), and Herwig7/ThePEG share one line since `Herwig --version` reports both.
-hep_status() {
+_hep_status_probe() {
     local GREEN=$'\033[0;32m' DIM=$'\033[2m' RESET=$'\033[0m'
     [ -t 1 ] || { GREEN=''; DIM=''; RESET=''; }
 
@@ -121,6 +121,14 @@ hep_refresh() {
     quit >/dev/null
     source "$setup"
 }
+# hep_status is now hep doctor --brief; the shell function stays as the familiar name (08 §3).
+hep_status() {
+    if command -v hep >/dev/null 2>&1; then
+        hep doctor --brief "$@"
+    else
+        _hep_status_probe
+    fi
+}
 hep_src()     { cd "$HEP/src"; }
 hep_build()   { cd "$HEP/build"; }
 hep_install() { cd "$HEP/install"; }
@@ -132,7 +140,7 @@ hep_cd() {
 hep_help() {
     cat << HLP
 HEP environment commands:
-  hep_status             show installed tool versions
+  hep_status             tool versions and environment health (hep doctor --brief)
   hep_refresh            reload the environment from scratch
   quit                   leave the HEP environment (restores paths, deactivates venv)
   hep_cd PROJECT [DIR]   cd to \$HEKIT_ROOT/DIR/PROJECT (DIR: configs|results|output|sources)
@@ -179,6 +187,19 @@ export ONNXRUNTIME_DIR="$HEP_INSTALL/onnxruntime"
 # RIVET_ANALYSIS_PATH is deliberately not set: the tools prepend their plugin directory per run.
 export HEP_ENV_LOADED=1
 hash -r
+
+# hep completion, cached: generating it costs a Python start-up, so it is only regenerated when the
+# entry point is newer than the cache. Interactive shells only.
+_hep_load_completion() {
+    local hep_bin cache="${XDG_CACHE_HOME:-$HOME/.cache}/hekit/hep-complete.bash"
+    hep_bin=$(command -v hep 2>/dev/null) || return 0
+    if [ ! -s "$cache" ] || [ "$hep_bin" -nt "$cache" ]; then
+        mkdir -p "$(dirname "$cache")"
+        _HEP_COMPLETE=bash_source hep > "$cache" 2>/dev/null || { rm -f "$cache"; return 0; }
+    fi
+    source "$cache" 2>/dev/null
+}
+[[ $- == *i* ]] && _hep_load_completion
 
 [[ $- == *i* ]] && echo "HEP env loaded — $HEP (hep_status for versions, hep_help for commands)"
 return 0
