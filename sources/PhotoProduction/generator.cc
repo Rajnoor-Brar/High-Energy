@@ -1,49 +1,37 @@
-// GenerateHepMC.cc
+// generator.cc
 //
-// Generate Pythia8 events from a .cmnd file and write them to a single
-// merged HepMC3 ASCII file for Rivet analysis. Event generation runs in
-// parallel across threads via Pythia8::PythiaParallel; only the
-// HepMC3 conversion+write is serialized (cheap relative to generation),
-// so the result is one .hepmc file rather than one-per-thread.
+// Generate Pythia8 events and write them to a single HepMC3 ASCII stream
+// (a file or the FIFO rivpyth sets up) for Rivet. Generation runs in
+// parallel via Pythia8::PythiaParallel; callbacks are processed serially
+// (Parallelism:processAsync = off), so one HepMC3 writer is enough.
 //
-// (Note: Pythia's own HepMC3Hooks plugin also integrates with
-// PythiaParallel, but per the manual it cannot merge threads into a
-// single file -- it writes out_0.hepmc, out_1.hepmc, etc. This program
-// avoids that by doing the write step itself under a mutex.)
+// Everything is configured through cmnd files, read in the order given so
+// that later settings override earlier ones. rivpyth passes two:
+//   1. the base cmnd  — shared physics (configs/<project>/photo_ep.cmnd)
+//   2. a point cmnd   — run control and sweep overrides
+//                       (Main:numberOfEvents, Parallelism:numThreads,
+//                        Random:seed, Beams:*, PDF:pSet, ...)
+// Main:numberOfEvents sets the event count; Parallelism:numThreads = 0
+// (Pythia's default) uses all hardware threads.
 //
-// Build (assumes pythia8-config / HepMC3-config are on PATH, e.g. via
-// setup.sh):
-//
-//   g++ -O2 -std=c++17 GenerateHepMC.cc -o generate_hepmc \
-//       $(pythia8-config --cxxflags --libs) \
-//       $(HepMC3-config --cflags --libs) \
-//       -lpthread
+// Build:  make PhotoProduction/generator.exe   (after load_hep)
 //
 // Usage:
-//   ./generate_hepmc <run.cmnd> <output.hepmc> [nEvents] [nThreads] [seed] [pdf:pSet]
+//   generator.exe <output.hepmc> <base.cmnd> [more.cmnd ...]
 //
-//   run.cmnd    : standard Pythia8 command file (beams, CR/Ropewalk,
-//                 Woods-Saxon, etc. -- all collision setup lives here,
-//                 untouched by this program)
-//   output.hepmc: destination HepMC3 ASCII file
-//   nEvents     : optional; overrides Main:numberOfEvents from the cmnd
-//                 file if > 0 (default: use whatever the cmnd file says)
-//   nThreads    : optional; degree of parallelism (default: hardware
-//                 concurrency, decided here in code rather than in the
-//                 cmnd file)
+// Exit codes: 0 success, 1 cmnd/initialisation failure, 2 bad arguments.
+// Output is opened only after a successful init(), so rivpyth must watch
+// this process as well as Rivet (Rivet blocks until the stream opens).
 //
-// Then analyze with Rivet, e.g.:
+// Then analyse with Rivet, e.g.:
 //   rivet --analysis=<ANALYSIS> -o out.yoda output.hepmc
 
 #include "Pythia8/Pythia.h"
 #include "Pythia8/PythiaParallel.h"
 #include "Pythia8Plugins/HepMC3.h"
 
-#include <cstdlib>
 #include <iostream>
-#include <mutex>
 #include <string>
-#include <thread>
 #include <vector>
 
 using namespace Pythia8;
@@ -51,28 +39,25 @@ using namespace Pythia8;
 int main(int argc, char* argv[]) {
 
   if (argc < 3) {
-    std::cerr << "Usage: " << argv[0] << " <cmnd file> <output.hepmc> [nEvents] [nThreads] [seed] [pdf:pSet]\n";
-    return 1;
+    std::cerr << "Usage: " << argv[0] << " <output.hepmc> <base.cmnd> [more.cmnd ...]\n";
+    return 2;
   }
 
-  const std::string cmndFile =  string(argv[1]);
-  const std::string outFile  =  string(argv[2]);
-  const long nEventsArg  = (argc > 3) ? std::atol(argv[3]) : 10000;
-  const long nThreadsArg = (argc > 4) ? std::atol(argv[4]) : 20;
-  const long seedArg = (argc > 5) ? std::atol(argv[5]) : -1;
-  const std::string pdfSetArg = (argc > 6) ? string(argv[6]) : "";
+  const std::string outFile = argv[1];
+  const std::vector<std::string> cmndFiles(argv + 2, argv + argc);
 
   PythiaParallel pythia;
-  if (!pythia.readFile(cmndFile)) {
-    std::cerr << "ERROR: could not read cmnd file '" << cmndFile << "'\n";
-    return 1;
-  }
-
-  const unsigned int nThreads = (nThreadsArg > 0) ? static_cast<unsigned int>(nThreadsArg) : std::thread::hardware_concurrency();
-  pythia.readString("Parallelism:numThreads = " + std::to_string(nThreads));
   pythia.readString("Print:quiet = on");
-  if (seedArg > 0) pythia.readString("Random:seed = " + std::to_string(seedArg));
-  if (!pdfSetArg.empty()) pythia.readString("PDF:pSet = " + pdfSetArg);
+  // readFile returns false for a missing file and for any line Pythia rejects
+  // (unknown key or meaningless value), so bad sweep overrides stop here.
+  for (const std::string& cmndFile : cmndFiles) {
+    if (!pythia.readFile(cmndFile)) {
+      std::cerr << "ERROR: could not read cmnd file '" << cmndFile << "' (missing file or rejected setting)\n";
+      return 1;
+    }
+  }
+  // The single HepMC3 writer below is unlocked; keep callbacks serial.
+  pythia.readString("Parallelism:processAsync = off");
 
   if (!pythia.init()) {
     std::cerr << "ERROR: Pythia initialization failed.\n";
@@ -80,23 +65,24 @@ int main(int argc, char* argv[]) {
   }
 
   Pythia8ToHepMC toHepMC(outFile);
-  std::mutex writeMutex;
   long nWritten = 0;
 
+  // Serial callback (processAsync = off): no locking needed around the writer.
   auto onEvent = [&](Pythia* pythiaPtr) {
-    std::lock_guard<std::mutex> lock(writeMutex);
     if (toHepMC.writeNextEvent(*pythiaPtr)) ++nWritten;
     else std::cerr << "WARNING: HepMC3 conversion/write failed for an event.\n";
   };
 
-  std::vector<long> perThreadCounts = (nEventsArg > 0) ? pythia.run(nEventsArg, onEvent) : pythia.run(onEvent);
+  // run(callback) generates Main:numberOfEvents events.
+  const std::vector<long> perThreadCounts = pythia.run(onEvent);
 
   pythia.stat();
 
   long nGenerated = 0;
-  for (long c : perThreadCounts) nGenerated += c;
+  for (long count : perThreadCounts) nGenerated += count;
 
-  std::cout << "Generated " << nGenerated << " events across " << nThreads << " threads; wrote " << nWritten << " to " << outFile << "\n";
+  std::cout << "Generated " << nGenerated << " events across " << perThreadCounts.size()
+            << " threads; wrote " << nWritten << " to " << outFile << "\n";
 
   return 0;
 }

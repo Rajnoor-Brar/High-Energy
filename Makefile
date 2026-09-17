@@ -61,7 +61,11 @@ FORCE:
 	if [ ! -e "$$dest" ] || [ "$$src" -nt "$$dest" ] || [ Makefile -nt "$$dest" ]; then \
 		rivet-build "$$dest" "$$src" $(BASE_CXXFLAGS) $(GIT_DEFINES) > /dev/null || exit $$?; \
 		echo "$$src -> $$dest"; \
-	fi
+	fi; \
+	for ext in info plot yoda; do \
+		meta="$${src%.cc}.$$ext"; \
+		[ -f "$$meta" ] && cp -p "$$meta" "$$(dirname "$$dest")/"; \
+	done; true
 
 compiledb:
 	@test -n "$(TARGETS)" || { echo "Usage: make compiledb TARGETS='folder/a.exe folder/b.so'"; exit 2; }

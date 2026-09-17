@@ -1,0 +1,36 @@
+Name: photo_eic
+Year: 2026
+Summary: Inclusive-jet photoproduction observables at EIC beam energies (ZEUS 2012 style)
+Experiment: EIC (prediction)
+Collider: EIC
+Status: UNVALIDATED NOHEPDATA SINGLEWEIGHT
+Reentrant: false
+Authors:
+ - Rajnoor S. Brar
+References:
+ - 'Based on ZEUS_2012_I1116258, Nucl.Phys.B 864 (2012) 1'
+RunInfo: 'ep photoproduction (Q2 < 1 GeV2), proton as beam A along +z. Any beam energies.'
+Options:
+ - YMIN=#        # inelasticity window lower edge (default 0.1992)
+ - YMAX=#        # inelasticity window upper edge (default 0.8483)
+ - WMIN=#        # photon-proton W window in GeV; replaces the y window when WMIN and WMAX are both set
+ - WMAX=#
+ - Q2MAX=#       # photon virtuality cut in GeV^2 (default 1.0)
+ - ETMIN=#       # jet E_T threshold in GeV (default 5.0)
+ - ETMIN2=#      # higher jet E_T threshold for d03 in GeV (default 10.0)
+ - ETAMAX=#      # jet |eta| acceptance (default 3.5)
+ - R=#           # jet radius for kT, anti-kT and SISCone (default 1.0)
+ - CHETAMAX=#    # charged-particle |eta| acceptance (default 3.5)
+ - CHPTMIN=#     # charged-particle pT threshold in GeV (default 0.1)
+Description:
+  'Inclusive-jet cross sections in photoproduction following the ZEUS 2012 measurement
+   (kT, anti-kT and SISCone jets in the laboratory frame), extended to EIC beam energies,
+   plus charged-particle pT, multiplicity and pseudorapidity distributions. The HERA
+   inelasticity range $0.1992 < y < 0.8483$ is applied at every beam energy; the old
+   per-energy plugins expressed the same cut as a W window, reproducible with WMIN/WMAX.'
+ValidationInfo:
+  'Checked against the per-energy plugins photo_5x41/10x100/18x275 on identical events:
+   with WMIN/WMAX set to their windows the outputs are identical.'
+Keywords: [photoproduction, jets, EIC]
+BibKey: Abramowicz:2012jz
+BibTeX: ''

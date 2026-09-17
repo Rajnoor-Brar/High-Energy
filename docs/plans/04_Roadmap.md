@@ -35,6 +35,10 @@ own verification. Finding IDs (A1, B1, M1, R1 …) refer to
 | 0.6 `generator.cc`: validate args, honour cmnd `Main:numberOfEvents` when N ≤ 0, fix header, drop redundant mutex (or keep with comment re `processAsync`) | B7, B12 | `generator.cc` |
 | 0.7 `setup.sh`: drop leading `:` in `RIVET_ANALYSIS_PATH` | B11 | `~/HEP/setup.sh` |
 
+**Status 2026-09-16:** 0.2 (polling supervisor in `rivpyth`), 0.5 (configs rewritten on the
+sweep schema) and 0.6 (generator CLI `OUT CMND [CMND…]` — base + point cmnd, all run control
+as Pythia settings; serial callbacks forced) are **done**; 0.1, 0.3, 0.4, 0.7 remain.
+
 **Verify:** `rivpyth` with a missing cmnd exits non-zero in < 5 s; a
 single-PDF 10k run reproduces the current YODA (same seed ⇒ identical
 histograms); touching a `utils/*.hh` rebuilds a Lambda driver;
@@ -89,25 +93,53 @@ ownership).
 
 ### 1.4 Sweep model
 
+**Implemented in the Python tools on 2026-09-16** (`~/HEP/rivpyth_common.py`);
+the C++ expander must reproduce the same rules. A run TOML has four roles:
+
 ```toml
-[sweep]
-over      = "pdf"                       # first dimension; later: "cmnd", "option"
-values    = ["LHAPDF6:MSTW2008lo68cl", "LHAPDF6:NNPDF23_lo_as_0130_qed"]
-labels    = ["MSTW 2008 LO", "NNPDF 2.3 QCD+QED LO"]   # legend text
-tags      = ["MSTW", "NNLO"]           # filename-safe
-select    = 0                           # 0 = all, i = one-based point
-tag_style = "index"                     # index | value | tag
-seed_step = 1                           # seed_i = seed + (i-1)*seed_step
+[analysis]                     # run control: cmnd_file (base), event_count, seed
+[settle]                       # what is held fixed
+tag = "pthat3"                 #   optional, appended to every name
+[settle.cmnd]                  #   "Group:key" = value, or shorthands beams = [eA, eB] | eCM, seed = N
+[settle.rivet]                 #   plugin = "photo_eic", options = { R = 1.0 }
+[settle.use]                   #   "cmnd.beams" = "5x41" (tag) or 3 (index): pins a declared quantity
+[sweep]                        # what varies
+across  = [["cmnd.beams", "rivet.etmin"], "cmnd.pdf"]   # lists move together; groups form a grid
+overlay = "cmnd.pdf"           #   group drawn as curves; other groups → one page per value
+[sweep.cmnd.<q>] / [sweep.rivet.<q>]   # quantity catalogue: type pythia|beams|seed / plugin|option
 ```
+
+Rules:
+- A point applies, in order: run control → `[analysis].seed + (point−1)·seed_step`
+  (unless a seed is settled or scanned) → `[settle.cmnd]` → quantities that are pinned
+  (`[settle.use]`, else their own `use`) or scanned.
+- A Pythia key written by two sources is an error; `[settle.use]` is ignored while that
+  quantity is scanned; a scanned or pinned option quantity replaces the same `[settle.rivet]` option.
+- Options are sorted in the analysis name, as Rivet canonicalises them.
+- The name suffix is the tags of all applied quantities (declaration order) plus `[settle].tag`,
+  so the same physics point always gets the same name.
+- The flat `across` form still accepts `style = "together" | "grid"`.
+- `[study.<name>]` presets (`description`, `across`, `style`, `overlay`, `pin`) are selected with
+  `--study`; `--pin QUANTITY=TAG|INDEX` adds one-off pins. Order: study → pins → across/style/overlay.
+- CLI: `--across "a+b,c"` (`+` couples, `,` separates groups), `--style`, `--overlay`.
+  A TOML overlay is kept while its quantity is still scanned.
+- The generator reads the base cmnd and then a **point cmnd** (run control plus overrides,
+  grouped by origin; the header records the base path and SHA-256), kept under
+  `results/<project>/cmnd/`. `rivpyth -p` writes point cmnds to a temporary directory only.
+- Removed keys (`pdf_*`, `use_pdf`, `[analysis].riv_plugin`) fail with a migration message.
+- Plotting: `void_empty` / `min_entries` blank uninformative bins; `auto_range` / `range_pad`
+  clip x axes to filled bins via a generated `.plot` override; options are removed from legends (`--rmopts`).
 
 ```cpp
 namespace Config {
-    struct SweepPoint { std::size_t index; std::string value, label, tag; long seed; };
-    std::vector<SweepPoint> expandSweep(const Document&, std::optional<std::size_t> cliSelect);
+    struct SweepPoint { std::size_t number; std::map<std::string, std::size_t> choice;
+                        std::vector<std::tuple<std::string, std::string, std::string>> settings;  // key, value, origin
+                        std::string analysis, suffix, legend; };
+    std::vector<SweepPoint> expandSweep(const Document&, std::optional<std::size_t> only);
 }
 ```
 
-- Same semantics as today's `use_pdf`/`pdf_suffix`/`alias_suffix`/`effective_seed`.
+- Semantics: identical to `expand_points` / `build_point` in `rivpyth_common.py`.
 - Python (`tools/`) calls the C++ expander via `_Generate.exe --list-points`
   (JSON) so naming lives in **one** place.
 
@@ -307,18 +339,23 @@ event_count = 1_000_000
 pythia = 20
 
 [pythia]
-cmnd_file = "configs/PhotoProduction/eic_5x41.cmnd"
+cmnd_file = "configs/PhotoProduction/photo_ep.cmnd"
 seed      = 270403
 quiet     = true
 
-[sweep]
-over   = "pdf"
-values = ["LHAPDF6:MSTW2008lo68cl", "LHAPDF6:NNPDF23_lo_as_0130_qed",
-          "LHAPDF6:NNPDF23_nlo_as_0119_qed", "LHAPDF6:PDF4LHC21_40"]
-labels = ["MSTW 2008 LO", "NNPDF 2.3 QCD+QED LO", "NNPDF 2.3 QCD+QED NLO", "PDF4 LHC21.40"]
-tags   = ["MSTW", "NNLO", "NNNLO", "LHC21"]
-select = 0
-tag_style = "index"
+[sweep]                  # unchanged from the implemented Python schema (§1.4)
+across = ["cmnd.pdf"]
+[sweep.cmnd.beams]
+type = "beams"
+values = [[41, 5], [100, 10], [275, 18]]
+use = 1
+[sweep.cmnd.pdf]
+type    = "pythia"
+setting = "PDF:pSet"
+values  = ["LHAPDF6:MSTW2008lo68cl", "LHAPDF6:NNPDF23_lo_as_0130_qed",
+           "LHAPDF6:NNPDF23_nlo_as_0119_qed", "LHAPDF6:PDF4LHC21_40"]
+labels  = ["MSTW 2008 LO", "NNPDF 2.3 QCD+QED LO", "NNPDF 2.3 QCD+QED NLO", "PDF4 LHC21.40"]
+tags    = ["MSTW", "NNLO", "NNNLO", "LHC21"]
 
 [rivet]
 analyses   = ["photo_5x41"]
@@ -359,17 +396,21 @@ draw      = true          # today's data_hist
 
 ### Key migration map
 
-| Old (`rivpyth`) | New |
+PDF keys were already migrated on 2026-09-16 (`pdf_sets/pdf_alias/alias_suffix`
+→ `[sweep.cmnd.<q>].values/labels/tags`, `use_pdf` → `.use` / `[sweep].only`,
+`pdf_suffix` → `[sweep].tag_style`, `pdf_legend` → `[sweep].yoda_legends`).
+The remaining moves for the C++ phase:
+
+| Current (`rivpyth`) | New |
 |---|---|
-| `[analysis].riv_plugin` | `[rivet].analyses = [...]` |
+| `[settle.rivet].plugin` / `options` | `[rivet].analyses = [...]` (or `[sweep.rivet.*]`) |
 | `[analysis].cmnd_file` | `[pythia].cmnd_file` (full repo-relative path) |
 | `[analysis].event_count` | `[events].event_count` |
 | `[analysis].seed` | `[pythia].seed` |
-| `[analysis].pdf_sets / pdf_alias / alias_suffix` | `[sweep].values / labels / tags` |
-| `[analysis].use_pdf` | `[sweep].select` |
-| `[analysis].pdf_suffix` (0/1/2) | `[sweep].tag_style` (index/value/tag) |
-| `[yoda].pdf_legend` (1/2/3) | `[plot].legend` (label/tag/point) |
-| `[yoda].plot_merge_type` (1/2) | `[plot].merge` (overlay/sum) |
+| `[sweep]` | unchanged |
+| `[sweep].yoda_legends` | `[plot].legend` |
+| `[yoda].plot_merge_type` (1/2) | `[plot].merge` (overlay/sum; sum only for seed sweeps) |
+| `[yoda].plot_analysis` / `rivet_refs` | `[plot].analysis` / `[plot].rivet_refs` |
 | `[yoda].use_data / data_file / data_legend / data_reference / data_hist` | `[plot.data]` present / `file` / `legend` / `reference` / `draw` |
 | `[rivpyth].project` | driver project name / `[record.paths].directory` |
 | `[rivpyth].generator` | implicit (`_Generate.exe`) |

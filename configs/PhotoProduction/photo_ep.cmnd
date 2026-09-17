@@ -1,0 +1,46 @@
+! photo_ep.cmnd — shared physics for ep inclusive-jet photoproduction.
+!
+! Base for every PhotoProduction sweep. rivpyth copies this file and appends
+! per-point overrides (later settings win), e.g.
+!   [sweep.cmnd.beams]  → Beams:frameType/eA/eB (or eCM)
+!   [sweep.cmnd.lepton] → Beams:idB (11 = EIC e-, -11 = HERA e+)
+!   [sweep.cmnd.pdf]    → PDF:pSet
+! Defaults below correspond to the EIC 18x275 GeV configuration.
+
+! Run control (event count and threads come from the generator command line)
+Main:numberOfEvents = 100000
+Main:timesAllowErrors = 40          ! abort run after this many flawed events
+Random:setSeed = on
+Random:seed = 0                     ! 0 = time-based; sweeps write an explicit seed
+
+! Beams: proton A along +z, lepton B
+Beams:frameType = 2                 ! beams with different energies
+Beams:idA = 2212                    ! p+
+Beams:eA = 275.0
+Beams:idB = 11                      ! e-
+Beams:eB = 18.0
+
+! Photoproduction
+PDF:lepton2gamma = on               ! photons emitted from the lepton
+Photon:ProcessType = 0              ! all photon processes (resolved + direct)
+Photon:Q2max = 1.0                  ! maximal photon virtuality (GeV^2)
+HardQCD:all = on                    ! all dijet matrix elements
+PhotonParton:all = on               ! all dijet matrix elements with photons
+PhaseSpace:pTHatMin = 6.            ! minimal pT-hat (GeV)
+MultipartonInteractions:pT0Ref = 3.2  ! tuned ep value
+
+! Proton PDF
+PDF:pSet = 15                       ! NNPDF2.3 QCD+QED NLO, alpha_s(M_Z) = 0.119
+
+! QED radiation off the lepton is not handled by the photoproduction setup
+TimeShower:QEDshowerByL = off
+PDF:lepton = off
+
+! Printout
+Init:showChangedSettings = on
+Init:showChangedParticleData = on
+Init:showMultipartonInteractions = on
+Next:numberShowInfo = 1
+Next:numberShowProcess = 1
+Next:numberShowEvent = 1
+Next:showScaleAndVertex = off
