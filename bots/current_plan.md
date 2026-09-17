@@ -1,41 +1,49 @@
-# Current plan — P0-S03 tools-into-repo
+# Current plan — P0-S04 golden-fixtures
 
-> Mirror of the step being executed (per bots/BOT.md). Source: `docs/rework/steps/P0-S03_tools-into-repo.md`.
+> Mirror of the step being executed (per bots/BOT.md). Source: `docs/rework/steps/P0-S04_golden-fixtures.md`.
 > Step index: `docs/rework/steps/README.md`. Status: **in-progress** (2026-09-17).
 > Approved by the user for P0: tags, `~/HEP` edits, local per-step commits (no push), `bots/` layout edits.
 
 ## Goal
 
-`rivpyth`, `ydplt`, `ydmrg`, `rivpyth_common.py`, `rivpyth.example.toml` are versioned under `tools/` and are the
-ones on PATH; debris is gone (plans 0.1, 00/B24, D18).
+Freeze the legacy behaviour as data before any fix: plan expansions for every study, a mini run with plot
+intermediates, an inventory of the existing results.
 
-## Plan
+## Design
 
-1. Scratch CWD `output/scratch/legacy/` (symlinks `configs`, `output`, `datasets`, `sources` → repo; own `results/`),
-   also reused by P0-S04.
-2. "Before" snapshot: run the P0-S01 tarball copy of the tools (`output/scratch/p0/snapshot/`) with
-   `rivpyth -p` for eic.toml (default + 10 studies) and zeus_validation.toml; keep stdout and the dry point cmnds.
-3. Commit 1: verbatim copy into `tools/` (+x).
-4. Commit 2:
-   - `rivpyth` `EXAMPLE` reads `rivpyth.example.toml` next to the script (removes the duplicate text);
-   - `env/hep_env.sh`: `$HEKIT_ROOT/tools` replaces `$HEP` on PATH;
-   - `.gitignore`: `__pycache__/`;
-   - remove `~/HEP/__pycache__` and the stale FIFOs in `output/PhotoProduction` (after `test -p`);
-   - rename the `~/HEP` copies to `*.moved`.
-5. "After" run with `tools/` on PATH; diff against the snapshot (stdout + point cmnds), and `--help` epilog equal.
+- **Frozen inputs** `tests/golden/inputs/PhotoProduction/{eic.toml,zeus_validation.toml,photo_ep.cmnd}`: copies taken
+  at capture time. Fixtures and tests use these, not the live `configs/` (which the user edits), so the tests stay
+  stable. A separate test only checks that the live configs still parse.
+- `tests/golden/capture_legacy.py` imports `tools/rivpyth_common.py` (pure functions), runs in a temp CWD with
+  `configs/PhotoProduction` → inputs; subcommands:
+  - `plan` → `legacy_plan/<cfg>/<case>.json`. Cases: every study, the default, and a few CLI overrides
+    (`--pin`, `--across … --overlay …`). Each file holds points (number, suffix, settings + origin, analysis,
+    plugin, legend, curve legend, page, relative plan paths, point-cmnd text) and pages (suffix, merged YODA,
+    output dir, members, legends).
+  - `mini` → runs `rivpyth`/`ydmrg`/`ydplt` on `legacy_mini.toml` in `output/scratch/legacy/`, then recomputes the
+    plot intermediates (voided YODAs, remapped data, auto-range `.plot`, mkhtml arguments) into `legacy_run/`.
+  - `inventory` → read-only `results_inventory.json` for `results/PhotoProduction` (path, bytes, sha256,
+    `/RAW/_EVTCOUNT` numEntries/sumW, `/_XSEC`, analyses, cmnd sha + header, serial, flags).
+- `legacy_mini.toml`: 2 PDF points (MSTW, NNLO) at 27x920 e⁺p, 5k events, 1 thread, seed 12345, ZEUS data overlay.
+- `test_legacy_counts.py`: point/page counts per study (frozen inputs); fixture equality (live expansion of the frozen
+  inputs == stored JSON); the mini-run YODAs are complete; the live configs parse.
+
+## Verified fact (affects P0-S05)
+
+`PythiaParallel::run()` returns **attempts** per thread: `eventsPerThread` is incremented before the success check,
+and the callback only runs on success (`PythiaParallel.cc:186-208`). The 1M-event results hold
+`/RAW/_EVTCOUNT` = 999 903. So:
+- B21 must count write failures, not compare `nWritten` with `nGenerated`;
+- B3 must compare Rivet's count with the generator's *written* count, not with `event_count`.
 
 ## Verification
 
 | Check | Expected |
 |---|---|
-| `which rivpyth ydplt ydmrg` | all under `$HEKIT_ROOT/tools/` |
-| `rivpyth -p` for every study vs snapshot | identical (the dry-dir line is the same path) |
-| FIFOs in `output/PhotoProduction`; `~/HEP/__pycache__` | none; absent |
-
-## Out of scope
-
-Behaviour changes (P0-S05).
+| `touch output/scratch/stamp` before; after: `find results configs -newer output/scratch/stamp \| wc -l` | 0 |
+| `pytest tests/golden -q` | pass |
+| `legacy_run/*.yoda` | 2 files; `/RAW/_EVTCOUNT` = the generator's written count (≈ 5000) |
 
 ## Next
 
-P0-S04 `golden-fixtures`.
+P0-S05 `legacy-hotfixes` (with the corrected B3/B21 design), then P0-S06.

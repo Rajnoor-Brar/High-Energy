@@ -1,0 +1,31 @@
+{
+ "captured": "2026-09-17",
+ "tool": {
+  "tools/rivpyth_common.py": "52705a36384a60d167da27bd381746da382491e7ea5bbfe100930db51c41f2f3"
+ },
+ "inputs": {
+  "eic.toml": "7bc217f58239cb7c5e7d5889ea2082eb399a8cf5a16695cd8697ee70765c5c2d",
+  "zeus_validation.toml": "a55c4ae5767222f7bb2bd5d4c9c3d7e92257f43fb51fbfd3f6471767489eb8cc",
+  "photo_ep.cmnd": "54435225e46b9cdf443b6af5b78d4d3a563ff433ae30f986ba6722d6f74027b8"
+ },
+ "cases": {
+  "eic/default": "4 points, 1 pages",
+  "eic/single": "1 points, 0 pages",
+  "eic/pdf": "4 points, 1 pages",
+  "eic/energies": "4 points, 1 pages",
+  "eic/energy_pdf": "16 points, 4 pages",
+  "eic/mpi": "3 points, 1 pages",
+  "eic/mpi_onoff": "2 points, 1 pages",
+  "eic/mpi_grid": "6 points, 2 pages",
+  "eic/pthatmin": "4 points, 1 pages",
+  "eic/process": "2 points, 1 pages",
+  "eic/radius": "3 points, 1 pages",
+  "eic/cli_pin_beams": "4 points, 1 pages",
+  "eic/cli_single_pin": "1 points, 0 pages",
+  "eic/cli_across_overlay": "16 points, 4 pages",
+  "eic/cli_across_together": "4 points, 1 pages",
+  "eic/cli_couple_mismatch": "Coupled quantities need equal value counts (cmnd.beams=4, cmnd.lepton=2)",
+  "zeus_validation/default": "4 points, 1 pages",
+  "zeus_validation/cli_across_process": "3 points, 1 pages"
+ }
+}

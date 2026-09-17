@@ -1,0 +1,61 @@
+# legacy_mini.toml — golden mini run of the legacy tools (rework P0-S04).
+# Two PDF points at 27x920 e+p, 5k events on one thread, ZEUS data overlay.
+# Run only through `python tests/golden/capture_legacy.py mini` (scratch CWD output/scratch/legacy_mini).
+
+[analysis]
+cmnd_file   = "photo_ep.cmnd"
+event_count = 5000
+seed        = 12345
+
+[yoda]
+plot_merge_type = 1
+use_data        = true
+data_hist       = true
+data_file       = "datasets/zeus_eic.yoda"
+data_legend     = "Data"
+data_reference  = true
+void_empty      = true
+min_entries     = 10
+auto_range      = true
+range_pad       = 1
+
+[rivpyth]
+project      = "PhotoProduction"
+generator    = "generator.exe"
+yoda_file    = "mini.yoda"
+plugin_dir   = "."
+threads      = 1
+path_literal = false
+
+[settle.rivet]
+plugin = "photo_eic"
+
+[settle.use]
+"cmnd.beams"  = "27x920"
+"cmnd.lepton" = "ep"
+
+[sweep]
+across       = ["cmnd.pdf"]
+tag_style    = "tag"
+yoda_legends = "label"
+seed_step    = 1
+
+[sweep.cmnd.beams]
+type   = "beams"
+values = [[41, 5], [920, 27.5]]
+labels = ["5x41 GeV", "27x920 GeV"]
+tags   = ["5x41", "27x920"]
+
+[sweep.cmnd.lepton]
+type    = "pythia"
+setting = "Beams:idB"
+values  = [11, -11]
+labels  = ["$e^-$", "$e^+$"]
+tags    = ["em", "ep"]
+
+[sweep.cmnd.pdf]
+type    = "pythia"
+setting = "PDF:pSet"
+values  = ["LHAPDF6:MSTW2008lo68cl", "LHAPDF6:NNPDF23_lo_as_0130_qed"]
+labels  = ["MSTW 2008 LO", "NNPDF 2.3 QCD+QED LO"]
+tags    = ["MSTW", "NNLO"]

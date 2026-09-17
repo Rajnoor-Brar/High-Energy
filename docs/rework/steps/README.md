@@ -58,7 +58,7 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P0-S01 | [Commit the in-flight work and tag the baseline](P0-S01_baseline-tag.md) | git | P0-S00 | 0.1 d | done |
 | P0-S02 | [Version and fix the shell environment](P0-S02_env-setup-fixes.md) | env | P0-S01 | 0.25 d | done |
 | P0-S03 | [Move the ~/HEP tools into the repo](P0-S03_tools-into-repo.md) | code | P0-S02 | 0.2 d | done |
-| P0-S04 | [Capture golden fixtures of the legacy workflow](P0-S04_golden-fixtures.md) | test | P0-S03 | 0.5 d | todo |
+| P0-S04 | [Capture golden fixtures of the legacy workflow](P0-S04_golden-fixtures.md) | test | P0-S03 | 0.5 d | done |
 | P0-S05 | [Hotfix the physics-relevant defects in the legacy tools](P0-S05_legacy-hotfixes.md) | code | P0-S04 | 0.5 d | todo |
 | P0-S06 | [Archive Lambda, old utils and stale docs into legacy/](P0-S06_legacy-archive.md) | git | P0-S01, P0-S04 | 0.5 d | todo |
 | P0-S07 | [Reduce the Makefile to what is still built](P0-S07_makefile-hygiene.md) | code | P0-S06 | 0.2 d | todo |

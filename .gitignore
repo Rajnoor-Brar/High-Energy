@@ -11,6 +11,7 @@ checkpoints/
 
 # Scratch / local-only
 __pycache__/
+.pytest_cache/
 *.pyc
 dump
 archive/*
