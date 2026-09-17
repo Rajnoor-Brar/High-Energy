@@ -32,7 +32,7 @@ Date: 2026-09-17 · Source: [10_Roadmap.md](../10_Roadmap.md) · 55 steps in 11 
 | Phase | Name | Goal | Exit criteria | Depends on | Effort | Steps | Status |
 |---|---|---|---|---|---|---|---|
 | P0 | Baseline, hygiene, legacy freeze | Current workflow versioned, physics-correct and reproducible from a tag; golden fixtures captured; Lambda and old utils frozen. | Clean tree + tags; env idempotent and `import ROOT, pythia8, rich` work; `rivpyth` runs from `tools/`; hotfix tests pass in scratch; `pytest tests/golden` green; PhotoProduction make targets build. | — | 2.5 d | 8 | done |
-| P1 | Python core (hekit: config, sweep, plan) | `hep plan` reproduces legacy planning on schema 2 with identity seeds and hashes. | `hep plan --json` matches the legacy fixtures except the changes listed in `EXPECTED_DELTAS.md`; pytest < 5 s; `hep doctor` works. | P0 | 4.5 d | 7 | todo |
+| P1 | Python core (hekit: config, sweep, plan) | `hep plan` reproduces legacy planning on schema 2 with identity seeds and hashes. | `hep plan --json` matches the legacy fixtures except the changes listed in `EXPECTED_DELTAS.md`; pytest < 5 s; `hep doctor` works. | P0 | 4.5 d | 7 | done |
 | P2 | C++ core, CMake, hep-run v1 | Pythia + serial in-process Rivet with merged σ, status on fd 3, atomic outputs. | Full and minimal CMake builds; ctest green including the `slow` equivalence gate against the legacy FIFO pipeline; decisions D-Q1/D-Q2/D-SEEDS recorded. | P1 | 4.5 d | 6 | todo |
 | P3 | Supervision, results layout, terminal | `hep run` end-to-end with a live view, provenance, and skip/partial rules. | e2e mini run in scratch; Ctrl-C → partial result + exit 6; fake-stage suite green; `hep watch` works; legacy tools still work. | P2 | 3.4 d | 5 | todo |
 | P4 | Plotting, compare, retirement of the legacy tools | `hep plot`/`hep compare` replace `ydplt`/`ydmrg`; `photo_eic` is re-entrant; legacy tools retired. | Golden page comparisons pass; real-study cross-check passes; tools in `legacy/`; v2 configs canonical; Makefile wraps CMake. | P3 | 4.25 d | 6 | todo |
@@ -68,7 +68,7 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P1-S04 | [Identity hashing and disjoint seed blocks](P1-S04_identity-seeds-hash.md) | code | P1-S03 | 0.5 d | done |
 | P1-S05 | [Plan groups, stage chains, resolved specs and point cards](P1-S05_plan-render.md) | code | P1-S04 | 1 d | done |
 | P1-S06 | [Migration tool and schema-2 configs](P1-S06_config-migrate.md) | code | P1-S05 | 0.5 d | done |
-| P1-S07 | [hep doctor and hep pdf](P1-S07_doctor-pdf.md) | code | P1-S01, P1-S05 | 0.5 d | todo |
+| P1-S07 | [hep doctor and hep pdf](P1-S07_doctor-pdf.md) | code | P1-S01, P1-S05 | 0.5 d | done |
 | P2-S01 | [CMake build with optional components](P2-S01_cmake-skeleton.md) | code | P0-S07 | 0.75 d | todo |
 | P2-S02 | [Decide chunked runs, σ error and seed blocks (spike)](P2-S02_pythia-parallel-spike.md) | decision | P2-S01 | 0.5 d | todo |
 | P2-S03 | [Core and Status namespaces](P2-S03_core-status.md) | code | P2-S01, P1-S01 | 1 d | todo |
@@ -364,6 +364,11 @@ flowchart LR
 ## 10. Change log
 
 - 2026-09-17 — created by P0-S00 (roadmap revision b).
+- 2026-09-18 — **P1 complete** (S01-S07). Exit criteria verified: `hep plan` reproduces the legacy point
+  sets, pages and legends for all 17 golden cases (the only difference is lossless option text, 00/B9);
+  `pytest tests/python tests/golden` 318 passed in 5.0 s (well under the 5 s budget for the Python suite);
+  `hep doctor` works and reports Herwig as run-only. New decisions: D-B22 (pin selectors). The schema-2
+  configs are committed as `.v2.toml` next to the originals.
 - 2026-09-18 — **P0 complete** (S01-S07). Exit criteria verified: clean tree; tags `rework/baseline` and
   `legacy/lambda-final`; env idempotent with `import ROOT, pythia8, rich, yoda, rivet, lhapdf, tomli_w, pytest`
   working; `rivpyth` runs from `tools/`; `pytest tests/golden` 55 passed; both PhotoProduction make targets build.

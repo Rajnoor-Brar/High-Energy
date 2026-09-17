@@ -1,16 +1,18 @@
-# Current plan — P1-S06 config-migrate (done) → next P1-S07
+# Current plan — P1 complete → next P2-S01
 
-> Source: `docs/rework/steps/P1-S06_config-migrate.md`. Index: `docs/rework/steps/README.md`.
-> Status: **done** (2026-09-18).
+> Index: `docs/rework/steps/README.md`. P0 (8 steps) and P1 (7 steps) are done; 15 of 55.
 
-## What P1-S06 delivered
+## P1 outcome (2026-09-18)
 
-`hep config migrate|validate|reference|init`; `configs/PhotoProduction/{eic,zeus_validation}.v2.toml`
-committed next to the originals (00/B12 tag renames with the old names recorded, 00/B14 undeclared
-option quantities dropped, 00/B5 explicit empty data map); `docs/rework/reference/config.md` generated
-from the schema.
+`hekit` is the Python half of the toolkit: schema-2 configuration with layering and origins, the sweep
+engine, identity hashing and disjoint seed blocks, plan building with the Pythia and Rivet adapters, the
+resolved spec (`spec_v2.json`), migration and the generated reference, and `hep doctor` / `hep pdf`.
+Commands that work today: `hep plan`, `hep studies`, `hep config migrate|validate|reference|init`,
+`hep doctor`, `hep pdf list|check|install`. 318 tests, ~5 s.
 
-## Next: P1-S07 doctor-pdf (last step of P1)
+## Next: P2 — C++ core, CMake, hep-run v1
 
-`hep doctor [--json/--brief]` (versions cached, imports, ThePEG modules, HepMC compression,
-`hep-run --capabilities`, env sanity) and `hep pdf check/list/install`; `hep_status` becomes an alias.
+P2-S01 `cmake-skeleton`: CMake + `cmake/Find*.cmake` (via `*-config`), AUTO
+`HEKIT_WITH_{RIVET,HEPMC,ONNX,DELPHES}`, HepMC compression defines, one interface library per facade,
+`git mv` `photo_eic` → `analyses/PhotoProduction/` with `rivet_<project>` targets (the legacy make also
+searches `analyses/`), ctest + pytest registration, compile DB.

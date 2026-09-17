@@ -37,7 +37,7 @@ _hep_strip() {
 # --- status report (on demand; several version probes are slow) ---
 # Strips version strings down to the number for most tools, with two exceptions: Sherpa keeps its
 # codename ("3.0.5 (Erebus)"), and Herwig7/ThePEG share one line since `Herwig --version` reports both.
-hep_status() {
+_hep_status_probe() {
     local GREEN=$'\033[0;32m' DIM=$'\033[2m' RESET=$'\033[0m'
     [ -t 1 ] || { GREEN=''; DIM=''; RESET=''; }
 
@@ -121,6 +121,14 @@ hep_refresh() {
     quit >/dev/null
     source "$setup"
 }
+# hep_status is now hep doctor --brief; the shell function stays as the familiar name (08 §3).
+hep_status() {
+    if command -v hep >/dev/null 2>&1; then
+        hep doctor --brief "$@"
+    else
+        _hep_status_probe
+    fi
+}
 hep_src()     { cd "$HEP/src"; }
 hep_build()   { cd "$HEP/build"; }
 hep_install() { cd "$HEP/install"; }
@@ -132,7 +140,7 @@ hep_cd() {
 hep_help() {
     cat << HLP
 HEP environment commands:
-  hep_status             show installed tool versions
+  hep_status             tool versions and environment health (hep doctor --brief)
   hep_refresh            reload the environment from scratch
   quit                   leave the HEP environment (restores paths, deactivates venv)
   hep_cd PROJECT [DIR]   cd to \$HEKIT_ROOT/DIR/PROJECT (DIR: configs|results|output|sources)
