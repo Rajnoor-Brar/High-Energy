@@ -1,47 +1,34 @@
-# Current plan — P0-S06 legacy-archive
+# Current plan — P0-S07 makefile-hygiene
 
-> Mirror of the step being executed (per bots/BOT.md). Source: `docs/rework/steps/P0-S06_legacy-archive.md`.
-> Step index: `docs/rework/steps/README.md`. Status: **in-progress** (2026-09-18).
+> Mirror of the step being executed (per bots/BOT.md). Source: `docs/rework/steps/P0-S07_makefile-hygiene.md`.
+> Step index: `docs/rework/steps/README.md`. Status: **in-progress** (2026-09-18). Last P0 step.
 > Approved by the user for P0: tags, `~/HEP` edits, local per-step commits (no push), `bots/` layout edits.
 
 ## Goal
 
-Everything the new stack replaces lives in a tracked `legacy/` with history, a README and a porting guide;
-nothing outside `legacy/` includes it; PhotoProduction still builds (D17).
+The interim Makefile builds only `generator.exe` and Rivet plugins, with per-target libraries, lazy flag
+evaluation and visible errors (plans 0.3 reduced, 00 §4.4, F11).
 
-## Moves (`git mv`, history preserved)
+## Changes
 
-| From | To |
-|---|---|
-| `modules/Lambda{,.hh}`, `sources/Lambda`, `configs/lambda` | `legacy/lambda/` |
-| `tests/*` except `tests/golden` | `legacy/tests/` |
-| `utils/{Config,Monitor,Paint,Physics,Probe,Record,Utility}{,.hh}` | `legacy/utils/` |
-| `_Paint.cc`, `_ThreadBench.cc`, `root_macros/` | `legacy/misc/` |
-| `configs/{defaults,templates,all.toml,Paint.toml}` | `legacy/configs/` |
-| `sources/PhotoProduction/photo_{5x41,10x100,18x275}.*` | `legacy/analyses/` |
-| `configs/photo_zeus/README_ZEUS.txt` (00/B28) | `legacy/configs/photo_zeus/` |
-| `docs/{MAP,Architecture,DataContract,UtilsAudit,UtilsDependencyMap,Audit}.md`, `docs/archive/`, `docs/plans/` | `legacy/docs/` |
-| `tests/golden/results_inventory.json` | `legacy/results/PhotoProduction.inventory.json` (capture script updated) |
-
-## Also
-
-- `legacy/README.md`: what, why, the tags to build from (`legacy/lambda-final`, `rework/baseline`), the Lambda physics
-  summary and its bugs, the old utils defects, port notes.
-- `legacy/PORTING.md`: snippet → target step table (00b §4).
-- `docs/README.md`: pointer (docs/ then holds only `rework/`).
-- Fix any path in `docs/rework` that points at a moved doc.
-- `bots/` layout and testing sections updated for `legacy/`, `tools/`, `env/`, `tests/golden` (approved);
-  `bots/CLAUDE.md` is stale Lambda-era content and moves to `legacy/docs/`.
+- Recursive `=` for every `*-config` / `pkg-config` call, so nothing runs until a build actually needs it.
+- Per-target link flags: `LIBS_<target>`; `generator.exe` gets Pythia + HepMC3 only.
+- Drop ROOT, toml++, ONNX, Delphes, FastJet, YODA and LHAPDF from the generic rule, and the stale
+  `-I./utils -I./modules` (both directories are gone after P0-S06).
+- `.so`: `rivet-build` only; a failing metadata copy now fails the rule (was `; true`).
+- `make test` prints where the tests live; `make help` lists the targets.
+- `clean` removes build products only and keeps `output/scratch/` (the golden-fixture scratch) —
+  `distclean` still removes the whole output tree.
 
 ## Verification
 
 | Check | Expected |
 |---|---|
-| `git grep -nE '#include "(Config\|Monitor\|Probe\|Record\|Paint\|Physics\|Utility\|Lambda)' -- ':!legacy'` | empty |
-| `make PhotoProduction/generator.exe PhotoProduction/photo_eic.so` | builds |
-| `git log --follow legacy/utils/Utility/Sha256.hh` | shows old commits |
-| `pytest tests/golden` | passes (mini run still valid) |
+| `make -n PhotoProduction/generator.exe \| grep -c onnx` | 0 |
+| `env -u ONNXRUNTIME_DIR make PhotoProduction/generator.exe` | builds |
+| `make PhotoProduction/photo_eic.so && ls output/PhotoProduction/photo_eic.info` | exists |
+| unreadable `.plot` in scratch | the rule exits non-zero |
 
 ## Next
 
-P0-S07 `makefile-hygiene` (last P0 step).
+P0 exit checks, then P1-S01 `package-skeleton` (first step of the Python core).
