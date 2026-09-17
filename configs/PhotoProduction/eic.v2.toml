@@ -1,0 +1,188 @@
+# eic.v2.toml — migrated from configs/PhotoProduction/eic.toml by `hep config migrate` (schema 1 → 2).
+#
+# Review it before use: the migration reports what it changed, and the notes below are that report.
+#   - [rivpyth].serial dropped: results are directories now, not serial-prefixed files (07 §1)
+#   - [rivpyth].generator dropped: hep-run replaces the per-project generator binary
+#   - [rivpyth].path_literal dropped: paths are resolved by hep (00/B18)
+#   - [sweep].seed_step dropped: seeds come from a point's identity now (03 §5, D21)
+#   - [beams].ids = [2212, 11] was implicit in the base card; schema 2 states it (check it against your card)
+#   - [sweep.cmnd.beams] held energies; it becomes type = "energies" named 'energies' (03 §3)
+#   - [sweep.cmnd.lepton] set Beams:idB; it is now a beams quantity with side = "b" (03 §3)
+#   - [quantity.pdf] tags renamed (00/B12): MSTW → MSTW08lo, NNLO → NNPDF23lo, NNNLO → NNPDF23nlo, LHC21 → PDF4LHC21
+
+schema = 2
+
+[run]
+name = "eic"
+events = 1000000
+seed = 270403
+threads = 20
+
+[generator]
+tool = "pythia"
+card = "photo_ep.cmnd"
+
+[beams]
+ids = [2212, 11]
+
+[rivet]
+analyses = ["photo_eic"]
+paths = ["."]
+
+[plot]
+merge = "overlay"
+void_empty = false
+min_entries = 1
+auto_range = true
+range_pad = 1
+legends = "label"
+
+[output]
+tag_style = "tag"
+
+[settle.use]
+energies = "27x920"
+beams = "ep"
+
+[quantity.energies]
+type = "energies"
+values = [[41, 5], [100, 10], [275, 18], [920, 27.5]]
+labels = [
+    "5x41 GeV ($\\sqrt{s}$ = 28.6 GeV)",
+    "10x100 GeV ($\\sqrt{s}$ = 63.2 GeV)",
+    "18x275 GeV ($\\sqrt{s}$ = 140.7 GeV)",
+    "27x920 GeV ($\\sqrt{s}$ = 318.1 GeV)",
+]
+use = 1
+tags = ["5x41", "10x100", "18x275", "27x920"]
+
+[quantity.beams]
+type = "beams"
+side = "b"
+values = [11, -11]
+labels = ["$e^-$", "$e^+$"]
+use = 1
+tags = ["em", "ep"]
+
+[quantity.pdf]
+type = "setting"
+key = "PDF:pSet"
+values = [
+    "LHAPDF6:MSTW2008lo68cl",
+    "LHAPDF6:NNPDF23_lo_as_0130_qed",
+    "LHAPDF6:NNPDF23_nlo_as_0119_qed",
+    "LHAPDF6:PDF4LHC21_40",
+]
+labels = ["MSTW 2008 LO", "NNPDF 2.3 QCD+QED LO", "NNPDF 2.3 QCD+QED NLO", "PDF4 LHC21.40"]
+use = 2
+note = "tags renamed in the schema-2 migration: MSTW08lo was MSTW, NNPDF23lo was NNLO, NNPDF23nlo was NNNLO, PDF4LHC21 was LHC21"
+tags = ["MSTW08lo", "NNPDF23lo", "NNPDF23nlo", "PDF4LHC21"]
+
+[quantity.pt0ref]
+type = "setting"
+key = "MultipartonInteractions:pT0Ref"
+values = [3.0, 3.2, 3.4]
+labels = ["pT0Ref = 3.0 GeV", "pT0Ref = 3.2 GeV", "pT0Ref = 3.4 GeV"]
+use = 2
+tags = ["pt30", "pt32", "pt34"]
+
+[quantity.mpi]
+type = "setting"
+key = "PartonLevel:MPI"
+values = [true, false]
+labels = ["MPI on", "MPI off"]
+use = 1
+tags = ["mpi", "nompi"]
+
+[quantity.pthatmin]
+type = "setting"
+key = "PhaseSpace:pTHatMin"
+values = [2.0, 3.0, 4.0, 6.0]
+labels = [
+    "$\\hat{p}_T > 2$ GeV",
+    "$\\hat{p}_T > 3$ GeV",
+    "$\\hat{p}_T > 4$ GeV",
+    "$\\hat{p}_T > 6$ GeV",
+]
+tags = ["pth2", "pth3", "pth4", "pth6"]
+
+[quantity.process]
+type = "setting"
+key = "Photon:ProcessType"
+values = [0, 1]
+labels = ["resolved + direct", "resolved"]
+tags = ["allproc", "resolved"]
+
+[quantity.radius]
+type = "option"
+option = "R"
+values = [0.4, 0.7, 1.0]
+labels = ["R = 0.4", "R = 0.7", "R = 1.0"]
+tags = ["r04", "r07", "r10"]
+
+[quantity.etmin]
+type = "option"
+option = "ETMIN"
+values = [4.0, 5.0, 6.0]
+labels = ["$E_T > 4$ GeV", "$E_T > 5$ GeV", "$E_T > 6$ GeV"]
+tags = ["et4", "et5", "et6"]
+
+[sweep]
+across = ["pdf"]
+
+[study.single]
+description = "One run at the pinned beams (other energies: --pin cmnd.beams=10x100 / 18x275)"
+across = []
+
+[study.pdf]
+description = "Proton-PDF comparison at the pinned beams (formerly eic28.toml)"
+across = ["pdf"]
+
+[study.energies]
+description = "Beam-energy comparison at the pinned PDF (formerly eic_energies.toml)"
+across = ["energies"]
+
+[study.energy_pdf]
+description = "Beams x PDF grid: one page per energy with PDF curves"
+across = ["energies", "pdf"]
+overlay = "pdf"
+
+[study.mpi]
+description = "MPI pT0Ref scan at 18x275 with MPI on (formerly eic_mpi.toml)"
+across = ["pt0ref"]
+
+[study.mpi.pin]
+energies = "18x275"
+
+[study.mpi_onoff]
+description = "MPI on vs off at 18x275"
+across = ["mpi"]
+
+[study.mpi_onoff.pin]
+energies = "18x275"
+
+[study.mpi_grid]
+description = "pT0Ref x MPI grid: one page per MPI setting with pT0Ref curves"
+across = ["pt0ref", "mpi"]
+overlay = "pt0ref"
+
+[study.mpi_grid.pin]
+energies = "18x275"
+
+[study.pthatmin]
+description = "Generation-cut stability at the pinned beams; the base pTHatMin = 6 GeV sits above the jet ETMIN = 5 GeV, which biases the lowest-ET jets (00/B27) - this study measures that"
+across = ["pthatmin"]
+
+[study.process]
+description = "Photon:ProcessType 0 vs 1 at 18x275 - a null comparison with this card, see the catalogue note (00/B13)"
+across = ["process"]
+
+[study.process.pin]
+energies = "18x275"
+
+[study.radius]
+description = "Jet radius (analysis option R) at 18x275"
+across = ["radius"]
+
+[study.radius.pin]
+energies = "18x275"

@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "sweep"))
-import v1_to_v2                                          # noqa: E402  the test translation helper
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import migrated                                              # noqa: E402
 from hekit import sweep                                  # noqa: E402
 from hekit.config import load_config                     # noqa: E402
 from hekit.errors import HepError                        # noqa: E402
@@ -29,7 +29,7 @@ STUDIES = ("single", "pdf", "energies", "energy_pdf", "mpi", "mpi_onoff", "mpi_g
 
 @pytest.fixture(scope="module")
 def eic(tmp_path_factory) -> Path:
-    return v1_to_v2.write_v2(INPUTS / "eic.toml", tmp_path_factory.mktemp("v2") / "eic.toml")
+    return migrated.write_v2(INPUTS / "eic.toml", tmp_path_factory.mktemp("v2") / "eic.toml")
 
 
 def points_of(path: Path, **arguments) -> tuple:

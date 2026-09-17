@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "sweep"))
-import v1_to_v2                                              # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import migrated                                              # noqa: E402
 from hekit import sweep                                      # noqa: E402
 from hekit.adapters import pythia, rivet                     # noqa: E402
 from hekit.config import load_config                         # noqa: E402
@@ -33,7 +33,7 @@ def project(tmp_path_factory) -> Path:
     """The frozen inputs as a schema-2 project directory (config plus its base card)."""
     directory = tmp_path_factory.mktemp("PhotoProduction")
     for name in ("eic", "zeus_validation"):
-        v1_to_v2.write_v2(INPUTS / f"{name}.toml", directory / f"{name}.toml")
+        migrated.write_v2(INPUTS / f"{name}.toml", directory / f"{name}.toml")
     (directory / "photo_ep.cmnd").write_bytes((INPUTS / "photo_ep.cmnd").read_bytes())
     return directory
 
@@ -298,7 +298,7 @@ def test_hep_plan_explains_where_a_value_came_from(project, tmp_path):
 
 
 def test_hep_plan_accepts_the_selectors(project, tmp_path):
-    done = run_hep("plan", str(project / "eic.toml"), "--across", "pdf", "--pin", "beams=10x100",
+    done = run_hep("plan", str(project / "eic.toml"), "--across", "pdf", "--pin", "energies=10x100",
                    "--set", "run.events=1000", "--json", cwd=tmp_path)
     assert done.returncode == 0, done.stderr
     document = json.loads(done.stdout)

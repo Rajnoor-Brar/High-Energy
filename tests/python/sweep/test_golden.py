@@ -9,22 +9,25 @@ point names gain the run-name prefix, and seeds are identity-derived from P1-S04
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import pytest
 
-import v1_to_v2
-from hekit import sweep
-from hekit.config import load_config
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import migrated                                              # noqa: E402
+from hekit import sweep                                      # noqa: E402
+from hekit.config import load_config                         # noqa: E402
 
 REPO = Path(__file__).resolve().parents[3]
 GOLDEN = REPO / "tests" / "golden"
 INPUTS = GOLDEN / "inputs" / "PhotoProduction"
 PLAN = GOLDEN / "legacy_plan"
 
-# The translation keeps the legacy quantity *names*, so the energy quantity is still called "beams"
-# (v1 `cmnd.beams` held energy pairs) and the lepton quantity is "lepton". `hep config migrate` (P1-S06)
-# renames them to `energies` and `beams` with an alias map; that is not this helper's job.
+# The migration renames the quantities so that a name matches its type: v1 `cmnd.beams` held energy
+# pairs and becomes `energies`, and the lepton setting becomes `beams` with `side = "b"` (03 §3). Tag
+# renames (00/B12) and dropping undeclared options (00/B14) are switched off here, so that point names
+# and counts can be compared with the legacy fixtures like with like.
 #: Legacy case name → the selection arguments that reproduce it with the new engine.
 CASES: dict[str, dict[str, object]] = {
     "eic/default": {},
@@ -38,9 +41,9 @@ CASES: dict[str, dict[str, object]] = {
     "eic/pthatmin": {"study": "pthatmin"},
     "eic/process": {"study": "process"},
     "eic/radius": {"study": "radius"},
-    "eic/cli_pin_beams": {"pins": ("beams=10x100",)},
-    "eic/cli_single_pin": {"study": "single", "pins": ("beams=18x275",)},
-    "eic/cli_across_overlay": {"across": "beams,pdf", "overlay": "beams"},
+    "eic/cli_pin_beams": {"pins": ("energies=10x100",)},
+    "eic/cli_single_pin": {"study": "single", "pins": ("energies=18x275",)},
+    "eic/cli_across_overlay": {"across": "energies,pdf", "overlay": "energies"},
     "eic/cli_across_together": {"across": "pdf,pthatmin", "style": "together"},
     "zeus_validation/default": {},
     "zeus_validation/cli_across_process": {"across": "process"},
@@ -51,7 +54,7 @@ CASES: dict[str, dict[str, object]] = {
 def translated(tmp_path_factory) -> dict[str, Path]:
     """Both frozen inputs as schema-2 files in a temporary directory."""
     directory = tmp_path_factory.mktemp("v2")
-    return {name: v1_to_v2.write_v2(INPUTS / f"{name}.toml", directory / f"{name}.toml")
+    return {name: migrated.write_v2(INPUTS / f"{name}.toml", directory / f"{name}.toml")
             for name in ("eic", "zeus_validation")}
 
 
@@ -115,8 +118,11 @@ def test_pages_match_the_legacy_fixture(case, translated):
         assert [point.number for point in members] == expected_page["members"]
         assert [sweep.curve_legend(config, selection, point) for point in members] \
             == expected_page["legends"]
-        assert sweep.page_suffix(config, selection, key).endswith(
-            expected_page["suffix"].split("_by_")[-1] and "by_" + expected_page["suffix"].split("_by_")[-1])
+        # the tag part must match exactly; the "by_<curves>" ending names the *new* quantity names,
+        # because the migration renamed the energy quantity (v1 `beams`) to `energies`
+        new_suffix = sweep.page_suffix(config, selection, key)
+        assert new_suffix.split("_by_")[0] == expected_page["suffix"].split("_by_")[0]
+        assert new_suffix.endswith("by_" + "_".join(selection.overlay))
 
 
 def test_the_settings_of_a_point_carry_the_legacy_values(translated):

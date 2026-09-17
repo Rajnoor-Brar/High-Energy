@@ -67,7 +67,7 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P1-S03 | [Port quantities, across, settle, studies and pins (with fixes)](P1-S03_sweep-engine.md) | code | P1-S02 | 1 d | done |
 | P1-S04 | [Identity hashing and disjoint seed blocks](P1-S04_identity-seeds-hash.md) | code | P1-S03 | 0.5 d | done |
 | P1-S05 | [Plan groups, stage chains, resolved specs and point cards](P1-S05_plan-render.md) | code | P1-S04 | 1 d | done |
-| P1-S06 | [Migration tool and schema-2 configs](P1-S06_config-migrate.md) | code | P1-S05 | 0.5 d | todo |
+| P1-S06 | [Migration tool and schema-2 configs](P1-S06_config-migrate.md) | code | P1-S05 | 0.5 d | done |
 | P1-S07 | [hep doctor and hep pdf](P1-S07_doctor-pdf.md) | code | P1-S01, P1-S05 | 0.5 d | todo |
 | P2-S01 | [CMake build with optional components](P2-S01_cmake-skeleton.md) | code | P0-S07 | 0.75 d | todo |
 | P2-S02 | [Decide chunked runs, σ error and seed blocks (spike)](P2-S02_pythia-parallel-spike.md) | decision | P2-S01 | 0.5 d | todo |
