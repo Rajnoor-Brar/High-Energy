@@ -1,16 +1,17 @@
-# Current plan — P1-S04 identity-seeds-hash (done) → next P1-S05
+# Current plan — P1-S05 plan-render (done) → next P1-S06
 
-> Source: `docs/rework/steps/P1-S04_identity-seeds-hash.md`. Index: `docs/rework/steps/README.md`.
+> Source: `docs/rework/steps/P1-S05_plan-render.md`. Index: `docs/rework/steps/README.md`.
 > Status: **done** (2026-09-18).
 
-## What P1-S04 delivered
+## What P1-S05 delivered
 
-`hekit.plan.hashing` (identity hash of the effective generation settings, aliases, skip rule) and
-`hekit.plan.seeds` (identity-derived, block-allocated seeds with a plan-level disjointness check, plus a
-test-only legacy policy). 00/B1, 00/B2 and 00/B15 are fixed and verified on the real catalogue.
+`hep plan` and `hep studies`; `hekit.plan` (build, naming, model, spec + `spec_v2.json`) and
+`hekit.adapters` (pythia, rivet). Generations are named after their events and carry their aliases,
+seed block, analyses, stage chain and resolved spec. Rivet options are checked against the analysis
+`.info` (00/B14). Cards reproduce the legacy settings modulo seeds.
 
-## Next: P1-S05 plan-render
+## Next: P1-S06 config-migrate
 
-`hep plan` / `hep studies`: points → groups → stage chains → spec-v2 `run.toml` + `point.cmnd` (in tmp);
-the Pythia adapter (header, ids/energies, rejects `Beams:*` and `processAsync` in cards, √s warning);
-Rivet options validated against the `.info` (00/B14); `plan/spec_v2.json` as the shared contract.
+`hep config migrate/reference/init/validate`; the v1 → v2 map with the B12 PDF-tag renames and an alias
+map, B14 cleanup and an explicit data map; commit `eic.v2.toml` and `zeus_validation.v2.toml` next to the
+originals; generated reference at `docs/rework/reference/config.md`.

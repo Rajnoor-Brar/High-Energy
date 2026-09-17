@@ -14,7 +14,7 @@ dependencies = ["click>=8.1", "rich>=13", "tomli_w>=1.0"]
 plot = ["matplotlib", "mplhep", "hist", "uproot"]
 ml = ["onnxruntime"]
 proc = ["scipy"]
-dev = ["pytest"]
+dev = ["pytest", "jsonschema"]
 
 [project.scripts]
 hep = "hekit.cli:main"

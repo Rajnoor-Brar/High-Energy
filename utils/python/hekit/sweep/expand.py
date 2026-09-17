@@ -32,6 +32,9 @@ class Point:
     number: int                                   # 1-based position in this expansion
     name: str                                     # run name plus the tags of the applied quantities
     suffix: str                                   # just the tags
+    #: the name of the *events* this point needs: the analysis-side tags are left out, because an
+    #: option variant analyses the same sample (03 §4)
+    generation_name: str = ""
     #: quantity name → zero-based value index, for every applied quantity
     choice: dict[str, int] = dataclass_field(default_factory=dict)
     #: native generator settings, in application order
@@ -112,6 +115,7 @@ def build_point(config: Any, selection: Selection, number: int, choice: dict[str
         options[""][key] = value
 
     tags: list[str] = []
+    generation_tags: list[str] = []
     analysis_choice: dict[str, int] = {}
     for name, quantity in config.quantities.items():       # catalogue order
         if name not in choice:
@@ -144,12 +148,17 @@ def build_point(config: Any, selection: Selection, number: int, choice: dict[str
         elif quantity.type == "option":
             options.setdefault(quantity.target, {})[quantity.option] = value
             analysis_choice[name] = index
-        tags.append(qt.tag(quantity, index, style))
+        rendered_tag = qt.tag(quantity, index, style)
+        tags.append(rendered_tag)
+        if name not in analysis_choice:
+            generation_tags.append(rendered_tag)
 
     if config.settle.tag:
         tags.append(config.settle.tag)
+        generation_tags.append(config.settle.tag)
 
     suffix = "_".join(part for part in tags if part)
+    generation_suffix = "_".join(part for part in generation_tags if part)
     stem = config.run.name
     legend_quantities = [name for name in selection.scanned if config.quantities[name].in_legend]
     legend = ", ".join(qt.legend(config.quantities[name], choice[name], config.plot.legends)
@@ -160,6 +169,7 @@ def build_point(config: Any, selection: Selection, number: int, choice: dict[str
         number=number,
         name="_".join(part for part in (stem, suffix) if part) or stem or "point",
         suffix=suffix,
+        generation_name="_".join(part for part in (stem, generation_suffix) if part) or stem or "point",
         choice=dict(choice),
         settings=settings,
         beams=beams,
