@@ -32,6 +32,8 @@ GOLDEN = REPO / "tests" / "golden"
 INPUTS = GOLDEN / "inputs"
 PLAN_DIR = GOLDEN / "legacy_plan"
 RUN_DIR = GOLDEN / "legacy_run"
+# The inventory describes the pre-rework results, so it lives with the archive (P0-S06).
+INVENTORY = REPO / "legacy" / "results" / "PhotoProduction.inventory.json"
 MINI_CONFIG = GOLDEN / "legacy_mini.toml"
 MINI_CWD = REPO / "output" / "scratch" / "legacy_mini"
 PROJECT = "PhotoProduction"
@@ -360,7 +362,7 @@ def capture_inventory() -> None:
         if entry["serial"]:
             config = (entry["cmnd"] or {}).get("header", {}).get("run config", "?")
             serials.setdefault(entry["serial"], set()).add(config)
-    write_json(GOLDEN / "results_inventory.json", {
+    write_json(INVENTORY, {
         "captured": datetime.date.today().isoformat(),
         "root": str(root.relative_to(REPO)),
         "totals": {"yoda": len(yodas), "directories": len(directories),

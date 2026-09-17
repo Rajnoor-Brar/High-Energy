@@ -8,15 +8,15 @@ Date: 2026-09-17 · Machine: Lab_PC · Branch: `sidequest`
 - what each installed tool actually exposes on this machine.
 
 Earlier audits:
-- `docs/UtilsAudit.md` (2026-06) is **partly stale**. Four of its open items are already fixed: the `traitsOf` bounds check, `writeTextFile` stream checking, the scoped `fs` alias, and the `Time.hh` → Config include. `docs/UtilsDependencyMap.md` is stale too.
-- `docs/plans/01_CurrentState.md` (2026-09) still describes the two workflows correctly.
+- `docs/UtilsAudit.md` (2026-06, now `legacy/docs/`) is **partly stale**. Four of its open items are already fixed: the `traitsOf` bounds check, `writeTextFile` stream checking, the scoped `fs` alias, and the `Time.hh` → Config include. `docs/UtilsDependencyMap.md` is stale too.
+- `legacy/docs/plans/01_CurrentState.md` (2026-09) still describes the two workflows correctly.
 
 This file answers a different question: **judged from scratch, what is each piece worth?**
 
 - **Revision 2026-09-17 (b):** a full read-only re-audit of `utils/`, Lambda and PhotoProduction + `~/HEP`.
   - It revised the verdicts in §3 and added §4 (current defects, with IDs `00/Bn`) and §5 (what gets carried over).
   - The function-level porting table is in [00b_PortingMap.md](00b_PortingMap.md).
-- **ID scheme.** Findings here are cited as `00/Bn`, because `docs/plans` already uses B1, B2, … for different findings, cited as `plans/Bn`.
+- **ID scheme.** Findings here are cited as `00/Bn`, because `legacy/docs/plans` already uses B1, B2, … for different findings, cited as `plans/Bn`.
 
 ---
 
@@ -247,6 +247,8 @@ B8 and B16 are unused: B8 is covered by §4.4, B16 by §4.5 / the P0-S04 invento
 - The file is unversioned.
 
 ### 4.7 Stale documentation
+
+All of the files listed here were archived to `legacy/docs/` in P0-S06; the paths below are their pre-move locations.
 - `docs/MAP.md` (lines 19, 150-161), `docs/Architecture.md:5-6`, `docs/DataContract.md:61-64`, `docs/UtilsAudit.md`, `docs/UtilsDependencyMap.md`.
 - `bots/CLAUDE.md` refers to missing docs (`docs/ROADMAP.md`, `REVIEW.md`, `DataFlow.md`, `Gemini/`) and to a May build status.
 - `docs/rework/05` §3 said worker event assignment is timing-dependent. Wrong: `Parallelism:balanceLoad` is on by default (fixed in this revision).

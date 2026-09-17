@@ -9,7 +9,7 @@ Date: 2026-09-17 · Source: [10_Roadmap.md](../10_Roadmap.md) · 55 steps in 11 
 - **Ready rule:** a step is ready when all its *Depends on* steps are `done` (or `dropped` with a note).
 - **Working state:** every phase ends in a working state; nothing is removed before its replacement passes (roadmap rule 1).
 - **Approval:** commits, tags, moves of `results/`, edits to `bots/` and `~/HEP` only with user approval.
-- **Citations:** findings `00/Bn` ([00_Audit §4](../00_Audit.md#4-current-workflow-defects-2026-09-17)) and `plans/Bn` (`docs/plans`, archived in P0-S06); decisions `Dn` ([10 §2](../10_Roadmap.md#2-decision-log)) and `D-…` (register below).
+- **Citations:** findings `00/Bn` ([00_Audit §4](../00_Audit.md#4-current-workflow-defects-2026-09-17)) and `plans/Bn` (`legacy/docs/plans`, archived in P0-S06); decisions `Dn` ([10 §2](../10_Roadmap.md#2-decision-log)) and `D-…` (register below).
 - **Test bed:** PhotoProduction physics must be correct; specifics are not blockers (D20).
 
 ## 2. How to execute a step
@@ -60,7 +60,7 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P0-S03 | [Move the ~/HEP tools into the repo](P0-S03_tools-into-repo.md) | code | P0-S02 | 0.2 d | done |
 | P0-S04 | [Capture golden fixtures of the legacy workflow](P0-S04_golden-fixtures.md) | test | P0-S03 | 0.5 d | done |
 | P0-S05 | [Hotfix the physics-relevant defects in the legacy tools](P0-S05_legacy-hotfixes.md) | code | P0-S04 | 0.5 d | done |
-| P0-S06 | [Archive Lambda, old utils and stale docs into legacy/](P0-S06_legacy-archive.md) | git | P0-S01, P0-S04 | 0.5 d | todo |
+| P0-S06 | [Archive Lambda, old utils and stale docs into legacy/](P0-S06_legacy-archive.md) | git | P0-S01, P0-S04 | 0.5 d | done |
 | P0-S07 | [Reduce the Makefile to what is still built](P0-S07_makefile-hygiene.md) | code | P0-S06 | 0.2 d | todo |
 | P1-S01 | [Create the hekit package, CLI entry point and test guard](P1-S01_package-skeleton.md) | code | P0-S07 | 0.3 d | todo |
 | P1-S02 | [Implement the schema-2 loader with strict validation and layering](P1-S02_config-schema.md) | code | P1-S01 | 1 d | todo |

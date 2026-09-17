@@ -4,7 +4,7 @@ Date: 2026-09-17 (revision b) · Status: **Proposed**. Execution is step-based: 
 
 **What this revision changed:**
 - It supersedes the first roadmap (P0–P8, ≈ 20–23 d) of this directory.
-- It supersedes `docs/plans/04_Roadmap.md`. That file's open items 0.1, 0.3, 0.4 and 0.7 are absorbed into P0 (0.4 by archiving Lambda instead of repairing it).
+- It supersedes `legacy/docs/plans/04_Roadmap.md`. That file's open items 0.1, 0.3, 0.4 and 0.7 are absorbed into P0 (0.4 by archiving Lambda instead of repairing it).
 - It adds the decisions taken after the first revision (D13–D20) and the re-audit findings (`00/Bn`, [00_Audit §4](00_Audit.md#4-current-workflow-defects-2026-09-17)).
 
 ## 0. Guiding rules
@@ -15,7 +15,7 @@ Date: 2026-09-17 (revision b) · Status: **Proposed**. Execution is step-based: 
 4. **Scratch only.** Tests and dry runs never write into `results/` or `configs/`. They use `output/scratch/`, `HEKIT_RESULTS`, and a pytest guard from P1. The old tools are run from `output/scratch/legacy/`.
 5. **Approval.** Commits, tags, moves of `results/`, and edits to `bots/` happen only with user approval.
 6. **One file per step.** Execution: read the step → mirror it to `bots/current_plan.md` → do it → run its checks → mark it done → update the index.
-7. **Citations.** Findings are cited as `00/Bn` (this rework) or `plans/Bn` (`docs/plans`).
+7. **Citations.** Findings are cited as `00/Bn` (this rework) or `plans/Bn` (`legacy/docs/plans`).
 
 ## 1. Phases
 

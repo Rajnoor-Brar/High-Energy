@@ -1,44 +1,47 @@
-# Current plan — P0-S05 legacy-hotfixes
+# Current plan — P0-S06 legacy-archive
 
-> Mirror of the step being executed (per bots/BOT.md). Source: `docs/rework/steps/P0-S05_legacy-hotfixes.md`.
+> Mirror of the step being executed (per bots/BOT.md). Source: `docs/rework/steps/P0-S06_legacy-archive.md`.
 > Step index: `docs/rework/steps/README.md`. Status: **in-progress** (2026-09-18).
 > Approved by the user for P0: tags, `~/HEP` edits, local per-step commits (no push), `bots/` layout edits.
 
 ## Goal
 
-Results produced by the legacy tools until P4-S06 are trustworthy: no correlated seeds, no partial YODA treated as
-complete, correct labels, no mismatched data overlay, real error reporting.
+Everything the new stack replaces lives in a tracked `legacy/` with history, a README and a porting guide;
+nothing outside `legacy/` includes it; PhotoProduction still builds (D17).
 
-## Corrections to the step's design (found in P0-S04)
+## Moves (`git mv`, history preserved)
 
-- **B21** cannot compare `nWritten` with `nGenerated`: `PythiaParallel::run()` returns *attempts* and calls the
-  callback only for successful events, so `nWritten < nGenerated` is normal (2 % at 5x41). Instead: count
-  `writeNextEvent` failures, and check `toHepMC.output().failed()` right after opening. Exit 4 on either.
-- **B3** cannot compare Rivet's count with `event_count` for the same reason. Instead: compare Rivet's
-  `/RAW/_EVTCOUNT` with the generator's *written* count, parsed from its summary line (relayed through a pipe).
-- **B3 suffix:** YODA rejects `X.yoda.part` ("Format cannot be identified"), so the partial file is `X.part.yoda`.
+| From | To |
+|---|---|
+| `modules/Lambda{,.hh}`, `sources/Lambda`, `configs/lambda` | `legacy/lambda/` |
+| `tests/*` except `tests/golden` | `legacy/tests/` |
+| `utils/{Config,Monitor,Paint,Physics,Probe,Record,Utility}{,.hh}` | `legacy/utils/` |
+| `_Paint.cc`, `_ThreadBench.cc`, `root_macros/` | `legacy/misc/` |
+| `configs/{defaults,templates,all.toml,Paint.toml}` | `legacy/configs/` |
+| `sources/PhotoProduction/photo_{5x41,10x100,18x275}.*` | `legacy/analyses/` |
+| `configs/photo_zeus/README_ZEUS.txt` (00/B28) | `legacy/configs/photo_zeus/` |
+| `docs/{MAP,Architecture,DataContract,UtilsAudit,UtilsDependencyMap,Audit}.md`, `docs/archive/`, `docs/plans/` | `legacy/docs/` |
+| `tests/golden/results_inventory.json` | `legacy/results/PhotoProduction.inventory.json` (capture script updated) |
 
-## Scope
+## Also
 
-- B3: rivet writes `<name>.part.yoda`; rename to `<name>.yoda` only when both processes exit 0 and the counts agree.
-- B20: keep both exit statuses; report the first *real* failure (a knock-on SIGPIPE/SIGTERM does not mask Rivet's).
-- B21: as corrected above.
-- B2: `ConfigError` when a base seed is used with `threads > 1` and `seed_step < threads`; configs get `seed_step = 20`.
-- B4: 27x920 label √s = 318.1 GeV (2·√(27.5·920)). B5: `use_data = false` in eic.toml. B10/B13/B23: comments.
-- Record B11 (no action), B12 (v2 rename), B27 (pTHatMin above ETMIN).
-- Re-capture fixtures; write `tests/golden/legacy_plan/EXPECTED_DELTAS.md`; add `tests/golden/test_hotfixes.py`.
+- `legacy/README.md`: what, why, the tags to build from (`legacy/lambda-final`, `rework/baseline`), the Lambda physics
+  summary and its bugs, the old utils defects, port notes.
+- `legacy/PORTING.md`: snippet → target step table (00b §4).
+- `docs/README.md`: pointer (docs/ then holds only `rework/`).
+- Fix any path in `docs/rework` that points at a moved doc.
+- `bots/` layout and testing sections updated for `legacy/`, `tools/`, `env/`, `tests/golden` (approved);
+  `bots/CLAUDE.md` is stale Lambda-era content and moves to `legacy/docs/`.
 
 ## Verification
 
 | Check | Expected |
 |---|---|
-| Kill test (B3) | no final `.yoda`; `.part.yoda` present; rerun regenerates |
-| Bogus analysis (B20) | Rivet's status and message, not the generator's SIGPIPE |
-| Unwritable output (B21) | non-zero exit |
-| threads=20, seed_step=1 (B2) | `ConfigError` |
-| `pytest tests/golden` | passes with the deltas recorded |
-| ProcessType=2 (B13) | verify the claim before rewriting the comments |
+| `git grep -nE '#include "(Config\|Monitor\|Probe\|Record\|Paint\|Physics\|Utility\|Lambda)' -- ':!legacy'` | empty |
+| `make PhotoProduction/generator.exe PhotoProduction/photo_eic.so` | builds |
+| `git log --follow legacy/utils/Utility/Sha256.hh` | shows old commits |
+| `pytest tests/golden` | passes (mini run still valid) |
 
 ## Next
 
-P0-S06 `legacy-archive`, then P0-S07.
+P0-S07 `makefile-hygiene` (last P0 step).
