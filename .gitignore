@@ -1,6 +1,9 @@
 # Build artifacts
 *.exe
 *.exe.d
+build/
+build-*/
+compile_commands.json
 
 # Run outputs
 output/*

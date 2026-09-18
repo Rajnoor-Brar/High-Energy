@@ -206,7 +206,7 @@ def test_option_parsing_rejects_a_malformed_entry():
 
 
 def test_info_options_are_read_from_the_real_plugin():
-    info = rivet.read_info("photo_eic", (REPO / "sources" / "PhotoProduction",))
+    info = rivet.read_info("photo_eic", (REPO / "analyses" / "PhotoProduction",))
     assert info.found
     assert {"R", "ETMIN", "YMIN", "YMAX", "WMIN", "WMAX", "Q2MAX"} <= info.options
 

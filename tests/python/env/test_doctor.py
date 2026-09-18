@@ -83,9 +83,30 @@ def test_hepmc_compression_is_detected_from_the_headers(monkeypatch, tmp_path):
     assert doctor.hepmc_compression()["formats"] == ["gz"]
 
 
-def test_hep_run_is_reported_as_not_built_until_p2(monkeypatch):
+def test_hep_run_reports_how_to_build_it_when_absent(monkeypatch):
+    monkeypatch.setattr(doctor, "hep_run_path", lambda: "")
+    found = doctor.hep_run()
+    assert found["status"] == "not built" and "cmake --build" in found["detail"]
+
+
+def test_hep_run_is_found_in_the_build_directory(monkeypatch, tmp_path):
+    """A built but not installed hep-run still counts: the build directory is searched too."""
+    binary = tmp_path / "build" / "bin" / "hep-run"
+    binary.parent.mkdir(parents=True)
+    binary.write_text("#!/bin/sh\n", encoding="utf-8")
     monkeypatch.setattr("shutil.which", lambda name: None)
-    assert doctor.hep_run()["status"] == "not built"
+    monkeypatch.setattr("hekit.env.paths.repo_root", lambda: tmp_path)
+    assert doctor.hep_run_path() == str(binary)
+
+
+def test_hep_run_capabilities_are_reported(monkeypatch):
+    """The real binary, when this checkout has been built."""
+    if not doctor.hep_run_path():
+        pytest.skip("hep-run is not built here")
+    found = doctor.hep_run()
+    assert found["status"] == "ok"
+    assert found["spec_schema"] == 2
+    assert set(found["components"]) <= {"rivet", "hepmc", "onnx", "delphes"}
 
 
 def test_missing_python_modules_come_with_a_fix(monkeypatch):
