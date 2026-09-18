@@ -51,6 +51,19 @@ class Decision:
         return not self.run
 
 
+def same_hash(left: str, right: str) -> bool:
+    """Compare identities regardless of whether they carry the `sha256:` prefix.
+
+    The plan holds a bare digest and a written spec holds `sha256:<digest>`; comparing them raw made
+    every rerun look like a name collision.
+    """
+    return bool(left) and bool(right) and _bare(left) == _bare(right)
+
+
+def _bare(digest: str) -> str:
+    return digest.split(":", 1)[1] if ":" in digest else digest
+
+
 def recorded_hash(directory: Path) -> str:
     """The identity hash of whatever is in this directory, from the summary or the provenance."""
     for name in (SUMMARY, PROVENANCE):
@@ -92,7 +105,7 @@ def decide(directory: Path, *, name: str = "", wanted_hash: str = "",
         return Decision(State.MISSING, True, "no result yet")
 
     found = recorded_hash(directory)
-    if wanted_hash and found and found != wanted_hash:
+    if wanted_hash and found and not same_hash(found, wanted_hash):
         return Decision(State.MISMATCH, False, found_hash=found,
                         reason=f"{name or directory.name} already exists with a different identity "
                                f"({found[:19]}… on disk, {wanted_hash[:19]}… wanted)",

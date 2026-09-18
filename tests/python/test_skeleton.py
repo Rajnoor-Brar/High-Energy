@@ -144,8 +144,11 @@ def test_results_are_redirected_for_tests(redirect_results):
 # ── the CLI shell ────────────────────────────────────────────────────────────
 
 def run_hep(*arguments: str, cwd: Path | None = None) -> subprocess.CompletedProcess:
+    # encoding is explicit: under a C locale (ctest's environment) `text=True` decodes as ASCII and
+    # raises on any non-ASCII byte the command prints.
     return subprocess.run([sys.executable, "-m", "hekit.cli", *arguments],
-                          capture_output=True, text=True, cwd=cwd, timeout=60)
+                          capture_output=True, text=True, encoding="utf-8", errors="replace",
+                          cwd=cwd, timeout=60)
 
 
 def test_version_shows_the_version_and_the_root(tmp_path):
@@ -162,15 +165,22 @@ def test_help_lists_every_command(tmp_path):
 
 
 def test_unimplemented_command_names_its_step(tmp_path):
-    done = run_hep("run", "whatever.toml", cwd=tmp_path)
+    """A command whose module does not exist yet says which step adds it, rather than failing
+    obscurely. `plot` arrives in P4-S02; when it does, this test should move to the next one that
+    has not landed."""
+    done = run_hep("plot", "whatever.toml", cwd=tmp_path)
     assert done.returncode == 3
-    assert "P3-S05" in done.stderr
+    assert "P4-S02" in done.stderr
 
 
-def test_an_implemented_command_is_loaded_lazily(tmp_path):
-    """`hep plan` exists from P1-S05; the placeholder must be gone."""
-    done = run_hep("plan", "--help", cwd=tmp_path)
-    assert done.returncode == 0 and "--study" in done.stdout
+@pytest.mark.parametrize("name,step", [("plan", "P1-S05"), ("run", "P3-S05"), ("watch", "P3-S04"),
+                                       ("runs", "P3-S04"), ("show", "P3-S04")])
+def test_an_implemented_command_is_loaded_lazily(tmp_path, name, step):
+    """Once a step lands, its command must be the real one and not the placeholder."""
+    done = run_hep(name, "--help", cwd=tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert "Usage:" in done.stdout
+    assert step not in done.stdout, f"{name} is still a placeholder"
 
 
 def test_unknown_command_suggests(tmp_path):

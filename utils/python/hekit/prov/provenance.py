@@ -118,7 +118,7 @@ def tools() -> dict[str, str]:
     try:
         for name, tool in versions.toolchain().items():
             if getattr(tool, "version", ""):
-                found[name] = tool.version
+                found[name.lower().replace(" ", "_")] = tool.version
     except Exception:                            # pragma: no cover - a broken environment
         pass
     return found

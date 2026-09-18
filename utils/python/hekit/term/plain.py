@@ -42,7 +42,9 @@ class PlainRenderer:
     _last_progress: dict[str, float] = field(default_factory=dict, repr=False)
     _interval: dict[str, float] = field(default_factory=dict, repr=False)
     _seen_logs: dict[tuple, int] = field(default_factory=dict, repr=False)
+    _last_done: dict[str, int] = field(default_factory=dict, repr=False)
     _started: set[str] = field(default_factory=set, repr=False)
+    _finished: set[str] = field(default_factory=set, repr=False)
 
     def __post_init__(self) -> None:
         if self.stream is None:
@@ -96,7 +98,10 @@ class PlainRenderer:
             self._interval[key] = interval
         if not force and now - self._last_progress.get(key, 0.0) < interval:
             return
+        if not force and self._last_done.get(key) == stage.done:
+            return                                  # nothing has moved; saying so again is noise
         self._last_progress[key] = now
+        self._last_done[key] = stage.done
         remaining = theme.eta(stage.done, stage.total, stage.rate)
         self.line(point, f"{stage_name}  {stage.done}/{stage.total}  "
                          f"{theme.percent(stage.done, stage.total)}  {theme.rate(stage.rate)}  "
@@ -154,13 +159,19 @@ class PlainRenderer:
             if point.name not in self._started:
                 self.point_started(point)
             for name, stage in point.stages.items():
-                if f"{point.name}/{name}" not in self._last_progress and (stage.total or stage.phase):
+                key = f"{point.name}/{name}"
+                # Wait until the stage has said something about itself, so the start line can carry
+                # its thread count and mode rather than appearing bare and being corrected later.
+                if key not in self._last_progress and (stage.total or stage.threads):
                     self.stage_started(point, name)
-                    self._last_progress[f"{point.name}/{name}"] = 0.0
+                    self._last_progress[key] = 0.0
                 if stage.total:
                     self.progress(point, name)
             for entry in point.logs:
                 self.log(point, entry)
+            if point.state in FINISHED and point.name not in self._finished:
+                self._finished.add(point.name)
+                self.point_finished(point)
         for entry in self.view._run_logs:
             self.log(None, entry)
 

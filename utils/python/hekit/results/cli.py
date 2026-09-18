@@ -172,7 +172,7 @@ def runs(context: click.Context, project: str, limit: int, as_json: bool) -> Non
 @click.option("--json", "as_json", is_flag=True, help="print the provenance document itself")
 @click.pass_context
 def show(context: click.Context, target: str, project: str, as_json: bool) -> None:
-    """Everything known about a point: σ, counts, seeds, warnings, outputs and provenance."""
+    """Everything known about a point: cross section, counts, seeds, warnings, outputs, provenance."""
     directory = find_point(target, project=project)
     summary = summary_of(directory)
     provenance = prov.read(directory) or {}

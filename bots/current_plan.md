@@ -3,29 +3,33 @@
 Executing `docs/rework` step by step. Read order: `bots/BOT.md` → this file → `docs/rework/steps/README.md`
 → the step being executed. Design context: `docs/rework/README.md`; decisions in `10_Roadmap.md` §2 are final.
 
-## Just finished — P3-S04 (dashboard, plain mode, watch/runs/show) — done
+## Just finished — P3-S05 (`hep run` end to end) — done. **Phase P3 is complete.**
 
-`hekit/term/{theme,model,plain,dashboard,cli}.py` + `hekit/run/journal.py` + `hekit/results/cli.py`
-(~1060 lines), 52 tests. All three verification rows measured: the dashboard frame asserted line by
-line against 06 §1's mock-up; `hep watch` through a real pipe gives plain clock-stamped lines; a pty
-test proves the cursor and echo come back after an exception mid-render.
+`hep run` now plans, preflights, supervises, renders, writes results and explains them. All five
+verification rows measured:
 
-One view model feeds the live dashboard, the plain lines and `hep watch`, which replays
-`status.jsonl` — so watching from another terminal is the same code, not a second implementation.
-The legacy bar-interval defect is fixed: the progress interval is computed once the totals are known.
+| Row | Result |
+|---|---|
+| e2e | 2 generations, each with YODA + summary + provenance + journal + logs |
+| Study | 4-point PDF study at 20 k events, live dashboard under a pty: 4 done in 1m34s |
+| Ctrl-C | exit 6, `analysis.partial.yoda` only, second point never started |
+| Rerun | `0 done, 2 skipped`; `--rerun` redoes; a changed identity is refused |
+| Preflight | `ProcessType = 2` → exit 3 before any spawn, nothing generated |
 
-Found while running under ctest: without `LANG`, a single `σ` was enough to kill the output, so the
-whole vocabulary now degrades to ASCII when the stream cannot encode it.
+Eight defects found by wiring it up — the two that mattered: the skip rule never matched (bare digest
+vs `sha256:`-prefixed, so every rerun looked like a collision), and Ctrl-C reached nothing, because
+every stage has its own session and nobody forwarded the signal. Both fixed and covered.
 
-## Next — P3-S05 (wire the hep run command end to end)
+## Next — P4-S01 (plot pipeline: load, select, transform, data map)
 
-Read `docs/rework/steps/P3-S05_hep-run-command.md` and mirror it here before starting. It joins what
-P3-S02..S04 built: plan → per-point spec → supervisor (with `on_status_fd` writing `[status].fd`) →
-journal + dashboard → results layout, skip rule and provenance. **P3 finishes with it.**
+**Phase P4 — plotting, comparison, retiring the legacy tools.** Read
+`docs/rework/steps/README.md` for P4's order, then `P4-S01_plot-pipeline.md`, and mirror it here
+before starting. The pipeline reorganises the validated `rivpyth_common` plotting functions into
+`hekit.plot.{io,select,transform,data,backends}`.
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6 — phase complete** · P3 4/5 · P4–P10 todo — 25 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5 — phases P0–P3 all complete** · P4–P10 todo — 26 of 55 steps done.
 
 ## Standing constraints
 

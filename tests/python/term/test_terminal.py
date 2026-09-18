@@ -78,13 +78,15 @@ def test_the_dashboard_matches_06_section_1(frozen_clock):
 
     assert lines[0] == "hep run eic.toml --study pdf  PhotoProduction · 0a10209+dirty"
     assert lines[1] == "  points █████░░░░░░░░░░░░░░░  1/4      elapsed 18m42s      eta ≈ 27m36s"
-    assert lines[2] == ("  ✔ 1  eic_5x41_em_MSTW            1.00 M ev   "
+    # The name column is as wide as the longest name in the run, plus two spaces, so a long point
+    # name never runs into its own numbers.
+    assert lines[2] == ("  ✔ 1  eic_5x41_em_MSTW              1.00 M ev   "
                         "σ = 1.832e+04 pb ± 0.3 %   9m12s   0 warnings")
     assert lines[3] == "  ▶ 2  eic_5x41_em_NNLO"
     assert lines[4] == ("       generate+rivet  ██████████████░░░░░░░░  642 113 / 1 000 000  64 %  "
                         "1.18 k ev/s  eta 5m03s")
     assert lines[5] == "       σ(running) 1.790e+04 pb ± 0.3 % · warnings 3 (pythia 2 · rivet 1)"
-    assert lines[6] == "  · 3  eic_5x41_em_NNNLO           queued"
+    assert lines[6] == "  · 3  eic_5x41_em_NNNLO             queued"
     assert "log (curated)" in lines[8]
     assert "SpaceShower::pT2nearThreshold: stuck in loop" in lines[9] and lines[9].endswith("×2")
     assert lines[-1] == ("  Ctrl-C: stop at the next checkpoint (partial outputs kept) · "

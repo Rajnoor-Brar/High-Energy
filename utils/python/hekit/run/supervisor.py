@@ -132,12 +132,18 @@ class Supervisor:
 
     def run(self, stages: Iterable[StageSpec], *, transport: Transport | None = None,
             watch: Callable[[list[StageRun]], None] | None = None,
-            on_status_fd: Callable[[StageSpec, int], None] | None = None) -> Outcome:
+            on_status_fd: Callable[[StageSpec, int], None] | None = None,
+            should_stop: Callable[[], int] | None = None) -> Outcome:
         """Spawn every stage, watch them, and return one outcome.
 
         `on_status_fd` is called before spawning a stage that asked for a status descriptor, with the
         descriptor number it will have in the child. `hep run` uses it to write `[status].fd` into the
         spec: the number cannot be chosen in advance, because `pass_fds` keeps the fd it is given.
+
+        `should_stop` returns how many times the user has asked to stop: 1 → SIGINT (hep-run finishes
+        its chunk and writes partial outputs), 2 → SIGTERM, 3 → SIGKILL. It is needed because every
+        stage runs in its own session, so a Ctrl-C in the user's terminal reaches `hep` and nothing
+        else — the forwarding is deliberate, and it is what makes "stop at the next checkpoint" work.
         """
         specs = list(stages)
         owned_transport = transport is None
@@ -149,7 +155,7 @@ class Supervisor:
         try:
             for spec in specs:
                 runs.append(self._spawn(spec, on_status_fd))
-            outcome = self._watch(runs, watch, started)
+            outcome = self._watch(runs, watch, started, should_stop)
         finally:
             self._close(runs)
             if owned_transport:
@@ -192,11 +198,12 @@ class Supervisor:
         run.last_activity = time.monotonic()
         return run
 
-    def _watch(self, runs: list[StageRun], watch, started: float) -> Outcome:
+    def _watch(self, runs: list[StageRun], watch, started: float, should_stop=None) -> Outcome:
         failing_since: float | None = None
         stalled_stage = ""
         killed_for_stall = False
         sent: set[int] = set()
+        escalated = 0
 
         while any(run.running for run in runs):
             for run in runs:
@@ -206,6 +213,15 @@ class Supervisor:
                     run.status = run.process.poll()
             if watch is not None:
                 watch(runs)
+
+            # The user asked to stop: pass it on, one step per request (06 §4).
+            wanted = should_stop() if should_stop is not None else 0
+            while wanted > escalated and escalated < len(self.escalation.steps):
+                step = self.escalation.steps[escalated]
+                escalated += 1
+                for run in runs:
+                    signal_policy.send(run.process, step)
+                sent.add(step)
 
             # A stage that failed takes the pipeline with it — but not immediately: the others get a
             # grace period to end on their own, because their real statuses explain more than ours.

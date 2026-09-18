@@ -147,9 +147,12 @@ class Dashboard:
     def point_lines(self) -> list[Any]:
         *_, Text = _rich()
         lines: list[Any] = []
+        # Wide enough for the longest name in this run, so a long point name never runs into its own
+        # numbers — and never wider than the terminal can spare.
+        width = min(48, max([28] + [len(point.name) for point in self.view.points])) + 2
         for point in self.view.points:
             head = Text(_t(f"  {point.glyph} {point.index}  "), style=point.colour)
-            head.append(f"{point.name:<28}")
+            head.append(f"{point.name:<{width}}")
             head.append(_t(self.point_summary(point)), style="dim")
             lines.append(head)
             if point.running:
