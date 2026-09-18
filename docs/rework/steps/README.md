@@ -80,12 +80,12 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P3-S03 | [Results layout, skip rule and provenance](P3-S03_results-provenance.md) | code | P3-S01, P1-S04 | 0.75 d | done |
 | P3-S04 | [Live dashboard, plain mode and watch/runs/show](P3-S04_terminal.md) | code | P3-S02 | 1 d | done |
 | P3-S05 | [Wire the hep run command end to end](P3-S05_hep-run-command.md) | code | P3-S02, P3-S03, P3-S04, P2-S05 | 0.5 d | done |
-| P4-S01 | [Plot pipeline: load, select, transform, data map](P4-S01_plot-pipeline.md) | code | P3-S03 | 1 d | todo |
-| P4-S02 | [hep plot with the rivet-mkhtml backend](P4-S02_plot-mkhtml.md) | code | P4-S01 | 0.75 d | todo |
-| P4-S03 | [mplhep backend and house style](P4-S03_plot-mpl-style.md) | code | P4-S01 | 1 d | todo |
-| P4-S04 | [hep compare and shared statistics](P4-S04_compare.md) | code | P4-S01 | 0.5 d | todo |
-| P4-S05 | [Make photo_eic re-entrant and fix plugin defects](P4-S05_photo-eic-reentrant.md) | code | P2-S05, P4-S04 | 0.5 d | todo |
-| P4-S06 | [Retire rivpyth/ydplt/ydmrg and generator.cc](P4-S06_retire-legacy-tools.md) | git | P4-S02, P4-S05, P3-S05, P2-S06, P1-S06 | 0.5 d | todo |
+| P4-S01 | [Plot pipeline: load, select, transform, data map](P4-S01_plot-pipeline.md) | code | P3-S03 | 1 d | done |
+| P4-S02 | [hep plot with the rivet-mkhtml backend](P4-S02_plot-mkhtml.md) | code | P4-S01 | 0.75 d | done |
+| P4-S03 | [mplhep backend and house style](P4-S03_plot-mpl-style.md) | code | P4-S01 | 1 d | done |
+| P4-S04 | [hep compare and shared statistics](P4-S04_compare.md) | code | P4-S01 | 0.5 d | done |
+| P4-S05 | [Make photo_eic re-entrant and fix plugin defects](P4-S05_photo-eic-reentrant.md) | code | P2-S05, P4-S04 | 0.5 d | done |
+| P4-S06 | [Retire rivpyth/ydplt/ydmrg and generator.cc](P4-S06_retire-legacy-tools.md) | git | P4-S02, P4-S05, P3-S05, P2-S06, P1-S06 | 0.5 d | done |
 | P5-S01 | [Store namespace, store sink and store CLI](P5-S01_store-writer.md) | code | P2-S05 | 1 d | todo |
 | P5-S02 | [Store and stream sources with parallel readers](P5-S02_store-source-replay.md) | code | P5-S01, P3-S03 | 1 d | todo |
 | P5-S03 | [Replay equivalence and hep events](P5-S03_replay-equivalence-events.md) | test | P5-S02 | 0.5 d | todo |

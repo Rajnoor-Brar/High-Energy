@@ -17,8 +17,10 @@ Two levels of agreement, because two different questions get asked of it:
     identical bins, only statistically indistinguishable ones. `--chi2` reports χ²/ndf over the bins
     whose errors are known, which is the right test there (and what `hep compare` will use, 07 §5).
 
-The helper becomes `hekit.compare` in P9-S02; until then it lives under tests/ so nothing ships that
-has not been used in anger.
+**Promoted in P4-S04.** The statistics now live in `hekit.results.stats`, which `hep compare` uses;
+this stays as the file-to-file *diff* the equivalence gates need — "is every number identical?" is a
+different question from "are these two measurements compatible?", and the gates ask the first.
+`--chi2` here answers the second by the same arithmetic `hekit.results.stats` uses.
 """
 
 from __future__ import annotations

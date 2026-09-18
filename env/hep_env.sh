@@ -161,8 +161,9 @@ fi
 # Activate the Python venv
 source "$HEP/.venv/bin/activate"
 
-# Versioned legacy tools (rivpyth, ydplt, ydmrg) until hep replaces them (P4-S06)
-_hep_prepend PATH "$HEKIT_ROOT/tools"
+# The legacy tools (rivpyth, ydplt, ydmrg) were retired in P4-S06 and live in legacy/tools/,
+# kept readable but off PATH: `hep run` and `hep plot` replace them, and the equivalence gates
+# proved they agree (P2-S06, P4-S02, P4-S06).
 
 _hep_pyver=$("$HEP/.venv/bin/python" -c 'import sys; print("%d.%d" % sys.version_info[:2])')
 for pkg in $_HEP_PACKAGES; do

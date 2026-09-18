@@ -19,8 +19,10 @@ from pathlib import Path
 
 from ..errors import HepError
 
-#: A directory is the repository root when it holds all of these.
-MARKERS = ("docs/rework", "configs", "sources")
+#: A directory is the repository root when it holds all of these. `sources/` was one of them until
+#: P4-S06 moved the last generator into `legacy/` and removed it; `analyses/` is the durable
+#: replacement, since every project has one.
+MARKERS = ("docs/rework", "configs", "analyses")
 
 ROOT_VAR = "HEKIT_ROOT"
 RESULTS_VAR = "HEKIT_RESULTS"
@@ -96,6 +98,18 @@ def project_dir(kind: str, project: str) -> Path:
     if kind not in roots:
         raise HepError(f"unknown directory kind '{kind}'", hint=f"one of: {', '.join(sorted(roots))}")
     return roots[kind]() / project
+
+
+def mpl_config_dir(run: str = "") -> Path:
+    """A private `MPLCONFIGDIR` for a plotting run (00/B19).
+
+    matplotlib caches fonts under `$HOME/.config/matplotlib` and rebuilds it when it looks stale;
+    two runs doing that at once corrupt each other's cache, and a read-only home makes matplotlib
+    warn on every import. A directory under `output/scratch/` avoids both.
+    """
+    directory = scratch_root() / "mpl" / (run or "default")
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
 
 
 def describe() -> dict[str, str]:

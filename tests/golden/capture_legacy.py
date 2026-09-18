@@ -6,7 +6,7 @@
     python tests/golden/capture_legacy.py mini        # run the tools on legacy_mini.toml -> legacy_run/
     python tests/golden/capture_legacy.py inventory   # read-only results_inventory.json
 
-The planner is exercised through the pure functions of tools/rivpyth_common.py on frozen copies of the
+The planner is exercised through the pure functions of legacy/tools/rivpyth_common.py on frozen copies of the
 configs (inputs/), from a temporary CWD, so the fixtures do not move when configs/ is edited. The mini run
 uses its own scratch CWD (output/scratch/legacy_mini). Nothing here writes into results/ or configs/.
 """
@@ -40,7 +40,7 @@ PROJECT = "PhotoProduction"
 CONFIGS = ("eic", "zeus_validation")
 INPUT_FILES = ("eic.toml", "zeus_validation.toml", "photo_ep.cmnd")
 
-sys.path.insert(0, str(REPO / "tools"))
+sys.path.insert(0, str(REPO / "legacy" / "tools"))
 import rivpyth_common as rc  # noqa: E402  (legacy planner; pure functions)
 
 # Command-line overrides captured next to the studies: (case name, arguments). Studies are added per config.
@@ -160,7 +160,8 @@ def capture_inputs() -> None:
 def capture_plan() -> None:
     manifest = {
         "captured": datetime.date.today().isoformat(),
-        "tool": {"tools/rivpyth_common.py": sha256(REPO / "tools" / "rivpyth_common.py")},
+        "tool": {"legacy/tools/rivpyth_common.py":
+                 sha256(REPO / "legacy" / "tools" / "rivpyth_common.py")},
         "inputs": {name: sha256(INPUTS / PROJECT / name) for name in INPUT_FILES},
         "cases": {},
     }
@@ -193,7 +194,7 @@ def capture_mini() -> None:
     (MINI_CWD / "configs" / PROJECT / "photo_ep.cmnd").symlink_to(INPUTS / PROJECT / "photo_ep.cmnd")
     (MINI_CWD / "configs" / PROJECT / "legacy_mini.toml").symlink_to(MINI_CONFIG)
     config_arg = f"configs/{PROJECT}/legacy_mini.toml"
-    tools = REPO / "tools"
+    tools = REPO / "legacy" / "tools"
     log = MINI_CWD / "run.log"
     os.chdir(MINI_CWD)
     statuses = {}

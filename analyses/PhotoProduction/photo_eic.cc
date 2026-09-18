@@ -71,11 +71,15 @@ namespace Rivet {
       declare(FastJets(fs, fastjet::JetAlgorithm::kt_algorithm, fastjet::RecombinationScheme::Et_scheme, radius), "Jets");
       declare(FastJets(fs, fastjet::JetAlgorithm::antikt_algorithm, fastjet::RecombinationScheme::Et_scheme, radius), "Jets_akt");
 
-      // SISCone with the E_T recombination scheme
+      // SISCone with the E_T recombination scheme.
+      // `JetDefinition` does not own a plugin unless it is told to: without
+      // `delete_plugin_when_unused()` this was leaked once per run, and once per worker in a
+      // sharded run (00/B25).
       const double overlapThreshold = 0.75;
       fastjet::SISConePlugin* plugin = new fastjet::SISConePlugin(radius, overlapThreshold);
       plugin->set_use_jet_def_recombiner(true);
       JetDefinition siscone(plugin);
+      siscone.delete_plugin_when_unused();
       siscone.set_recombination_scheme(fastjet::RecombinationScheme::Et_scheme);
       declare(FastJets(fs, siscone), "Jets_sis");
 
@@ -123,7 +127,11 @@ namespace Rivet {
       } else if (!inRange(kin.y(), _ymin, _ymax)) vetoEvent;
 
       // Jet selection
-      const Cut jetCut = Cuts::Et > _etmin*GeV && Cuts::etaIn(-_etamax*orientation, _etamax*orientation);
+      // The acceptance is symmetric in eta, so it is written that way: building it as
+      // [-etamax*orientation, +etamax*orientation] gave an empty range when orientation = -1, and
+      // every jet histogram would have come out empty without a word (00/B26). The orientation
+      // still flips the eta that is *binned*, a few lines below.
+      const Cut jetCut = Cuts::Et > _etmin*GeV && Cuts::abseta < _etamax;
       const Jets jets     = apply<FastJets>(event, "Jets").jets(jetCut, cmpMomByEt);
       const Jets jets_akt = apply<FastJets>(event, "Jets_akt").jets(jetCut, cmpMomByEt);
       const Jets jets_sis = apply<FastJets>(event, "Jets_sis").jets(jetCut, cmpMomByEt);

@@ -3,33 +3,31 @@
 Executing `docs/rework` step by step. Read order: `bots/BOT.md` → this file → `docs/rework/steps/README.md`
 → the step being executed. Design context: `docs/rework/README.md`; decisions in `10_Roadmap.md` §2 are final.
 
-## Just finished — P3-S05 (`hep run` end to end) — done. **Phase P3 is complete.**
+## Just finished — P4-S06 (retire the legacy tools) — done. **Phase P4 is complete.**
 
-`hep run` now plans, preflights, supervises, renders, writes results and explains them. All five
-verification rows measured:
+The gate first: the `pdf` study at **100 k events per point** through both toolchains gives χ²/ndf of
+1.085, 1.227, 1.129 and 1.043 over ~410 bins each, with σ agreeing to 0.2–0.4 %. Independent samples,
+so ≈1 is the right answer.
 
-| Row | Result |
-|---|---|
-| e2e | 2 generations, each with YODA + summary + provenance + journal + logs |
-| Study | 4-point PDF study at 20 k events, live dashboard under a pty: 4 done in 1m34s |
-| Ctrl-C | exit 6, `analysis.partial.yoda` only, second point never started |
-| Rerun | `0 done, 2 skipped`; `--rerun` redoes; a changed identity is refused |
-| Preflight | `ProcessType = 2` → exit 3 before any spawn, nothing generated |
+Then, with your approval: `tools/*` and `generator.cc` → `legacy/`, `sources/` gone, the v2 configs
+promoted to `eic.toml`/`zeus_validation.toml` (originals archived), `tools/` off PATH, the Makefile
+reduced to a CMake wrapper, and the five `~/HEP/*.moved` files deleted — two of which were pre-hotfix
+originals, located in git (`18db967`) before deleting.
 
-Eight defects found by wiring it up — the two that mattered: the skip rule never matched (bare digest
-vs `sha256:`-prefixed, so every rerun looked like a collision), and Ctrl-C reached nothing, because
-every stage has its own session and nobody forwarded the signal. Both fixed and covered.
+**Worth knowing:** `which rivpyth` still finds `~/.local/bin/rivpyth` — an *older standalone bash*
+script with a different interface that predates the Python tool. It is outside the repo and outside
+what was approved, so it was left alone.
 
-## Next — P4-S01 (plot pipeline: load, select, transform, data map)
+14/14 ctest; `hep plan/run/plot` verified end to end on the promoted config.
 
-**Phase P4 — plotting, comparison, retiring the legacy tools.** Read
-`docs/rework/steps/README.md` for P4's order, then `P4-S01_plot-pipeline.md`, and mirror it here
-before starting. The pipeline reorganises the validated `rivpyth_common` plotting functions into
-`hekit.plot.{io,select,transform,data,backends}`.
+## Next — P5-S01 (Store namespace, store sink and store CLI)
+
+**Phase P5 — the HepMC3 event store and event inspection.** Read `docs/rework/steps/README.md` for
+P5's order, then `P5-S01_store-writer.md`, and mirror it here before starting.
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5 — phases P0–P3 all complete** · P4–P10 todo — 26 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6 — phases P0–P4 all complete** · P5–P10 todo — 32 of 55 steps done.
 
 ## Standing constraints
 

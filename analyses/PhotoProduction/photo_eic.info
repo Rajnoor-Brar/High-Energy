@@ -4,12 +4,15 @@ Summary: Inclusive-jet photoproduction observables at EIC beam energies (ZEUS 20
 Experiment: EIC (prediction)
 Collider: EIC
 Status: UNVALIDATED NOHEPDATA SINGLEWEIGHT
-Reentrant: false
+Reentrant: true
 Authors:
  - Rajnoor S. Brar
 References:
  - 'Based on ZEUS_2012_I1116258, Nucl.Phys.B 864 (2012) 1'
 RunInfo: 'ep photoproduction (Q2 < 1 GeV2), proton as beam A along +z. Any beam energies.'
+Beams:
+ - [p+, e-]
+ - [p+, e+]
 Options:
  - YMIN=#        # inelasticity window lower edge (default 0.1992)
  - YMAX=#        # inelasticity window upper edge (default 0.8483)

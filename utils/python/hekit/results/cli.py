@@ -306,3 +306,52 @@ def find_point(target: str, *, project: str = "") -> Path:
                        hint=("did you mean: " + ", ".join(near[:5])) if near
                             else "`hep runs` lists what is there")
     return matches[0]
+
+
+# ── hep compare ──────────────────────────────────────────────────────────────
+
+@click.command("compare")
+@click.argument("config_file", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--study", help="run a named [study.<name>]")
+@click.option("--pin", "pins", multiple=True, metavar="QUANTITY=SELECTOR",
+              help="hold a quantity at a tag, a value or '#N' (repeatable)")
+@click.option("--across", help="scanned groups, e.g. 'energies+beams,pdf'")
+@click.option("--overlay", help="quantity drawn as curves")
+@click.option("--set", "sets", multiple=True, metavar="KEY=VALUE", help="override a value")
+@click.option("--ref", "reference", default="data", show_default=True,
+              help="'data' (the overlaid reference) or a point name")
+@click.option("--write/--no-write", default=True, show_default=True,
+              help="also write compare.md into the study directory")
+@click.pass_context
+def compare(context: click.Context, config_file: Path, study, pins, across, overlay, sets,
+            reference: str, write: bool) -> None:
+    """Compare curves or points: chi2/ndf, bins used and the largest pull (07 §5)."""
+    import tempfile
+
+    from ..config import load_config
+    from ..plan import build as builder
+    from ..plot import page as page_module
+    from ..sweep import select as select_points
+    from . import compare as compare_module
+    from .layout import Layout
+
+    config = load_config(config_file, sets=tuple(sets))
+    selection = select_points(config, study=study, pins=tuple(pins), across=across, overlay=overlay)
+    plan = builder.build(config, selection, check_analyses=False)
+    layout = Layout.of(config)
+    if not plan.pages:
+        raise HepError("nothing to compare", hint="`hep plan` shows what a config expands to")
+
+    plain = (context.obj or {}).get("plain", False)
+    for spec in plan.pages:
+        with tempfile.TemporaryDirectory(prefix="hekit-compare-") as workdir:
+            built = page_module.prepare_from_config(plan, layout, spec, Path(workdir))
+            for warning in built.warnings:
+                click.echo(f"hep compare: {warning}", err=True)
+            table = (compare_module.against_reference(built) if reference == "data"
+                     else compare_module.against_curve(built, reference))
+            compare_module.render(table, plain=plain)
+            if write:
+                latest = layout.latest_study(plan.study or "adhoc")
+                if latest is not None:
+                    click.echo(f"hep compare: wrote {table.write(latest)}")

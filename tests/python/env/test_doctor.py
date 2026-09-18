@@ -218,7 +218,7 @@ def test_a_plan_declares_which_sets_it_needs(monkeypatch, tmp_path):
     from hekit.config import load_config
     from hekit.plan import build as builder
 
-    config = load_config(CONFIGS / "eic.v2.toml", machine_file=None, project="PhotoProduction")
+    config = load_config(CONFIGS / "eic.toml", machine_file=None, project="PhotoProduction")
     plan = builder.build(config, sweep.select(config, study="pdf"))
     needed = lhapdf.sets_in_plan(plan)
     assert set(needed) == {"MSTW2008lo68cl", "NNPDF23_lo_as_0130_qed", "NNPDF23_nlo_as_0119_qed",
@@ -249,7 +249,7 @@ def test_doctor_json_reports_herwig_as_run_only(tmp_path):
 
 
 def test_pdf_check_finds_the_four_sets_the_eic_config_needs(tmp_path):
-    done = run_hep("pdf", "check", str(CONFIGS / "eic.v2.toml"), "--study", "pdf", "--json", cwd=tmp_path)
+    done = run_hep("pdf", "check", str(CONFIGS / "eic.toml"), "--study", "pdf", "--json", cwd=tmp_path)
     assert done.returncode == 0, done.stderr
     found = json.loads(done.stdout)
     assert len(found) == 4 and all(found.values()), found

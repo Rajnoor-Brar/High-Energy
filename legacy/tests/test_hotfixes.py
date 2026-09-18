@@ -1,7 +1,21 @@
-"""Regression tests for the P0-S05 hotfixes to the legacy tools.
+"""Regression tests for the P0-S05 hotfixes to the legacy tools — **frozen with them (P4-S06)**.
 
-Each test names the finding it guards. The long-running checks (kill, bogus analysis, unwritable output)
-are recorded in the step's Log; what is testable without generating events is tested here.
+These guard `rivpyth`, `ydplt` and `ydmrg`, which were retired once `hep run` and `hep plot` were shown
+to reproduce them (P2-S06, P4-S02, P4-S06). They are kept here, beside the tools, so the hotfixes are
+still checkable if anyone ever revives one; they are **not** part of the suite, because nothing in the
+toolkit runs those tools any more, and `tests/` may not import from `legacy/`.
+
+To run them by hand:
+
+    python -m pytest legacy/tests/test_hotfixes.py
+
+The behaviours that still matter to the new toolchain are tested there instead: the partial-output
+naming in `tests/python/run/test_rivet_sink.py`, the locale restore in
+`tests/python/results/test_layout_skip_provenance.py`, and the exit codes in
+`tests/python/run/test_hep_run.py`.
+
+Each test names the finding it guards. The long-running checks (kill, bogus analysis, unwritable
+output) are recorded in the P0-S05 Log.
 """
 
 import importlib.util
@@ -13,16 +27,20 @@ from pathlib import Path
 
 import pytest
 
-import capture_legacy as cl
-import rivpyth_common as rc
+_REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(_REPO / "tests" / "golden"))     # capture_legacy.py, the fixture recorder
+sys.path.insert(0, str(_REPO / "legacy" / "tools"))     # the tools these hotfixes are for
+
+import capture_legacy as cl                 # noqa: E402
+import rivpyth_common as rc                 # noqa: E402
 
 GENERATOR = cl.REPO / "output" / "PhotoProduction" / "generator.exe"
 
 
 def load_rivpyth() -> types.ModuleType:
-    """Import tools/rivpyth (no .py suffix) as a module."""
+    """Import legacy/tools/rivpyth (no .py suffix) as a module."""
     spec = importlib.util.spec_from_loader(
-        "rivpyth_tool", importlib.machinery.SourceFileLoader("rivpyth_tool", str(cl.REPO / "tools" / "rivpyth")))
+        "rivpyth_tool", importlib.machinery.SourceFileLoader("rivpyth_tool", str(_REPO / "legacy" / "tools" / "rivpyth")))
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

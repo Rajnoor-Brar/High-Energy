@@ -4,7 +4,6 @@ The planner cases run on the frozen inputs in inputs/; recapture with capture_le
 """
 
 import json
-import warnings
 
 import pytest
 
@@ -75,10 +74,14 @@ def test_fixture_matches_legacy_planner(config, case, arguments):
 def test_inputs_are_the_fixture_inputs():
     manifest = json.loads((cl.PLAN_DIR / "MANIFEST.json").read_text(encoding="utf-8"))
     assert manifest["inputs"] == {name: cl.sha256(cl.INPUTS / cl.PROJECT / name) for name in cl.INPUT_FILES}
+    # The live configs are schema 2 now (P4-S06 promoted them), so they are *expected* to differ from
+    # these schema-1 fixtures. What must still match is the archive the migration reads from.
+    archive = cl.REPO / "legacy" / "configs" / cl.PROJECT
     stale = [name for name in cl.INPUT_FILES
-             if cl.sha256(cl.INPUTS / cl.PROJECT / name) != cl.sha256(cl.REPO / "configs" / cl.PROJECT / name)]
-    if stale:   # informative only: the fixtures describe the frozen inputs, not the live configs
-        warnings.warn(f"configs/{cl.PROJECT} differs from the frozen golden inputs: {', '.join(stale)}")
+             if (archive / name).is_file()
+             and cl.sha256(cl.INPUTS / cl.PROJECT / name) != cl.sha256(archive / name)]
+    assert not stale, (f"legacy/configs/{cl.PROJECT} differs from the frozen golden inputs: "
+                       f"{', '.join(stale)} — the fixtures no longer describe the archived originals")
 
 
 def test_mini_run_is_complete():
