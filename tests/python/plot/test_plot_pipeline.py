@@ -1,20 +1,19 @@
 """The plot pipeline (P4-S01).
 
-Two kinds of test here:
+The transforms are ports of code whose output was validated against real plots, and they were checked
+against the originals bin for bin while `tools/` still existed. P4-S06 retired those tools, so the
+comparison is gone and the fixtures stay: the *outputs* the old tools produced are still compared, in
+`tests/integration/test_plot_vs_legacy.py`, against the files P0-S04 froze. That is the durable
+evidence — captured results outlive the code that made them.
 
-* **equality with the legacy functions.** `void_bins`, `auto_range_plot` and `align_to_edges` are ports
-  of code whose output is already validated against real plots, so the test imports the originals from
-  `tools/rivpyth_common.py` and compares bin for bin on the same fixtures. When `tools/` is retired
-  (P4-S06) these tests keep the fixtures and drop the comparison.
-* **the three findings.** The data overlay must be explicit (00/B5), a merged page must not lose a
-  curve to a name collision (00/B17), and nothing may be written to a fixed temporary path (00/B19).
+What is left here is the behaviour itself, and the three findings: the data overlay must be explicit
+(00/B5), a merged page must not lose a curve to a name collision (00/B17), and nothing may be written
+to a fixed temporary path (00/B19).
 """
 
 from __future__ import annotations
 
-import importlib.util
 import math
-import sys
 from pathlib import Path
 
 import pytest
@@ -26,19 +25,6 @@ from hekit.plot import io, plotfile, select, transform
 yoda = pytest.importorskip("yoda")
 
 REPO = Path(__file__).resolve().parents[3]
-
-
-@pytest.fixture(scope="module")
-def legacy():
-    """`tools/rivpyth_common.py`, imported by path — the reference implementation while it exists."""
-    path = REPO / "tools" / "rivpyth_common.py"
-    if not path.is_file():                                # pragma: no cover - after P4-S06
-        pytest.skip("the legacy tools have been retired")
-    spec = importlib.util.spec_from_file_location("legacy_rivpyth_common", path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules.setdefault("legacy_rivpyth_common", module)
-    spec.loader.exec_module(module)
-    return module
 
 
 # ── fixtures ─────────────────────────────────────────────────────────────────
@@ -82,29 +68,23 @@ def page(tmp_path: Path) -> list[Path]:
 
 # ── voiding, against the legacy implementation ───────────────────────────────
 
-def test_voiding_empty_bins_matches_the_legacy_function(page, tmp_path, legacy):
+def test_voiding_blanks_a_bin_that_is_empty_in_every_curve(page, tmp_path):
     ours, report = transform.void_bins(page, tmp_path / "ours", void_empty=True)
-    (tmp_path / "theirs").mkdir()                    # the legacy function does not create it
-    theirs = legacy.void_bins({"void_empty": True, "min_entries": 0}, page, tmp_path / "theirs")
-
     # The count is of voided *bins of a plot*, not of curve-bins: one bin in one histogram, blanked
     # in every curve of the page.
     assert report.bins == 1 and report.histograms == 1
-    for mine, other in zip(ours, theirs):
-        assert values_of(mine) == pytest.approx(values_of(other), nan_ok=True)
+    for path in ours:
+        assert math.isnan(values_of(path)[1]), "bin 2 is zero in both curves"
+        assert not math.isnan(values_of(path)[0])
 
 
-def test_voiding_sparse_bins_matches_the_legacy_function(page, tmp_path, legacy):
+def test_voiding_blanks_a_bin_too_few_entries_went_into(page, tmp_path):
     ours, report = transform.void_bins(page, tmp_path / "ours", void_empty=True, min_entries=25)
-    (tmp_path / "theirs").mkdir()
-    theirs = legacy.void_bins({"void_empty": True, "min_entries": 25}, page, tmp_path / "theirs")
-    for mine, other in zip(ours, theirs):
-        assert values_of(mine) == pytest.approx(values_of(other), nan_ok=True)
-    # bins 2 and 3 go: one is empty everywhere, the other has 3 and 20 entries against a floor of 25.
+    # bins 2, 3 and 4 go: one is empty everywhere, the others have 3 and 20 raw entries in a curve.
     first = io.read(ours[0])["/photo_eic/d01-x01-y01"]
     assert math.isnan(first.bin(2).val()) and math.isnan(first.bin(3).val())
     assert not math.isnan(first.bin(1).val())
-    assert report.bins == 3 and "25 entries" in report.rule    # bins 2, 3 and 4: 20 entries < 25
+    assert report.bins == 3 and "25 entries" in report.rule
 
 
 def test_voiding_is_a_no_op_when_nothing_is_asked_for(page, tmp_path):
@@ -124,15 +104,6 @@ def values_of(path: Path) -> list[float]:
 
 
 # ── auto-range, against the legacy implementation ────────────────────────────
-
-def test_auto_range_matches_the_legacy_function(page, tmp_path, legacy):
-    ours = transform.auto_range(page, "photo_eic", tmp_path / "ours", pad=0)
-    (tmp_path / "theirs").mkdir()
-    theirs = legacy.auto_range_plot({"auto_range": True, "range_pad": 0}, "photo_eic", page,
-                                    tmp_path / "theirs")
-    assert ours is not None and theirs is not None
-    assert plotfile.parse(ours) == plotfile.parse(theirs)
-
 
 def test_auto_range_clips_to_the_filled_bins(page, tmp_path):
     blocks = plotfile.parse(transform.auto_range(page, "photo_eic", tmp_path / "out", pad=0))
@@ -155,14 +126,12 @@ def test_auto_range_says_nothing_when_there_is_nothing_to_say(tmp_path):
 
 # ── alignment, against the legacy implementation ─────────────────────────────
 
-def test_alignment_matches_the_legacy_function(tmp_path, legacy):
+def test_an_object_is_trimmed_to_its_longest_aligned_run(tmp_path):
     mc_edges = [0.0, 1.0, 2.0, 3.0, 4.0]
     reference = yoda.BinnedEstimate1D([0.5, 1.0, 2.0, 3.0], "/REF/x/d01-x01-y01")
     for index in range(1, 4):
         reference.bin(index).setVal(float(index))
-    mine = transform.align_to_edges(reference.clone(), mc_edges)
-    theirs = legacy.align_to_edges(reference.clone(), mc_edges)
-    assert io.edges_of(mine) == io.edges_of(theirs) == [1.0, 2.0, 3.0]
+    assert io.edges_of(transform.align_to_edges(reference, mc_edges)) == [1.0, 2.0, 3.0]
 
 
 def test_an_aligned_object_is_returned_unchanged(tmp_path):
@@ -348,12 +317,6 @@ def test_the_plot_analysis_can_be_forced(tmp_path):
 ])
 def test_object_paths_are_split_the_way_rivet_writes_them(path, expected):
     assert io.split_object_path(path) == expected
-
-
-def test_object_paths_match_the_legacy_splitter(legacy):
-    for path in ("/photo_eic/d01-x01-y01", "/REF/photo_eic/d01-x01-y01", "/RAW/x/y", "/TMP/_B",
-                 "/_EVTCOUNT", "/photo_eic:R=0.4/d01-x01-y01"):
-        assert io.split_object_path(path) == legacy.split_object_path(path), path
 
 
 def test_a_plot_key_ignores_options():

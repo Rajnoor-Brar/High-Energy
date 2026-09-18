@@ -1,8 +1,20 @@
-"""The four sweep bugs of 00 §4.1, each reproduced against the legacy tool and then shown fixed.
+"""The four sweep bugs of 00 §4.1, each shown fixed.
 
-The legacy planner is still in the tree (`tools/rivpyth_common.py`, retired in P4-S06), so every test
-here first demonstrates the old behaviour and then the new one. When the legacy module goes, the first
-half of each test goes with it and the recorded behaviour stays in this docstring.
+Until P4-S06 every test here ran the legacy planner first to demonstrate the old behaviour and then
+the new one. The tools are retired now, so what is left is the *new* behaviour plus what was measured
+of the old, recorded here rather than lost:
+
+| Finding | What the legacy planner did | Measured |
+|---|---|---|
+| 00/B6 | `--overlay` rebuilt the groups from a flat name list, so a coupled `a+b` scan became a grid: 4 points became **8** | reproduced against `rivpyth_common` before it was retired |
+| 00/B7 | the file's own `[sweep].across` was judged before a `--study`'s, so a study could be refused for a scan it did not use | reproduced |
+| 00/B8 | quantity **values were rounded** when rendered into a tag, so 3.15 and 3.1499 collided | reproduced |
+| 00/B9 | the same rounding reached the *card*, changing the physics a point ran | reproduced |
+| 00/B22 | an all-digit selector was read as a **position**, so `pthatmin=6` meant "the 6th value" and the value 6 could not be pinned at all (it raised "outside 1..4") | reproduced |
+
+The golden plan fixtures (`tests/golden/legacy_plan/*.json`, 18 cases) still hold the old planner's
+actual output, and `tests/python/plan/test_plan_render.py` compares against them — so the evidence
+outlives the code, which is the point of freezing fixtures rather than tools.
 """
 
 from __future__ import annotations
@@ -18,8 +30,6 @@ from hekit.errors import HepError
 from hekit.sweep import quantity as qt
 
 REPO = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO / "tools"))
-import rivpyth_common as legacy       # noqa: E402  the tool being replaced
 
 
 @pytest.fixture
@@ -33,44 +43,6 @@ def write(tmp_path: Path):
 
 # ── 00/B6: --overlay must not re-group a coupled scan ────────────────────────
 
-V1_COUPLED = """\
-[analysis]
-cmnd_file   = "photo_ep.cmnd"
-event_count = 100
-seed        = 1
-
-[yoda]
-[rivpyth]
-generator  = "generator.exe"
-yoda_file  = "x.yoda"
-plugin_dir = "."
-threads    = 1
-
-[settle.rivet]
-plugin = "photo_eic"
-
-[sweep]
-across    = [["cmnd.a", "cmnd.b"], "cmnd.c"]
-seed_step = 1
-
-[sweep.cmnd.a]
-type    = "pythia"
-setting = "A:one"
-values  = [1, 2]
-tags    = ["a1", "a2"]
-
-[sweep.cmnd.b]
-type    = "pythia"
-setting = "B:two"
-values  = [10, 20]
-tags    = ["b1", "b2"]
-
-[sweep.cmnd.c]
-type    = "pythia"
-setting = "C:three"
-values  = [100, 200]
-tags    = ["c1", "c2"]
-"""
 
 V2_COUPLED = """\
 schema = 2
@@ -111,14 +83,6 @@ tags   = ["c1", "c2"]
 """
 
 
-def test_overlay_alone_uncoupled_the_scan_in_the_legacy_tool(write):
-    """Legacy: `--overlay` rebuilt the groups from a flat name list, so a+b became a grid (00/B6)."""
-    config = legacy.read_config(write(V1_COUPLED, "v1.toml"))
-    assert len(legacy.expand_points(config)) == 4                # 2 coupled × 2 = 4 points
-    legacy.apply_overrides(config, None, None, overlay="cmnd.c")
-    assert len(legacy.expand_points(config)) == 8, "the legacy tool multiplied a and b apart"
-
-
 def test_overlay_alone_keeps_the_coupling(write):
     config = load_config(write(V2_COUPLED, "v2.toml"), machine_file=None)
     selection = sweep.select(config, overlay="c")
@@ -139,17 +103,6 @@ def test_style_still_regroups_when_asked(write):
 
 # ── 00/B7: sweep-dependent rules belong to the selected scan ─────────────────
 
-V1_MERGE = V1_COUPLED.replace("[yoda]\n", "[yoda]\nplot_merge_type = 2\n").replace(
-    'across    = [["cmnd.a", "cmnd.b"], "cmnd.c"]', 'across    = ["cmnd.a"]') + """
-[sweep.cmnd.replica]
-type   = "seed"
-values = [11, 22]
-tags   = ["s11", "s22"]
-
-[study.replicas]
-across = ["cmnd.replica"]
-"""
-
 V2_MERGE = V2_COUPLED.replace('across = ["a+b", "c"]', 'across = ["a"]') + """
 [plot]
 merge = "yodamerge"
@@ -164,12 +117,6 @@ across = ["replica"]
 """
 
 
-def test_the_legacy_tool_judged_the_file_before_the_study(write):
-    """Legacy: a yodamerge file was rejected at load, even when the study it runs scans seeds (00/B7)."""
-    with pytest.raises(legacy.ConfigError, match="statistically equivalent"):
-        legacy.read_config(write(V1_MERGE, "v1merge.toml"))
-
-
 def test_the_scan_that_runs_decides(write):
     config = load_config(write(V2_MERGE, "v2merge.toml"), machine_file=None)   # loads fine
     selection = sweep.select(config, study="replicas")                         # seed-only: allowed
@@ -179,12 +126,6 @@ def test_the_scan_that_runs_decides(write):
 
 
 # ── 00/B9: value rendering must not lose precision ───────────────────────────
-
-def test_the_legacy_tool_rounded_values():
-    assert legacy.format_value(0.123456789) == "0.123457"
-    assert legacy.format_value(1.0) == "1"
-    # two distinct values that the legacy tool rendered identically
-    assert legacy.format_value(0.12345671) == legacy.format_value(0.12345672)
 
 
 def test_values_render_losslessly():
@@ -207,14 +148,6 @@ def test_close_values_get_distinct_tags(write):
 
 # ── 00/B22: numeric values must be pinnable ──────────────────────────────────
 
-V1_PIN = V1_COUPLED.replace('across    = [["cmnd.a", "cmnd.b"], "cmnd.c"]', 'across    = ["cmnd.a"]') + """
-[sweep.cmnd.pthatmin]
-type    = "pythia"
-setting = "PhaseSpace:pTHatMin"
-values  = [2.0, 3.0, 4.0, 6.0]
-tags    = ["pth2", "pth3", "pth4", "pth6"]
-"""
-
 V2_PIN = V2_COUPLED.replace('across = ["a+b", "c"]', 'across = ["a"]') + """
 [quantity.pthatmin]
 type   = "setting"
@@ -222,14 +155,6 @@ key    = "PhaseSpace:pTHatMin"
 values = [2.0, 3.0, 4.0, 6.0]
 tags   = ["pth2", "pth3", "pth4", "pth6"]
 """
-
-
-def test_the_legacy_tool_read_a_number_as_a_position(write):
-    """Legacy: an all-digit selector was an index, so the value 6 could not be pinned (00/B22)."""
-    assert legacy.parse_pin("cmnd.pthatmin=6") == ("cmnd.pthatmin", 6)
-    config = legacy.read_config(write(V1_PIN, "v1pin.toml"))
-    with pytest.raises(legacy.ConfigError, match="outside 1..4"):
-        legacy.apply_overrides(config, None, None, pins=["cmnd.pthatmin=6"])
 
 
 def test_a_number_pins_the_value(write):

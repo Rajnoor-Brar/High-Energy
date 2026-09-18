@@ -19,8 +19,10 @@ from pathlib import Path
 
 from ..errors import HepError
 
-#: A directory is the repository root when it holds all of these.
-MARKERS = ("docs/rework", "configs", "sources")
+#: A directory is the repository root when it holds all of these. `sources/` was one of them until
+#: P4-S06 moved the last generator into `legacy/` and removed it; `analyses/` is the durable
+#: replacement, since every project has one.
+MARKERS = ("docs/rework", "configs", "analyses")
 
 ROOT_VAR = "HEKIT_ROOT"
 RESULTS_VAR = "HEKIT_RESULTS"

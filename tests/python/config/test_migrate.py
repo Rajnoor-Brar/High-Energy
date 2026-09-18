@@ -20,6 +20,8 @@ from hekit.plan import build as builder
 REPO = Path(__file__).resolve().parents[3]
 INPUTS = REPO / "tests" / "golden" / "inputs" / "PhotoProduction"
 CONFIGS = REPO / "configs" / "PhotoProduction"
+#: the schema-1 originals, archived when the v2 files were promoted (P4-S06)
+LEGACY_CONFIGS = REPO / "legacy" / "configs" / "PhotoProduction"
 
 
 @pytest.fixture(scope="module")
@@ -147,9 +149,13 @@ def plan_of(path: Path, **arguments):
 
 
 def test_the_committed_file_plans_like_a_fresh_migration(migrated):
-    """The `.v2.toml` in configs/ must be exactly what the tool produces today."""
-    committed = CONFIGS / "eic.v2.toml"
-    fresh = migrate_file(CONFIGS / "eic.toml")
+    """The config in `configs/` must be exactly what migrating the archived schema-1 file produces.
+
+    P4-S06 promoted `eic.v2.toml` to `eic.toml` and archived the original under `legacy/configs/`;
+    reading that archive as *data* is how this test still checks the migration end to end.
+    """
+    committed = CONFIGS / "eic.toml"
+    fresh = migrate_file(LEGACY_CONFIGS / "eic.toml")
     assert to_toml(fresh.document) == to_toml(
         tomllib.loads(committed.read_text(encoding="utf-8")))
 
@@ -286,7 +292,7 @@ def test_config_reference_and_init(tmp_path):
 
 
 def test_validate_reports_the_committed_configs(tmp_path):
-    for name in ("eic.v2.toml", "zeus_validation.v2.toml"):
+    for name in ("eic.toml", "zeus_validation.toml"):
         done = run_hep("config", "validate", str(CONFIGS / name), cwd=tmp_path)
         assert done.returncode == 0, done.stderr
         assert "valid schema-2 configuration for project 'PhotoProduction'" in done.stdout
