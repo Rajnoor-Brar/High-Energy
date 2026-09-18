@@ -1,6 +1,6 @@
 # Interim Makefile — builds the two things that are still built by hand:
 #   make PhotoProduction/generator.exe     # sources/<project>/<name>.cc -> output/<project>/<name>.exe
-#   make PhotoProduction/photo_eic.so      # Rivet plugin  -> output/<project>/Rivet_<name>.so (+ .info/.plot)
+#   make PhotoProduction/photo_eic.so      # analyses/<project>/<name>.cc -> output/<project>/Rivet_<name>.so
 #
 # CMake replaces this in P2-S01, and this file becomes a thin wrapper in P4-S06.
 # Everything needs the HEP environment first: `load_hep` (env/hep_env.sh).
@@ -11,6 +11,8 @@ SHELL := /bin/sh
 CXX ?= g++
 
 SOURCE_ROOT := sources
+# Rivet analyses moved to analyses/<project>/ in P2-S01; the .so rule searches there first.
+ANALYSIS_ROOT := analyses
 OUTPUT_ROOT := output
 
 BASE_CXXFLAGS := -O2 -std=c++17
@@ -34,7 +36,7 @@ COMPILE_DB ?= $(OUTPUT_ROOT)/compile_commands.json
 
 help:
 	@echo "make <project>/<name>.exe    build an executable from $(SOURCE_ROOT)/<project>/<name>.cc"
-	@echo "make <project>/<name>.so     build a Rivet plugin (+ copy its .info/.plot)"
+	@echo "make <project>/<name>.so     build a Rivet plugin from $(ANALYSIS_ROOT)/ (+ copy its .info/.plot)"
 	@echo "make test                    where the tests are"
 	@echo "make clean                   remove built executables and plugins (keeps output/scratch)"
 	@echo "make distclean               remove $(OUTPUT_ROOT) entirely"
@@ -56,9 +58,10 @@ FORCE:
 	fi
 
 %.so: FORCE
-	@src="$(SOURCE_ROOT)/$(basename $@).cc"; \
+	@src="$(ANALYSIS_ROOT)/$(basename $@).cc"; \
+	[ -f "$$src" ] || src="$(SOURCE_ROOT)/$(basename $@).cc"; \
 	[ -f "$$src" ] || src="$(basename $@).cc"; \
-	[ -f "$$src" ] || { echo "Missing source: $(SOURCE_ROOT)/$(basename $@).cc or $(basename $@).cc"; exit 2; }; \
+	[ -f "$$src" ] || { echo "Missing source: $(ANALYSIS_ROOT)/$(basename $@).cc, $(SOURCE_ROOT)/$(basename $@).cc or $(basename $@).cc"; exit 2; }; \
 	dest="$(OUTPUT_ROOT)/$(dir $@)Rivet_$(notdir $@)"; \
 	mkdir -p "$$(dirname "$$dest")"; \
 	if [ ! -e "$$dest" ] || [ "$$src" -nt "$$dest" ] || [ Makefile -nt "$$dest" ]; then \

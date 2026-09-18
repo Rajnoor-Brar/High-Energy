@@ -35,6 +35,10 @@ def analysis_search_paths(config: Any) -> tuple[Path, ...]:
         candidate = Path(entry)
         found.append(candidate if candidate.is_absolute() else (config.path.parent / candidate).resolve())
     if config.project:
+        # The compiled plugin is what Rivet actually loads, and `rivet-build` writes it into the build
+        # tree next to the copied .info/.plot files — so that comes first. The source directory stays
+        # in the list because a hand-built .so often sits there.
+        found.append(paths.build_root() / "analyses" / config.project)
         found.append(paths.analyses_root() / config.project)
         found.append(paths.output_root() / config.project)
     return tuple(found)

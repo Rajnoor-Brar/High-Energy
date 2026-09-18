@@ -158,21 +158,42 @@ def _generator_state(tool: versions.Tool, features: list[str]) -> dict[str, Any]
     return {"status": "ok", "features": features, "detail": tool.version}
 
 
-def hep_run() -> dict[str, Any]:
-    """`hep-run --capabilities`, once it is built (P2-S04)."""
+def hep_run_path() -> str:
+    """Where `hep-run` is: on PATH, or in the repository's build directory."""
     from shutil import which
 
-    executable = which("hep-run")
-    if executable is None:
+    found = which("hep-run")
+    if found:
+        return found
+    try:
+        from .paths import repo_root
+
+        for candidate in (repo_root() / "build" / "bin" / "hep-run",
+                          repo_root() / "output" / "scratch" / "build" / "bin" / "hep-run"):
+            if candidate.is_file():
+                return str(candidate)
+    except Exception:                   # noqa: BLE001 - a missing repository is not an error here
+        pass
+    return ""
+
+
+def hep_run() -> dict[str, Any]:
+    """`hep-run --capabilities`, once it is built (P2-S01 builds a stub, P2-S04 the real loop)."""
+    executable = hep_run_path()
+    if not executable:
         return {"status": "not built", "components": [],
-                "detail": "hep-run arrives in P2; the Python half works without it"}
+                "detail": "build it with: cmake -S . -B build && cmake --build build"}
     try:
         done = subprocess.run([executable, "--capabilities"], capture_output=True, text=True, timeout=30)
         payload = json.loads(done.stdout) if done.returncode == 0 else {}
     except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
         payload = {}
     return {"status": "ok" if payload else "unknown", "path": executable,
-            "components": payload.get("components", []), "detail": payload.get("built", "")}
+            "components": payload.get("components", []),
+            "compression": payload.get("compression", ""),
+            "spec_schema": payload.get("spec_schema"),
+            "detail": f"built {payload.get('built', '?')} ({payload.get('build', '?')})"
+                      if payload else "did not report its capabilities"}
 
 
 def data() -> dict[str, Any]:

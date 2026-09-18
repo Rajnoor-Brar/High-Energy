@@ -67,6 +67,13 @@ def analyses_root() -> Path:
     return repo_root() / "analyses"
 
 
+def build_root() -> Path:
+    """Where CMake put the compiled things. `HEKIT_BUILD` overrides it, as `hep doctor` reports."""
+    from os import environ
+    override = environ.get("HEKIT_BUILD")
+    return Path(override).expanduser() if override else repo_root() / "build"
+
+
 def output_root() -> Path:
     return repo_root() / "output"
 

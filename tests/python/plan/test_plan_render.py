@@ -133,6 +133,19 @@ def test_a_single_thread_run_writes_no_seed_block(project):
     assert "parallelism:seeds" not in settings_of(plan.groups[0].card)
 
 
+def test_the_seed_list_length_always_matches_the_thread_count(project):
+    """D-SEEDS: Pythia indexes Parallelism:seeds without bounds checking, so the length is on us."""
+    for threads in (2, 4, 20):
+        config = load_config(project / "eic.toml", machine_file=None, project="PhotoProduction",
+                             sets=(f"run.threads={threads}",))
+        plan = builder.build(config, sweep.select(config, study="pdf"))
+        for group in plan.groups:
+            assert len(group.seeds.instances) == threads
+            assert len(group.spec["run"]["seeds"]["instances"]) == group.spec["run"]["threads"]
+            written = settings_of(group.card)["parallelism:seeds"].split(",")
+            assert len(written) == threads
+
+
 def test_beams_and_energies_are_rendered_by_the_adapter(project):
     plan = plan_for(project, study="energies")
     for group in plan.groups:
@@ -206,7 +219,7 @@ def test_option_parsing_rejects_a_malformed_entry():
 
 
 def test_info_options_are_read_from_the_real_plugin():
-    info = rivet.read_info("photo_eic", (REPO / "sources" / "PhotoProduction",))
+    info = rivet.read_info("photo_eic", (REPO / "analyses" / "PhotoProduction",))
     assert info.found
     assert {"R", "ETMIN", "YMIN", "YMAX", "WMIN", "WMAX", "Q2MAX"} <= info.options
 

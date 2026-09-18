@@ -90,7 +90,23 @@ public:
 - Histogram contents are equal up to floating-point summation order.
 - Provenance records the mode, thread count and instance seeds.
 
-**Seeds.** The planner renders `Parallelism:seeds` as a disjoint block per point (03 §5, 00/B2). `Run` records the effective per-instance seeds, read back with `foreach`.
+**Chunking** (measured in P2-S02, D-Q2). `Run::loop` calls `run(chunk)` repeatedly after one `init()`,
+because `PythiaParallel::run` cannot be interrupted from its callback, and a chunk boundary is the only
+place to stop, dump or checkpoint. Measured properties:
+- counts and σ are correct and **cumulative** across chunks (σ after the last chunk equals a single run's);
+- the event set is **bit-identical** to one `run(N)` when every chunk's per-thread split matches, which
+  holds when the chunk size is a multiple of the thread count. `chunk = threads · ceil(target / threads)`,
+  remainder in the last chunk; the effective chunk size goes into provenance.
+
+**Merged σ** (D-Q1). `PythiaParallel` exposes `sigmaGen()` and `weightSum()` but **no error**, so `Run`
+combines the instances with `foreach`: σ = Σwᵢσᵢ / Σwᵢ and error = √(Σ(wᵢ·errᵢ)²) / Σwᵢ. The σ reproduces
+`sigmaGen()` exactly, and the error tracks a serial `stat()` to within the statistical difference.
+
+**Seeds.** The planner renders `Parallelism:seeds` as a disjoint block per point (03 §5, 00/B2). `Run`
+records the effective per-instance seeds, read back with `foreach`, and **checks the list length against
+the thread count before `init()`**: Pythia indexes the list without bounds checking, so a short list is
+undefined behaviour rather than the documented error (D-SEEDS). With `threads = 0` the list is omitted and
+Pythia derives `Random:seed + i`, which is the same block.
 
 **Replay and stream sources parallelise too:**
 - one reader thread per shard (or per FIFO) fills a bounded queue;
@@ -104,13 +120,18 @@ public:
   2. force the run control from the spec (events, threads, seeds, `processAsync` per mode, `Next:numberCount = 0`);
   3. `init()`; failure → exit 3.
 - **Output only after `init()`.** No output is opened before init succeeds, which is a `generator.cc` behaviour to keep.
-- **Chunked run:** `run(chunk, callback)` is called repeatedly, with `chunk = min(checkpoint, remaining)`.
+- **Chunked run:** `run(chunk, callback)` is called repeatedly, with
+  `chunk = threads · ceil(min(checkpoint, remaining) / threads)` and the remainder in the last chunk
+  (**D-Q2, measured in P2-S02**).
   - This gives clean stop points (SIGINT) and checkpoints, since `PythiaParallel` has no abort API.
   - `run()` returns per-thread counts, which feed the per-worker status.
-  - **Decision D-Q2 (P2-S02):** confirm that repeated `run()` after one `init()` accumulates `sigmaGen()` and `weightSum()` correctly, including chunks not divisible by the thread count. Fallback: a single `run()` with cooperative skipping (the callback returns immediately once stop is requested; pattern from `legacy/lambda/sources/_Lambda_Data.cc:43-50`).
+  - Counts and σ accumulate correctly across chunks, and a chunk size that is a multiple of the thread
+    count reproduces the unchunked event set exactly. A chunk size that is *not* gives a different
+    (statistically equivalent) sample, which is why the rule above rounds up to the thread count.
 - **σ at the end:** merged `sigmaGen()` [mb → pb].
-  - **Decision D-Q1 (P2-S02):** the error comes from `foreach` over the instances (`info.sigmaErr()` and `info.weightSum()`), weighted like `sigmaGen()`, and is checked against `stat(true)`.
-  - If they disagree, the error is recorded as "unavailable", never invented.
+  - **D-Q1 (measured in P2-S02):** the error comes from `foreach` over the instances (`info.sigmaErr()`
+    weighted by `info.weightSum()`), because `PythiaParallel` exposes no error of its own. The combined σ
+    reproduces `sigmaGen()` exactly and agrees with a serial `stat()` within statistics.
 - **Warnings:** the Pythia `Logger` counts are read at checkpoints and at the end, and emitted as `log` messages (06 §3).
 - **LHE:** the same class. The cards set `Beams:frameType = 4` and `Beams:LHEF`.
 
