@@ -1,21 +1,18 @@
-# Current plan — P2-S02 pythia-parallel-spike (done) → next P2-S03
+# Current plan — P2-S03 core-status (done) → next P2-S04
 
-> Source: `docs/rework/steps/P2-S02_pythia-parallel-spike.md`. Index: `docs/rework/steps/README.md`.
-> Status: **done** (2026-09-18). 17 of 55 steps.
+> Source: `docs/rework/steps/P2-S03_core-status.md`. Index: `docs/rework/steps/README.md`.
+> Status: **done** (2026-09-18). 18 of 55 steps.
 
-## Decisions recorded
+## What P2-S03 delivered
 
-- **D-Q2 = chunk.** `k × run(chunk)` after one `init()` is safe; with a chunk size that is a multiple of
-  the thread count the event set is bit-identical to one `run(N)`. Rule:
-  `chunk = threads · ceil(target / threads)`, remainder last, chunk size in provenance.
-- **D-Q1 = combine from the instances.** σ = Σwᵢσᵢ/Σwᵢ, err = √(Σ(wᵢerrᵢ)²)/Σwᵢ via `foreach`;
-  `PythiaParallel` exposes no error at all.
-- **D-SEEDS = explicit blocks, length checked by us.** Seeds are applied once in `init()`, never
-  re-seeded; a short list is undefined behaviour in Pythia, so `hep-run` checks it.
+`Core` (errors and exit codes, Sha256 with an idempotent digest, two clocks, sigaction signals, paths,
+the spec reader with the D-SEEDS length check, provenance, types) and `Status` (fd-3 JSON writer with a
+non-blocking drop policy, heartbeat with advanced deadlines, plain fallback, scope timers, the X11
+guard), plus `hekit.run.status` and a cross-language round-trip test.
 
-## Next: P2-S03 core-status
+## Next: P2-S04 source-run-loop
 
-`Core/{Types,Spec,Errors,Signals,Clock,Sha256,Paths}` and `Status/{Types,Writer,Heartbeat,Plain}`
-(fd 3, rate limiting, deadline loop, stderr fallback, the `#ifdef Status` guard for X11), plus the
-Python status reader. ctest: `core_spec`, `core_sha256` (FIPS vectors), `core_signals`,
-`status_roundtrip`.
+`Source::Pythia` (checked `readFile` → exit 1; `init` → exit 3; chunked runs per D-Q2;
+`Parallelism:index`; logger counts), `Events::View` (lazy HepMC), the `Sink` interface, `Run::loop`,
+and `hep-run SPEC [--check/--plain/--capabilities/--list N]`. Plus the seed-length check before
+`init()` (D-SEEDS) and σ combined from the instances (D-Q1).
