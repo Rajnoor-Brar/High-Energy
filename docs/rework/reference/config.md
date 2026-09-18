@@ -74,7 +74,7 @@ Optional HepMC3 event store (11).
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `enabled` | bool | `False` | write events as a sharded HepMC3 store |
-| `compression` | str one of 'gz', 'zst', 'none' | `'gz'` | shard compression |
+| `compression` | str one of 'gz', 'zst', 'none' | `'zst'` | shard compression; zst is smaller and twice as fast to write as gz (D-STORE-COMP, measured in P5-S01) |
 
 ### `[sinks.module]`
 

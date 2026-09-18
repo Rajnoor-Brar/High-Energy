@@ -86,7 +86,7 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P4-S04 | [hep compare and shared statistics](P4-S04_compare.md) | code | P4-S01 | 0.5 d | done |
 | P4-S05 | [Make photo_eic re-entrant and fix plugin defects](P4-S05_photo-eic-reentrant.md) | code | P2-S05, P4-S04 | 0.5 d | done |
 | P4-S06 | [Retire rivpyth/ydplt/ydmrg and generator.cc](P4-S06_retire-legacy-tools.md) | git | P4-S02, P4-S05, P3-S05, P2-S06, P1-S06 | 0.5 d | done |
-| P5-S01 | [Store namespace, store sink and store CLI](P5-S01_store-writer.md) | code | P2-S05 | 1 d | todo |
+| P5-S01 | [Store namespace, store sink and store CLI](P5-S01_store-writer.md) | code | P2-S05 | 1 d | done |
 | P5-S02 | [Store and stream sources with parallel readers](P5-S02_store-source-replay.md) | code | P5-S01, P3-S03 | 1 d | todo |
 | P5-S03 | [Replay equivalence and hep events](P5-S03_replay-equivalence-events.md) | test | P5-S02 | 0.5 d | todo |
 | P6-S01 | [Sharded Rivet and concurrency modes](P6-S01_sharded-rivet.md) | code | P4-S05, P5-S02 | 1 d | todo |
@@ -286,7 +286,7 @@ flowchart LR
 | D-Q7 | Cross-generator photoproduction equivalence | P7-S02 | open | — |
 | D-Q8 | Port or archive Lambda? | P0-S06 | answered | archive frozen (D17) |
 | D-Q9 | HepMC3 gzip support? | P5-S01 | answered | yes, compile-time flags |
-| D-STORE-COMP | Default store compression (gz vs zstd) | P5-S01 | open | — |
+| D-STORE-COMP | Default store compression (gz vs zstd) | P5-S01 | answered | **zst**, measured on 10 000 real events: 9 866 B/event vs 10 223 (2.96× vs 2.86×), **2.1× faster to write** (2 289 vs 1 086 ev/s) and 1.26× faster to read (5 624 vs 4 461). No axis favours gz. `gz` stays the fallback where zstd is not compiled in, and the codec is recorded in the index |
 | D-DERIVED | Derived per-candidate tables | P8-S04 | deferred | trigger: first ML training dataset (D23) |
 | D-B11 | EIC studies run e⁺ via `[settle.use]` | P0-S05 | answered | no action (test bed, D20) |
 | D-B12 | PDF tags `NNLO`/`NNNLO` misleading | P1-S06 | answered | rename in v2 migration with alias map |

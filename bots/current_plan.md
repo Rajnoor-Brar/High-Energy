@@ -3,31 +3,32 @@
 Executing `docs/rework` step by step. Read order: `bots/BOT.md` → this file → `docs/rework/steps/README.md`
 → the step being executed. Design context: `docs/rework/README.md`; decisions in `10_Roadmap.md` §2 are final.
 
-## Just finished — P4-S06 (retire the legacy tools) — done. **Phase P4 is complete.**
+## Just finished — P5-S01 (event store: writer, sink, CLI) — done
 
-The gate first: the `pdf` study at **100 k events per point** through both toolchains gives χ²/ndf of
-1.085, 1.227, 1.129 and 1.043 over ~410 bins each, with σ agreeing to 0.2–0.4 %. Independent samples,
-so ≈1 is the right answer.
+**D-STORE-COMP decided by measurement: `zst`.** On 10 000 real events, zstd is 9 866 B/event against
+gz's 10 223, **2.1× faster to write** (2 289 vs 1 086 ev/s) and 1.26× faster to read. No axis favours
+gz, so `zst` is the default and `gz` the fallback.
 
-Then, with your approval: `tools/*` and `generator.cc` → `legacy/`, `sources/` gone, the v2 configs
-promoted to `eic.toml`/`zeus_validation.toml` (originals archived), `tools/` off PATH, the Makefile
-reduced to a CMake wrapper, and the five `~/HEP/*.moved` files deleted — two of which were pre-hotfix
-originals, located in git (`73658d0`) before deleting.
+All three verification rows measured: shard counts add up and nothing is left in `.part`; a truncated
+shard is caught by size alone and a single changed byte by `--deep`; a build without zstd works on gz
+and refuses `zst` with a clear message. End to end, `hep run --set store.enabled=true` wrote two
+stores and `hep store ls|verify --deep` read them.
 
-**Worth knowing:** `which rivpyth` still finds `~/.local/bin/rivpyth` — an *older standalone bash*
-script with a different interface that predates the Python tool. It is outside the repo and outside
-what was approved, so it was left alone.
+The order is the design: shards stream into `.part` with no lock, are closed, hashed and renamed, and
+only then is the index written atomically — so a directory with an index is a finished store.
 
-14/14 ctest; `hep plan/run/plot` verified end to end on the promoted config.
+Three defects found on the way, including two in my own spike (`Pythia8ToHepMC` reuses one `GenEvent`,
+so holding its pointer would have measured one event 10 000 times) and an include that found itself.
 
-## Next — P5-S01 (Store namespace, store sink and store CLI)
+## Next — P5-S02 (store and stream sources with parallel readers)
 
-**Phase P5 — the HepMC3 event store and event inspection.** Read `docs/rework/steps/README.md` for
-P5's order, then `P5-S01_store-writer.md`, and mirror it here before starting.
+Read `docs/rework/steps/P5-S02_store-source-replay.md` and mirror it here before starting. It adds
+`Source::Store` (one reader thread per shard into a bounded queue) and `Source::Stream` for FIFOs —
+the replay side of what P5-S01 writes.
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6 — phases P0–P4 all complete** · P5–P10 todo — 32 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · P5 1/3 · P6–P10 todo — 33 of 55 steps done.
 
 ## Standing constraints
 

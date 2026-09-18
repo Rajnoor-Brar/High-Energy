@@ -1,8 +1,12 @@
 # C++ tests (09 §3). Each test is a small executable that ctest runs; `check.hh` is the harness.
 #
-# The spikes in spikes/ are measurements, not tests, and are deliberately not registered.
+# The spikes in spikes/ are measurements, not tests, and are deliberately not registered. They are
+# built on demand: `cmake --build build --target store_compression`.
 
 set(HEKIT_CXX_TESTS core_sha256 core_signals status_roundtrip run_rules results_writer)
+if(HEKIT_HEPMC)
+  list(APPEND HEKIT_CXX_TESTS store_writer)       # the event store needs HepMC3
+endif()
 if(TARGET TomlPlusPlus::TomlPlusPlus)
   list(APPEND HEKIT_CXX_TESTS core_spec)        # the spec reader needs toml++
 endif()
@@ -12,6 +16,8 @@ foreach(name IN LISTS HEKIT_CXX_TESTS)
   target_link_libraries(test_${name} PRIVATE hekit_Status)
   if(name STREQUAL "results_writer")
     target_link_libraries(test_${name} PRIVATE hekit_Results)      # YODA
+  elseif(name STREQUAL "store_writer")
+    target_link_libraries(test_${name} PRIVATE hekit_Store)        # HepMC3 (+ compression)
   endif()
   target_include_directories(test_${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
   add_test(NAME ${name} COMMAND test_${name})
@@ -28,3 +34,11 @@ set_tests_properties(hep_run_usage PROPERTIES WILL_FAIL TRUE LABELS "cxx")
 
 add_test(NAME hep_run_unknown_option COMMAND hep-run --nonsense)
 set_tests_properties(hep_run_unknown_option PROPERTIES WILL_FAIL TRUE LABELS "cxx")
+
+
+# ── spikes (measurements, built on demand, never run by ctest) ───────────────
+
+if(TARGET hekit_Store AND HEKIT_HEPMC)
+  add_executable(store_compression EXCLUDE_FROM_ALL spikes/store_compression.cc)
+  target_link_libraries(store_compression PRIVATE hekit_Store Pythia8::Pythia8)
+endif()

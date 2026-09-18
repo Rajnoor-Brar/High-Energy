@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://high-energy/hekit/store/index_v1.json",
+  "title": "hekit event store index",
+  "description": "events.index.json, written last and atomically by Store::Writer (11 §2). It is the source of truth for a replay: sigma, beams, weight names and counts come from here, not from the per-event records.",
+  "type": "object",
+  "required": ["version", "format", "compression", "events", "shards"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {"const": 1},
+    "format": {"const": "hepmc3-ascii"},
+    "compression": {"enum": ["gz", "zst", "none"]},
+    "point": {"type": "string", "description": "the generation that produced these events"},
+    "hash": {"type": "string", "pattern": "^(sha256:[0-9a-f]{64})?$"},
+    "provenance": {"type": "string", "description": "path to the point's provenance.json"},
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"tool": {"type": "string"}, "version": {"type": "string"}}
+    },
+    "beams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ids": {"type": "array", "items": {"type": "integer"}, "maxItems": 2},
+        "energies": {"type": "array", "items": {"type": "number"}, "maxItems": 2}
+      }
+    },
+    "threads": {"type": "integer", "minimum": 0},
+    "seeds": {"type": "array", "items": {"type": "integer"}},
+    "weights": {"type": "array", "items": {"type": "string"}},
+    "xsec_pb": {"type": "number"},
+    "xsec_err_pb": {"type": "number"},
+    "events": {"type": "integer", "minimum": 0},
+    "stopped": {"type": "boolean", "description": "true marks a partial store; replay is allowed and its result is marked partial"},
+    "shards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["file", "events"],
+        "additionalProperties": false,
+        "properties": {
+          "file": {"type": "string", "description": "relative to the store directory"},
+          "worker": {"type": "integer", "minimum": 0},
+          "events": {"type": "integer", "minimum": 0},
+          "bytes": {"type": "integer", "minimum": 0},
+          "sha256": {"type": "string", "pattern": "^([0-9a-f]{64})?$"}
+        }
+      }
+    }
+  }
+}
