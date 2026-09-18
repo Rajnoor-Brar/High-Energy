@@ -42,6 +42,14 @@ Never `#include`/import from `legacy/`; copy or adapt.
 - Rivet sink (S05)
 - sharded mode (P6-S01)
 
+## Added by P2-S02
+
+- Chunk with `chunk = threads · ceil(target / threads)`, the remainder in the last chunk, so the event set
+  matches an unchunked run (D-Q2); record the effective chunk size in provenance.
+- Combine σ from the instances with `foreach` (D-Q1); `PythiaParallel` has no σ error of its own.
+- **Check `len(run.seeds.instances) == run.threads` before `init()` and exit 1 otherwise** (D-SEEDS):
+  Pythia indexes the seed list without bounds checking, so a short list is undefined behaviour.
+
 ## Design notes
 
 - Run control from the spec overrides cards (events, threads, `Parallelism:seeds`, `Next:numberCount = 0`).

@@ -70,7 +70,7 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P1-S06 | [Migration tool and schema-2 configs](P1-S06_config-migrate.md) | code | P1-S05 | 0.5 d | done |
 | P1-S07 | [hep doctor and hep pdf](P1-S07_doctor-pdf.md) | code | P1-S01, P1-S05 | 0.5 d | done |
 | P2-S01 | [CMake build with optional components](P2-S01_cmake-skeleton.md) | code | P0-S07 | 0.75 d | in-progress |
-| P2-S02 | [Decide chunked runs, σ error and seed blocks (spike)](P2-S02_pythia-parallel-spike.md) | decision | P2-S01 | 0.5 d | todo |
+| P2-S02 | [Decide chunked runs, σ error and seed blocks (spike)](P2-S02_pythia-parallel-spike.md) | decision | P2-S01 | 0.5 d | done |
 | P2-S03 | [Core and Status namespaces](P2-S03_core-status.md) | code | P2-S01, P1-S01 | 1 d | todo |
 | P2-S04 | [Pythia source, event view, sink interface and run loop](P2-S04_source-run-loop.md) | code | P2-S02, P2-S03, P1-S05 | 1 d | todo |
 | P2-S05 | [Serial Rivet sink and atomic results writer](P2-S05_rivet-sink-results-writer.md) | code | P2-S04 | 0.75 d | todo |
@@ -276,9 +276,9 @@ flowchart LR
 
 | ID | Question | Step | Status | Outcome |
 |---|---|---|---|---|
-| D-Q1 | Merged σ error from `PythiaParallel` (vs `stat(true)`) | P2-S02 | open | — |
-| D-Q2 | Repeated `run()` after one `init()` σ-consistent? | P2-S02 | open | fallback: single run + cooperative stop |
-| D-SEEDS | `Parallelism:seeds` behaviour (also with chunks); identity-seed function | P2-S02 / P1-S04 | open | — |
+| D-Q1 | Merged σ error from `PythiaParallel` (vs `stat(true)`) | P2-S02 | answered | combine the instances: σ = Σwᵢσᵢ/Σwᵢ, err = √(Σ(wᵢerrᵢ)²)/Σwᵢ; PythiaParallel exposes no error |
+| D-Q2 | Repeated `run()` after one `init()` σ-consistent? | P2-S02 | answered | yes; chunk size a multiple of threads reproduces the unchunked event set exactly |
+| D-SEEDS | `Parallelism:seeds` behaviour (also with chunks); identity-seed function | P2-S02 / P1-S04 | answered | applied once in init(), never re-seeded; hep-run must check the list length (Pythia does not) |
 | D-Q3 | Numeric serial label? | P3-S01 | proposed | no; free-text `run.label` |
 | D-Q4 | Import legacy results? | P3-S01 | proposed | no; move to `results/PhotoProduction/legacy/` |
 | D-Q5 | Add `rich`, `tomli_w`, `pytest` to the venv? | P0-S02 | answered | yes |

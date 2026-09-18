@@ -81,8 +81,8 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
 | Sharded Rivet merge ≠ serial (merge semantics, re-entrancy) | M | H | Equivalence gate in P6-S01; `auto` uses serial unless every analysis is re-entrant |
-| Repeated `PythiaParallel::run()` misbehaves (σ accumulation), or `Parallelism:seeds` interacts badly with chunked runs | M | M | Spike P2-S02 before any C++ run loop; fallback: single `run()` + cooperative stop |
-| σ error combination is wrong | M | M | Compare with `stat(true)`; record "unavailable" rather than a wrong number |
+| Repeated `PythiaParallel::run()` misbehaves (σ accumulation), or `Parallelism:seeds` interacts badly with chunked runs | — | — | **Retired by P2-S02:** measured safe; σ is cumulative and correct, seeds are applied once in `init()`. The residual risk is a chunk size that is not a multiple of the thread count, which changes the sample; the chunking rule prevents it |
+| σ error combination is wrong | L | M | **Measured in P2-S02:** the combination reproduces `sigmaGen()` exactly and agrees with a serial `stat()` within statistics; `hep bench` and the equivalence gate re-check it |
 | `rivet-merge` ignores module objects in `analysis.yoda` | H | M | hekit merges module objects itself (07 §3); test in P8-S01 |
 | External generators' HepMC lacks `GenCrossSection`, or writes it only at the end | M | M | Adapter preflight on 10 events; allow `rivet.xsec` = number |
 | gz replay throughput too low for large stores | M | L | D-STORE-COMP spike (zstd); shards give parallelism; measure with `hep bench` |
@@ -112,8 +112,8 @@ The authoritative status lives in the decision register in [steps/README.md](ste
 
 | # | Question | Status | Step |
 |---|---|---|---|
-| Q1 | Combine per-instance σ errors from `PythiaParallel` (check against `stat(true)`)? | open → spike | P2-S02 |
-| Q2 | Repeated `PythiaParallel::run()` after one `init()` σ-consistent in 8.317? | open → spike | P2-S02 |
+| Q1 | Combine per-instance σ errors from `PythiaParallel` (check against `stat(true)`)? | **answered: yes**, weighted combination (P2-S02) | P2-S02 |
+| Q2 | Repeated `PythiaParallel::run()` after one `init()` σ-consistent in 8.317? | **answered: yes**; chunk a multiple of threads keeps the event set (P2-S02) | P2-S02 |
 | Q3 | Numeric serial label for studies? | proposed: no (free-text `run.label` only) | P3-S01 |
 | Q4 | Import legacy `results/PhotoProduction`? | proposed: no; move to `results/PhotoProduction/legacy/` | P3-S01 |
 | Q5 | Add `rich`, `tomli_w` (and `pytest`) to the venv? | **answered: yes** | P0-S02 |
