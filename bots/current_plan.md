@@ -3,29 +3,28 @@
 Executing `docs/rework` step by step. Read order: `bots/BOT.md` → this file → `docs/rework/steps/README.md`
 → the step being executed. Design context: `docs/rework/README.md`; decisions in `10_Roadmap.md` §2 are final.
 
-## Just finished — P4-S02 (`hep plot`, mkhtml backend) — done
+## Just finished — P4-S03 (mplhep backend and house style) — done
 
-`hep plot` replaces `ydmrg` and `ydplt`. The golden row passes on every intermediate P0-S04 kept from
-a real run of the old tools: voided curves bin for bin (NaNs included), the same number of voided
-bins, identical `auto_range.plot`, the same remapped data YODA, and the same `rivet-mkhtml` argv —
-for a page and for a single point.
+`hep plot --backend mpl` renders publication figures from the **same** `.plot` keys the mkhtml backend
+reads, so an analysis's labels live in one place. The house style is the legacy ROOT preset translated
+(`Paint.toml`'s 900×600 canvas, margins and tick settings), not invented.
 
-The deliberate difference is 00/B5: the comparison passes the old tool's implicit name-matching map
-**explicitly**, and without a map nothing is overlaid at all.
+Visual check recorded in the step's Log: the real 4-point PDF study renders with LaTeX axis labels from
+`photo_eic.plot`, `LogY`, the pipeline's auto-range, four colour-blind-safe curves with their sweep
+legends, error bars and a ratio panel.
 
-Also fixed: `hep plot` leaked a temp directory per page, and `hep analyses`/`hep build` claimed steps
-(P1-S07, P2-S01) that are done but never implemented them — both are now real, and the skeleton test
-finds the first unimplemented command rather than naming one, so it stops going stale.
+Caught by looking at it: `LegendTitle` (where the analysis states its cuts) was being ignored, and a
+`#` in a colour inside an `.mplstyle` file starts a comment — the first figures were silently on the
+default palette.
 
-## Next — P4-S03 (mplhep backend and house style)
+## Next — P4-S04 (`hep compare` and shared statistics)
 
-Read `docs/rework/steps/P4-S03_plot-mpl-style.md` and mirror it here before starting. It renders
-publication figures from the **same** `.plot` keys the mkhtml backend uses, so one label source serves
-both backends.
+Read `docs/rework/steps/P4-S04_compare.md` and mirror it here before starting: χ²/ndf, pulls and the
+comparison table, shared with the plotting pipeline.
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · P4 2/6 · P5–P10 todo — 28 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · P4 3/6 · P5–P10 todo — 29 of 55 steps done.
 
 ## Standing constraints
 

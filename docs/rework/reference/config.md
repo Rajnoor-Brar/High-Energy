@@ -132,6 +132,19 @@ Reference data overlaid on the curves.
 | `rivet_refs` | bool | `False` | let rivet-mkhtml load Rivet's own reference data |
 | `map` | table | — | histogram name → reference object path; explicit, never matched by name (00/B5) |
 
+### `[plot.style]`
+
+How a figure looks with the mpl backend (07 §4).
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `name` | str one of 'hekit', 'none', 'ATLAS', 'CMS', 'ALICE', 'LHCb2', 'ROOT' | `'hekit'` | mplhep style, the house style, or none |
+| `figure` | list of number ≥ 2 ≤ 2 | — | figure size in inches [w, h]; [] = the style's own |
+| `font_size` | number ≥ 0 | `0` | base font size in points; 0 = the style's own |
+| `formats` | list of str | `['pdf', 'png']` | image formats to write |
+| `dpi` | int ≥ 0 ≤ 1200 | `0` | raster resolution; 0 = the style's own |
+| `ratio` | bool | `True` | draw the ratio panel when a reference is present |
+
 ### `[terminal]`
 
 Live view (06).

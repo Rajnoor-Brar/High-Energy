@@ -85,9 +85,15 @@ def plot(context: click.Context, config_file: Path, study, pins, across, style, 
 
 def _draw(built: Any, output: Path, backend: str, config: Any, layout: Any) -> Path:
     if backend == "mpl":
-        from ..errors import NotImplementedYet
+        from ..plot.backends import mpl
 
-        raise NotImplementedYet("plot --backend mpl", "P4-S03")
+        result = mpl.draw(built, output, style=mpl.Style.of(config),
+                          data_legend=config.plot.data.legend)
+        for key, reason in result.skipped.items():
+            click.echo(f"hep plot: {key} skipped: {reason}", err=True)
+        if not result.ok:
+            raise HepError(f"nothing was drawn for page {built.name}")
+        return mpl.index_html(result, built)
 
     from ..plot.backends import mkhtml
     from . import plotfile

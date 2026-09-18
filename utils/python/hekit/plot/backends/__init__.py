@@ -5,4 +5,4 @@ with ratio panels and Rivet's own reference data. `mpl` (P4-S03) renders publica
 **same** `.plot` keys, so one label source serves both.
 """
 
-from . import mkhtml  # noqa: F401
+from . import mkhtml, mpl  # noqa: F401

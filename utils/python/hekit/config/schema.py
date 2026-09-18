@@ -98,6 +98,17 @@ PLOT_DATA = Section("plot.data", doc="Reference data overlaid on the curves.", f
                  free=True, value_kind="str"),
 })
 
+PLOT_STYLE = Section("plot.style", doc="How a figure looks with the mpl backend (07 §4).", fields={
+    "name": Field("str", "hekit", "mplhep style, the house style, or none",
+                  choices=("hekit", "none", "ATLAS", "CMS", "ALICE", "LHCb2", "ROOT")),
+    "figure": Field("list", [], "figure size in inches [w, h]; [] = the style's own", item="number",
+                    minimum=2, maximum=2),
+    "font_size": Field("number", 0, "base font size in points; 0 = the style's own", minimum=0),
+    "formats": Field("list", ["pdf", "png"], "image formats to write", item="str"),
+    "dpi": Field("int", 0, "raster resolution; 0 = the style's own", minimum=0, maximum=1200),
+    "ratio": Field("bool", True, "draw the ratio panel when a reference is present"),
+})
+
 PLOT = Section("plot", doc="Plotting (was [yoda] in schema 1).", fields={
     "backend": Field("str", "mkhtml", "plotting backend", choices=("mkhtml", "mpl")),
     "merge": Field("str", "overlay", "overlay the curves, or yodamerge them (seed-only sweeps)",
@@ -109,7 +120,7 @@ PLOT = Section("plot", doc="Plotting (was [yoda] in schema 1).", fields={
     "range_pad": Field("int", 0, "empty bins to keep on each side of an auto range", minimum=0),
     "legends": Field("str", "label", "what a curve legend shows", choices=("label", "tag", "value")),
     "analysis": Field("str", "", "common analysis name when plugins differ; '' = the first one"),
-}, subsections={"data": PLOT_DATA})
+}, subsections={"data": PLOT_DATA, "style": PLOT_STYLE})
 
 TERMINAL = Section("terminal", doc="Live view (06).", machine_keys=("dashboard", "log_tail", "stall_after"),
                    fields={
