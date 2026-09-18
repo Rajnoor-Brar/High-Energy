@@ -245,6 +245,11 @@ if(HEKIT_PYTEST)
   add_test(NAME e2e COMMAND ${HEKIT_PYTEST} -q
            ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_hep_run_e2e.py)
   set_tests_properties(e2e PROPERTIES LABELS "slow" TIMEOUT 3600)
+
+  # `hep plot` against the intermediates ydmrg and ydplt produced (P4-S02).
+  add_test(NAME plot_equivalence COMMAND ${HEKIT_PYTEST} -q
+           ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_plot_vs_legacy.py)
+  set_tests_properties(plot_equivalence PROPERTIES LABELS "slow" TIMEOUT 3600)
 endif()
 
 string(JOIN " " _facade_text ${HEKIT_FACADES})

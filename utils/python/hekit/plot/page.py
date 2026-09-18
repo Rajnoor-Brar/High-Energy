@@ -1,0 +1,143 @@
+"""Turning a plan into pages a backend can draw (07 §4).
+
+A **page** is a set of curves that belong on the same axes: the points of one sweep group, plus
+whatever option variants they carry, plus optional reference data. `hep plan` already decides which
+points share a page (03 §4); this assembles the files.
+
+The order is the legacy one, because it is the order that works:
+
+    select curves → unify analysis names → void uninformative bins → overlay data → auto-range
+
+Voiding comes before the data overlay so the reference is aligned against the binning the curves will
+actually be drawn with, and auto-range comes last so it sees both the curves and the data.
+
+Everything is written into a **work directory the caller owns** — no fixed `/tmp` names (00/B19) — and
+the intermediates are kept, because they are what the golden comparison against `ydmrg` checks.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+from ..errors import HepError
+from . import data as data_module
+from . import io, plotfile, select, transform
+from .select import Curve
+
+
+@dataclass
+class Page:
+    """One drawable page and everything that went into it."""
+
+    name: str
+    analysis: str
+    curves: list[Curve] = field(default_factory=list)
+    plot_file: Path | None = None
+    ranges: Path | None = None
+    data: data_module.DataOverlay | None = None
+    workdir: Path | None = None
+    warnings: list[str] = field(default_factory=list)
+    voided: transform.VoidReport | None = None
+
+    @property
+    def paths(self) -> list[Path]:
+        return [curve.path for curve in self.curves]
+
+    @property
+    def legends(self) -> list[str]:
+        return [curve.legend for curve in self.curves]
+
+
+@dataclass
+class PointFile:
+    """A point as the plot pipeline sees it: a name, a legend and a YODA."""
+
+    name: str
+    yoda: Path
+    legend: str = ""
+    tag: str = ""
+
+
+def points_of(plan: Any, layout: Any, page: Any) -> list[PointFile]:
+    """The results a page's points produced, by looking in the layout rather than guessing."""
+    found: list[PointFile] = []
+    for point, legend in zip(page.members, page.legends):
+        group = plan.group_of(point.name)
+        directory = layout.point(group.name)
+        yoda = directory / "analysis.yoda"
+        if not yoda.is_file():
+            partial = directory / "analysis.partial.yoda"
+            yoda = partial if partial.is_file() else yoda
+        found.append(PointFile(name=point.name, yoda=yoda, legend=legend or point.name,
+                               tag=getattr(point, "suffix", "")))
+    return found
+
+
+def missing(points: list[PointFile]) -> list[str]:
+    return [str(point.yoda) for point in points if not point.yoda.is_file()]
+
+
+def prepare(points: list[PointFile], workdir: Path, *, name: str = "", project: str = "",
+            analysis: str = "", legends: str = "label", void_empty: bool = False,
+            min_entries: int = 0, auto_range: bool = False, range_pad: int = 0,
+            data_file: Path | str = "", data_map: dict[str, str] | None = None,
+            data_reference: bool = True, data_show: bool = True) -> Page:
+    """Run the pipeline for one page and return everything a backend needs."""
+    absent = missing(points)
+    if absent:
+        raise HepError("these results have not been produced yet:\n  " + "\n  ".join(absent),
+                       hint="run them with `hep run`, or select points that exist")
+
+    workdir.mkdir(parents=True, exist_ok=True)
+    curves = select.curves_for(points, analysis=analysis, legends=legends)
+    if not curves:
+        raise HepError(f"no curves for page {name or '(unnamed)'}")
+
+    chosen = select.common_analysis(curves, override=analysis)
+    curves = select.unify(curves, chosen, workdir / "unified")
+
+    voided, report = transform.void_bins([curve.path for curve in curves], workdir / "voided",
+                                         void_empty=void_empty, min_entries=min_entries)
+    for curve, path in zip(curves, voided):
+        curve.path = path
+
+    page = Page(name=name, analysis=chosen, curves=curves, workdir=workdir, voided=report,
+                plot_file=plotfile.find(chosen, project) if project else None)
+
+    if data_file:
+        page.data = data_module.overlay(
+            data_file=data_file, mapping=dict(data_map or {}), curves=page.paths, analysis=chosen,
+            destination=workdir / f"{io.base_analysis(chosen)}_data.yoda",
+            reference=data_reference, show=data_show)
+        page.warnings.extend(page.data.warnings)
+
+    if auto_range:
+        inputs = list(page.paths)
+        if page.data is not None and page.data.path is not None:
+            inputs.append(page.data.path)
+        page.ranges = transform.auto_range(inputs, chosen, workdir, pad=range_pad)
+    return page
+
+
+def prepare_from_config(plan: Any, layout: Any, page_spec: Any, workdir: Path) -> Page:
+    """The same, reading every option from a config's `[plot]` section."""
+    config = plan.config
+    plot = config.plot
+    return prepare(
+        points_of(plan, layout, page_spec), workdir,
+        name=page_spec.name, project=config.project, analysis=plot.analysis,
+        legends=plot.legends, void_empty=plot.void_empty, min_entries=plot.min_entries,
+        auto_range=plot.auto_range, range_pad=plot.range_pad,
+        data_file=_data_path(config), data_map=dict(getattr(plot.data, "map", {}) or {}),
+        data_reference=plot.data.reference, data_show=plot.data.show)
+
+
+def _data_path(config: Any) -> str:
+    """`[plot.data].file`, resolved against the config's directory when it is relative."""
+    entry = getattr(config.plot.data, "file", "")
+    if not entry:
+        return ""
+    path = Path(entry)
+    return str(path if path.is_absolute() else (config.path.parent / path).resolve())

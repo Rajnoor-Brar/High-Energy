@@ -166,15 +166,32 @@ def test_help_lists_every_command(tmp_path):
 
 def test_unimplemented_command_names_its_step(tmp_path):
     """A command whose module does not exist yet says which step adds it, rather than failing
-    obscurely. `plot` arrives in P4-S02; when it does, this test should move to the next one that
-    has not landed."""
-    done = run_hep("plot", "whatever.toml", cwd=tmp_path)
-    assert done.returncode == 3
-    assert "P4-S02" in done.stderr
+    obscurely.
+
+    The command is *found* rather than named, so this test does not need editing every time a step
+    lands — which it did twice before it was written this way.
+    """
+    pending = [(name, step) for name, (_, step, _) in cli.COMMANDS.items()
+               if not cli.LazyGroup._resolve(name)[1]]
+    if not pending:                                       # pragma: no cover - after P10
+        pytest.skip("every command is implemented")
+    name, step = pending[0]
+    done = run_hep(name, "whatever.toml", cwd=tmp_path)
+    assert done.returncode == 3, done.stderr
+    assert step in done.stderr
+
+
+def test_the_landed_commands_are_all_real(tmp_path):
+    """Every step that has been done must have left a real command behind it."""
+    landed = {"plan", "run", "watch", "runs", "show", "plot", "config", "studies", "doctor",
+              "pdf", "analyses", "build"}
+    for name in sorted(landed):
+        assert cli.LazyGroup._resolve(name)[1], f"{name} is still a placeholder"
 
 
 @pytest.mark.parametrize("name,step", [("plan", "P1-S05"), ("run", "P3-S05"), ("watch", "P3-S04"),
-                                       ("runs", "P3-S04"), ("show", "P3-S04")])
+                                       ("runs", "P3-S04"), ("show", "P3-S04"),
+                                       ("plot", "P4-S02")])
 def test_an_implemented_command_is_loaded_lazily(tmp_path, name, step):
     """Once a step lands, its command must be the real one and not the placeholder."""
     done = run_hep(name, "--help", cwd=tmp_path)
