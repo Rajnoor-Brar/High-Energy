@@ -98,6 +98,18 @@ def project_dir(kind: str, project: str) -> Path:
     return roots[kind]() / project
 
 
+def mpl_config_dir(run: str = "") -> Path:
+    """A private `MPLCONFIGDIR` for a plotting run (00/B19).
+
+    matplotlib caches fonts under `$HOME/.config/matplotlib` and rebuilds it when it looks stale;
+    two runs doing that at once corrupt each other's cache, and a read-only home makes matplotlib
+    warn on every import. A directory under `output/scratch/` avoids both.
+    """
+    directory = scratch_root() / "mpl" / (run or "default")
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
 def describe() -> dict[str, str]:
     """What `hep doctor` and `hep --version` report about the layout."""
     root = repo_root()
