@@ -2,7 +2,7 @@
 #
 # The spikes in spikes/ are measurements, not tests, and are deliberately not registered.
 
-set(HEKIT_CXX_TESTS core_sha256 core_signals status_roundtrip run_rules)
+set(HEKIT_CXX_TESTS core_sha256 core_signals status_roundtrip run_rules results_writer)
 if(TARGET TomlPlusPlus::TomlPlusPlus)
   list(APPEND HEKIT_CXX_TESTS core_spec)        # the spec reader needs toml++
 endif()
@@ -10,6 +10,9 @@ endif()
 foreach(name IN LISTS HEKIT_CXX_TESTS)
   add_executable(test_${name} test_${name}.cc)
   target_link_libraries(test_${name} PRIVATE hekit_Status)
+  if(name STREQUAL "results_writer")
+    target_link_libraries(test_${name} PRIVATE hekit_Results)      # YODA
+  endif()
   target_include_directories(test_${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
   add_test(NAME ${name} COMMAND test_${name})
   set_tests_properties(${name} PROPERTIES LABELS "cxx")

@@ -95,6 +95,30 @@ Options parseOptions(const std::vector<std::string>& arguments) {
     return options;
 }
 
+// The sinks a spec asks for. A spec with no sink at all is legal and useful: it is the
+// generation-only leg of the benchmark (P6-S03) and of the equivalence gate (P2-S06), and it counts
+// its events so the run still reports something.
+void addSinks(Run::Loop& loop, const Core::Spec& spec, Status::Writer& status) {
+    bool added = false;
+    for (const Core::SinkSpec& sink : spec.sinks) {
+        if (sink.kind == "rivet") {
+#if defined(HEKIT_WITH_RIVET)
+            loop.add(std::make_unique<Sink::Rivet>(sink, spec.output_dir, spec.yoda_name, status));
+            added = true;
+#else
+            throw Core::Error{Core::Exit::Config, "this build has no Rivet, but the spec asks for it",
+                              "rebuild with -DHEKIT_RIVET=ON, or check `hep-run --capabilities`"};
+#endif
+        } else {
+            // A sink this build does not know is refused rather than skipped: a run that silently
+            // dropped its store or its module would look like a success and produce nothing.
+            throw Core::Error{Core::Exit::Config, "unknown sink kind: " + sink.kind,
+                              "this hep-run knows: rivet (store arrives in P5-S01, module in P8-S01)"};
+        }
+    }
+    if (!added) loop.add(std::make_unique<Sink::Count>());
+}
+
 std::string summaryFields(const Core::Spec& spec, const Run::Result& result) {
     std::string outputs;
     for (const Sink::Output& output : result.outputs)
@@ -162,11 +186,7 @@ int main(int argc, char* argv[]) {
         Core::Signals::installGracefulStop();
 
         Run::Loop loop(spec, status, heartbeat);
-        // P2-S05 adds Sink::Rivet here, reading spec.sinks; until then a run counts its events, which
-        // is what the generation-only legs of the benchmark and the equivalence gate need.
-        auto counter = std::make_unique<Sink::Count>();
-        Sink::Count* counted = counter.get();
-        loop.add(std::move(counter));
+        addSinks(loop, spec, status);
         if (options.list > 0)
             loop.onEvent([&](Events::View& view) { listEvent(status, view, options.list); });
 
@@ -184,7 +204,6 @@ int main(int argc, char* argv[]) {
                                 ? ", sigma = " + Status::number(result.xsec_pb) + " pb"
                                 : "") +
                            (result.stopped ? " (stopped)" : ""));
-        (void)counted;
         return Core::code(result.exit);
     } catch (const Core::Error& error) {
         std::cerr << "hep-run: " << error.what() << "\n";

@@ -24,6 +24,7 @@ namespace Run {
         int threads = 1;
         std::vector<std::int64_t> seeds;      // read back from the instances
         std::vector<Sink::Output> outputs;
+        std::string summary_path;             // run.summary.json, written after the sinks finish
         Core::Exit exit = Core::Exit::Ok;
     };
 

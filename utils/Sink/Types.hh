@@ -47,6 +47,11 @@ namespace Sink {
         virtual Needs needs() const { return {}; }
         virtual Concurrency concurrency() const { return Concurrency::Serial; }
 
+        // Before anything is generated, and before `start`: load what may not exist (a Rivet
+        // analysis, a module library) so a typo costs a second rather than a whole run. `--check`
+        // stops right after this, which is what makes it worth checking.
+        virtual void prepare() {}
+
         // Once, before the first event, with everything the sink may need to book its objects.
         virtual void start(const Core::Beams& beams, long long expected_events) {
             (void)beams;

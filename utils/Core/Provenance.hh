@@ -9,6 +9,8 @@
 
 #include <array>
 #include <string>
+#include <utility>
+#include <vector>
 #include <unistd.h>
 
 #include "Core/Clock.hh"
@@ -59,6 +61,7 @@ namespace Core {
         std::string origin;
         std::string started;                 // ISO-8601 UTC
         double wall_seconds = 0.0;
+        long long events_requested = 0;      // what the spec asked for
         long long attempted = 0;             // next() calls: Main:numberOfEvents (P0-S04)
         long long accepted = 0;              // events that reached the sinks
         double xsec_pb = 0.0;
@@ -66,6 +69,12 @@ namespace Core {
         bool stopped = false;                // a signal ended it, so the outputs are partial
         int threads = 0;
         long long chunk = 0;                 // the effective chunk size (P2-S02, D-Q2)
+        std::string mode = "serial";         // serial | sharded (P6-S01)
+        long long seed = 0;                  // the point seed, the base of its block (03 §5)
+        std::vector<long long> seeds;        // read back from the instances, not assumed
+        // Aggregated by source: message → how many times. A warning is not an error, but a run that
+        // produced 10⁵ of them is not the same result as one that produced none.
+        std::vector<std::pair<std::string, long long>> warnings;
     };
 
 }  // namespace Core

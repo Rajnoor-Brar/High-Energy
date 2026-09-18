@@ -151,7 +151,18 @@ namespace Source {
         // Pythia aggregates its warnings in a Logger; report the counts rather than every message
         // (06 §3.2). Called at checkpoints and at the end.
         void reportWarnings(Status::Writer& status) {
-            std::vector<std::pair<std::string, int>> found;
+            for (const auto& [message, count] : warningCounts()) {
+                if (reported_.count(message) != 0) continue;
+                reported_.insert(message);
+                status.log(Status::Level::Warn, "pythia",
+                           message + " (x" + std::to_string(count) + ")");
+            }
+        }
+
+        // The same counts as a number, for the run summary: a run that produced 10⁵ warnings is not
+        // the same result as one that produced none, even though neither is an error (07 §2).
+        std::vector<std::pair<std::string, long long>> warningCounts() {
+            std::vector<std::pair<std::string, long long>> found;
             parallel_.foreach([&](Pythia8::Pythia* instance) {
                 // Logger is iterable over its message → count map.
                 for (const auto& entry : instance->logger) {
@@ -164,12 +175,7 @@ namespace Source {
                         existing->second += entry.second;
                 }
             });
-            for (const auto& [message, count] : found) {
-                if (reported_.count(message) != 0) continue;
-                reported_.insert(message);
-                status.log(Status::Level::Warn, "pythia",
-                           message + " (x" + std::to_string(count) + ")");
-            }
+            return found;
         }
 
         const std::vector<long long>& workers() const { return workers_; }

@@ -20,6 +20,7 @@
 
 #include "Core.hh"
 #include "Events.hh"
+#include "Results.hh"
 #include "Run/Types.hh"
 #include "Sink.hh"
 #include "Source.hh"
@@ -34,13 +35,18 @@ namespace Run {
 
         void add(std::unique_ptr<Sink::Sink> sink) { sinks_.push_back(std::move(sink)); }
 
-        // Everything up to (but not including) the first event. `--check` stops here (06 §3.3).
+        // Everything up to (but not including) the first event. `--check` stops here (06 §3.3), so
+        // everything that can be checked without generating belongs in this function: a card Pythia
+        // refuses, a physics point that cannot initialise, an analysis that does not exist.
         void prepare() {
             status_.phase("configure", std::to_string(spec_.cards.size()) + " cards");
             source_ = std::make_unique<Source::Pythia>(spec_, status_);
             source_->configure();
             status_.phase("init");
             source_->initialise();
+            // After the generator, before the events: a sink loads its analyses and libraries here,
+            // so a typo costs a second instead of a run (05 §5).
+            for (const auto& sink : sinks_) sink->prepare();
             const Core::Beams& beams = source_->beams();
             std::vector<std::string> names;
             for (const auto& sink : sinks_) names.push_back(sink->name());
@@ -51,6 +57,7 @@ namespace Run {
         Result run() {
             if (!prepared_) prepare();
             const Core::Steady::time_point started = Core::tick();
+            started_at_ = Core::timestamp();
             const Core::Beams& beams = source_->beams();
             for (const auto& sink : sinks_) sink->start(beams, spec_.events);
 
@@ -93,22 +100,17 @@ namespace Run {
             source_->reportWarnings(status_);
 
             status_.phase("finish", result.stopped ? "stopped: writing partial outputs" : "");
-            Core::RunRecord record;
-            record.point = spec_.point;
-            record.hash = spec_.hash;
-            record.origin = spec_.origin;
-            record.attempted = counts.attempted;
-            record.accepted = counts.accepted;
-            record.xsec_pb = result.xsec_pb;
-            record.xsec_error_pb = result.xsec_error_pb;
-            record.stopped = result.stopped;
-            record.threads = result.threads;
-            record.chunk = result.chunk;
-            record.wall_seconds = result.wall_seconds;
+            const Core::RunRecord record = recordOf(result, started);
             for (const auto& sink : sinks_) {
                 sink->finish(record);
                 for (const Sink::Output& output : sink->outputs()) result.outputs.push_back(output);
             }
+            // Written last, because it names what the sinks produced. `hekit.prov` folds it into
+            // provenance.json (07 §2); it is not provenance itself.
+            result.summary_path =
+                Results::Writer(spec_.output_dir)
+                    .writeText(spec_.summary_name,
+                               Results::summaryJson(record, result.outputs, Core::timestamp()));
 
             result.exit = result.stopped ? Core::Exit::Stopped : Core::Exit::Ok;
             return result;
@@ -118,6 +120,29 @@ namespace Run {
         void onEvent(std::function<void(Events::View&)> hook) { hook_ = std::move(hook); }
 
       private:
+        Core::RunRecord recordOf(const Result& result, Core::Steady::time_point started) const {
+            (void)started;
+            Core::RunRecord record;
+            record.point = spec_.point;
+            record.hash = spec_.hash;
+            record.origin = spec_.origin;
+            record.started = started_at_;
+            record.events_requested = spec_.events;
+            record.attempted = result.counts.attempted;
+            record.accepted = result.counts.accepted;
+            record.xsec_pb = result.xsec_pb;
+            record.xsec_error_pb = result.xsec_error_pb;
+            record.stopped = result.stopped;
+            record.threads = result.threads;
+            record.chunk = result.chunk;
+            record.wall_seconds = result.wall_seconds;
+            record.mode = "serial";
+            record.seed = spec_.seed;
+            record.seeds.assign(result.seeds.begin(), result.seeds.end());
+            record.warnings = source_->warningCounts();
+            return record;
+        }
+
         std::int64_t chunkTarget() const {
             // Small enough that Ctrl-C feels immediate, large enough that the chunk overhead is
             // invisible: about a second of generation, floored at the thread count.
@@ -158,6 +183,7 @@ namespace Run {
         std::function<void(Events::View&)> hook_;
         bool prepared_ = false;
         bool needs_hepmc_ = false;
+        std::string started_at_;
 #if defined(HEKIT_WITH_HEPMC)
         Events::Converter converter_;
 #endif
