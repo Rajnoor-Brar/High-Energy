@@ -27,7 +27,8 @@ A machine file (`~/.config/hekit/machine.toml`) may set `threads`.
 | `seed` | int ≥ 0 ≤ 9e+08 | `0` | base of the identity seed policy (03 §5); never offset by sweep position |
 | `threads` | int ≥ 0 ≤ 4096 | `0` | worker threads; 0 = all cores, resolved by hep |
 | `skip_existing` | bool | `False` | skip a point whose name, hash and complete output all match |
-| `label` | str | — | free text kept in manifests; never used in a path |
+| `label` | str | — | free text kept in manifests, and appended to a study directory name |
+| `serial` | bool | `True` | number each study run: results/<project>/studies/01_pdf/ (D-Q3). Points are never numbered — they are named by physics, so two studies that reach the same events share one generation |
 | `seed_policy` | str one of 'identity', 'legacy' | `'identity'` | how point seeds are chosen: from the point's identity (03 §5), or the pre-rework position-based scheme, which exists only to reproduce old results in tests |
 | `legacy_seed_step` | int ≥ 1 ≤ 9e+08 | `20` | seed spacing used by seed_policy = "legacy" only |
 

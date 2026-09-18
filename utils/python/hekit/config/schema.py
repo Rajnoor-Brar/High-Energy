@@ -22,7 +22,10 @@ RUN = Section("run", doc="Run control: how much, how parallel, where to.", machi
                   minimum=0, maximum=900_000_000),
     "threads": Field("int", 0, "worker threads; 0 = all cores, resolved by hep", minimum=0, maximum=4096),
     "skip_existing": Field("bool", False, "skip a point whose name, hash and complete output all match"),
-    "label": Field("str", "", "free text kept in manifests; never used in a path"),
+    "label": Field("str", "", "free text kept in manifests, and appended to a study directory name"),
+    "serial": Field("bool", True, "number each study run: results/<project>/studies/01_pdf/ (D-Q3). "
+                                  "Points are never numbered — they are named by physics, so two "
+                                  "studies that reach the same events share one generation"),
     "seed_policy": Field("str", "identity", "how point seeds are chosen: from the point's identity "
                                             "(03 §5), or the pre-rework position-based scheme, which "
                                             "exists only to reproduce old results in tests",
