@@ -3,27 +3,34 @@
 Executing `docs/rework` step by step. Read order: `bots/BOT.md` → this file → `docs/rework/steps/README.md`
 → the step being executed. Design context: `docs/rework/README.md`; decisions in `10_Roadmap.md` §2 are final.
 
-## Just finished — P4-S04 (`hep compare` and shared statistics) — done
+## Just finished — P4-S05 (photo_eic re-entrant, plugin defects) — done
 
-`hekit/results/{stats,compare}.py` + the `hep compare` command, 22 tests. Both verification rows
-measured on fixtures whose answers are known by hand (one combined error apart → χ²/ndf = 1; two →
-4), and two binnings with no shared edges give **no** χ² rather than a misleading number.
+Three plugin changes, each measured:
 
-Three things never enter a χ² and are counted in the row's note instead: unaligned bins, voided bins
-(a void is "no information", not a measurement of zero) and bins with no error.
+| Row | Result |
+|---|---|
+| Merge | `rivet-merge -e` of 2×20 k vs one 40 k run → **χ²/ndf = 0.602 over 378 bins** |
+| Leak | ASan 1 k events: 74 allocations before, **73 after** — exactly the 80-byte `SISConePlugin` |
+| Orientation | proton as beam B (orientation = −1 confirmed): 17 of 17 histograms filled |
+| Dumps | `analysis.dump.yoda` written and **finalized** (`ScaledBy`, `/_XSEC`, cross-section values) |
 
-On the real 4-point study: NNPDF2.3 LO sits at χ²/ndf ≈ 1.1–1.4 against MSTW08 LO, the NLO set and
-PDF4LHC21 at ≈ 3.2–5.7 — which is what a PDF study is meant to show.
+**00/B26 turned out not to be a defect** — the audit had it as "unverified". Rivet 4.1.3 normalises an
+inverted range, and both versions give byte-identical output; the cut is now written symmetrically so
+it cannot depend on that. The audit row is updated to say so.
 
-## Next — P4-S05 (make `photo_eic` re-entrant and fix plugin defects)
+`Reentrant: true` is earned rather than asserted, and both equivalence gates still pass bin for bin
+after the plugin change.
 
-Read `docs/rework/steps/P4-S05_photo-eic-reentrant.md` and mirror it here before starting. P2-S06
-already proved the merge chain works once the analysis declares `Reentrant: true`, so this closes that
-loop; it also fixes the plugin defects the audit recorded.
+## Next — P4-S06 (retire rivpyth/ydplt/ydmrg and generator.cc). **P4 finishes with it.**
+
+Read `docs/rework/steps/P4-S06_retire-legacy-tools.md` and mirror it here before starting. It moves
+`tools/` into `legacy/tools/` and removes the `~/HEP/*.moved` files — note that `~/HEP` edits and the
+move both need care, and the plot tests import `tools/rivpyth_common.py` today, so that comparison has
+to be retired with it.
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · P4 4/6 · P5–P10 todo — 30 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · P4 5/6 · P5–P10 todo — 31 of 55 steps done.
 
 ## Standing constraints
 

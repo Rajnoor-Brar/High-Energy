@@ -250,6 +250,11 @@ if(HEKIT_PYTEST)
   add_test(NAME plot_equivalence COMMAND ${HEKIT_PYTEST} -q
            ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_plot_vs_legacy.py)
   set_tests_properties(plot_equivalence PROPERTIES LABELS "slow" TIMEOUT 3600)
+
+  # The analysis plugin's own defects and its re-entrant merge (P4-S05).
+  add_test(NAME photo_eic COMMAND ${HEKIT_PYTEST} -q
+           ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_photo_eic_plugin.py)
+  set_tests_properties(photo_eic PROPERTIES LABELS "slow" TIMEOUT 3600)
 endif()
 
 string(JOIN " " _facade_text ${HEKIT_FACADES})

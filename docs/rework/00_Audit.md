@@ -155,7 +155,7 @@ A **Keep** verdict means the *idea* moves into the new layout, rewritten to fit 
 | 00/B23 | Stale `photo_ep.cmnd` comments (who appends, where N/threads come from) | `photo_ep.cmnd:3,10` | Old tools |
 | 00/B24 | Debris: stale FIFOs in `output/PhotoProduction/`, misnamed pycache in `~/HEP` | `ls -la` | P0-S03 |
 | 00/B25 | SISCone plugin leak (`delete_plugin_when_unused` not called) | `photo_eic.cc:76-80` | P4-S05 |
-| 00/B26 | η acceptance inverted if `orientation = −1` (unverified) | `photo_eic.cc:126` | P4-S05 |
+| 00/B26 | η acceptance inverted if `orientation = −1` | `photo_eic.cc:126` | **verified not a defect** (P4-S05): Rivet 4.1.3 normalises an inverted range, and both versions give identical output. The cut is now written symmetrically so it cannot depend on that. |
 | 00/B27 | Base `pTHatMin = 6` > jet `ETMIN = 5` biases the first E_T bin | `photo_ep.cmnd`, `photo_eic.cc` | Record only (the pthatmin study measures it) |
 | 00/B28 | `configs/photo_zeus/README_ZEUS.txt` describes deleted files and an old workflow | file | Archive (P0-S06) |
 | 00/B29 | `yoda.read()` resets `LC_ALL` to `C` and never restores it, so the locale default encoding becomes ASCII and later locale-dependent text I/O fails on non-ASCII content (the point-cmnd header holds an em dash) | measured in P0-S05 | Old tools: restore the locale and name every encoding. hekit: never rely on the locale default (P1-S01) |

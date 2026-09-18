@@ -207,11 +207,35 @@ def test_two_option_variants_share_one_run_and_one_yoda(project, tmp_path):
 
 # ── dumps ────────────────────────────────────────────────────────────────────
 
-def test_dump_every_is_refused_for_a_non_reentrant_analysis(project, tmp_path):
-    """Rivet 4.1.3 skips finalize in a dump unless the analysis is re-entrant, so the dump would be
-    unscaled — better no file than a wrong one. photo_eic becomes re-entrant in P4-S05."""
+def test_dump_every_is_honoured_for_a_reentrant_analysis(project, tmp_path):
+    """P4-S05 made `photo_eic` re-entrant, so Rivet finalizes its dumps and the file is a result."""
     spec = plan_spec(project, tmp_path, events=40)
     dumping = edited(spec, "dump", lambda text: text.replace("dump_every = 0", "dump_every = 20"))
+    done = run_spec(dumping, "--plain")
+    assert done.returncode == 0, done.stderr
+    assert "dump_every ignored" not in done.stderr
+    assert (output_dir(spec) / "analysis.dump.yoda").is_file()
+
+
+def test_dump_every_is_refused_for_a_non_reentrant_analysis(project, tmp_path):
+    """Rivet 4.1.3 skips finalize in a dump unless the analysis is re-entrant, so the dump would be
+    unscaled counts wearing the name of a result — better no file than a wrong one (05 §5).
+
+    The plugin is copied with `Reentrant: false` put back, because the real one is re-entrant now.
+    """
+    import shutil
+
+    plugins = tmp_path / "plugins"
+    plugins.mkdir()
+    for path in PLUGIN.parent.iterdir():
+        shutil.copy2(path, plugins / path.name)
+    info = plugins / "photo_eic.info"
+    info.write_text(info.read_text(encoding="utf-8").replace("Reentrant: true", "Reentrant: false"),
+                    encoding="utf-8")
+
+    spec = plan_spec(project, tmp_path / "specs", events=40)
+    dumping = edited(spec, "dump", lambda text: text.replace(
+        "dump_every = 0", "dump_every = 20").replace(str(PLUGIN.parent), str(plugins)))
     done = run_spec(dumping, "--plain")
     assert done.returncode == 0, done.stderr
     assert "dump_every ignored" in done.stderr and "not re-entrant" in done.stderr
