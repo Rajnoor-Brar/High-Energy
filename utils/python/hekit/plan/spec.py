@@ -106,20 +106,46 @@ def dumps(spec: dict[str, Any]) -> str:
     return tomli_w.dumps(spec)
 
 
-def write(plan: Any, directory: Path) -> list[Path]:
+def relocated(spec: dict[str, Any], target: Path, card_name: str) -> dict[str, Any]:
+    """The same spec, with its own paths pointing at `target`.
+
+    A written spec has to be runnable: `hep-run <dir>/run.toml` must find the card next to it and write
+    its outputs there. Without this the preview would name the final results path, whose card does not
+    exist yet — which is exactly what happened the first time this was tried.
+    """
+    # A resolved spec holds absolute paths only (03 §7): `--write out/dir` must not leave a relative
+    # one behind, or hep-run resolves it against its own working directory.
+    target = target.resolve()
+    moved = {key: dict(value) if isinstance(value, dict) else value for key, value in spec.items()}
+    source = dict(moved.get("source", {}))
+    if source.get("cards"):
+        cards = list(source["cards"])
+        cards[-1] = str(target / card_name)          # the point card is the last one
+        source["cards"] = cards
+    moved["source"] = source
+    output = dict(moved.get("output", {}))
+    output["dir"] = str(target)
+    moved["output"] = output
+    return moved
+
+
+def write(plan: Any, directory: Path, *, relocate: bool = True) -> list[Path]:
     """Write every group's `run.toml` and native card into `directory/<group>/` (never into results/).
 
-    `hep plan` uses a temporary directory; `hep run` (P3-S05) writes into the point directory itself.
+    `hep plan` uses a temporary directory and relocates the paths so the result can be run as it
+    stands; `hep run` (P3-S05) writes into the point directory itself with `relocate=False`.
     """
     written: list[Path] = []
     for group in plan.groups:
         target = directory / group.name
         target.mkdir(parents=True, exist_ok=True)
+        card_name = naming.card_path(plan.config, group.name, plan.config.generator.tool).name
+        document = relocated(group.spec, target, card_name) if relocate else group.spec
         spec_path = target / "run.toml"
-        spec_path.write_text(dumps(group.spec), encoding="utf-8")
+        spec_path.write_text(dumps(document), encoding="utf-8")
         written.append(spec_path)
         if group.card:
-            card = target / naming.card_path(plan.config, group.name, plan.config.generator.tool).name
+            card = target / card_name
             card.write_text(group.card, encoding="utf-8")
             written.append(card)
     return written

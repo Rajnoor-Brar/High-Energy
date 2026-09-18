@@ -149,6 +149,9 @@ endif()
 # ── hep-run ──────────────────────────────────────────────────────────────────
 add_executable(hep-run utils/apps/hep-run.cc)
 target_link_libraries(hep-run PRIVATE hekit_Run)
+if(NOT TARGET TomlPlusPlus::TomlPlusPlus)
+  message(FATAL_ERROR "hep-run needs toml++ to read a resolved spec (install libtomlplusplus-dev)")
+endif()
 target_compile_definitions(hep-run PRIVATE
   HEKIT_VERSION="0.1.0"
   HEKIT_BUILD_TYPE="${CMAKE_BUILD_TYPE}"

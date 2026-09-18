@@ -2,7 +2,7 @@
 #
 # The spikes in spikes/ are measurements, not tests, and are deliberately not registered.
 
-set(HEKIT_CXX_TESTS core_sha256 core_signals status_roundtrip)
+set(HEKIT_CXX_TESTS core_sha256 core_signals status_roundtrip run_rules)
 if(TARGET TomlPlusPlus::TomlPlusPlus)
   list(APPEND HEKIT_CXX_TESTS core_spec)        # the spec reader needs toml++
 endif()

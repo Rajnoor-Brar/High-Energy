@@ -61,6 +61,15 @@ namespace Status {
         return buffer;
     }
 
+    // A Unix timestamp needs its own format: `%.10g` of 1.79e9 is whole seconds, which would round
+    // every message to the same second and make a rate or an ETA meaningless. Microseconds are more
+    // than the stream needs and still exact in a double for another two centuries.
+    inline std::string stamp(double seconds) {
+        char buffer[32];
+        std::snprintf(buffer, sizeof buffer, "%.6f", seconds);
+        return buffer;
+    }
+
     template <typename T>
     std::string jsonList(const std::vector<T>& values) {
         std::string out = "[";
@@ -150,7 +159,7 @@ namespace Status {
         void emit(Kind kind, const std::string& fields, const std::string& plain) {
             const std::lock_guard<std::mutex> lock(mutex_);
             if (fd_ >= 0) {
-                std::string line = "{\"t\":" + number(Core::now()) + ",\"k\":\"" + name(kind) + "\"";
+                std::string line = "{\"t\":" + stamp(Core::now()) + ",\"k\":\"" + name(kind) + "\"";
                 if (!fields.empty()) line += "," + fields;
                 line += "}\n";
                 write(line);

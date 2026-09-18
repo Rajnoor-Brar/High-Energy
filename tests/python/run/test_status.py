@@ -132,6 +132,9 @@ def test_the_cpp_writer_and_the_python_reader_agree(tmp_path):
     assert kinds == ["phase", "init", "progress", "xsec", "log", "log", "checkpoint", "heartbeat",
                      "summary"]
     assert all(message.time > 0 for message in messages), "every message carries a timestamp"
+    # A timestamp needs sub-second resolution or every rate and ETA is meaningless; `%.10g` of a Unix
+    # epoch is whole seconds, which is exactly what it used to print (P2-S04).
+    assert any(message.time % 1 for message in messages), [m.time for m in messages]
 
     reader = StatusReader().feed_lines(lines)
     assert reader.phase == "init"
