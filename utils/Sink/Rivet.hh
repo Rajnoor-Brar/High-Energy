@@ -20,6 +20,8 @@
 //      non-re-entrant analysis (`AnalysisHandler.cc:700-705`), so the dump would be unscaled and
 //      quietly wrong; `dump_every` is refused with a warning in that case.
 //   5. **`Pythia8Plugins/RivetHooks.h` is not used**: its `onStat` hook can merge twice (05 §5).
+//   6. **The `/RAW/` objects are written**, because `rivet-merge -e` re-runs `finalize` from them
+//      (07 §3) and refuses a file without them.
 
 #include <algorithm>
 #include <cstdlib>
@@ -130,8 +132,13 @@ namespace Sink {
             handler_->finalize();
 
             Results::Writer writer(output_dir_);
-            const std::string written =
-                writer.writeYoda(yoda_name_, handler_->getYodaAOs(), record.stopped);
+            // `includeraw = true` keeps Rivet's own `/RAW/` copies in the file. They are not
+            // decoration: `rivet-merge -e` re-runs `finalize` from them, and without them it refuses
+            // the file outright ("Missing cross-section for /RAW/_XSEC"), which would break the seed
+            // replica merge of 07 §3. The legacy `rivet` command wrote them too, so this also keeps
+            // the two pipelines' files comparable (P2-S06).
+            const std::string written = writer.writeYoda(
+                yoda_name_, handler_->getYodaAOs(/*includeraw=*/true), record.stopped);
             outputs_.push_back(Output{"yoda", written, record.stopped});
             status_.log(Status::Level::Info, "rivet",
                         std::to_string(analysed_) + " events analysed, wrote " + written);

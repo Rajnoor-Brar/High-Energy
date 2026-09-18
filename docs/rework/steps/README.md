@@ -69,12 +69,12 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P1-S05 | [Plan groups, stage chains, resolved specs and point cards](P1-S05_plan-render.md) | code | P1-S04 | 1 d | done |
 | P1-S06 | [Migration tool and schema-2 configs](P1-S06_config-migrate.md) | code | P1-S05 | 0.5 d | done |
 | P1-S07 | [hep doctor and hep pdf](P1-S07_doctor-pdf.md) | code | P1-S01, P1-S05 | 0.5 d | done |
-| P2-S01 | [CMake build with optional components](P2-S01_cmake-skeleton.md) | code | P0-S07 | 0.75 d | in-progress |
+| P2-S01 | [CMake build with optional components](P2-S01_cmake-skeleton.md) | code | P0-S07 | 0.75 d | done |
 | P2-S02 | [Decide chunked runs, σ error and seed blocks (spike)](P2-S02_pythia-parallel-spike.md) | decision | P2-S01 | 0.5 d | done |
 | P2-S03 | [Core and Status namespaces](P2-S03_core-status.md) | code | P2-S01, P1-S01 | 1 d | done |
 | P2-S04 | [Pythia source, event view, sink interface and run loop](P2-S04_source-run-loop.md) | code | P2-S02, P2-S03, P1-S05 | 1 d | done |
 | P2-S05 | [Serial Rivet sink and atomic results writer](P2-S05_rivet-sink-results-writer.md) | code | P2-S04 | 0.75 d | done |
-| P2-S06 | [Equivalence gate against the legacy FIFO pipeline](P2-S06_equivalence-gate.md) | test | P2-S05, P0-S04 | 0.5 d | todo |
+| P2-S06 | [Equivalence gate against the legacy FIFO pipeline](P2-S06_equivalence-gate.md) | test | P2-S05, P0-S04 | 0.5 d | done |
 | P3-S01 | [Decide the serial label and the fate of legacy results](P3-S01_decide-serial-and-legacy-results.md) | decision | P0-S04 | 0.1 d | todo |
 | P3-S02 | [Process supervisor, FIFO transport and stall detection](P3-S02_supervisor.md) | code | P2-S03 | 1 d | todo |
 | P3-S03 | [Results layout, skip rule and provenance](P3-S03_results-provenance.md) | code | P3-S01, P1-S04 | 0.75 d | todo |

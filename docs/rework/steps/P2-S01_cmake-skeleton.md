@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | in-progress |
+| Status | done |
 | Kind | code |
 | Phase | P2 — C++ core, CMake, hep-run v1 |
 | Depends on | [P0-S07](P0-S07_makefile-hygiene.md) |

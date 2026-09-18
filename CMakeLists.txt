@@ -234,6 +234,12 @@ if(HEKIT_PYTEST)
   add_test(NAME python COMMAND ${HEKIT_PYTEST} -q ${CMAKE_CURRENT_SOURCE_DIR}/tests/python
                                                   ${CMAKE_CURRENT_SOURCE_DIR}/tests/golden)
   set_tests_properties(python PROPERTIES LABELS "python")
+
+  # The equivalence gate runs the real binary against the golden legacy outputs, so it is minutes
+  # rather than seconds and carries the "slow" label: `ctest -L slow -R equivalence` (09 §3).
+  add_test(NAME equivalence COMMAND ${HEKIT_PYTEST} -q
+           ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration)
+  set_tests_properties(equivalence PROPERTIES LABELS "slow" TIMEOUT 3600)
 endif()
 
 string(JOIN " " _facade_text ${HEKIT_FACADES})
