@@ -3,26 +3,29 @@
 Executing `docs/rework` step by step. Read order: `bots/BOT.md` → this file → `docs/rework/steps/README.md`
 → the step being executed. Design context: `docs/rework/README.md`; decisions in `10_Roadmap.md` §2 are final.
 
-## Just finished — P3-S03 (results layout, skip rule, provenance) — done
+## Just finished — P3-S04 (dashboard, plain mode, watch/runs/show) — done
 
-`hekit/results/{layout,skip,manifest}.py` + `hekit/prov/{provenance,stamp}.py` (~720 lines), 33 tests.
-Every verification row measured: a name collision with a different hash is refused with a `--rerun`
-hint; a partial result reruns instead of being skipped (00/B3); `HekitPoint`/`HekitHash`/`HekitGit`
-read back off `/_EVTCOUNT`; the layout is identical when run from `/` (00/B18).
+`hekit/term/{theme,model,plain,dashboard,cli}.py` + `hekit/run/journal.py` + `hekit/results/cli.py`
+(~1060 lines), 52 tests. All three verification rows measured: the dashboard frame asserted line by
+line against 06 §1's mock-up; `hep watch` through a real pipe gives plain clock-stamped lines; a pty
+test proves the cursor and echo come back after an exception mid-render.
 
-D-Q3 is implemented: one serial series across studies, allocated by `mkdir` in a loop (scanning then
-creating is a race), `[run].serial` default on, and a point path never carries a serial. `[run].serial`
-is in the schema and `docs/rework/reference/config.md` is regenerated.
+One view model feeds the live dashboard, the plain lines and `hep watch`, which replays
+`status.jsonl` — so watching from another terminal is the same code, not a second implementation.
+The legacy bar-interval defect is fixed: the progress interval is computed once the totals are known.
 
-## Next — P3-S04 (live dashboard, plain mode, watch/runs/show)
+Found while running under ctest: without `LANG`, a single `σ` was enough to kill the output, so the
+whole vocabulary now degrades to ASCII when the stream cannot encode it.
 
-Read `docs/rework/steps/P3-S04_terminal.md` and mirror it here before starting. It renders what the
-supervisor already collects (06 §1–2, §5): the `rich` dashboard, `--plain` for logs and CI, and the
-`hep watch` / `hep runs` / `hep show` commands over the layout and manifests written in P3-S03.
+## Next — P3-S05 (wire the hep run command end to end)
+
+Read `docs/rework/steps/P3-S05_hep-run-command.md` and mirror it here before starting. It joins what
+P3-S02..S04 built: plan → per-point spec → supervisor (with `on_status_fd` writing `[status].fd`) →
+journal + dashboard → results layout, skip rule and provenance. **P3 finishes with it.**
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6 — phase complete** · P3 3/5 · P4–P10 todo — 24 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6 — phase complete** · P3 4/5 · P4–P10 todo — 25 of 55 steps done.
 
 ## Standing constraints
 
