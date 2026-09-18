@@ -16,12 +16,15 @@ results/<project>/
     provenance.json
     status.jsonl
     logs/  prepare.log  generate.log  delphes.log
-  studies/<study>/                     one per study (or ad-hoc selection)
+  studies/[NN_]<study>[_<label>]/       one per study (or ad-hoc selection); NN is the run serial
+                                       (D-Q3: `[run].serial`, on by default; `01_pdf`, `02_pdf_thesis`)
     manifest.json                      points, pages, CLI, timestamps, optional run.label
     plots/<page>/                      index.html | *.pdf | *.png
     compare.md                         optional χ² table (§5)
     proc/                              hep proc outputs: fits.json, proc.yoda, optional proc.root, proc.log (12)
-  legacy/                              pre-rework results, moved here unchanged (decision Q4, P3-S01)
+  legacy/                              pre-rework results, moved here unchanged with a README
+                                       (decision D-Q4, P3-S01, done 2026-09-18: 541 files, 25 YODAs
+                                       re-checksummed after the move)
   .cache/<tool>/<prep-hash>/           integration grids, .run files, MG process dirs
 ```
 
@@ -29,7 +32,7 @@ results/<project>/
 | Today | New |
 |---|---|
 | The flat `results/<P>/<serial>_<name>_<tags>.yoda` and `cmnd/` directory | One directory per generation. Point card, logs, provenance and outputs sit together. |
-| The numeric `serial` prefix, which drifted across studies | Study directories. Points are shared by any study that reaches the same physics (name + hash, 03 §5). Decision Q3 (P3-S01): no serial in paths; an optional free-text `run.label` goes into manifests. |
+| The numeric `serial` prefix, which drifted across studies | Study directories, with the serial moved onto them: `studies/01_pdf/`. Points are shared by any study that reaches the same physics (name + hash, 03 §5), so a point path never carries a serial — that drift is what made the same physics live at four paths. Decision **D-Q3** (P3-S01, user sign-off): keep the serial, on the study directory only, switched by `[run].serial` (default on), with the optional free-text `[run].label` alongside it. |
 | A killed run leaves a YODA at the final path (00/B3) | Outputs are written under temporary names and renamed; stopped runs produce only `analysis.partial.yoda`. |
 | — | An analysis-option variant is **not** a separate generation. It lives inside the group's YODA under Rivet's canonical path (`/photo_eic:R=0.4/d01-x01-y01`). Plotting selects it. |
 

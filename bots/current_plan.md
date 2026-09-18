@@ -3,37 +3,33 @@
 Executing `docs/rework` step by step. Read order: `bots/BOT.md` → this file → `docs/rework/steps/README.md`
 → the step being executed. Design context: `docs/rework/README.md`; decisions in `10_Roadmap.md` §2 are final.
 
-## Just finished — P2-S06 (equivalence gate) — done. **Phase P2 is complete.**
+## Just finished — P3-S05 (`hep run` end to end) — done. **Phase P3 is complete.**
 
-The gate passes **identically**. Both legacy point cards of the golden mini run went through `hep-run`
-at one thread with the card's own seed, and every number agrees with the YODA the legacy
-`generator.exe` → FIFO → `rivet` pipeline wrote:
+`hep run` now plans, preflights, supervises, renders, writes results and explains them. All five
+verification rows measured:
 
-| Point | Seed | Attempts | Events | σ (pb) new | σ (pb) legacy | Result |
-|---|---|---|---|---|---|---|
-| MSTW | 12345 | 5000 | 5000 | 71422.15821 | 71422.16 | 39 objects, 1004 numbers, χ² = 0 |
-| NNLO | 12346 | 5000 | 4999 | 72994.84068 | 72994.84 | 39 objects, 1004 numbers, χ² = 0 |
+| Row | Result |
+|---|---|
+| e2e | 2 generations, each with YODA + summary + provenance + journal + logs |
+| Study | 4-point PDF study at 20 k events, live dashboard under a pty: 4 done in 1m34s |
+| Ctrl-C | exit 6, `analysis.partial.yoda` only, second point never started |
+| Rerun | `0 done, 2 skipped`; `--rerun` redoes; a changed identity is refused |
+| Preflight | `ProcessType = 2` → exit 3 before any spawn, nothing generated |
 
-The NNLO row reproduces the legacy run's 4999-written-of-5000-attempted exactly, which is what makes it
-a real test of 00/B21. It also confirms D-Q2 (ten chunks of 500 = one run of 5000) and D4 (in-process
-HepMC = what the FIFO carried) on real physics.
+Eight defects found by wiring it up — the two that mattered: the skip rule never matched (bare digest
+vs `sha256:`-prefixed, so every rerun looked like a collision), and Ctrl-C reached nothing, because
+every stage has its own session and nobody forwarded the signal. Both fixed and covered.
 
-Defect the gate caught: the Rivet sink wrote no `/RAW/` objects, so `rivet-merge -e` refused our files
-outright — the seed-replica merge path of 07 §3 was broken. Fixed; the merge chain is now verified end
-to end (error falls by exactly 1/√2), pending `Reentrant: true` in P4-S05.
+## Next — P4-S01 (plot pipeline: load, select, transform, data map)
 
-New: `tests/tools/yodacmp.py`, `tests/integration/test_hep_run_vs_legacy.py` (ctest `equivalence`,
-label `slow`, 14.2 s), `pytest.ini`. Full `ctest`: 11/11.
-
-## Next — P3-S01 (results layout and legacy move)
-
-P2 is finished, so the next phase is **P3 — supervision, provenance and the run command**. Read
-`docs/rework/steps/README.md` for P3's order and then `P3-S01`, mirror it here, and note that moving
-`results/` needs the user's approval (roadmap rule 5) — ask before touching it.
+**Phase P4 — plotting, comparison, retiring the legacy tools.** Read
+`docs/rework/steps/README.md` for P4's order, then `P4-S01_plot-pipeline.md`, and mirror it here
+before starting. The pipeline reorganises the validated `rivpyth_common` plotting functions into
+`hekit.plot.{io,select,transform,data,backends}`.
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6 — phase complete** · P3–P10 todo — 21 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5 — phases P0–P3 all complete** · P4–P10 todo — 26 of 55 steps done.
 
 ## Standing constraints
 
