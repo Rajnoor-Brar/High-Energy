@@ -114,8 +114,8 @@ The authoritative status lives in the decision register in [steps/README.md](ste
 |---|---|---|---|
 | Q1 | Combine per-instance σ errors from `PythiaParallel` (check against `stat(true)`)? | **answered: yes**, weighted combination (P2-S02) | P2-S02 |
 | Q2 | Repeated `PythiaParallel::run()` after one `init()` σ-consistent in 8.317? | **answered: yes**; chunk a multiple of threads keeps the event set (P2-S02) | P2-S02 |
-| Q3 | Numeric serial label for studies? | proposed: no (free-text `run.label` only) | P3-S01 |
-| Q4 | Import legacy `results/PhotoProduction`? | proposed: no; move to `results/PhotoProduction/legacy/` | P3-S01 |
+| Q3 | Numeric serial label for studies? | **answered: yes**, on the study directory only (`studies/01_pdf/`), `[run].serial` on by default; never in a point path | P3-S01 |
+| Q4 | Import legacy `results/PhotoProduction`? | **answered: no**; moved to `results/PhotoProduction/legacy/` with a README (done 2026-09-18) | P3-S01 |
 | Q5 | Add `rich`, `tomli_w` (and `pytest`) to the venv? | **answered: yes** | P0-S02 |
 | Q6 | Rebuild ThePEG/Herwig with HepMC + Rivet now or later? | open | P7-S06 |
 | Q7 | "Same physics" photoproduction set-up across generators? | open | P7-S02 |

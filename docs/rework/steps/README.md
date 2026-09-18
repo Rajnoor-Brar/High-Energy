@@ -75,7 +75,7 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P2-S04 | [Pythia source, event view, sink interface and run loop](P2-S04_source-run-loop.md) | code | P2-S02, P2-S03, P1-S05 | 1 d | done |
 | P2-S05 | [Serial Rivet sink and atomic results writer](P2-S05_rivet-sink-results-writer.md) | code | P2-S04 | 0.75 d | done |
 | P2-S06 | [Equivalence gate against the legacy FIFO pipeline](P2-S06_equivalence-gate.md) | test | P2-S05, P0-S04 | 0.5 d | done |
-| P3-S01 | [Decide the serial label and the fate of legacy results](P3-S01_decide-serial-and-legacy-results.md) | decision | P0-S04 | 0.1 d | todo |
+| P3-S01 | [Decide the serial label and the fate of legacy results](P3-S01_decide-serial-and-legacy-results.md) | decision | P0-S04 | 0.1 d | done |
 | P3-S02 | [Process supervisor, FIFO transport and stall detection](P3-S02_supervisor.md) | code | P2-S03 | 1 d | todo |
 | P3-S03 | [Results layout, skip rule and provenance](P3-S03_results-provenance.md) | code | P3-S01, P1-S04 | 0.75 d | todo |
 | P3-S04 | [Live dashboard, plain mode and watch/runs/show](P3-S04_terminal.md) | code | P3-S02 | 1 d | todo |
@@ -279,8 +279,8 @@ flowchart LR
 | D-Q1 | Merged σ error from `PythiaParallel` (vs `stat(true)`) | P2-S02 | answered | combine the instances: σ = Σwᵢσᵢ/Σwᵢ, err = √(Σ(wᵢerrᵢ)²)/Σwᵢ; PythiaParallel exposes no error |
 | D-Q2 | Repeated `run()` after one `init()` σ-consistent? | P2-S02 | answered | yes; chunk size a multiple of threads reproduces the unchunked event set exactly |
 | D-SEEDS | `Parallelism:seeds` behaviour (also with chunks); identity-seed function | P2-S02 / P1-S04 | answered | applied once in init(), never re-seeded; hep-run must check the list length (Pythia does not) |
-| D-Q3 | Numeric serial label? | P3-S01 | proposed | no; free-text `run.label` |
-| D-Q4 | Import legacy results? | P3-S01 | proposed | no; move to `results/PhotoProduction/legacy/` |
+| D-Q3 | Numeric serial label? | P3-S01 | answered | yes, but on the **study** directory only (`studies/01_pdf/`), `[run].serial` default on, prefix form, `[run].label` optional; a point path stays name + hash so points remain shared and the skip rule keeps working |
+| D-Q4 | Import legacy results? | P3-S01 | answered | no import; moved to `results/PhotoProduction/legacy/` + README, 541 files, 25 YODA checksums re-verified (2026-09-18) |
 | D-Q5 | Add `rich`, `tomli_w`, `pytest` to the venv? | P0-S02 | answered | yes |
 | D-Q6 | Rebuild ThePEG/Herwig with HepMC + Rivet? | P7-S06 | open | — |
 | D-Q7 | Cross-generator photoproduction equivalence | P7-S02 | open | — |

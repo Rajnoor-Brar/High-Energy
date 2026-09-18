@@ -25,15 +25,30 @@ to end (error falls by exactly 1/√2), pending `Reentrant: true` in P4-S05.
 New: `tests/tools/yodacmp.py`, `tests/integration/test_hep_run_vs_legacy.py` (ctest `equivalence`,
 label `slow`, 14.2 s), `pytest.ini`. Full `ctest`: 11/11.
 
-## Next — P3-S01 (results layout and legacy move)
+## Just finished — P3-S01 (serial label and the fate of legacy results) — done
 
-P2 is finished, so the next phase is **P3 — supervision, provenance and the run command**. Read
-`docs/rework/steps/README.md` for P3's order and then `P3-S01`, mirror it here, and note that moving
-`results/` needs the user's approval (roadmap rule 5) — ask before touching it.
+Both questions decided with the user on 2026-09-18:
+
+- **D-Q3 — the numeric serial stays, as an option, on the *study* directory**:
+  `results/<project>/studies/[NN_]<study>[_<label>]/`, prefix form, `[run].serial` default on,
+  `[run].label` optional. A point path stays name + hash, so points are still shared between studies and
+  the skip rule still recognises them — a serial there is the drift the audit recorded. Implemented in
+  P3-S03. (The roadmap had proposed no serial at all; this is the recorded compromise, and
+  `[run].serial = false` gives the original behaviour.)
+- **D-Q4 — moved and frozen.** 541 files → `results/PhotoProduction/legacy/`, file list compared before
+  and after, **25 of 25 YODA checksums re-verified** against the P0-S06 inventory, and a README written
+  beside them explaining why they cannot be rebuilt and what they may still be used for.
+
+Docs updated: 07 §1, 10_Roadmap §2 (Q3, Q4 → answered), the decision register in `steps/README.md`.
+
+## Next — P3-S02 (process supervisor, FIFO transport and stall detection)
+
+Read `docs/rework/steps/P3-S02_supervisor.md` and mirror it here before starting. Note P3-S03 (results
+layout) is where D-Q3's serial and D-Q4's `legacy/` line actually get implemented.
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6 — phase complete** · P3–P10 todo — 21 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6 — phase complete** · P3 1/5 · P4–P10 todo — 22 of 55 steps done.
 
 ## Standing constraints
 
