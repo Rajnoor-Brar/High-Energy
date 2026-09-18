@@ -2,14 +2,14 @@
 
 | Field | Value |
 |---|---|
-| Status | todo |
+| Status | done |
 | Kind | code |
 | Phase | P4 — Plotting, compare, retirement of the legacy tools |
 | Depends on | [P4-S01](P4-S01_plot-pipeline.md) |
 | Blocks | [P4-S05](P4-S05_photo-eic-reentrant.md), [P9-S01](P9-S01_proc-fits.md) |
 | Effort | 0.5 d |
 | Findings / decisions | 07 §5 |
-| Updated | 2026-09-17 |
+| Updated | 2026-09-18 |
 
 ## Goal
 
@@ -45,8 +45,8 @@ Never `#include`/import from `legacy/`; copy or adapt.
 
 ## Tasks
 
-- [ ] Implement
-- [ ] Tests
+- [x] Implement
+- [x] Tests
 
 ## Outputs
 
@@ -67,10 +67,48 @@ Revert.
 
 ## Done when
 
-- [ ] every Verification row passes
-- [ ] docs named in this step are updated
-- [ ] status set here and in [steps/README.md](README.md)
+- [x] every Verification row passes
+- [x] docs named in this step are updated
+- [x] status set here and in [steps/README.md](README.md)
 
 ## Log
 
 - 2026-09-17 — step file created (P0-S00).
+- 2026-09-18 — implemented `hekit/results/{stats,compare}.py` (≈340 lines) and `hep compare`, with
+  22 tests. Suite: 13/13 ctest.
+
+  **Verification**
+
+  | Row | Result |
+  |---|---|
+  | Known χ² | fixtures whose answer is known by hand: identical curves → 0; one combined error apart in every bin → χ²/ndf = 1; two apart → 4; errors combine in quadrature (3 and 4 make 5) |
+  | Alignment | two binnings with no shared edges → **0 bins used**, "no bins align", χ²/ndf NaN rather than a number; a partly aligned reference uses exactly the bins that line up |
+
+  **What must not enter a χ², and is counted instead**
+
+  1. **unaligned bins** — the pipeline's `align_to_edges` rule decides what lines up (07 §4);
+  2. **voided bins** — a void is "no information", and treating a blanked bin as a measurement of zero
+     would invent a large χ² out of nothing;
+  3. **bins with no error** — dividing by zero is how a χ² becomes infinite and a study becomes
+     nonsense.
+
+  Each is reported separately in the row's note (`10 voided`, `2 unaligned`), so a number that looks
+  small because half the bins were dropped says so.
+
+  **On real results.** `hep compare configs/PhotoProduction/eic.v2.toml --study pdf --ref
+  eic_27x920_ep_MSTW08lo_pt32_mpi` on the 4-point 20 k-event study gives χ²/ndf ≈ 1.1–1.4 for
+  NNPDF2.3 LO against MSTW08 LO and ≈ 3.2–5.7 for NNPDF2.3 NLO and PDF4LHC21 — the LO sets agree with
+  each other and the NLO one does not, which is what a PDF study is for.
+
+  **Notes**
+
+  1. `tests/tools/yodacmp.py` is **promoted** rather than moved: the arithmetic is now in
+     `hekit.results.stats`, and the tool stays as the file-to-file diff the equivalence gates use.
+     "Is every number identical?" (a gate) and "are these compatible?" (a comparison) are different
+     questions, and conflating them would weaken the gate.
+  2. `--ref data` compares against the overlaid reference the plot pipeline builds; `--ref POINT`
+     compares every other curve against one of them, which is what a tune or PDF study asks.
+  3. `compare.md` is written into the study directory beside the manifest, atomically like everything
+     else, so a scan survives the session.
+  4. The terminal table colours χ²/ndf green/yellow/red (< 2, < 5, above), because the point of the
+     table is to find the one row worth opening a plot for.

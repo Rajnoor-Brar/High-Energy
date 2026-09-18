@@ -83,7 +83,7 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P4-S01 | [Plot pipeline: load, select, transform, data map](P4-S01_plot-pipeline.md) | code | P3-S03 | 1 d | done |
 | P4-S02 | [hep plot with the rivet-mkhtml backend](P4-S02_plot-mkhtml.md) | code | P4-S01 | 0.75 d | done |
 | P4-S03 | [mplhep backend and house style](P4-S03_plot-mpl-style.md) | code | P4-S01 | 1 d | done |
-| P4-S04 | [hep compare and shared statistics](P4-S04_compare.md) | code | P4-S01 | 0.5 d | todo |
+| P4-S04 | [hep compare and shared statistics](P4-S04_compare.md) | code | P4-S01 | 0.5 d | done |
 | P4-S05 | [Make photo_eic re-entrant and fix plugin defects](P4-S05_photo-eic-reentrant.md) | code | P2-S05, P4-S04 | 0.5 d | todo |
 | P4-S06 | [Retire rivpyth/ydplt/ydmrg and generator.cc](P4-S06_retire-legacy-tools.md) | git | P4-S02, P4-S05, P3-S05, P2-S06, P1-S06 | 0.5 d | todo |
 | P5-S01 | [Store namespace, store sink and store CLI](P5-S01_store-writer.md) | code | P2-S05 | 1 d | todo |

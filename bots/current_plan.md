@@ -3,28 +3,27 @@
 Executing `docs/rework` step by step. Read order: `bots/BOT.md` → this file → `docs/rework/steps/README.md`
 → the step being executed. Design context: `docs/rework/README.md`; decisions in `10_Roadmap.md` §2 are final.
 
-## Just finished — P4-S03 (mplhep backend and house style) — done
+## Just finished — P4-S04 (`hep compare` and shared statistics) — done
 
-`hep plot --backend mpl` renders publication figures from the **same** `.plot` keys the mkhtml backend
-reads, so an analysis's labels live in one place. The house style is the legacy ROOT preset translated
-(`Paint.toml`'s 900×600 canvas, margins and tick settings), not invented.
+`hekit/results/{stats,compare}.py` + the `hep compare` command, 22 tests. Both verification rows
+measured on fixtures whose answers are known by hand (one combined error apart → χ²/ndf = 1; two →
+4), and two binnings with no shared edges give **no** χ² rather than a misleading number.
 
-Visual check recorded in the step's Log: the real 4-point PDF study renders with LaTeX axis labels from
-`photo_eic.plot`, `LogY`, the pipeline's auto-range, four colour-blind-safe curves with their sweep
-legends, error bars and a ratio panel.
+Three things never enter a χ² and are counted in the row's note instead: unaligned bins, voided bins
+(a void is "no information", not a measurement of zero) and bins with no error.
 
-Caught by looking at it: `LegendTitle` (where the analysis states its cuts) was being ignored, and a
-`#` in a colour inside an `.mplstyle` file starts a comment — the first figures were silently on the
-default palette.
+On the real 4-point study: NNPDF2.3 LO sits at χ²/ndf ≈ 1.1–1.4 against MSTW08 LO, the NLO set and
+PDF4LHC21 at ≈ 3.2–5.7 — which is what a PDF study is meant to show.
 
-## Next — P4-S04 (`hep compare` and shared statistics)
+## Next — P4-S05 (make `photo_eic` re-entrant and fix plugin defects)
 
-Read `docs/rework/steps/P4-S04_compare.md` and mirror it here before starting: χ²/ndf, pulls and the
-comparison table, shared with the plotting pipeline.
+Read `docs/rework/steps/P4-S05_photo-eic-reentrant.md` and mirror it here before starting. P2-S06
+already proved the merge chain works once the analysis declares `Reentrant: true`, so this closes that
+loop; it also fixes the plugin defects the audit recorded.
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · P4 3/6 · P5–P10 todo — 29 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · P4 4/6 · P5–P10 todo — 30 of 55 steps done.
 
 ## Standing constraints
 
