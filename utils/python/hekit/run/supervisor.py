@@ -55,6 +55,10 @@ class StageSpec:
     env: dict[str, str] | None = None
     status: bool = False                      # give it a status descriptor (hep-run)
     note: str = ""
+    # Stages of one phase run *together*; a phase runs only after the one before it has finished.
+    # A generator and the `hep-run` reading its FIFO must be concurrent or they deadlock; a prepare
+    # step must be finished before either starts (04 §1). Two numbers express both.
+    phase: int = 0
 
 
 @dataclass
@@ -151,15 +155,26 @@ class Supervisor:
         if owned_transport:
             transport.open()
         started = time.monotonic()
-        runs: list[StageRun] = []
+        done: list[StageRun] = []
+        outcome = Outcome()
         try:
-            for spec in specs:
-                runs.append(self._spawn(spec, on_status_fd))
-            outcome = self._watch(runs, watch, started, should_stop)
+            for phase in sorted({spec.phase for spec in specs}):
+                runs = [self._spawn(spec, on_status_fd)
+                        for spec in specs if spec.phase == phase]
+                try:
+                    outcome = self._watch(runs, watch, started, should_stop, done=done)
+                finally:
+                    self._close(runs)
+                done.extend(runs)
+                # A failed phase stops the chain: generating into a FIFO nobody will read, or
+                # analysing events a failed prepare never produced, only wastes the next hour.
+                if not outcome.ok:
+                    break
         finally:
-            self._close(runs)
             if owned_transport:
                 transport.close()
+        outcome.stages = done
+        outcome.wall_seconds = time.monotonic() - started
         return outcome
 
     def _spawn(self, spec: StageSpec, on_status_fd) -> StageRun:
@@ -198,7 +213,8 @@ class Supervisor:
         run.last_activity = time.monotonic()
         return run
 
-    def _watch(self, runs: list[StageRun], watch, started: float, should_stop=None) -> Outcome:
+    def _watch(self, runs: list[StageRun], watch, started: float, should_stop=None,
+               done: list[StageRun] | None = None) -> Outcome:
         failing_since: float | None = None
         stalled_stage = ""
         killed_for_stall = False
@@ -212,7 +228,7 @@ class Supervisor:
                 if run.process is not None and run.status is None:
                     run.status = run.process.poll()
             if watch is not None:
-                watch(runs)
+                watch((done or []) + runs)
 
             # The user asked to stop: pass it on, one step per request (06 §4).
             wanted = should_stop() if should_stop is not None else 0
@@ -254,10 +270,12 @@ class Supervisor:
                     sent |= signal_policy.stop([run.process], self.escalation)
                     run.status = run.process.poll()
         if watch is not None:
-            watch(runs)
+            watch((done or []) + runs)
 
+        # Attribution looks at every stage the chain has run, not only this phase's: a prepare step
+        # that failed is the reason the run stopped, and its exit code is the one to report (00/B20).
         attribution = signal_policy.attribute(
-            [(run.name, run.spec.role, run.status) for run in runs],
+            [(run.name, run.spec.role, run.status) for run in (done or []) + runs],
             sent=sent, stalled=stalled_stage if killed_for_stall else "")
         return Outcome(exit_code=attribution.exit_code, attribution=attribution, stages=runs,
                        stalled=stalled_stage, wall_seconds=time.monotonic() - started,

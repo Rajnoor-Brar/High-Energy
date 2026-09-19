@@ -54,20 +54,55 @@ def group_analyses(points: list[Any]) -> list[str]:
     return seen
 
 
-def stage_chain(config: Any, group_name: str) -> list[Stage]:
+def stage_chain(config: Any, group: Any) -> list[Stage]:
     """The processes one generation needs.
 
-    Pythia and a store replay run inside `hep-run`, so the chain has one stage. External generators add
-    a prepare and a generate stage in P7, and an external Delphes tee adds a stage in P7-S08; the chain
-    stays a closed list, never a general dependency graph (02 §3).
+    Pythia and a store replay run inside `hep-run`, so the chain has one stage. An external generator
+    adds up to two more — a cached `prepare` and a `generate` that writes the FIFO `hep-run` reads
+    (04 §1, §8) — and an external Delphes tee adds one in P7-S08. The chain stays a closed list,
+    never a general dependency graph (02 §3).
+
+    The order is always prepare → generate → hep-run, and `hep-run` is always last: it is the one
+    that decides whether the run succeeded, because it is the one counting events.
     """
     tool = config.generator.tool
+    name = group if isinstance(group, str) else group.name
+    run_stage = Stage(name="hep-run", role="generate+analyse",
+                      command=["hep-run", str(naming.point_dir(config, name) / "run.toml")],
+                      note="in-process source and sinks")
     if tool in {"pythia", "store"}:
-        return [Stage(name="hep-run", role="generate+analyse",
-                      command=["hep-run", str(naming.point_dir(config, group_name) / "run.toml")],
-                      note="in-process source and sinks")]
-    raise HepError(f"stage chains for '{tool}' arrive with its adapter",
-                   hint="P7 adds Sherpa, Whizard, MadGraph and Herwig")
+        return [run_stage]
+
+    adapter = adapter_for(tool)             # raises, naming the step, for one not written yet
+    external = external_stages(config, group, adapter)
+    run_stage.role = "analyse"
+    run_stage.note = "reads the FIFO the generator writes (Source::Stream)"
+    return [*external, run_stage]
+
+
+def external_stages(config: Any, group: Any, adapter: Any) -> list[Stage]:
+    """The adapter's own stages, as the planner shows them (04 §1).
+
+    A `prepare` stage is only in the chain when the cache has not already got it: that is the whole
+    point of the cache, and it has to be visible in `hep plan` or a seed study would look as though
+    it integrates ten times.
+    """
+    from ..adapters import base as adapter_base
+    from ..adapters import cache as cache_module
+
+    directory = naming.point_dir(config, group.name)
+    stages: list[Stage] = []
+
+    version = getattr(adapter, "VERSION", "") or ""
+    entry = cache_module.lookup(config.project, config.generator.tool, group.card or "",
+                                version=version)
+    prepare = adapter.prepare(config, group, entry.directory) if hasattr(adapter, "prepare") else []
+    if prepare and not entry.ready:
+        stages += [stage.to_plan_stage() for stage in prepare]
+
+    generated = adapter.generate(config, group, adapter_base.fifo_path(directory))
+    stages.append(generated.to_plan_stage())
+    return stages
 
 
 def build(config: Any, selection: Any, *, index: int | None = None, tool_version: str = "",
@@ -122,7 +157,7 @@ def build(config: Any, selection: Any, *, index: int | None = None, tool_version
             block = seeding.legacy_block(config.run.seed, members[0].number,
                                          config.run.legacy_seed_step, config.run.threads)
         group = Group(name=name, identity=identity, points=members, seeds=block,
-                      analyses=group_analyses(members), stages=stage_chain(config, name),
+                      analyses=group_analyses(members), stages=[],
                       directory=naming.point_dir(config, name))
         if adapter is not None:
             for point in members:
@@ -134,6 +169,9 @@ def build(config: Any, selection: Any, *, index: int | None = None, tool_version
                 members[0], seeds=block, threads=config.run.threads,
                 card_path=str(card), card_sha=identity.inputs["card"],
                 identity_hash=identity.hash, origin=describe_origin(config, selection, members[0]))
+        # After the card: an external generator's prepare stage is keyed on the rendered card, so
+        # the chain cannot be built before there is one (04 §1).
+        group.stages = stage_chain(config, group)
         groups.append(group)
 
     pages = [Page(name=page_name(config, selection, key), suffix=page_suffix(config, selection, key),

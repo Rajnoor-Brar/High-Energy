@@ -55,7 +55,7 @@ def check_quantity(quantity: Any, where: str) -> None:
     label = f"[quantity.{quantity.name}]"
     if not quantity.type:
         raise HepError(f"{label} needs a type", where=where,
-                       hint="one of: " + ", ".join(sch.QUANTITY.fields["type"].choices))
+                       hint="one of: " + ", ".join(sch.QUANTITY.fields["type"].allowed()))
     if not quantity.values:
         raise HepError(f"{label} needs a non-empty values list", where=where)
     count = len(quantity.values)
@@ -86,9 +86,9 @@ def check_quantity(quantity: Any, where: str) -> None:
         raise HepError(f"{label} key applies only to type = \"setting\"", where=where)
     if isinstance(quantity.key, dict):
         for tool in quantity.key:
-            if tool not in sch.GENERATOR.fields["tool"].choices:
+            if tool not in sch.GENERATOR.fields["tool"].allowed():
                 raise HepError(f"{label} key has no such tool '{tool}'", where=where,
-                               hint=did_you_mean(tool, sch.GENERATOR.fields["tool"].choices))
+                               hint=did_you_mean(tool, sch.GENERATOR.fields["tool"].allowed()))
 
     if quantity.type == "beams":
         for value in quantity.values:
@@ -109,9 +109,9 @@ def check_quantity(quantity: Any, where: str) -> None:
             if not isinstance(value, dict) or "tool" not in value:
                 raise HepError(f"{label} values must be tables with a tool", where=where,
                                hint='values = [{ tool = "pythia", card = "a.cmnd" }, …]')
-            if value["tool"] not in sch.GENERATOR.fields["tool"].choices:
+            if value["tool"] not in sch.GENERATOR.fields["tool"].allowed():
                 raise HepError(f"{label} has no such tool '{value['tool']}'", where=where,
-                               hint=did_you_mean(value["tool"], sch.GENERATOR.fields["tool"].choices))
+                               hint=did_you_mean(value["tool"], sch.GENERATOR.fields["tool"].allowed()))
     if quantity.type == "option":
         for value in quantity.values:
             text = str(value)

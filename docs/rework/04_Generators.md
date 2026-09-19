@@ -30,8 +30,16 @@ The supervisor (06) runs every stage the same way.
 
 **Prepare cache.** Integration grids, Herwig `.run` files and MadGraph process directories are reusable across seeds and event counts.
 - They are stored under `results/<project>/.cache/<tool>/<prep-hash>/`.
-- `prep-hash` covers the rendered card *minus* `seed` and `events`, plus the tool version.
-- A seed-replica study therefore integrates once.
+- `prep-hash` covers the rendered card *minus* `seed` and `events`, plus the tool version. The volatile
+  keys are the tool's own spellings **plus** the generic `seed`/`events`/`nevents`/`n_events`: the hash
+  is taken over the *rendered* card, and an adapter that writes `seed =` while its native language says
+  `RANDOM_SEED` would otherwise give every replica its own grid.
+- An entry is usable only once `prepared.json` is written — last, and only when the outputs the stage
+  promised really exist. A directory without it is an interrupted prepare, not a usable grid (same rule
+  as the store index, 11 §1).
+- A seed-replica study therefore integrates once. **Whether a prepare stage is still needed is decided
+  when the run reaches the point, not when the plan is built**: in a seed study the first point fills
+  the cache and every later one skips it, which cannot be known in advance.
 
 ## 2. Capability matrix (this machine, 2026-09-17)
 
@@ -161,5 +169,6 @@ The supervisor (06) runs every stage the same way.
 
 - **Events:** external generators must emit exactly `run.events`. `hep-run` (`Source::Stream`) counts events and flags a mismatch.
 - **σ:** for FIFO sources (`Source::Stream`), `Sink::Rivet` takes σ from the **last** event's `GenCrossSection` (the generator's final estimate, since there is one producer). A missing attribute is an error unless `rivet.xsec` is a number.
+  - *"Since there is one producer" is load-bearing*, and P7-S01 measured it: streaming a **one**-worker store reproduces the generation's YODA exactly (39 objects, 1004 numbers), while streaming a **two**-worker store scales every histogram by the ratio between one worker's running estimate and the merged σ — 1.8 % on a 300-event test. Every external generator here is a single process, so the rule holds; a future multi-process one would have to carry its merged σ some other way.
 - **Environment:** adapters locate executables through `tools.<name>.exe` (machine file), then `PATH`. They never use absolute paths from the repo.
 - **Version:** `probe()` result goes into provenance. A version change invalidates the prepare cache.

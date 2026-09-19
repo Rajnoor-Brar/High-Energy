@@ -13,6 +13,13 @@ from .fields import Field, Section
 
 SCHEMA_VERSION = 2
 
+def _generator_tools() -> tuple[str, ...]:
+    """`[generator].tool`'s choices, read from the adapter registry when they are needed."""
+    from ..adapters.registry import tools
+
+    return tools()
+
+
 # ── run control ──────────────────────────────────────────────────────────────
 
 RUN = Section("run", doc="Run control: how much, how parallel, where to.",
@@ -42,8 +49,11 @@ RUN = Section("run", doc="Run control: how much, how parallel, where to.",
 })
 
 GENERATOR = Section("generator", doc="Which generator, and its native card.", fields={
-    "tool": Field("str", "pythia", "generator to run",
-                  choices=("pythia", "sherpa", "herwig", "whizard", "madgraph", "store")),
+    # The list lives in `hekit.adapters.registry`, so the schema and the adapter package cannot
+    # disagree about what a valid generator is (they used to hold two copies).
+    # A callable, not a tuple: the list lives in `hekit.adapters.registry`, and resolving it here at
+    # import time would freeze it before an adapter (or a test) could register itself.
+    "tool": Field("str", "pythia", "generator to run", choices=_generator_tools),
     "card": Field("str", "", "native base card, relative to this file"),
     "shower": Field("str", "", "madgraph only: Pythia card used to shower the LHE events"),
     "input": Field("str", "", "store only: point name, 'sha256:…', or a path to an events/ directory"),

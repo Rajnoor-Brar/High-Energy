@@ -78,15 +78,37 @@ makes it moot here — the analysis that costs the most is the one that cannot b
 so the whole table is 15 unit tests. Verified in the positive direction too: `MC_FSPARTICLES` on
 four threads measures 1.91x and recommends `sharded`.
 
-## Next — P7-S01 (adapter framework), the start of phase P7
+## Just finished — P7-S01 (external adapter framework and prepare cache) — done
 
-**Phase P7 — external generators and Delphes** (8 steps, the largest phase). Read
-`docs/rework/steps/README.md` for P7's order, then `P7-S01_adapter-framework.md`, and mirror it here
-before starting.
+A stand-in generator now goes through the whole pipeline: prepare → generate into a FIFO → `hep-run`
+reading it as `Source::Stream`. Its events come from a real store, so the YODA out of the FIFO is
+**identical** to the Pythia run that wrote it (39 objects, 1004 numbers). A two-seed study prepares
+**once**.
+
+**Two defects, both found by running it.**
+
+1. **00/B33 — `hep-run --check` on a stream hung forever.** Opening a FIFO for reading blocks until a
+   writer appears, and a preflight never starts one. Every external-generator run would have hung
+   before generating anything. `initialise()` now validates inputs without opening them; the readers
+   start in `run()`.
+2. **A seed study prepared once per point.** The chain is built at plan time, when the cache is empty
+   for every point; whether a prepare step is still needed is a question about *now*. Nothing marked
+   the cache ready either.
+
+Also: streaming a **two**-worker store scales every histogram by 1.8 %, because a stream takes σ from
+the last event and that is one worker's running estimate. 04 §8's "since there is one producer" is
+load-bearing, and now says so.
+
+## Next — P7-S02 (decide cross-generator photoproduction set-ups)
+
+A **decision** step: which EPA/WW parameters, Q²max, photon PDF, pTHatMin analogue and MPI settings
+count as equivalent to `photo_ep.cmnd` across Sherpa, Whizard, Herwig and MadGraph. It blocks S03 and
+S04. Read `docs/rework/steps/P7-S02_decide-photoproduction-equivalence.md` and mirror it here first;
+a decision step also needs its **Decision record** filled and the register updated.
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · P7–P10 todo — 38 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · P7 1/8 · P8–P10 todo — 39 of 55 steps done.
 
 ## Standing constraints
 

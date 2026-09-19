@@ -141,6 +141,10 @@ class Runner:
             directory = self.layout.point(group.name)
             directory.mkdir(parents=True, exist_ok=True)
             group.directory = directory
+            # Before the preflight, not just before the run: `hep-run --check` opens the source, and
+            # a stream's source is this FIFO. It has to exist by then, even though nothing will write
+            # to it until the generator starts.
+            self._make_fifo(directory)
             spec_module.write_group(group, directory) if hasattr(spec_module, "write_group") else \
                 self._write_group(spec_module, group, directory)
 
@@ -200,10 +204,25 @@ class Runner:
                 poll=0.1, log_dir=logs,
                 stall_after=_seconds(getattr(self.config.terminal, "stall_after", 0)),
                 stall_kill=0.0)
+            # An external generator writes HepMC3 into a FIFO that `hep-run` reads; it has to exist
+            # before either of them starts, and it lives beside the point's results rather than in a
+            # shared `/tmp` path (00/B19).
+            self._make_fifo(directory)
+
+            # The chain was decided when the plan was built, before anything had run. Whether a
+            # prepare step is still needed is a question about *now*: in a seed study the first
+            # point fills the cache and every later one must skip it, which is the entire point of
+            # having a cache (04 §1).
+            chain = [stage for stage in group.stages
+                     if stage.role != "prepare" or not self._prepared(group)]
+
             stages = [StageSpec(name=stage.name, role=stage.role, command=list(stage.command),
                                 tool="" if stage.name == "hep-run" else self.config.generator.tool,
-                                status=(stage.name == "hep-run"), cwd=directory)
-                      for stage in group.stages]
+                                status=(stage.name == "hep-run"), cwd=directory,
+                                # A prepare step must finish before anything reads its output; the
+                                # generator and `hep-run` must run together or the FIFO deadlocks.
+                                phase=0 if stage.role == "prepare" else 1)
+                      for stage in chain]
             for stage in stages:
                 if stage.command and stage.command[0] == "hep-run":
                     stage.command = [binary, str(spec_path)]
@@ -259,6 +278,16 @@ class Runner:
                     "workers": stage.workers, "point": point.name, "stage": stage_run.name})
 
     def _finish_point(self, point: model.PointView, group: Any, outcome, book, directory: Path) -> None:
+        # A generator that stopped early leaves a YODA normalised with the σ of a run that did not
+        # happen, so the point fails here even though every process exited 0 (04 §8).
+        if outcome.exit_code == 0:
+            short = self._check_event_count(group, directory)
+            if short:
+                outcome.exit_code = 1
+                outcome.attribution.reason = short
+            else:
+                self._mark_prepared(group)
+
         state = {0: model.DONE, signal_policy.EXIT_STOPPED: model.STOPPED}.get(
             outcome.exit_code, model.FAILED)
         outputs = sorted(str(path) for path in directory.glob("*.yoda"))
@@ -393,6 +422,84 @@ class Runner:
         click.echo(f"hep: {', '.join(parts)} in {theme.duration(self.view.elapsed())} → {study_dir}")
 
     # ── small helpers ────────────────────────────────────────────────────────
+
+    def _cache_entry(self, group: Any):
+        """The prepare-cache entry for this group, or None when the tool has no prepare step."""
+        tool = self.config.generator.tool
+        if tool in {"pythia", "store"}:
+            return None
+        from ..adapters import ADAPTERS
+        from ..adapters import cache as cache_module
+
+        adapter = ADAPTERS.get(tool)
+        if adapter is None or not hasattr(adapter, "prepare"):
+            return None
+        version = getattr(adapter, "VERSION", "") or ""
+        return cache_module.lookup(self.config.project, tool, group.card or "", version=version)
+
+    def _prepared(self, group: Any) -> bool:
+        entry = self._cache_entry(group)
+        return entry is not None and entry.ready
+
+    def _mark_prepared(self, group: Any) -> None:
+        """Write the cache marker, once the prepare step has produced what it promised.
+
+        The marker is written last and names the outputs, so an interrupted prepare leaves a
+        directory without one — an unfinished entry rather than a silently incomplete grid, which is
+        the same rule as the event store's index (11 §1).
+        """
+        entry = self._cache_entry(group)
+        if entry is None or entry.ready:
+            return
+        from ..adapters import ADAPTERS
+        from ..adapters import cache as cache_module
+
+        adapter = ADAPTERS[self.config.generator.tool]
+        produced: list[Path] = []
+        for stage in adapter.prepare(self.config, group, entry.directory):
+            produced += [Path(path) for path in stage.produces]
+        try:
+            cache_module.mark_ready(entry, version=getattr(adapter, "VERSION", "") or "",
+                                    produced=produced, note=group.name)
+        except HepError:
+            # The step exited 0 but did not leave what it said it would. Not fatal for this point —
+            # the events were produced — but the entry stays unusable so the next point redoes it.
+            cache_module.invalidate(entry)
+
+    def _make_fifo(self, directory: Path) -> None:
+        """The named pipe an external generator writes into (04 §8). No-op for in-process tools."""
+        if self.config.generator.tool in {"pythia", "store"}:
+            return
+        from ..adapters import base as adapter_base
+
+        adapter_base.make_fifo(adapter_base.fifo_path(directory))
+
+    def _check_event_count(self, group: Any, directory: Path) -> str:
+        """An external generator must emit exactly `run.events` (04 §8); a short stream is a failure.
+
+        Checked here rather than in `hep-run`, because "how many events did we ask for" is a question
+        about the plan: the binary knows only what its spec said (02 §2).
+        """
+        if self.config.generator.tool in {"pythia", "store"}:
+            return ""
+        from ..adapters import base as adapter_base
+
+        summary_path = directory / "run.summary.json"
+        if not summary_path.is_file():
+            return ""
+        try:
+            run = json.loads(summary_path.read_text(encoding="utf-8")).get("run", {})
+        except ValueError:                                   # pragma: no cover - a truncated summary
+            return ""
+        if run.get("stopped"):
+            return ""                                        # the user stopped it; not the tool's fault
+        try:
+            adapter_base.check_event_count(int(run.get("events_requested") or 0),
+                                           int(run.get("events") or 0),
+                                           tool=self.config.generator.tool)
+        except HepError as error:
+            return error.render()
+        return ""
 
     def _binary(self) -> str:
         from ..env.doctor import hep_run_path

@@ -29,6 +29,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <filesystem>
 #include <cstdint>
 #include <exception>
 #include <functional>
@@ -96,13 +97,18 @@ namespace Source {
                 beams_.sqrtS = beams_.energies[0];
         }
 
-        /// Open the shards and start the readers. This is where a missing file is noticed.
+        /// Check the inputs and build the reader. **Nothing is opened here.**
+        ///
+        /// Opening a FIFO for reading blocks until a writer appears, and `--check` runs exactly this
+        /// far (06 §3.3) — so opening here would make a preflight of an external generator hang
+        /// forever, waiting for a generator that a preflight never starts. The readers are started
+        /// in `run()` instead, where there really is one at the other end.
         void initialise() override {
             const std::size_t capacity = spec_.store.queue > 0
                                              ? static_cast<std::size_t>(spec_.store.queue)
                                              : kDefaultQueue;
+            requireInputs();
             reader_ = std::make_unique<Store::ParallelReader>(shards_, codec_, capacity);
-            reader_->start(spec_.store.directory.empty() ? spec_.input : spec_.store.directory);
             counted_ = std::vector<std::atomic<long long>>(shards_.size());
             for (std::atomic<long long>& counter : counted_) counter.store(0);
             workers_.assign(shards_.size(), 0);
@@ -135,6 +141,10 @@ namespace Source {
                          const std::function<void(Events::View&)>& consume,
                          const std::function<bool()>& stop,
                          const std::function<void(std::int64_t)>& checkpoint = {}) override {
+            // Here, not in `initialise()`: this is the first moment a writer can be at the other
+            // end of a FIFO (see `initialise`).
+            reader_->start(spec_.store.directory.empty() ? spec_.input : spec_.store.directory);
+
             Core::Counts counts;
             const int consumers = async_ ? std::max(1, slots()) : 1;
             const std::int64_t step = std::max<std::int64_t>(1, chunkSize(chunk));
@@ -253,6 +263,34 @@ namespace Source {
 
       private:
         static constexpr std::size_t kDefaultQueue = 512;
+
+        /// What can be checked about the inputs without blocking on them.
+        ///
+        /// A FIFO only has to *exist* — opening it is what blocks, and whether a generator will
+        /// write to it is not knowable until one does. A shard is a regular file, so it can be
+        /// checked properly, which keeps `--check` on a store as useful as it was.
+        void requireInputs() const {
+            const std::string root =
+                spec_.store.directory.empty() ? spec_.input : spec_.store.directory;
+            for (const Store::Shard& shard : shards_) {
+                const std::filesystem::path path =
+                    shard.file.find('/') == std::string::npos
+                        ? std::filesystem::path(root) / shard.file
+                        : std::filesystem::path(shard.file);
+                std::error_code code;
+                const std::filesystem::file_status state = std::filesystem::status(path, code);
+                if (code || !std::filesystem::exists(state))
+                    throw Core::Error{Core::Exit::Source, "no such input: " + path.string(),
+                                      kind() == "stream"
+                                          ? "the generator writes into this FIFO; `hep run` creates "
+                                            "it before starting either process"
+                                          : "the store's index names it, so the store is incomplete"};
+                if (std::filesystem::is_fifo(state)) continue;      // cannot be checked further
+                if (!std::filesystem::is_regular_file(state))
+                    throw Core::Error{Core::Exit::Source,
+                                      "not a file or a FIFO: " + path.string()};
+            }
+        }
 
         void bump(int worker) {
             if (worker >= 0 && static_cast<std::size_t>(worker) < counted_.size())

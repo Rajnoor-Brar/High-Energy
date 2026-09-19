@@ -58,6 +58,15 @@ def source_document(config: Any, group: Any) -> dict[str, Any]:
         # (and JSON) in Python, the event loop in C++ (02 §2, 11 §4).
         return {"kind": "store", "input": str(directory),
                 "store": store_adapter.store_document(directory)}
+    if tool != "pythia":
+        # An external generator writes HepMC3 into a FIFO next to the point's own results, and
+        # `hep-run` reads it with `Source::Stream` — the same reader a store replay uses, so an
+        # external generator costs no new event path (04 §8, 11 §4).
+        from ..adapters import base as adapter_base
+
+        fifo = adapter_base.fifo_path(naming.point_dir(config, group.name))
+        return adapter_base.stream_source(fifo, compression=_stream_compression(config))
+
     cards = []
     from .build import card_file
 
@@ -68,6 +77,18 @@ def source_document(config: Any, group: Any) -> dict[str, Any]:
     for extra in group.points[0].cards:
         cards.append(str((config.path.parent / extra).resolve()))
     return {"kind": tool, "cards": cards}
+
+
+def _stream_compression(config: Any) -> str:
+    """What an external generator writes into the FIFO.
+
+    Uncompressed by default: a FIFO is a pipe between two processes on one machine, so compressing it
+    spends CPU to save nothing. An adapter whose tool can only write gzip says so.
+    """
+    from ..adapters import ADAPTERS
+
+    adapter = ADAPTERS.get(config.generator.tool)
+    return getattr(adapter, "STREAM_COMPRESSION", "none")
 
 
 def document(config: Any, group: Any, *, origin: str = "") -> dict[str, Any]:

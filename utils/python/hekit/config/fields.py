@@ -38,13 +38,22 @@ class Field:
     doc: str = ""
     minimum: float | None = None
     maximum: float | None = None
-    choices: tuple[Any, ...] = ()
+    #: Allowed values, or a callable returning them. A callable is for a list that is not fixed at
+    #: import time: `[generator].tool` reads the adapter registry, which a plugin (or a test) can
+    #: add to after this module has been imported.
+    choices: tuple[Any, ...] | Any = ()
     item: str = ""
     free: bool = False
     required: bool = False
     since: int = 2
     #: Value shapes accepted for a free table's values.
     value_kind: str = "any"
+
+    def allowed(self) -> tuple[Any, ...]:
+        """`choices`, resolved now rather than when this field was declared."""
+        if callable(self.choices):
+            return tuple(self.choices())
+        return tuple(self.choices)
 
     def default_value(self) -> Any:
         if self.kind == "list":
@@ -58,8 +67,9 @@ class Field:
         parts = [self.kind]
         if self.item:
             parts.append(f"of {self.item}")
-        if self.choices:
-            parts.append("one of " + ", ".join(repr(choice) for choice in self.choices))
+        allowed = self.allowed()
+        if allowed:
+            parts.append("one of " + ", ".join(repr(choice) for choice in allowed))
         if self.minimum is not None:
             parts.append(f"≥ {self.minimum:g}")
         if self.maximum is not None:
@@ -149,8 +159,9 @@ def check(spec: Field, value: Any, where: str) -> Any:
     checked = check_scalar(spec.kind, value, where)
     if checked == spec.default_value() and not isinstance(checked, bool):
         return checked
-    if spec.choices and checked not in spec.choices:
-        allowed = ", ".join(repr(choice) for choice in spec.choices)
+    choices = spec.allowed()
+    if choices and checked not in choices:
+        allowed = ", ".join(repr(choice) for choice in choices)
         raise HepError(f"{checked!r} is not allowed", where=where, hint=f"use one of: {allowed}")
     _range_checked(spec, checked, where)
     return checked
