@@ -79,7 +79,32 @@ public:
 |---|---|---|---|
 | `serial` | `processAsync = off` | all sinks on the callback thread | Simplest; today's behaviour |
 | `sharded` | `processAsync = on` | `Sharded` sinks get a per-worker shard; `Locked` sinks go through one mutex | Analysis cost is comparable to generation (01 A4) |
-| `auto` (default) | — | `sharded` if threads > 1 **and** every Rivet analysis is `Reentrant: true` **and** at least one sink is shardable; otherwise `serial`, with a notice | — |
+| `auto` (default) | — | `sharded` if threads > 1 **and** every Rivet analysis is `Reentrant: true` **and** jet clustering is thread-safe in this build **and** at least one sink is shardable; otherwise `serial`, with a notice naming the reason | — |
+
+Set with `[run].mode`, which is a machine key: it changes the wall clock, not the events, and is not
+part of a point's identity.
+
+**Jet clustering is the binding constraint** (00/B31, measured in P6-S01). SISCone keeps its
+clustering cache and its RNG in process-wide statics in *every* FastJet build, and this installation's
+FastJet is built without `FASTJET_HAVE_LIMITED_THREAD_SAFETY` besides. Two threads clustering at once
+do not crash; they change each other's jets. Whether an analysis clusters is only knowable after
+`Analysis::init()`, which Rivet calls on the first event, so the question is answered twice:
+
+- **before any event**, which is what `auto` uses — without a thread-safe FastJet *no* analysis may be
+  sharded, because any of them might cluster and there is no way to ask yet;
+- **immediately after `init()`**, which is what an explicit `sharded` runs into — if a `FastJets`
+  turns up, the run stops. A jet race produces a plausible histogram with the wrong numbers in it,
+  which is worse than no histogram.
+
+`photo_eic` runs kT, anti-kT and SISCone, so it is always serial. The sharded path is exercised by the
+event store (one shard per worker, no lock) and by jet-free analyses.
+
+**A merge is not enough to make every object mergeable.** `Reentrant: true` says an analysis'
+`finalize` can be re-run; it does not say every object it books *adds*. `MC_XS` is re-entrant and
+still has one object, `XS`, which it `set()`s from the per-event running σ — a snapshot, which four
+handlers cannot reconstruct and `AnalysisHandler::merge` falls back to copying. The rule for modules
+(P8-S01) follows: **`fill` merges, `set` does not.** A run's σ is not affected: it comes from the
+generator, is applied once to the merged total (D-Q1), and lands in `/_XSEC` and `run.summary.json`.
 
 **Decision rule.** Measure, don't guess: `hep bench` (P6-S03) times generation only, generation with sinks, and replay with k readers, then recommends a mode.
 

@@ -15,12 +15,19 @@ SCHEMA_VERSION = 2
 
 # ── run control ──────────────────────────────────────────────────────────────
 
-RUN = Section("run", doc="Run control: how much, how parallel, where to.", machine_keys=("threads",), fields={
+RUN = Section("run", doc="Run control: how much, how parallel, where to.",
+              machine_keys=("threads", "mode"), fields={
     "name": Field("str", "", "output stem; also the prefix of every point name"),
     "events": Field("int", 0, "events to generate per point; 0 = whatever the native card says", minimum=0),
     "seed": Field("int", 0, "base of the identity seed policy (03 §5); never offset by sweep position",
                   minimum=0, maximum=900_000_000),
     "threads": Field("int", 0, "worker threads; 0 = all cores, resolved by hep", minimum=0, maximum=4096),
+    "mode": Field("str", "auto", "how the sinks see the threads (05 \u00a73): \"serial\" calls them one "
+                                 "event at a time, \"sharded\" gives each worker its own analysis "
+                                 "handler and merges at the end, \"auto\" shards only when every sink "
+                                 "and analysis can be. A performance choice, not a physics one: it is "
+                                 "not part of a point's identity",
+                  choices=("auto", "serial", "sharded")),
     "skip_existing": Field("bool", False, "skip a point whose name, hash and complete output all match"),
     "label": Field("str", "", "free text kept in manifests, and appended to a study directory name"),
     "serial": Field("bool", True, "number each study run: results/<project>/studies/01_pdf/ (D-Q3). "

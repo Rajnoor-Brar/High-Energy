@@ -17,14 +17,25 @@
 //   * **there are no seeds.** A replay did not choose any; `instanceSeeds()` is empty, and the
 //     summary says so rather than inventing a number.
 //   * **the worker of an event is the shard it came from**, so the per-worker counts keep meaning
-//     what they meant when the events were written.
+//     what they meant when the events were written. Under `[run].mode = "sharded"` that is no longer
+//     the same number as the *slot* it is analysed on: k consumers pop from one queue fed by n
+//     shards, so an event carries both (05 §3, `Events::View`).
+//
+// **Sharded replay keeps the chunk boundary.** The consumers run a chunk's worth of events and are
+// joined; only then does the main thread checkpoint and look at the stop flag. That is the same
+// shape as the generator (D-Q2) and it is what makes "stop" and "write a partial result" mean the
+// same thing for both sources — a checkpoint never runs while a sink is being called.
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <exception>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -92,6 +103,8 @@ namespace Source {
                                              : kDefaultQueue;
             reader_ = std::make_unique<Store::ParallelReader>(shards_, codec_, capacity);
             reader_->start(spec_.store.directory.empty() ? spec_.input : spec_.store.directory);
+            counted_ = std::vector<std::atomic<long long>>(shards_.size());
+            for (std::atomic<long long>& counter : counted_) counter.store(0);
             workers_.assign(shards_.size(), 0);
             status_.log(Status::Level::Info, kind(),
                         "replaying " + std::to_string(shards_.size()) + " " + codec_ +
@@ -102,6 +115,14 @@ namespace Source {
 
         /// One reader per shard, so the shard count is what a replay parallelises over.
         int threads() const override { return static_cast<int>(shards_.size()); }
+
+        void async(bool on) override { async_ = on; }
+
+        /// One consumer per shard: more would contend on the queue for no gain, fewer would leave a
+        /// reader blocked on a full queue.
+        int slots() const override {
+            return async_ ? std::max<int>(1, static_cast<int>(shards_.size())) : 1;
+        }
 
         /// A replay chose no seeds; saying so is better than inventing them (07 §2).
         std::vector<std::int64_t> instanceSeeds() override { return {}; }
@@ -115,29 +136,70 @@ namespace Source {
                          const std::function<bool()>& stop,
                          const std::function<void(std::int64_t)>& checkpoint = {}) override {
             Core::Counts counts;
+            const int consumers = async_ ? std::max(1, slots()) : 1;
             const std::int64_t step = std::max<std::int64_t>(1, chunkSize(chunk));
-            Store::Frame frame;
-            std::int64_t since_checkpoint = 0;
+            std::atomic<std::int64_t> accepted{0};
+            std::atomic<std::int64_t> attempted{0};
+            std::atomic<bool> drained{false};
+            std::exception_ptr failure;
+            std::mutex failure_mutex;
 
-            while (target <= 0 || counts.accepted < target) {
-                if (!reader_->queue().pop(frame)) break;          // drained, or stopped
-                counts.attempted += 1;
-                Events::View view(nullptr, counts.accepted, frame.worker);
-                view.adoptHepMC(frame.event.get());
-                view.weights().values.assign(1, weightOf(*frame.event));
-                counts.accepted += 1;
-                if (frame.worker >= 0 && static_cast<std::size_t>(frame.worker) < workers_.size())
-                    workers_[static_cast<std::size_t>(frame.worker)] += 1;
-                last_ = frame.event;                              // keeps the event alive for the sinks
-                consume(view);
-
-                if (++since_checkpoint >= step) {
-                    since_checkpoint = 0;
-                    if (checkpoint) checkpoint(counts.accepted);
-                    if (stop && stop()) {
-                        reader_->stop();                          // a blocked FIFO read ends here
-                        break;
+            // One chunk's worth of events on `consumers` threads, then join. The index is claimed
+            // *before* the pop so the chunk never overshoots and no event is claimed and dropped.
+            const auto body = [&](int slot, std::int64_t ceiling) {
+                Store::Frame frame;
+                try {
+                    while (true) {
+                        std::int64_t index = accepted.load(std::memory_order_relaxed);
+                        do {
+                            if (index >= ceiling) return;
+                        } while (!accepted.compare_exchange_weak(index, index + 1));
+                        if (!reader_->queue().pop(frame)) {
+                            accepted.fetch_sub(1);
+                            drained.store(true);
+                            return;
+                        }
+                        attempted.fetch_add(1, std::memory_order_relaxed);
+                        Events::View view(nullptr, index, frame.worker, slot);
+                        view.adoptHepMC(frame.event.get());
+                        view.weights().values.assign(1, weightOf(*frame.event));
+                        bump(frame.worker);
+                        remember(frame.event);            // keeps the event alive for the sinks
+                        consume(view);
                     }
+                } catch (...) {
+                    // A sink threw on a thread we started; carry it to the main thread rather than
+                    // letting it unwind through `std::thread` into `std::terminate`.
+                    const std::lock_guard<std::mutex> guard(failure_mutex);
+                    if (!failure) failure = std::current_exception();
+                    drained.store(true);
+                }
+            };
+
+            while (!drained.load() && (target <= 0 || accepted.load() < target)) {
+                std::int64_t ceiling = accepted.load() + step;
+                if (target > 0) ceiling = std::min(ceiling, target);
+                if (consumers == 1) {
+                    body(0, ceiling);
+                } else {
+                    std::vector<std::thread> threads;
+                    threads.reserve(static_cast<std::size_t>(consumers));
+                    for (int slot = 0; slot < consumers; ++slot)
+                        threads.emplace_back(body, slot, ceiling);
+                    for (std::thread& thread : threads) thread.join();
+                }
+                counts.accepted = accepted.load();
+                counts.attempted = attempted.load();
+                if (failure) {
+                    reader_->stop();
+                    reader_->join();
+                    std::rethrow_exception(failure);
+                }
+                // Nothing is running now, so a checkpoint sees a settled set of sinks.
+                if (checkpoint) checkpoint(counts.accepted);
+                if (stop && stop()) {
+                    reader_->stop();                      // a blocked FIFO read ends here
+                    break;
                 }
             }
             reader_->stop();
@@ -156,6 +218,7 @@ namespace Source {
                 found.known = true;
                 return found;
             }
+            const std::lock_guard<std::mutex> guard(last_lock_);
             if (last_ != nullptr) {
                 const std::shared_ptr<HepMC3::GenCrossSection> cross = last_->cross_section();
                 if (cross != nullptr && cross->xsec() > 0.0) {
@@ -167,7 +230,14 @@ namespace Source {
             return found;
         }
 
-        const std::vector<long long>& workers() const override { return workers_; }
+        // Materialised from the atomic counters, because two consumers can be holding events from
+        // the same source shard at the same time.
+        const std::vector<long long>& workers() const override {
+            workers_.resize(counted_.size());
+            for (std::size_t index = 0; index < counted_.size(); ++index)
+                workers_[index] = counted_[index].load(std::memory_order_relaxed);
+            return workers_;
+        }
 
         void reportWarnings(Status::Writer& status) override {
             for (const auto& [message, count] : warnings_) {
@@ -184,6 +254,18 @@ namespace Source {
       private:
         static constexpr std::size_t kDefaultQueue = 512;
 
+        void bump(int worker) {
+            if (worker >= 0 && static_cast<std::size_t>(worker) < counted_.size())
+                counted_[static_cast<std::size_t>(worker)].fetch_add(1, std::memory_order_relaxed);
+        }
+
+        // The sinks only borrow the event, so one reference has to outlive the call; a stream also
+        // reads σ off the last one it saw (there being no index to read it from).
+        void remember(const std::shared_ptr<HepMC3::GenEvent>& event) {
+            const std::lock_guard<std::mutex> guard(last_lock_);
+            last_ = event;
+        }
+
         static double weightOf(const HepMC3::GenEvent& event) {
             const std::vector<double>& weights = event.weights();
             return weights.empty() ? 1.0 : weights.front();
@@ -195,8 +277,11 @@ namespace Source {
         std::vector<Store::Shard> shards_;
         std::unique_ptr<Store::ParallelReader> reader_;
         Core::Beams beams_;
-        std::vector<long long> workers_;
+        bool async_ = false;
+        std::vector<std::atomic<long long>> counted_;
+        mutable std::vector<long long> workers_;
         std::shared_ptr<HepMC3::GenEvent> last_;
+        mutable std::mutex last_lock_;
         std::vector<std::pair<std::string, long long>> warnings_;
         std::set<std::string> reported_;
     };

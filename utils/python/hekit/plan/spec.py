@@ -85,6 +85,9 @@ def document(config: Any, group: Any, *, origin: str = "") -> dict[str, Any]:
             "events": group.points[0].events or 0,
             "seed": group.seeds.point,
             "threads": config.run.threads,
+            # Not in the identity hash: how many threads see the sinks changes the wall clock, not
+            # the events (05 §3).
+            "mode": config.run.mode,
             "seeds": {"point": group.seeds.point, "instances": list(group.seeds.instances)},
         },
         "source": source_document(config, group),
