@@ -37,7 +37,11 @@ MARKER = "prepared.json"
 #: that has already been stripped, case-insensitively.
 VOLATILE: dict[str, tuple[str, ...]] = {
     "pythia": ("random:seed", "random:setseed", "parallelism:seeds", "main:numberofevents"),
-    "sherpa": ("random_seed", "events", "event_generation_mode"),
+    # `event_output` and `result_directory` carry the *point's* directory, so leaving them in would
+    # give every seed replica its own integration -- the exact opposite of what the cache is for.
+    # `event_generation_mode` is deliberately *not* here: unweighting reads max-weights that the
+    # integration writes, so a different mode deserves its own entry.
+    "sherpa": ("random_seed", "events", "event_output", "result_directory"),
     "whizard": ("seed", "n_events"),
     "herwig": ("set /herwig/random:seed", "run -s", "saverun"),
     "madgraph": ("iseed", "nevents"),
@@ -133,6 +137,33 @@ def entry_for(project: str, tool: str, digest: str) -> Entry:
 
 def lookup(project: str, tool: str, text: str, *, version: str = "") -> Entry:
     return entry_for(project, tool, prepare_hash(text, tool=tool, version=version))
+
+
+def tool_version(adapter: Any, config: Any = None) -> str:
+    """The adapter's version, however it reports one. Empty for an adapter that does not."""
+    reader = getattr(adapter, "version", None)
+    if callable(reader):
+        return reader(config) or ""
+    return str(getattr(adapter, "VERSION", "") or "")
+
+
+def for_group(config: Any, group: Any) -> Entry | None:
+    """The prepare-cache entry a group's generation uses, or None when its tool has no prepare step.
+
+    **The** way to ask. The planner decides whether a prepare stage is in the chain and the runner
+    decides whether to skip it and where to write the marker; computing the key twice is how the two
+    ended up looking at different directories.
+    """
+    tool = getattr(config.generator, "tool", "")
+    if tool in {"pythia", "store"}:
+        return None
+    from . import ADAPTERS
+
+    adapter = ADAPTERS.get(tool)
+    if adapter is None or not hasattr(adapter, "prepare"):
+        return None
+    return lookup(config.project, tool, getattr(group, "card", "") or "",
+                  version=tool_version(adapter, config))
 
 
 def mark_ready(entry: Entry, *, version: str = "", produced: Iterable[Path] = (),

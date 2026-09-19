@@ -18,6 +18,10 @@ class Stage:
     role: str                     # generate | analyse | prepare | detector
     command: list[str] = dataclass_field(default_factory=list)
     note: str = ""
+    # Where it runs, when that is not the point directory: an integration runs in the prepare cache
+    # (04 §1), and a tool that writes beside its working directory would otherwise fill the results.
+    cwd: str = ""
+    env: dict[str, str] = dataclass_field(default_factory=dict)
 
 
 @dataclass

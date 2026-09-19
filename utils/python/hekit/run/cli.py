@@ -218,7 +218,9 @@ class Runner:
 
             stages = [StageSpec(name=stage.name, role=stage.role, command=list(stage.command),
                                 tool="" if stage.name == "hep-run" else self.config.generator.tool,
-                                status=(stage.name == "hep-run"), cwd=directory,
+                                status=(stage.name == "hep-run"),
+                                cwd=Path(stage.cwd) if stage.cwd else directory,
+                                env=dict(stage.env) or None,
                                 # A prepare step must finish before anything reads its output; the
                                 # generator and `hep-run` must run together or the FIFO deadlocks.
                                 phase=0 if stage.role == "prepare" else 1)
@@ -226,6 +228,10 @@ class Runner:
             for stage in stages:
                 if stage.command and stage.command[0] == "hep-run":
                     stage.command = [binary, str(spec_path)]
+                # A stage's working directory has to exist before it is spawned; the prepare cache's
+                # does not until something makes it.
+                if stage.cwd is not None:
+                    Path(stage.cwd).mkdir(parents=True, exist_ok=True)
 
             outcome = supervisor.run(
                 stages,
@@ -425,17 +431,9 @@ class Runner:
 
     def _cache_entry(self, group: Any):
         """The prepare-cache entry for this group, or None when the tool has no prepare step."""
-        tool = self.config.generator.tool
-        if tool in {"pythia", "store"}:
-            return None
-        from ..adapters import ADAPTERS
         from ..adapters import cache as cache_module
 
-        adapter = ADAPTERS.get(tool)
-        if adapter is None or not hasattr(adapter, "prepare"):
-            return None
-        version = getattr(adapter, "VERSION", "") or ""
-        return cache_module.lookup(self.config.project, tool, group.card or "", version=version)
+        return cache_module.for_group(self.config, group)
 
     def _prepared(self, group: Any) -> bool:
         entry = self._cache_entry(group)
@@ -459,7 +457,8 @@ class Runner:
         for stage in adapter.prepare(self.config, group, entry.directory):
             produced += [Path(path) for path in stage.produces]
         try:
-            cache_module.mark_ready(entry, version=getattr(adapter, "VERSION", "") or "",
+            cache_module.mark_ready(entry,
+                                    version=cache_module.tool_version(adapter, self.config),
                                     produced=produced, note=group.name)
         except HepError:
             # The step exited 0 but did not leave what it said it would. Not fatal for this point —

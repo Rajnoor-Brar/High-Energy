@@ -133,14 +133,33 @@ of the reference that is empty. `photo_ep.sin` targets direct photoproduction an
 | Output | `EVENT_OUTPUT: HepMC3_GenEvent[<fifo stem>]` |
 
 **Integration:**
-- The prepare stage runs `Sherpa -f point.yaml -e 0` in the cache directory.
+- The prepare stage runs `Sherpa -f point.yaml -e 0` **in** the cache directory, with
+  `RESULT_DIRECTORY` and `EVENT_OUTPUT: None` on the command line. Both matter: without the first the
+  grid lands in the point directory, and without the second Sherpa opens the HepMC3 output at
+  start-up — and that output is a FIFO, so the integration blocks for ever waiting for a reader that
+  only the *generate* stage starts.
+- Both stages read the **point's** card; there is only ever one, and a copy in the cache would be a
+  second thing that could drift. What differs goes on the command line.
 - The generate stage points `RESULT_DIRECTORY` at the cache.
+
+**Three things measured in P7-S02/S03 that the manual does not make obvious:**
+- `MPI_PDF_SET`/`MPI_PDF_LIBRARY` are read by the MPI model and default to the compiled
+  `PDF4LHC21_40_pdfas` — not installed here — so a run dies naming a PDF the card never mentioned.
+  The adapter mirrors `PDF_SET` into them unless the card set them itself.
+- `EVENT_OUTPUT` is resolved **relative to the working directory** and prefixed with `./`, so an
+  absolute path becomes `.//home/...` and cannot be opened. `HepMC3_GenEvent[name]` writes exactly
+  `name`, with no extension of its own.
+- `MI_HANDLER: Amisic` produced **0 events in 768 s** for ep photoproduction where `None` produced
+  2 000 in 4 s, so the committed base card has MPI off and says why.
 
 **Modes:**
 | `rivet.mode` | What happens |
 |---|---|
 | `inprocess` (default) | HepMC3 → FIFO → `hep-run` (`Source::Stream`). Same sinks, same σ and provenance policy. |
-| `native` | `ANALYSIS: Rivet` with `RIVET: {ANALYSES: [...]}`. Faster for Rivet-only runs, but module, store and Delphes sinks are unavailable. The progress parser still works. |
+| `native` | `ANALYSIS: Rivet` with `RIVET: {--analyses: [...]}` and `ANALYSIS_OUTPUT: analysis`; there is **no `hep-run` stage at all**. Faster for Rivet-only runs, but module, store and Delphes sinks are unavailable, and Sherpa writes `analysis.yoda.gz` rather than `analysis.yoda` (the skip rule and the plot pipeline accept both). The plugin path is passed to the stage as `RIVET_ANALYSIS_PATH`, which `Sink::Rivet` would otherwise have set. The progress parser still works. |
+
+Measured: at a fixed seed the two modes give the same σ to 1e-6 — different code on both sides of the
+seam, the same events.
 
 **Weights:** on-the-fly scale/PDF variations arrive as HepMC weights. `rivet.weights = "all"` keeps them.
 

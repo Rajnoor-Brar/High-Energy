@@ -33,8 +33,15 @@ def test_the_known_tools_are_the_designs_tools():
 def test_an_unwritten_adapter_says_which_step_brings_it():
     """The difference between "you misspelled it" and "it is not built yet" is worth keeping."""
     with pytest.raises(HepError) as raised:
-        registry.adapter_for("sherpa")
-    assert "not written yet" in str(raised.value) and "P7-S03" in str(raised.value)
+        registry.adapter_for("whizard")
+    assert "not written yet" in str(raised.value) and "P7-S04" in str(raised.value)
+
+
+def test_a_written_adapter_is_returned():
+    from hekit.adapters import pythia, sherpa
+
+    assert registry.adapter_for("pythia") is pythia
+    assert registry.adapter_for("sherpa") is sherpa
 
 
 def test_an_unknown_tool_is_a_different_error():

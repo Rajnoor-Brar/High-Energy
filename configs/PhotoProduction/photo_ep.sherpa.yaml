@@ -8,16 +8,19 @@
 # leading order — the reference is a leading-order Pythia run, and an NLO comparison would be
 # comparing two things neither of which is the other.
 #
-# `hep` owns the run control: beams, energies, event count and seed are written into a point card that
-# is read after this file, exactly as for Pythia (04 §1). The values here are the 18x275 EIC defaults
-# so the file is runnable on its own.
+# `hep` owns the run control: beams, energies, event count and seed are deep-merged into the point
+# card that Sherpa actually reads (04 §1, §4), so they are absent here rather than set to a default
+# that a point would silently inherit.
 
 # ── beams ────────────────────────────────────────────────────────────────────
 # Proton first, so the proton runs along +z as it does in Pythia (`Beams:idA = 2212`). Sherpa's own
 # example puts the lepton first; copying that would mirror every pseudorapidity distribution, which is
 # the sort of difference that looks like physics (00/B26 was the same trap from the other side).
-BEAMS: [2212, 11]
-BEAM_ENERGIES: [275.0, 18.0]
+# `BEAMS` and `BEAM_ENERGIES` are **not** set here: the plan owns them (04 §8), and `hep` writes them
+# into the point card. The 18x275 EIC values are
+#   BEAMS: [2212, 11]
+#   BEAM_ENERGIES: [275.0, 18.0]
+# and uncommenting them makes this file runnable on its own, which is how P7-S02 measured it.
 BEAM_SPECTRA: [Monochromatic, EPA]
 
 # `PDF:lepton2gamma = on` + `Photon:Q2max = 1.0`.
@@ -58,10 +61,17 @@ SELECTORS:
       R: 1.0
       Exp: 1
 
-# DIFFERS: `MultipartonInteractions:pT0Ref = 3.2` is a Pythia tune parameter. Sherpa's MPI is Amisic,
-# a different model with its own tune, so there is no number to copy across — only "MPI on" matches.
-# Left at Sherpa's default rather than invented.
-MI_HANDLER: Amisic
+# DIFFERS, twice over.
+#
+# 1. `MultipartonInteractions:pT0Ref = 3.2` is a Pythia tune parameter. Sherpa's MPI is Amisic, a
+#    different model with its own tune, so there is no number to copy across — only "MPI on" would
+#    match, not the tune.
+# 2. **Amisic is off here because it does not work for this process on this machine.** Measured in
+#    P7-S02: with `MI_HANDLER: Amisic` the integration finished in 75 s and then produced *0 events
+#    in 768 s*; with `None` the same card produces 2 000 events in 4 s. So a Sherpa point currently
+#    has **no underlying event**, which is a real difference from the Pythia reference and not a
+#    modelling choice. Turn it back on when someone works out why.
+MI_HANDLER: None
 
 SCALES: METS{H_T2/4}{H_T2/4}{H_T2/4}
 ME_GENERATORS: [Comix]
@@ -69,5 +79,4 @@ ME_GENERATORS: [Comix]
 # Unweighted events, so the sample is what `Sink::Rivet` expects from a generator.
 EVENT_GENERATION_MODE: Weighted
 
-# `hep` fills these in from the point spec; the defaults make the card runnable by hand.
-EVENTS: 1000
+# `EVENTS`, `RANDOM_SEED` and `EVENT_OUTPUT` are written by `hep` into the point card.

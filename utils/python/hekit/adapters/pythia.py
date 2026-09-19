@@ -121,8 +121,13 @@ def run_settings(point: Any, seeds: Any, threads: int) -> list[tuple[str, Any, s
 
 
 def render_card(point: Any, *, seeds: Any, threads: int, card_path: str, card_sha: str,
-                identity_hash: str, origin: str) -> str:
-    """The point card: header, run control, beams, then the overrides grouped by origin."""
+                identity_hash: str, origin: str, **_: Any) -> str:
+    """The point card: header, run control, beams, then the overrides grouped by origin.
+
+    `**_` swallows what only an external adapter needs — where its FIFO is, which Rivet mode is in
+    force — because the planner hands every adapter the same context and Pythia's events never leave
+    the process.
+    """
     lines = [
         "! hekit point card (generated) — read after the base card, so these settings win",
         f"! origin     : {origin}",

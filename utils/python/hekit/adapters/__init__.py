@@ -16,10 +16,12 @@ from __future__ import annotations
 from typing import Any
 
 from . import pythia
+from . import sherpa
 from .registry import (ADAPTERS, KNOWN_TOOLS, adapter_for, implemented, register, tools,
                        unregister)
 
 register("pythia", pythia, description=KNOWN_TOOLS["pythia"])
+register("sherpa", sherpa, description=KNOWN_TOOLS["sherpa"])
 
 __all__ = ["ADAPTERS", "KNOWN_TOOLS", "adapter_for", "defaults_for", "implemented", "register",
            "tools", "unregister"]

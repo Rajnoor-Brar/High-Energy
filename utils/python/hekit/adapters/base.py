@@ -95,12 +95,18 @@ class Stage:
         from ..plan.model import Stage as PlanStage
 
         return PlanStage(name=self.name, role=self.role,
-                         command=[str(entry) for entry in self.argv], note=self.note)
+                         command=[str(entry) for entry in self.argv], note=self.note,
+                         cwd=str(self.cwd) if self.cwd else "", env=dict(self.env))
 
 
 @runtime_checkable
 class Adapter(Protocol):
-    """04 §1. Adapters are modules, so these are module-level functions rather than methods."""
+    """04 §1. Adapters are modules, so these are module-level functions rather than methods.
+
+    **Every one of these takes `**extra`.** The planner hands the same context to all adapters —
+    where the FIFO is, which Rivet mode is in force, the base card's text — and an adapter ignores
+    what it does not need. Without it, adding one adapter's needs breaks every other adapter.
+    """
 
     tool: str
 

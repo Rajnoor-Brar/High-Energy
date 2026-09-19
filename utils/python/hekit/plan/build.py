@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from ..adapters import adapter_for
+from ..adapters import base as adapter_base
 from ..adapters import rivet as rivet_adapter
 from ..env import paths
 from ..errors import HepError
@@ -75,9 +76,19 @@ def stage_chain(config: Any, group: Any) -> list[Stage]:
 
     adapter = adapter_for(tool)             # raises, naming the step, for one not written yet
     external = external_stages(config, group, adapter)
+    if native_rivet(config, adapter):
+        # The generator runs Rivet itself and writes the YODA, so there is nothing for `hep-run` to
+        # read. Faster for a Rivet-only run, and it gives up every other sink (04 §4).
+        return external
     run_stage.role = "analyse"
     run_stage.note = "reads the FIFO the generator writes (Source::Stream)"
     return [*external, run_stage]
+
+
+def native_rivet(config: Any, adapter: Any) -> bool:
+    """Is this run letting the generator do the analysing?"""
+    return (getattr(config.rivet, "mode", "inprocess") == "native"
+            and bool(getattr(adapter, "RUNS_RIVET", False)))
 
 
 def external_stages(config: Any, group: Any, adapter: Any) -> list[Stage]:
@@ -87,16 +98,14 @@ def external_stages(config: Any, group: Any, adapter: Any) -> list[Stage]:
     point of the cache, and it has to be visible in `hep plan` or a seed study would look as though
     it integrates ten times.
     """
-    from ..adapters import base as adapter_base
+
     from ..adapters import cache as cache_module
 
     directory = naming.point_dir(config, group.name)
     stages: list[Stage] = []
 
-    version = getattr(adapter, "VERSION", "") or ""
-    entry = cache_module.lookup(config.project, config.generator.tool, group.card or "",
-                                version=version)
-    prepare = adapter.prepare(config, group, entry.directory) if hasattr(adapter, "prepare") else []
+    entry = cache_module.for_group(config, group)
+    prepare = adapter.prepare(config, group, entry.directory) if entry is not None else []
     if prepare and not entry.ready:
         stages += [stage.to_plan_stage() for stage in prepare]
 
@@ -168,7 +177,13 @@ def build(config: Any, selection: Any, *, index: int | None = None, tool_version
             group.card = adapter.render_card(
                 members[0], seeds=block, threads=config.run.threads,
                 card_path=str(card), card_sha=identity.inputs["card"],
-                identity_hash=identity.hash, origin=describe_origin(config, selection, members[0]))
+                identity_hash=identity.hash, origin=describe_origin(config, selection, members[0]),
+                # An external adapter renders the whole card rather than appending to a base, and
+                # needs to know where its events go; Pythia ignores these.
+                base_text=card_text, events=members[0].events,
+                fifo=str(adapter_base.fifo_path(naming.point_dir(config, name))),
+                mode=getattr(config.rivet, "mode", "inprocess"),
+                analyses=group_analyses(members))
         # After the card: an external generator's prepare stage is keyed on the rendered card, so
         # the chain cannot be built before there is one (04 §1).
         group.stages = stage_chain(config, group)

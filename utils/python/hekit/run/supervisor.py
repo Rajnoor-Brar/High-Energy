@@ -250,6 +250,26 @@ class Supervisor:
                 sent |= signal_policy.stop([run.process for run in runs], self.escalation)
                 break
 
+            # A consumer whose producers have all gone can never receive anything again. The
+            # common shape is a generator writing a FIFO that `hep-run` reads: if the generator
+            # exits without ever opening the FIFO — because it wrote somewhere else, say — the
+            # reader is blocked in `open()` and will wait for ever. Idleness is required as well as
+            # absence, so a consumer still working through what it already has is left alone.
+            # Only when every producer *succeeded*: a producer that failed is handled above, and
+            # attributing the run to it ("the generator's card was wrong") says more than
+            # attributing it to the reader that was waiting for it.
+            producers = [run for run in runs if run.spec.role != "analyse"]
+            consumers = [run for run in runs if run.spec.role == "analyse"]
+            if (producers and consumers
+                    and all(run.status == 0 for run in producers)
+                    and any(run.running for run in consumers)
+                    and self._idle_for(consumers) >= self.escalation.grace):
+                orphaned = ", ".join(run.name for run in consumers if run.running)
+                stalled_stage = stalled_stage or orphaned
+                killed_for_stall = True
+                sent |= signal_policy.stop([run.process for run in runs], self.escalation)
+                break
+
             found = self._stalled(runs)
             stalled_stage = found or stalled_stage          # remembered once seen
             if found and self.stall_kill and self._idle_for(runs) >= self.stall_kill:

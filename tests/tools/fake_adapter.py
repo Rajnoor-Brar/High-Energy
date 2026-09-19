@@ -61,7 +61,7 @@ def frame_warning(point: Any) -> str:
 
 
 def render_card(point: Any, *, seeds: Any, threads: int, card_path: str = "", card_sha: str = "",
-                identity_hash: str = "", origin: str = "") -> str:
+                identity_hash: str = "", origin: str = "", **_: Any) -> str:
     """The point card.
 
     The seed and the event count are on it *and are ignored by the prepare hash* — that is the whole

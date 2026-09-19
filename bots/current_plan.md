@@ -123,14 +123,39 @@ the cut-definition row.
 3. Beam order is proton-first in both cards: Sherpa's own example puts the lepton on beam 1, which
    mirrors every η distribution (the 00/B26 trap, harder to spot across generators).
 
-## Next — P7-S03 (Sherpa adapter)
+## Just finished — P7-S03 (Sherpa adapter) — done
 
-Read `docs/rework/steps/P7-S03_sherpa.md` and mirror it here before starting. It now has a verified
-base card and three known obstacles to work from.
+Sherpa is installed here, so every row was measured against the real binary.
+
+- **Point**: a 200-event Sherpa point runs end to end — integrate (75 s, cached), generate into the
+  FIFO, `hep-run` reads it as `Source::Stream`, `photo_eic` writes a YODA. σ = 9 452 pb, consistent
+  with P7-S02's standalone 9 636 ± 782 pb.
+- **Cache**: two seeds → **one** integration, one entry, one `prepared.json`.
+- **Modes**: `native` and `inprocess` agree on σ **to 1e-6** — different code on both sides of the
+  seam, the same events.
+
+**Four defects, all found by running it.** The prepare stage looked for a card nothing wrote; the
+runner overrode every stage's `cwd`, so the integration filled the point directory (`Stage` now
+carries `cwd` and `env` — `env` earned its keep at once, for native mode's `RIVET_ANALYSIS_PATH`);
+`EVENT_OUTPUT` must be *relative* and takes the whole filename, so the generator wrote 3.2 MB to the
+wrong name and exited 0; and the planner and runner computed the cache key with different versions,
+so the grid and the marker went to different directories and every run re-integrated.
+
+**And one that fell out of the third: a chain could hang for ever.** `hep-run` sat in `open()` on a
+FIFO no one would write to. New rule: when every producer has exited **successfully** and an
+`analyse` stage is still running and idle past the grace period, stop — it can never receive
+anything. Only for *successful* producers, because a failed one already gives a better answer.
+
+## Next — P7-S04 (Whizard adapter)
+
+Read `docs/rework/steps/P7-S04_whizard.md` and mirror it here before starting. **P7-S02 already
+decided its scope**: Whizard cannot do resolved photoproduction (no photon structure function, by its
+own manual), so `photo_ep.sin` targets *direct* photoproduction as its own physics point rather than
+as a cross-check of the reference.
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · P7 2/8 · P8–P10 todo — 40 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · P7 3/8 · P8–P10 todo — 41 of 55 steps done.
 
 ## Standing constraints
 

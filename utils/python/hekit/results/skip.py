@@ -29,6 +29,18 @@ SUMMARY = "run.summary.json"
 PROVENANCE = "provenance.json"
 YODA = "analysis.yoda"
 
+#: A generator running Rivet itself writes a gzipped YODA (`rivet.mode = "native"`, 04 §4). It is
+#: just as finished as the plain one, so "the directory has a result" has to know about it.
+COMPRESSED = ".gz"
+
+
+def finished_yoda(directory: Path, yoda_name: str = YODA) -> Path | None:
+    """The finished result in `directory`, whatever it is called, or None."""
+    for name in (yoda_name, yoda_name + COMPRESSED):
+        if (directory / name).is_file():
+            return directory / name
+    return None
+
 
 class State(str, Enum):
     MISSING = "missing"          # nothing there yet
@@ -96,7 +108,6 @@ def decide(directory: Path, *, name: str = "", wanted_hash: str = "",
            yoda_name: str = YODA, rerun: bool = False) -> Decision:
     """What to do about `directory` for a point with this name and hash."""
     partial = directory / marked(yoda_name, "partial")
-    complete = directory / yoda_name
 
     if rerun:
         return Decision(State.MISSING if not directory.exists() else State.COMPLETE, True,
@@ -112,10 +123,11 @@ def decide(directory: Path, *, name: str = "", wanted_hash: str = "",
                         hint="the configuration changed under an existing result: rerun it with "
                              "--rerun, or give the point a new [run].name")
 
-    if partial.is_file() and not complete.is_file():
+    complete = finished_yoda(directory, yoda_name)
+    if partial.is_file() and complete is None:
         return Decision(State.PARTIAL, True, reason="the last run was stopped before it finished",
                         hint=f"it left {partial.name}")
-    if not complete.is_file():
+    if complete is None:
         return Decision(State.INCOMPLETE, True, reason="the directory has no finished result")
     if stopped(directory):
         # Belt and braces: a summary that says "stopped" beside a final-named YODA should not happen

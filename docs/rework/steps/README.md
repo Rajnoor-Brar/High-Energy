@@ -94,7 +94,7 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P6-S03 | [hep bench](P6-S03_bench.md) | code | P6-S01 | 0.5 d | done |
 | P7-S01 | [External adapter framework and prepare cache](P7-S01_adapter-framework.md) | code | P3-S05, P5-S02 | 1 d | done |
 | P7-S02 | [Decide cross-generator photoproduction set-ups](P7-S02_decide-photoproduction-equivalence.md) | decision | P7-S01 | 0.5 d | done |
-| P7-S03 | [Sherpa adapter](P7-S03_sherpa.md) | code | P7-S01, P7-S02 | 1.5 d | todo |
+| P7-S03 | [Sherpa adapter](P7-S03_sherpa.md) | code | P7-S01, P7-S02 | 1.5 d | done |
 | P7-S04 | [Whizard adapter](P7-S04_whizard.md) | code | P7-S01, P7-S02 | 1 d | todo |
 | P7-S05 | [MadGraph adapter (LHE → Pythia shower)](P7-S05_madgraph.md) | code | P7-S01, P2-S04 | 1 d | todo |
 | P7-S06 | [Decide and (optionally) rebuild ThePEG/Herwig](P7-S06_decide-herwig-rebuild.md) | decision | P1-S07 | 0.25 d + build | todo |
