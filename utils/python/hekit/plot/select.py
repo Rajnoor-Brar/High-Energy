@@ -55,27 +55,41 @@ def curves_for(points: Iterable[Any], *, analysis: str = "", legends: str = "lab
 
     `points` are objects with `name`, `yoda` (a path) and optionally `legend`/`label` — the study
     manifest's entries, or anything shaped like them.
+
+    **A point that says which variant is its own gets only that one.** Several points can share one
+    generation when they differ only in an analysis option (03 §4), and their one YODA then holds
+    every variant; expanding all of them for each point would put four curves on a two-member page.
+    A point that declares nothing still gets every variant in its file, which is how a single point
+    with several radii becomes several curves.
     """
     curves: list[Curve] = []
     for point in points:
         path = Path(getattr(point, "yoda", "") or getattr(point, "path", ""))
         name = getattr(point, "name", path.stem)
         found = variants_in(path, analysis=analysis) if path.is_file() else []
-        for variant in found or [analysis or ""]:
+        declared = [variant for variant in (getattr(point, "analyses", ()) or []) if variant in found]
+        chosen = declared or found or [analysis or ""]
+        # Only a point being split into several curves needs its option in the name and the legend;
+        # when the point *is* the variant, its own label already says so.
+        split = not declared and len(found) > 1
+        for variant in chosen:
             options = io.options_of(variant)
-            suffix = ""
-            if len(found) > 1:
-                suffix = "_" + "_".join(f"{key}{value}" for key, value in sorted(options.items()))
+            suffix = ("_" + "_".join(f"{key}{value}" for key, value in sorted(options.items()))
+                      if split else "")
             curves.append(Curve(
                 name=f"{name}{suffix}",
                 path=path, analysis=variant, point=name, options=options,
-                legend=legend_for(point, variant, legends)))
+                legend=legend_for(point, variant, legends, with_options=split)))
     return curves
 
 
-def legend_for(point: Any, variant: str, legends: str = "label") -> str:
-    """What a curve is called on the page: its label, its tag, or its value (`[plot].legends`)."""
-    options = io.options_of(variant)
+def legend_for(point: Any, variant: str, legends: str = "label", *, with_options: bool = True) -> str:
+    """What a curve is called on the page: its label, its tag, or its value (`[plot].legends`).
+
+    `with_options = False` leaves the variant out of the text, for a point whose own label already is
+    the variant — otherwise the radius study reads "R = 0.4 (R=0.4)".
+    """
+    options = io.options_of(variant) if with_options else {}
     chosen = {
         "label": getattr(point, "legend", "") or getattr(point, "label", ""),
         "tag": getattr(point, "tag", "") or getattr(point, "name", ""),

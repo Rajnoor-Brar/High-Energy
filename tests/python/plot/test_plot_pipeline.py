@@ -275,6 +275,47 @@ def test_an_option_variant_is_a_curve_not_a_page(tmp_path):
     assert all(curve.point == "eic_5x41" for curve in curves)
 
 
+def test_points_sharing_one_generation_take_only_their_own_variant(tmp_path):
+    """03 §4 again, from the other side: one file, two points, two curves — not four.
+
+    When a study scans an analysis option its points share one generation, so they share one YODA and
+    that file holds every variant. Each point must take the one that is its own; expanding all of
+    them for each point is how a two-member page got four curves (found in P6-S02).
+    """
+    objects = []
+    for radius in ("0.4", "1.0"):
+        objects += histogram(f"/photo_eic:R={radius}/d01-x01-y01", [0.0, 1.0, 2.0], [1.0, 2.0])
+    path = tmp_path / "shared.yoda"
+    yoda.write(objects, str(path))
+
+    class Point:
+        def __init__(self, name, legend, analyses):
+            self.name, self.legend, self.analyses, self.yoda = name, legend, analyses, path
+
+    points = [Point("mini_r04", "R = 0.4", ("photo_eic:R=0.4",)),
+              Point("mini_r10", "R = 1.0", ("photo_eic:R=1.0",))]
+    curves = select.curves_for(points, analysis="photo_eic")
+
+    assert [curve.name for curve in curves] == ["mini_r04", "mini_r10"]
+    assert [curve.analysis for curve in curves] == ["photo_eic:R=0.4", "photo_eic:R=1.0"]
+    # The point's own label already says which radius it is, so the legend does not repeat it.
+    assert [curve.legend for curve in curves] == ["R = 0.4", "R = 1.0"]
+    assert all(curve.path == path for curve in curves), "one generation, one file"
+
+
+def test_a_declared_variant_that_is_not_in_the_file_falls_back(tmp_path):
+    """A stale manifest must not silently produce an empty page."""
+    objects = histogram("/photo_eic:R=0.4/d01-x01-y01", [0.0, 1.0, 2.0], [1.0, 2.0])
+    path = tmp_path / "one.yoda"
+    yoda.write(objects, str(path))
+
+    class Point:
+        name, legend, yoda, analyses = "p", "p", path, ("photo_eic:R=9.9",)
+
+    curves = select.curves_for([Point()], analysis="photo_eic")
+    assert [curve.analysis for curve in curves] == ["photo_eic:R=0.4"]
+
+
 def test_curves_from_different_plugins_are_unified(tmp_path):
     first = a_curve(tmp_path / "one", "a", [1.0, 2.0, 3.0, 4.0], analysis="photo_eic")
     second = a_curve(tmp_path / "two", "b", [2.0, 3.0, 4.0, 5.0], analysis="photo_5x41")

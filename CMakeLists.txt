@@ -260,6 +260,10 @@ if(HEKIT_PYTEST)
            ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_sharded_rivet.py)
   set_tests_properties(sharded_rivet PROPERTIES LABELS "slow" TIMEOUT 3600)
 
+  add_test(NAME event_groups COMMAND ${HEKIT_PYTEST} -q
+           ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_event_groups.py)
+  set_tests_properties(event_groups PROPERTIES LABELS "slow" TIMEOUT 3600)
+
   # The analysis plugin's own defects and its re-entrant merge (P4-S05).
   add_test(NAME photo_eic COMMAND ${HEKIT_PYTEST} -q
            ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_photo_eic_plugin.py)

@@ -37,13 +37,33 @@ Also settled: **`fill` merges, `set` does not** — `MC_XS` is re-entrant and st
 `set()`s from the per-event running σ, which no merge can reconstruct. That is the rule P8-S01 has
 to follow for module results.
 
-## Next — P6-S02 (shared generation for analysis-only variants)
+## Just finished — P6-S02 (shared generation for analysis-only variants) — done
 
-Read `docs/rework/steps/P6-S02_event-groups.md` and mirror it here before starting.
+The planning half had worked since P1-S05; the **plotting half had not**, and testing the chain end
+to end is what found it.
+
+**A two-member page was drawing four curves.** `select.curves_for` expanded *every* variant it found
+in a point's file. That is right when one point holds several radii, and wrong the moment several
+points **share** one generation — the shared YODA then holds every variant and each point claimed
+all of them. Nothing had ever asked what came out of the far end: the planner grouped correctly, the
+sink booked both variants, and the page quietly doubled them.
+
+Fixed by giving `PointFile` the point's own `analyses`; a point that declares one takes only that.
+The legend stopped repeating itself too ("R = 0.4 (R=0.4)" → "R = 0.4").
+
+Rows: `hep plan --study radius` → 1 group, 3 variants (and the `pdf` study is *not* grouped, as a
+control); one point directory whose YODA carries both variant paths and one `/_EVTCOUNT`; `hep plot`
+→ 2 curves.
+
+## Next — P6-S03 (`hep bench`)
+
+Read `docs/rework/steps/P6-S03_bench.md` and mirror it here before starting. It is the last step of
+phase P6: time generation only, generation with sinks, and replay with k readers, then recommend a
+mode — which now has a real constraint to report (00/B31: a jet analysis can only be serial).
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · P6 1/3 · P7–P10 todo — 36 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · P6 2/3 · P7–P10 todo — 37 of 55 steps done.
 
 ## Standing constraints
 
