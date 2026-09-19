@@ -164,8 +164,12 @@ def for_group(config: Any, group: Any) -> Entry | None:
     adapter = ADAPTERS.get(tool)
     if adapter is None or not hasattr(adapter, "prepare"):
         return None
-    return lookup(config.project, tool, getattr(group, "card", "") or "",
-                  version=tool_version(adapter, config))
+    # Which text the key is taken over is the adapter's to say. For most it is the rendered card;
+    # for MadGraph it is the *proc* card, because the process directory is built from the processes
+    # and the rendered card is a short Pythia shower card that says nothing about them.
+    reader = getattr(adapter, "cache_text", None)
+    text = reader(group) if callable(reader) else (getattr(group, "card", "") or "")
+    return lookup(config.project, tool, text, version=tool_version(adapter, config))
 
 
 def mark_ready(entry: Entry, *, version: str = "", produced: Iterable[Path] = (),

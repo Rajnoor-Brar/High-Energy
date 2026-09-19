@@ -221,7 +221,16 @@ half in a `# hep: beam_structure = pdf_builtin, epa` line and the adapter writes
 2. **Matrix element:** a `launch` script with `shower=OFF`, `set nevents` and `set iseed`, plus overrides (`run_card.<key>`) → `unweighted_events.lhe.gz`. Beam settings are rendered as:
    - **Ids:** mapped to `lpp1/2`, the beam type (±2212 → ±1 PDF beam; ±11 → 0 without, or with EPA, per the base card). An id with no `lpp` mapping is a planning error.
    - **Energies:** `ebeam1/2`. A scalar √s → `ebeam1 = ebeam2 = √s/2`.
-3. **Shower:** decompress the LHE (Pythia gzip support is build-dependent, so do not rely on it). Then run `hep-run` (`Source::Pythia`) with the `[generator].shower` card, `Beams:frameType = 4` and `Beams:LHEF`.
+3. **Unpack:** decompress the LHE **into the point directory** (Pythia gzip support is build-dependent, so do not rely on it). It goes there rather than staying in the cache because the shower card has to name it, and the cache's path is a hash of the proc card — which the card cannot contain without the key depending on itself.
+4. **Shower:** run `hep-run` (`Source::Pythia`) with the `[generator].shower` card and the point card, which carries `Beams:frameType = 4` and `Beams:LHEF`. The spec's `source.kind` is **`pythia`**: MadGraph handed over a matrix element, not events.
+
+**Nothing overlaps.** Every other external generator streams into a FIFO and runs *alongside*
+`hep-run`; MadGraph writes files, so its four stages are four phases. That also means `hep run` skips
+the `hep-run --check` preflight for a MadGraph point: the LHE does not exist yet, so the check would
+fail on every such point for a reason that is not a problem.
+
+**The two texts are different.** The *proc card* is what gets built and what the prepare cache is
+keyed on; the *rendered card* is a five-line Pythia shower card that mentions no processes at all.
 
 **Matching/merging** settings are in the shower card. The adapter only warns if a multi-jet proc card has no merging settings.
 

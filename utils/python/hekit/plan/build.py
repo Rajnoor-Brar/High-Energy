@@ -81,7 +81,14 @@ def stage_chain(config: Any, group: Any) -> list[Stage]:
         # read. Faster for a Rivet-only run, and it gives up every other sink (04 §4).
         return external
     run_stage.role = "analyse"
-    run_stage.note = "reads the FIFO the generator writes (Source::Stream)"
+    if getattr(adapter, "STREAMS", True):
+        # It shares the generator's phase: a FIFO's two ends must be open at once or they deadlock.
+        run_stage.phase = max((stage.phase for stage in external), default=1)
+        run_stage.note = "reads the FIFO the generator writes (Source::Stream)"
+    else:
+        # The generator wrote a file, so it has to be finished before this reads it (MadGraph's LHE).
+        run_stage.phase = max((stage.phase for stage in external), default=0) + 1
+        run_stage.note = "showers the events the generator wrote"
     return [*external, run_stage]
 
 
@@ -109,8 +116,12 @@ def external_stages(config: Any, group: Any, adapter: Any) -> list[Stage]:
     if prepare and not entry.ready:
         stages += [stage.to_plan_stage() for stage in prepare]
 
-    generated = adapter.generate(config, group, adapter_base.fifo_path(directory))
-    stages.append(generated.to_plan_stage())
+    # `stages()` for a tool that needs more than one step to produce its events — MadGraph launches
+    # and then unpacks — and `generate()` for the usual single one.
+    fifo = adapter_base.fifo_path(directory)
+    produced = (adapter.stages(config, group, fifo) if hasattr(adapter, "stages")
+                else [adapter.generate(config, group, fifo)])
+    stages += [stage.to_plan_stage() for stage in produced]
     return stages
 
 
@@ -174,6 +185,7 @@ def build(config: Any, selection: Any, *, index: int | None = None, tool_version
                 warning = adapter.frame_warning(point)
                 if warning and warning not in warnings:
                     warnings.append(warning)
+            group.base_card = card_text
             group.card = adapter.render_card(
                 members[0], seeds=block, threads=config.run.threads,
                 card_path=str(card), card_sha=identity.inputs["card"],
@@ -183,7 +195,21 @@ def build(config: Any, selection: Any, *, index: int | None = None, tool_version
                 base_text=card_text, events=members[0].events,
                 fifo=str(adapter_base.fifo_path(naming.point_dir(config, name))),
                 mode=getattr(config.rivet, "mode", "inprocess"),
-                analyses=group_analyses(members))
+                analyses=group_analyses(members),
+                lhe=str(adapter.lhe_path(config, group)) if hasattr(adapter, "lhe_path") else "")
+            if hasattr(adapter, "launch_script"):
+                # MadGraph's launch carries the seed, the event count and the beams, so it is
+                # rendered with the point like the card is (04 §7).
+                from ..adapters import cache as cache_module
+
+                entry = cache_module.for_group(config, group)
+                group.launch = adapter.launch_script(
+                    members[0], seeds=block, events=members[0].events,
+                    process_dir=adapter.process_dir(entry.directory))
+            if hasattr(adapter, "merging_warning"):
+                notice = adapter.merging_warning(card_text)
+                if notice and notice not in warnings:
+                    warnings.append(notice)
         # After the card: an external generator's prepare stage is keyed on the rendered card, so
         # the chain cannot be built before there is one (04 §1).
         group.stages = stage_chain(config, group)

@@ -280,6 +280,10 @@ if(HEKIT_PYTEST)
            ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_whizard.py)
   set_tests_properties(whizard PROPERTIES LABELS "slow" TIMEOUT 3600)
 
+  add_test(NAME madgraph COMMAND ${HEKIT_PYTEST} -q
+           ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_madgraph.py)
+  set_tests_properties(madgraph PROPERTIES LABELS "slow" TIMEOUT 3600)
+
   # The analysis plugin's own defects and its re-entrant merge (P4-S05).
   add_test(NAME photo_eic COMMAND ${HEKIT_PYTEST} -q
            ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_photo_eic_plugin.py)

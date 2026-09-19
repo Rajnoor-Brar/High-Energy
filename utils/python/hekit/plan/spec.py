@@ -58,7 +58,10 @@ def source_document(config: Any, group: Any) -> dict[str, Any]:
         # (and JSON) in Python, the event loop in C++ (02 §2, 11 §4).
         return {"kind": "store", "input": str(directory),
                 "store": store_adapter.store_document(directory)}
-    if tool != "pythia":
+    from ..adapters import ADAPTERS
+
+    adapter = ADAPTERS.get(tool)
+    if tool != "pythia" and getattr(adapter, "STREAMS", True):
         # An external generator writes HepMC3 into a FIFO next to the point's own results, and
         # `hep-run` reads it with `Source::Stream` — the same reader a store replay uses, so an
         # external generator costs no new event path (04 §8, 11 §4).
@@ -67,16 +70,28 @@ def source_document(config: Any, group: Any) -> dict[str, Any]:
         fifo = adapter_base.fifo_path(naming.point_dir(config, group.name))
         return adapter_base.stream_source(fifo, compression=_stream_compression(config))
 
+    # Pythia, or a tool whose events Pythia showers: the source is Pythia reading cards. For MadGraph
+    # those are the shower card the config names and the point card that opens the LHE (04 §7).
     cards = []
     from .build import card_file
 
-    base = card_file(config)
-    if base is not None:
-        cards.append(str(base))
+    if tool == "pythia":
+        base = card_file(config)
+        if base is not None:
+            cards.append(str(base))
+    else:
+        shower = getattr(config.generator, "shower", "")
+        if not shower:
+            raise HepError(f"[generator] tool = \"{tool}\" needs a shower card",
+                           hint='shower = "shower.cmnd", relative to this file: Pythia showers the '
+                                "events it produces (04 §7)")
+        cards.append(str((config.path.parent / shower).resolve()))
     cards.append(str(naming.card_path(config, group.name, tool)))
     for extra in group.points[0].cards:
         cards.append(str((config.path.parent / extra).resolve()))
-    return {"kind": tool, "cards": cards}
+    # The *source* is Pythia whatever produced the matrix element: `hep-run` runs `Source::Pythia`
+    # over these cards, and for MadGraph one of them opens the LHE (04 §7).
+    return {"kind": "pythia", "cards": cards}
 
 
 def _stream_compression(config: Any) -> str:

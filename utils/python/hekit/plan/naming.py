@@ -41,5 +41,7 @@ def page_dir(config: Any, study: str, page_name: str) -> Path:
 
 
 def card_path(config: Any, group_name: str, tool: str) -> Path:
-    suffix = {"pythia": "cmnd", "sherpa": "yaml", "whizard": "sin", "herwig": "in"}.get(tool, "card")
+    # MadGraph's point card is a *Pythia* card: it showers the LHE (04 §7).
+    suffix = {"pythia": "cmnd", "sherpa": "yaml", "whizard": "sin", "herwig": "in",
+              "madgraph": "cmnd"}.get(tool, "card")
     return point_dir(config, group_name) / f"point.{suffix}"

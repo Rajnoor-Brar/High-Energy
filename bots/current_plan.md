@@ -169,15 +169,33 @@ because SINDARIN runs it *after* the point card.
 `Stage` gained `writes` — the integration needs a card without the generation lines, and Whizard's
 `--execute` runs before the card rather than after.
 
-## Next — P7-S05 (MadGraph adapter: LHE → Pythia shower)
+## Just finished — P7-S05 (MadGraph adapter) — done
 
-Read `docs/rework/steps/P7-S05_madgraph.md` and mirror it here before starting. It differs from S03
-and S04 in shape: MadGraph produces **LHE**, which Pythia then showers *in `hep-run`* — so there is no
-FIFO and no stream source, and the prepare stage is a process-directory build.
+`e+ e- → mu+ mu-` runs end to end against the real MadGraph 3.7.3: build the process directory,
+launch to an LHE, unpack it, and Pythia showers it **inside `hep-run`**. 100 events, σ = 2 016 pb
+from the LHE header. A second run reuses the process directory, and the *planner* drops the build
+stage once the cache entry is ready.
+
+**This is the adapter that hands over a matrix element, not events**, so there is no FIFO and the
+spec's `source.kind` is `pythia`. Everything else follows: four phases instead of two, because a
+file must be finished before anything reads it (`base.Stage` gained a `phase`, and `STREAMS = False`
+puts `hep-run` in a later one).
+
+**Three defects, all found by running it.** The prepare stage wrote `group.card` — the *Pythia*
+shower card — so MadGraph got a file with no `generate` line and said "No model found"; the spec
+claimed `source.kind = "madgraph"`, which `hep-run` rightly refused; and the preflight ran
+`hep-run --check` before the LHE existed, so Pythia failed to initialise on every MadGraph point.
+
+## Next — P7-S06 (decide whether to rebuild ThePEG/Herwig)
+
+A **decision** step, and a short one: ThePEG here has no HepMC or Rivet modules, so Herwig cannot
+emit events we can read. The question is whether to rebuild it `--with-hepmc --with-rivet` or gate
+Herwig off. Read `docs/rework/steps/P7-S06_decide-herwig-rebuild.md` and mirror it here first; fill
+the **Decision record** and the register (D-Q6) before marking it done.
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · P7 4/8 · P8–P10 todo — 42 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · P7 5/8 · P8–P10 todo — 43 of 55 steps done.
 
 ## Standing constraints
 

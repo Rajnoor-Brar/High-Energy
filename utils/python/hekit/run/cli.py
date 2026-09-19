@@ -221,9 +221,10 @@ class Runner:
                                 status=(stage.name == "hep-run"),
                                 cwd=Path(stage.cwd) if stage.cwd else directory,
                                 env=dict(stage.env) or None,
-                                # A prepare step must finish before anything reads its output; the
-                                # generator and `hep-run` must run together or the FIFO deadlocks.
-                                phase=0 if stage.role == "prepare" else 1)
+                                # The planner worked out what may overlap (02 §3): a prepare step
+                                # finishes first, a FIFO's two ends run together, and a generator
+                                # that writes a file finishes before anything reads it.
+                                phase=stage.phase)
                       for stage in chain]
             for stage in stages:
                 if stage.command and stage.command[0] == "hep-run":
@@ -337,11 +338,17 @@ class Runner:
     # ── preflight, skipping, signals, rendering ──────────────────────────────
 
     def _preflight(self, binary: str, decisions) -> int:
-        """`hep-run --check` for every generation that would run, before spawning any of them."""
+        """`hep-run --check` for every generation that would run, before spawning any of them.
+
+        Skipped for a generation whose `hep-run` reads something an *earlier* stage produces —
+        MadGraph's LHE (04 §7). There is nothing useful to check then: the source's input does not
+        exist yet, so `--check` would fail on every such point for a reason that is not a problem.
+        A streaming generator is different: its FIFO exists from the start, so it is preflighted.
+        """
         import subprocess
 
         for group in self.plan.groups:
-            if decisions[group.name].skip:
+            if decisions[group.name].skip or self._made_later(group):
                 continue
             spec_path = self.layout.point(group.name) / "run.toml"
             done = subprocess.run([binary, str(spec_path), "--check", "--plain"],
@@ -433,6 +440,19 @@ class Runner:
 
     # ── small helpers ────────────────────────────────────────────────────────
 
+    def _made_later(self, group: Any) -> bool:
+        """Does something have to finish before `hep-run` can even open its source?
+
+        True when a stage that *produces* events runs in an earlier phase — MadGraph writes an LHE
+        and Pythia reads it afterwards. A streaming generator shares `hep-run`'s phase, so it is
+        false there and the preflight still happens.
+        """
+        run_stage = next((stage for stage in group.stages if stage.name == "hep-run"), None)
+        if run_stage is None:
+            return False
+        producers = [stage.phase for stage in group.stages if stage.role == "generate"]
+        return bool(producers) and run_stage.phase > max(producers)
+
     def _cache_entry(self, group: Any):
         """The prepare-cache entry for this group, or None when the tool has no prepare step."""
         from ..adapters import cache as cache_module
@@ -470,11 +490,19 @@ class Runner:
             cache_module.invalidate(entry)
 
     def _make_fifo(self, directory: Path) -> None:
-        """The named pipe an external generator writes into (04 §8). No-op for in-process tools."""
-        if self.config.generator.tool in {"pythia", "store"}:
+        """The named pipe a *streaming* generator writes into (04 §8).
+
+        No-op for the in-process tools, and for MadGraph — it writes an LHE file, so a pipe beside
+        the results would be a thing nothing ever opens.
+        """
+        tool = self.config.generator.tool
+        if tool in {"pythia", "store"}:
             return
+        from ..adapters import ADAPTERS
         from ..adapters import base as adapter_base
 
+        if not getattr(ADAPTERS.get(tool), "STREAMS", True):
+            return
         adapter_base.make_fifo(adapter_base.fifo_path(directory))
 
     def _check_event_count(self, group: Any, directory: Path) -> str:

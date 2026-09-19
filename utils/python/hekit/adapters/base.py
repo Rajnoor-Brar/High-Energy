@@ -81,6 +81,13 @@ class Stage:
 
     name: str
     role: str = "generate"            # generate | analyse | prepare | detector
+    #: Stages of one phase run together; a phase runs only after the one before it finished. A
+    #: generator streaming into a FIFO shares its phase with the `hep-run` reading it — they must
+    #: overlap or they deadlock — while a generator writing a *file* must finish first.
+    #:
+    #: `-1` means "derive it from the role": a prepare step first, everything else after. Only a tool
+    #: with more than two steps has to say (MadGraph: build, integrate, unpack, shower).
+    phase: int = -1
     argv: list[str] = field(default_factory=list)
     env: dict[str, str] = field(default_factory=dict)
     cwd: Path | None = None
@@ -94,6 +101,12 @@ class Stage:
     writes: list[tuple[str, str]] = field(default_factory=list)
     note: str = ""
 
+    @property
+    def resolved_phase(self) -> int:
+        if self.phase >= 0:
+            return self.phase
+        return 0 if self.role == "prepare" else 1
+
     def to_plan_stage(self) -> Any:
         """The planner's lighter `Stage`, which is what `hep plan` shows."""
         from ..plan.model import Stage as PlanStage
@@ -101,7 +114,14 @@ class Stage:
         return PlanStage(name=self.name, role=self.role,
                          command=[str(entry) for entry in self.argv], note=self.note,
                          cwd=str(self.cwd) if self.cwd else "", env=dict(self.env),
+                         phase=self.resolved_phase,
                          writes=[(str(path), text) for path, text in self.writes])
+
+
+#: Does this tool hand its events over as a *stream*? A streaming generator runs alongside the
+#: `hep-run` reading its FIFO; one that writes a file (MadGraph's LHE) must finish first. Adapters
+#: that do not say are assumed to stream, which is what every external generator but MadGraph does.
+STREAMS = True
 
 
 @runtime_checkable

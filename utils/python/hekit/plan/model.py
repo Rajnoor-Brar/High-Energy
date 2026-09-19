@@ -22,6 +22,8 @@ class Stage:
     # (04 §1), and a tool that writes beside its working directory would otherwise fill the results.
     cwd: str = ""
     env: dict[str, str] = dataclass_field(default_factory=dict)
+    #: Which phase of the chain runs this. Stages of one phase run together (02 §3).
+    phase: int = 0
     #: (path, text) pairs the runner writes before spawning this stage.
     writes: list[tuple[str, str]] = dataclass_field(default_factory=list)
 
@@ -37,6 +39,8 @@ class Group:
     analyses: list[str]           # every analysis variant of this group, in one Rivet handler
     stages: list[Stage]
     card: str = ""                # rendered native card text
+    base_card: str = ""           # the base card it was rendered from, for adapters that key on it
+    launch: str = ""              # MadGraph's launch script, rendered with the point's seed
     directory: Path | None = None
     spec: dict[str, Any] = dataclass_field(default_factory=dict)
 
