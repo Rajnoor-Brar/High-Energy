@@ -53,11 +53,39 @@ The supervisor (06) runs every stage the same way.
 | Prepare stage | — | integration (`Results/`) | integration (grids) | `Herwig read` → `.run` | process build + `launch` |
 | Seed | `Parallelism:seeds` (identity block, 03 §5) | `RANDOM_SEED` | `seed` | `run -s` | `iseed` |
 | σ source | merged `sigmaGen()` | HepMC `GenCrossSection` | HepMC `GenCrossSection` | HepMC `GenCrossSection` | Pythia (LHE-weighted) |
-| Photoproduction (ep) | ✓ (current) | ✓ EPA beam spectra | ✓ EPA structure function | ✓ (budnev/WW photon PDFs) | with EPA; check the model |
+| Photoproduction (ep) | ✓ (current) | ✓ EPA + **resolved** (CJK/SAS/GRV/SAL photon PDFs) | **direct only** — no photon structure function (P7-S02) | ✓ (budnev/WW photon PDFs) | with EPA; check the model |
 | **Priority** | **1** | 2 | 3 | 4 (after rebuild) | 3 |
 | **Step** | P2-S04 | P7-S03 | P7-S04 | P7-S06 → P7-S07 | P7-S05 |
 
-**"Same physics" across generators (Q7).** Which EPA/WW parameters, Q²max, photon PDF, pTHatMin analogue and MPI settings count as equivalent to `photo_ep.cmnd` is decided in P7-S02, before the Sherpa and Whizard adapters are written. PhotoProduction is a test bed (D20), so the comparison is documented rather than gated.
+**"Same physics" across generators (Q7) — decided in P7-S02 (D-Q7).**
+
+The reference is **resolved** photoproduction, and 00/B30 measured that its direct contribution is
+unreachable, which settles most of the question:
+
+| Knob | Pythia | Sherpa | Matched? |
+|---|---|---|---|
+| photon flux | `PDF:lepton2gamma = on` | `BEAM_SPECTRA: [Monochromatic, EPA]` | yes |
+| photon virtuality | `Photon:Q2max = 1.0` | `EPA: {Q2Max: 1.0}` | yes |
+| photon PDF | CJKL — the *only* one Pythia has (`PDF:GammaSet` is `min=max=1`) | `CJKSherpa`/`CJKLLO` | **yes, exactly** |
+| proton PDF | `PDF:pSet` | `PDF_SET[1]` **and `MPI_PDF_SET[1]`** | yes |
+| hard process | `HardQCD:all` | `93 93 -> 93 93`, `Order: {QCD: 2, EW: 0}` | yes |
+| pT regulator | `PhaseSpace:pTHatMin` (2→2 matrix element) | `NJetFinder{PTMin}` (clustered jet) | **no — different surfaces** |
+| MPI tune | `MultipartonInteractions:pT0Ref = 3.2` | Amisic, a different model | **no counterpart** |
+
+Measured at 18×275, matched LO, resolved, MPI off, same proton PDF, 6 GeV cut: Pythia
+**11 950 ± 34 pb** against Sherpa **9 636 ± 782 pb**, a ratio of **0.81 ± 0.07**. PhotoProduction is a
+test bed (D20), so this is documented rather than gated; the residue is dominated by the pT-cut row.
+
+**Whizard is deferred for this reference.** Its manual states that there is no photon structure
+function and that `pdf_builtin_photon` throws, so it can do *direct* photoproduction only — the part
+of the reference that is empty. `photo_ep.sin` targets direct photoproduction and says so.
+
+**Two things Sherpa needs here, found in P7-S02:**
+- `MPI_PDF_SET`/`MPI_PDF_LIBRARY` must be set alongside `PDF_SET`. The MPI model reads its own key and
+  otherwise falls back to the compiled default `PDF4LHC21_40_pdfas`, which this LHAPDF does not have,
+  so the run dies in initialisation naming a set the card never mentions.
+- `MI_HANDLER: Amisic` produced **0 events in 768 s** for this process, where `MI_HANDLER: None`
+  produced 2 000 in 4 s. P7-S03 has to solve that before a Sherpa point can carry the underlying event.
 
 **Store pseudo-generator.** `tool = "store"` replays a HepMC3 store ([11](11_EventStore.md)). It has no cards, no prepare stage, and no generation-side quantities; σ, beams and weights come from the store index (P5-S02).
 

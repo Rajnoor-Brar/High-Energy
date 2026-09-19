@@ -1,0 +1,58 @@
+# photo_ep.sin — Whizard's reading of `photo_ep.cmnd` (P7-S02, decision D-Q7).
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# THIS IS NOT THE REFERENCE PHYSICS, AND IT CANNOT BE.
+#
+# `photo_ep.cmnd` is *resolved* photoproduction: the quasi-real photon from the lepton fluctuates
+# into partons, and one of those collides with a parton from the proton. Whizard 3.1.8 cannot do
+# that. Its own manual is explicit (`share/doc/manual.tex`):
+#
+#   "there is no builtin PDF that contains a photon structure function. There is a `beams` structure
+#    function specifier `pdf_builtin_photon`, but at the moment this throws an error."
+#
+# So Whizard can put a photon on a beam (EPA) but cannot resolve it. What is left is **direct**
+# photoproduction — the photon entering the hard matrix element as a photon — which is Pythia's
+# `PhotonParton:all`, not `HardQCD:all`, and is a different measurement.
+#
+# Worse for the comparison: 00/B30 measured that with this base card Pythia's direct contribution is
+# unreachable, so the reference sample is effectively resolved-only. The overlap between what Whizard
+# can generate and what the reference contains is therefore approximately empty.
+#
+# This card is kept because P7-S04 still needs a target, and direct photoproduction at the EIC is a
+# perfectly good thing to generate — just not a cross-check of `photo_ep.cmnd`. Whoever writes the
+# Whizard adapter should treat it as its own physics point (D20: PhotoProduction is a test bed).
+# ─────────────────────────────────────────────────────────────────────────────
+
+model = SM
+
+alias q     = u:d:s:c:U:D:S:C
+alias parton = q:gl
+
+# ── beams ────────────────────────────────────────────────────────────────────
+# Proton first so the proton runs along +z, as in `photo_ep.cmnd` (`Beams:idA = 2212`) and in the
+# Sherpa card beside this one; mirroring it would mirror every pseudorapidity distribution.
+beams = p, e1 => pdf_builtin, epa
+sqrts = 2 * sqrt (275 GeV * 18 GeV)     # the 18x275 EIC point; `hep` overrides per point
+
+# `Photon:Q2max = 1.0`. `epa_x_min` has no Pythia counterpart and is set low enough not to bite.
+epa_q_max = 1.0 GeV
+epa_x_min = 1.0E-4
+
+# ── the hard process ─────────────────────────────────────────────────────────
+# Direct photoproduction only: gamma q -> q g and gamma g -> q qbar.
+process photo_direct_q = A, q  => q, gl
+process photo_direct_g = A, gl => q, Q
+
+# DIFFERS: `PhaseSpace:pTHatMin = 6.` is a matrix-element pT-hat cut; this is a cut on the outgoing
+# partons, which is the closest Whizard offers.
+cuts = all Pt > 6 GeV [parton]
+
+# DIFFERS: there is no multiple-interaction model here at all, so
+# `MultipartonInteractions:pT0Ref = 3.2` has no counterpart. Whizard showers and hadronises through
+# an external Pythia when asked; the underlying event is absent either way.
+
+integrate (photo_direct_q, photo_direct_g)
+
+n_events = 1000
+sample_format = hepmc
+simulate (photo_direct_q, photo_direct_g)

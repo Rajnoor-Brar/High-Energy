@@ -93,7 +93,7 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P6-S02 | [Shared generation for analysis-only variants](P6-S02_event-groups.md) | code | P4-S01, P1-S05 | 0.5 d | done |
 | P6-S03 | [hep bench](P6-S03_bench.md) | code | P6-S01 | 0.5 d | done |
 | P7-S01 | [External adapter framework and prepare cache](P7-S01_adapter-framework.md) | code | P3-S05, P5-S02 | 1 d | done |
-| P7-S02 | [Decide cross-generator photoproduction set-ups](P7-S02_decide-photoproduction-equivalence.md) | decision | P7-S01 | 0.5 d | todo |
+| P7-S02 | [Decide cross-generator photoproduction set-ups](P7-S02_decide-photoproduction-equivalence.md) | decision | P7-S01 | 0.5 d | done |
 | P7-S03 | [Sherpa adapter](P7-S03_sherpa.md) | code | P7-S01, P7-S02 | 1.5 d | todo |
 | P7-S04 | [Whizard adapter](P7-S04_whizard.md) | code | P7-S01, P7-S02 | 1 d | todo |
 | P7-S05 | [MadGraph adapter (LHE → Pythia shower)](P7-S05_madgraph.md) | code | P7-S01, P2-S04 | 1 d | todo |
@@ -283,7 +283,7 @@ flowchart LR
 | D-Q4 | Import legacy results? | P3-S01 | answered | no import; moved to `results/PhotoProduction/legacy/` + README, 541 files, 25 YODA checksums re-verified (2026-09-18) |
 | D-Q5 | Add `rich`, `tomli_w`, `pytest` to the venv? | P0-S02 | answered | yes |
 | D-Q6 | Rebuild ThePEG/Herwig with HepMC + Rivet? | P7-S06 | open | — |
-| D-Q7 | Cross-generator photoproduction equivalence | P7-S02 | open | — |
+| D-Q7 | Cross-generator photoproduction equivalence | P7-S02 | answered | Sherpa: match every knob that has an equivalent (EPA Q²max, **photon PDF exactly** — Pythia's only one is CJKL, Sherpa has CJKLLO — proton PDF, order); the pT regulator and the MPI tune have no counterpart and are documented in the card. Measured 18×275 LO MPI-off: 11 950 ± 34 pb vs 9 636 ± 782 pb, ratio 0.81 ± 0.07. Whizard: **deferred** — no photon structure function, so direct-only (its own manual) |
 | D-Q8 | Port or archive Lambda? | P0-S06 | answered | archive frozen (D17) |
 | D-Q9 | HepMC3 gzip support? | P5-S01 | answered | yes, compile-time flags |
 | D-STORE-COMP | Default store compression (gz vs zstd) | P5-S01 | answered | **zst**, measured on 10 000 real events: 9 866 B/event vs 10 223 (2.96× vs 2.86×), **2.1× faster to write** (2 289 vs 1 086 ev/s) and 1.26× faster to read (5 624 vs 4 461). No axis favours gz. `gz` stays the fallback where zstd is not compiled in, and the codec is recorded in the index |

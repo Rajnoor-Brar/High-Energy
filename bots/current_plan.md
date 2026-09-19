@@ -99,16 +99,38 @@ Also: streaming a **two**-worker store scales every histogram by 1.8 %, because 
 the last event and that is one worker's running estimate. 04 §8's "since there is one producer" is
 load-bearing, and now says so.
 
-## Next — P7-S02 (decide cross-generator photoproduction set-ups)
+## Just finished — P7-S02 (cross-generator photoproduction) — done. **Decision D-Q7 recorded.**
 
-A **decision** step: which EPA/WW parameters, Q²max, photon PDF, pTHatMin analogue and MPI settings
-count as equivalent to `photo_ep.cmnd` across Sherpa, Whizard, Herwig and MadGraph. It blocks S03 and
-S04. Read `docs/rework/steps/P7-S02_decide-photoproduction-equivalence.md` and mirror it here first;
-a decision step also needs its **Decision record** filled and the register updated.
+Sherpa 3.0.5 is installed here, so the cards were **run**, not just written.
+
+**Decision.** Sherpa: match every knob that has an equivalent. The photon PDF matches *exactly* —
+Pythia has only one (`PDF:GammaSet` is `min=max=1`, CJKL) and Sherpa's CJK library has CJKLLO. Two
+knobs have no counterpart and are written into the card: the pT regulator (pT-hat vs clustered jet)
+and `pT0Ref = 3.2` (Amisic is a different model). **Whizard: deferred** — its manual says there is no
+photon structure function and `pdf_builtin_photon` throws, so it can only do *direct*
+photoproduction, and 00/B30 showed the reference's direct part is empty.
+
+**Measured**, 18×275, matched LO, resolved, MPI off, same proton PDF, 6 GeV cut:
+Pythia **11 950 ± 34 pb** vs Sherpa **9 636 ± 782 pb** — ratio **0.81 ± 0.07**, residue dominated by
+the cut-definition row.
+
+**Three findings handed to P7-S03/S04**
+
+1. Sherpa needs `MPI_PDF_SET` as well as `PDF_SET`; the MPI model reads its own key and otherwise
+   falls back to `PDF4LHC21_40_pdfas`, which is not installed — the run then dies naming a PDF the
+   card never mentions.
+2. `MI_HANDLER: Amisic` produced **0 events in 768 s** for this process; `None` produced 2 000 in 4 s.
+3. Beam order is proton-first in both cards: Sherpa's own example puts the lepton on beam 1, which
+   mirrors every η distribution (the 00/B26 trap, harder to spot across generators).
+
+## Next — P7-S03 (Sherpa adapter)
+
+Read `docs/rework/steps/P7-S03_sherpa.md` and mirror it here before starting. It now has a verified
+base card and three known obstacles to work from.
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · P7 1/8 · P8–P10 todo — 39 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · P7 2/8 · P8–P10 todo — 40 of 55 steps done.
 
 ## Standing constraints
 
