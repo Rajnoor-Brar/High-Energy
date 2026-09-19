@@ -3,32 +3,28 @@
 Executing `docs/rework` step by step. Read order: `bots/BOT.md` → this file → `docs/rework/steps/README.md`
 → the step being executed. Design context: `docs/rework/README.md`; decisions in `10_Roadmap.md` §2 are final.
 
-## Just finished — P5-S01 (event store: writer, sink, CLI) — done
+## Just finished — P5-S02 (store and stream sources) — done
 
-**D-STORE-COMP decided by measurement: `zst`.** On 10 000 real events, zstd is 9 866 B/event against
-gz's 10 223, **2.1× faster to write** (2 289 vs 1 086 ev/s) and 1.26× faster to read. No axis favours
-gz, so `zst` is the default and `gz` the fallback.
+`Store/{Queue,Reader}.hh` + `Source/{Base,Replay}.hh` + the store adapter. The run loop now holds a
+`Source::Base` and cannot tell a generator from a replay.
 
-All three verification rows measured: shard counts add up and nothing is left in `.part`; a truncated
-shard is caught by size alone and a single changed byte by `--deep`; a build without zstd works on gz
-and refuses `zst` with a clear message. End to end, `hep run --set store.enabled=true` wrote two
-stores and `hep store ls|verify --deep` read them.
+All three rows measured, and the replay row beat its own bar: a replayed store gives a YODA
+**identical** to the generation's (1004 numbers, χ² = 0), not merely compatible. A generation-side
+quantity on a store is refused with a hint; SIGINT gives exit 6 and a partial YODA.
 
-The order is the design: shards stream into `.part` with no lock, are closed, hashed and renamed, and
-only then is the index written atomically — so a directory with an index is a finished store.
+**Defect found by replaying a real store:** two option variants became two generations sharing one
+directory, and the second overwrote the first — a replay's hash folded in each *point's* analyses
+instead of the group's. Now: two variants are one read, a different analysis set is a different point.
 
-Three defects found on the way, including two in my own spike (`Pythia8ToHepMC` reuses one `GenEvent`,
-so holding its pointer would have measured one event 10 000 times) and an include that found itself.
+## Next — P5-S03 (replay equivalence and `hep events`)
 
-## Next — P5-S02 (store and stream sources with parallel readers)
-
-Read `docs/rework/steps/P5-S02_store-source-replay.md` and mirror it here before starting. It adds
-`Source::Store` (one reader thread per shard into a bounded queue) and `Source::Stream` for FIFOs —
-the replay side of what P5-S01 writes.
+Read `docs/rework/steps/P5-S03_replay-equivalence-events.md` and mirror it here before starting. It
+formalises the replay equivalence (already true) and adds `hep events` for inspecting events — the
+last step of P5.
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · P5 1/3 · P6–P10 todo — 33 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · P5 2/3 · P6–P10 todo — 34 of 55 steps done.
 
 ## Standing constraints
 

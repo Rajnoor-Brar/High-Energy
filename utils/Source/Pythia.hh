@@ -36,18 +36,21 @@
 
 #include "Core.hh"
 #include "Events.hh"
+#include "Source/Base.hh"
 #include "Source/Types.hh"
 #include "Status.hh"
 
 namespace Source {
 
-    class Pythia {
+    class Pythia : public Base {
       public:
         Pythia(const Core::Spec& spec, Status::Writer& status) : spec_(spec), status_(status) {}
 
+        std::string kind() const override { return "pythia"; }
+
         // Read the cards and force the run control the spec owns. Throws `Exit::Config` on a rejected
         // card or line, which is behaviour 1 of `generator.cc`.
-        void configure() {
+        void configure() override {
             parallel_.readString("Print:quiet = on");        // a card may turn this back on
             for (const std::string& card : spec_.cards) {
                 if (!Core::isRegularFile(card))
@@ -80,7 +83,7 @@ namespace Source {
 
         // `init()` failing is its own exit code, because "the cards were fine but the physics is not"
         // is a different problem from a typo (06 §3.3).
-        void initialise() {
+        void initialise() override {
             if (!parallel_.init())
                 throw Core::Error{Core::Exit::Init, "Pythia failed to initialise",
                                   "the log above says why; a vanishing cross section and impossible "
@@ -92,11 +95,11 @@ namespace Source {
             beams_ = readBeams();
         }
 
-        const Core::Beams& beams() const { return beams_; }
-        int threads() const { return threads_; }
+        const Core::Beams& beams() const override { return beams_; }
+        int threads() const override { return threads_; }
 
         // The seeds each instance actually got, read back rather than assumed (05 §3).
-        std::vector<std::int64_t> instanceSeeds() {
+        std::vector<std::int64_t> instanceSeeds() override {
             std::vector<std::int64_t> seeds;
             parallel_.foreach([&](Pythia8::Pythia* instance) {
                 seeds.push_back(instance->settings.mode("Random:seed"));
@@ -105,14 +108,16 @@ namespace Source {
         }
 
         // The chunk size that keeps a chunked run's events identical to an unchunked one (D-Q2).
-        std::int64_t chunkSize(std::int64_t wanted) const { return chunkFor(wanted, threads_); }
+        std::int64_t chunkSize(std::int64_t wanted) const override {
+            return chunkFor(wanted, threads_);
+        }
 
         // Generate `target` events in chunks, calling `consume` for every event that succeeded and
         // asking `stop` between chunks. Returns attempts and accepted counts.
         Core::Counts run(std::int64_t target, std::int64_t chunk,
                          const std::function<void(Events::View&)>& consume,
                          const std::function<bool()>& stop,
-                         const std::function<void(std::int64_t)>& checkpoint = {}) {
+                         const std::function<void(std::int64_t)>& checkpoint = {}) override {
             Core::Counts counts;
             const std::int64_t step = chunkSize(chunk);
             while (counts.attempted < target) {
@@ -139,7 +144,7 @@ namespace Source {
         }
 
         // D-Q1: combine the instances, because PythiaParallel exposes σ but no error.
-        Xsec xsec() {
+        Xsec xsec() override {
             Combine combine;
             parallel_.foreach([&](Pythia8::Pythia* instance) {
                 combine.add(instance->info.weightSum(), instance->info.sigmaGen(),
@@ -150,7 +155,7 @@ namespace Source {
 
         // Pythia aggregates its warnings in a Logger; report the counts rather than every message
         // (06 §3.2). Called at checkpoints and at the end.
-        void reportWarnings(Status::Writer& status) {
+        void reportWarnings(Status::Writer& status) override {
             for (const auto& [message, count] : warningCounts()) {
                 if (reported_.count(message) != 0) continue;
                 reported_.insert(message);
@@ -161,7 +166,7 @@ namespace Source {
 
         // The same counts as a number, for the run summary: a run that produced 10⁵ warnings is not
         // the same result as one that produced none, even though neither is an error (07 §2).
-        std::vector<std::pair<std::string, long long>> warningCounts() {
+        std::vector<std::pair<std::string, long long>> warningCounts() override {
             std::vector<std::pair<std::string, long long>> found;
             parallel_.foreach([&](Pythia8::Pythia* instance) {
                 // Logger is iterable over its message → count map.
@@ -178,7 +183,7 @@ namespace Source {
             return found;
         }
 
-        const std::vector<long long>& workers() const { return workers_; }
+        const std::vector<long long>& workers() const override { return workers_; }
         Pythia8::PythiaParallel& parallel() { return parallel_; }
 
       private:

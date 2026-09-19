@@ -35,12 +35,18 @@ namespace Run {
 
         void add(std::unique_ptr<Sink::Sink> sink) { sinks_.push_back(std::move(sink)); }
 
+        /// The source to run. Set before `prepare()`; a generator or a replay, the loop cannot tell
+        /// (05 §1, 11 §4).
+        void source(std::unique_ptr<Source::Base> source) { source_ = std::move(source); }
+
         // Everything up to (but not including) the first event. `--check` stops here (06 §3.3), so
         // everything that can be checked without generating belongs in this function: a card Pythia
         // refuses, a physics point that cannot initialise, an analysis that does not exist.
         void prepare() {
-            status_.phase("configure", std::to_string(spec_.cards.size()) + " cards");
-            source_ = std::make_unique<Source::Pythia>(spec_, status_);
+            if (source_ == nullptr) source_ = std::make_unique<Source::Pythia>(spec_, status_);
+            status_.phase("configure", source_->kind() == "pythia"
+                                           ? std::to_string(spec_.cards.size()) + " cards"
+                                           : source_->kind());
             source_->configure();
             status_.phase("init");
             source_->initialise();
@@ -137,6 +143,7 @@ namespace Run {
             record.chunk = result.chunk;
             record.wall_seconds = result.wall_seconds;
             record.mode = "serial";
+            record.source = source_->kind();
             record.seed = spec_.seed;
             record.seeds.assign(result.seeds.begin(), result.seeds.end());
             record.warnings = source_->warningCounts();
@@ -178,7 +185,7 @@ namespace Run {
         const Core::Spec& spec_;
         Status::Writer& status_;
         Status::Heartbeat& heartbeat_;
-        std::unique_ptr<Source::Pythia> source_;
+        std::unique_ptr<Source::Base> source_;
         std::vector<std::unique_ptr<Sink::Sink>> sinks_;
         std::function<void(Events::View&)> hook_;
         bool prepared_ = false;

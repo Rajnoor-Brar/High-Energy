@@ -87,7 +87,7 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P4-S05 | [Make photo_eic re-entrant and fix plugin defects](P4-S05_photo-eic-reentrant.md) | code | P2-S05, P4-S04 | 0.5 d | done |
 | P4-S06 | [Retire rivpyth/ydplt/ydmrg and generator.cc](P4-S06_retire-legacy-tools.md) | git | P4-S02, P4-S05, P3-S05, P2-S06, P1-S06 | 0.5 d | done |
 | P5-S01 | [Store namespace, store sink and store CLI](P5-S01_store-writer.md) | code | P2-S05 | 1 d | done |
-| P5-S02 | [Store and stream sources with parallel readers](P5-S02_store-source-replay.md) | code | P5-S01, P3-S03 | 1 d | todo |
+| P5-S02 | [Store and stream sources with parallel readers](P5-S02_store-source-replay.md) | code | P5-S01, P3-S03 | 1 d | done |
 | P5-S03 | [Replay equivalence and hep events](P5-S03_replay-equivalence-events.md) | test | P5-S02 | 0.5 d | todo |
 | P6-S01 | [Sharded Rivet and concurrency modes](P6-S01_sharded-rivet.md) | code | P4-S05, P5-S02 | 1 d | todo |
 | P6-S02 | [Shared generation for analysis-only variants](P6-S02_event-groups.md) | code | P4-S01, P1-S05 | 0.5 d | todo |

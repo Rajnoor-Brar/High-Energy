@@ -251,6 +251,11 @@ if(HEKIT_PYTEST)
            ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_plot_vs_legacy.py)
   set_tests_properties(plot_equivalence PROPERTIES LABELS "slow" TIMEOUT 3600)
 
+  # Replaying a store through the same sinks as fresh events (P5-S02).
+  add_test(NAME store_replay COMMAND ${HEKIT_PYTEST} -q
+           ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_store_replay.py)
+  set_tests_properties(store_replay PROPERTIES LABELS "slow" TIMEOUT 3600)
+
   # The analysis plugin's own defects and its re-entrant merge (P4-S05).
   add_test(NAME photo_eic COMMAND ${HEKIT_PYTEST} -q
            ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_photo_eic_plugin.py)

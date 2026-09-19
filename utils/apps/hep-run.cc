@@ -95,6 +95,22 @@ Options parseOptions(const std::vector<std::string>& arguments) {
     return options;
 }
 
+// The source a spec asks for: a generator, or a replay of events somebody already generated.
+std::unique_ptr<Source::Base> makeSource(const Core::Spec& spec, Status::Writer& status) {
+    if (spec.source_kind == "pythia")
+        return std::make_unique<Source::Pythia>(spec, status);
+    if (spec.source_kind == "store" || spec.source_kind == "stream") {
+#if defined(HEKIT_WITH_HEPMC)
+        return std::make_unique<Source::Replay>(spec, status);
+#else
+        throw Core::Error{Core::Exit::Config,
+                          "this build has no HepMC3, so it cannot replay stored events"};
+#endif
+    }
+    throw Core::Error{Core::Exit::Config, "unknown source kind: " + spec.source_kind,
+                      "this hep-run knows: pythia, store, stream (external generators arrive in P7)"};
+}
+
 // The sinks a spec asks for. A spec with no sink at all is legal and useful: it is the
 // generation-only leg of the benchmark (P6-S03) and of the equivalence gate (P2-S06), and it counts
 // its events so the run still reports something.
@@ -194,6 +210,7 @@ int main(int argc, char* argv[]) {
         Core::Signals::installGracefulStop();
 
         Run::Loop loop(spec, status, heartbeat);
+        loop.source(makeSource(spec, status));
         addSinks(loop, spec, status);
         if (options.list > 0)
             loop.onEvent([&](Events::View& view) { listEvent(status, view, options.list); });

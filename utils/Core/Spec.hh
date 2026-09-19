@@ -34,6 +34,26 @@ namespace Core {
     inline constexpr std::int64_t kMinSeed = 1;
     inline constexpr std::int64_t kMaxSeed = 900000000;
 
+    /// What `hep` read out of a store's `events.index.json` (11 §2, §4).
+    ///
+    /// The index is the source of truth for a replay, and `hep` is the side that reads JSON — so it
+    /// puts the index's facts into the spec and `hep-run` needs no JSON parser. A hand-written spec
+    /// may instead name `[source].inputs` (a stream), where there is no index at all.
+    struct StoreSpec {
+        std::string directory;
+        std::string compression = "zst";
+        std::vector<std::string> shards;          // file names, in the index's order
+        std::vector<int> workers;                 // the worker each shard came from
+        std::int64_t events = 0;                  // what the index promised
+        double xsec_pb = 0.0;
+        double xsec_err_pb = 0.0;
+        std::vector<int> beam_ids;
+        std::vector<double> beam_energies;
+        std::vector<std::string> weights;
+        std::int64_t queue = 0;                   // events in flight; 0 = the source's default
+        bool stopped = false;                     // the store is partial, so this replay is too
+    };
+
     struct SinkSpec {
         std::string kind;                       // rivet | module | store | delphes
         std::vector<std::string> analyses;      // rivet
@@ -65,6 +85,7 @@ namespace Core {
         std::vector<std::string> cards;
         std::string input;                      // store
         std::vector<std::string> inputs;        // stream
+        StoreSpec store;
         // [output]
         std::string output_dir;
         std::string yoda_name = "analysis.yoda";
@@ -89,6 +110,9 @@ namespace Core {
             throw Error{Exit::Config, "[meta] hash must be 'sha256:<64 hex>'", "written by `hep plan`"};
         if (spec.source_kind.empty())
             throw Error{Exit::Config, "[source] kind is empty"};
+        if (spec.source_kind == "store" && spec.store.shards.empty() && spec.inputs.empty())
+            throw Error{Exit::Config, "[source] is a store but names no shards",
+                        "`hep run` fills [source.store] from the store's index"};
         if (spec.output_dir.empty())
             throw Error{Exit::Config, "[output] dir is empty"};
         if (spec.threads < 0)
@@ -226,6 +250,31 @@ namespace Core {
         spec.cards = detail::strings(source, "cards");
         spec.input = detail::value<std::string>(source, "input", "");
         spec.inputs = detail::strings(source, "inputs");
+        if (const toml::node* store = source.get("store")) {
+            if (!store->is_table())
+                throw Error{Exit::Config, "[source.store] must be a table"};
+            const toml::table& table = *store->as_table();
+            spec.store.directory = detail::value<std::string>(table, "dir", spec.input);
+            spec.store.compression = detail::value<std::string>(table, "compression", "zst");
+            spec.store.shards = detail::strings(table, "shards");
+            for (std::int64_t worker : detail::integers(table, "workers"))
+                spec.store.workers.push_back(static_cast<int>(worker));
+            spec.store.events = detail::value<std::int64_t>(table, "events", 0);
+            spec.store.xsec_pb = detail::value<double>(table, "xsec_pb", 0.0);
+            spec.store.xsec_err_pb = detail::value<double>(table, "xsec_err_pb", 0.0);
+            for (std::int64_t id : detail::integers(table, "beam_ids"))
+                spec.store.beam_ids.push_back(static_cast<int>(id));
+            if (const toml::node* energies = table.get("beam_energies")) {
+                const toml::array* array = energies->as_array();
+                if (array == nullptr)
+                    throw Error{Exit::Config, "[source.store].beam_energies must be a list"};
+                for (const toml::node& entry : *array)
+                    spec.store.beam_energies.push_back(entry.value_or(0.0));
+            }
+            spec.store.weights = detail::strings(table, "weights");
+            spec.store.queue = detail::value<std::int64_t>(table, "queue", 0);
+            spec.store.stopped = detail::value<bool>(table, "stopped", false);
+        }
 
         const toml::table& output = detail::requireTable(document, "output");
         spec.output_dir = detail::value<std::string>(output, "dir", "");

@@ -4,6 +4,7 @@
 # built on demand: `cmake --build build --target store_compression`.
 
 set(HEKIT_CXX_TESTS core_sha256 core_signals status_roundtrip run_rules results_writer)
+list(APPEND HEKIT_CXX_TESTS store_queue)          # the replay queue needs only threads
 if(HEKIT_HEPMC)
   list(APPEND HEKIT_CXX_TESTS store_writer)       # the event store needs HepMC3
 endif()
@@ -16,7 +17,7 @@ foreach(name IN LISTS HEKIT_CXX_TESTS)
   target_link_libraries(test_${name} PRIVATE hekit_Status)
   if(name STREQUAL "results_writer")
     target_link_libraries(test_${name} PRIVATE hekit_Results)      # YODA
-  elseif(name STREQUAL "store_writer")
+  elseif(name STREQUAL "store_writer" OR name STREQUAL "store_queue")
     target_link_libraries(test_${name} PRIVATE hekit_Store)        # HepMC3 (+ compression)
   endif()
   target_include_directories(test_${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
