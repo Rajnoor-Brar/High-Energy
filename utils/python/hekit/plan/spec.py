@@ -51,7 +51,13 @@ def source_document(config: Any, group: Any) -> dict[str, Any]:
     """Where the events come from (03 §7)."""
     tool = config.generator.tool
     if tool == "store":
-        return {"kind": "store", "input": config.generator.input}
+        from ..adapters import store as store_adapter
+
+        directory = store_adapter.resolve(config.generator.input, project=config.project)
+        # `[source.store]` carries the index's facts, so `hep-run` needs no JSON parser: judgement
+        # (and JSON) in Python, the event loop in C++ (02 §2, 11 §4).
+        return {"kind": "store", "input": str(directory),
+                "store": store_adapter.store_document(directory)}
     cards = []
     from .build import card_file
 

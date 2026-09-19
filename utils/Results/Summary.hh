@@ -44,6 +44,7 @@ namespace Results {
         json += "    \"threads\": " + std::to_string(record.threads) + ",\n";
         json += "    \"chunk\": " + std::to_string(record.chunk) + ",\n";
         json += "    \"mode\": \"" + Status::escape(record.mode) + "\",\n";
+        json += "    \"source\": \"" + Status::escape(record.source) + "\",\n";
         json += "    \"stopped\": " + std::string(record.stopped ? "true" : "false") + ",\n";
         json += "    \"wall_s\": " + Status::number(record.wall_seconds) + ",\n";
         json += "    \"xsec_pb\": " + Status::number(record.xsec_pb) + ",\n";

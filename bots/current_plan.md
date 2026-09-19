@@ -3,31 +3,25 @@
 Executing `docs/rework` step by step. Read order: `bots/BOT.md` → this file → `docs/rework/steps/README.md`
 → the step being executed. Design context: `docs/rework/README.md`; decisions in `10_Roadmap.md` §2 are final.
 
-## Just finished — P4-S06 (retire the legacy tools) — done. **Phase P4 is complete.**
+## Just finished — P5-S03 (replay equivalence, `hep events`) — done. **Phase P5 is complete.**
 
-The gate first: the `pdf` study at **100 k events per point** through both toolchains gives χ²/ndf of
-1.085, 1.227, 1.129 and 1.043 over ~410 bins each, with σ agreeing to 0.2–0.4 %. Independent samples,
-so ≈1 is the right answer.
+Both rows measured. The equivalence is **exact**, not "to rounding": a replayed store gives a YODA
+identical to the generation's (1004 numbers, χ² = 0), because the same events go through the same
+sinks in the same order.
 
-Then, with your approval: `tools/*` and `generator.cc` → `legacy/`, `sources/` gone, the v2 configs
-promoted to `eic.toml`/`zeus_validation.toml` (originals archived), `tools/` off PATH, the Makefile
-reduced to a CMake wrapper, and the five `~/HEP/*.moved` files deleted — two of which were pre-hotfix
-originals, located in git (`18db967`) before deleting.
+`hep events` shows a store, any HepMC3 file, or a config (which generates a few events into a scratch
+store first — one renderer, one data path). Tables with particle names, `--tree`, `--final`, `--hard`,
+role colours, and a compressed shard is streamed through `zstd -dc` and cut off one event past the
+last one asked for, so looking at three events never costs more.
 
-**Worth knowing:** `which rivpyth` still finds `~/.local/bin/rivpyth` — an *older standalone bash*
-script with a different interface that predates the Python tool. It is outside the repo and outside
-what was approved, so it was left alone.
+## Next — P6-S01 (sharded Rivet and the concurrency modes)
 
-14/14 ctest; `hep plan/run/plot` verified end to end on the promoted config.
-
-## Next — P5-S01 (Store namespace, store sink and store CLI)
-
-**Phase P5 — the HepMC3 event store and event inspection.** Read `docs/rework/steps/README.md` for
-P5's order, then `P5-S01_store-writer.md`, and mirror it here before starting.
+**Phase P6 — concurrency and benchmarking.** Read `docs/rework/steps/README.md` for P6's order, then
+`P6-S01_sharded-rivet.md`, and mirror it here before starting.
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6 — phases P0–P4 all complete** · P5–P10 todo — 32 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — phases P0–P5 all complete** · P6–P10 todo — 35 of 55 steps done.
 
 ## Standing constraints
 

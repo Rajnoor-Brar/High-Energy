@@ -78,6 +78,15 @@ def build(config: Any, selection: Any, *, index: int | None = None, tool_version
     tool = config.generator.tool
     adapter = adapter_for(tool) if tool != "store" else None
 
+    # A replay's events already exist, so a sweep that would change them is refused here rather than
+    # silently ignored (11 §5). Resolving the store also turns a name or a hash into a directory.
+    store_directory = None
+    if tool == "store":
+        from ..adapters import store as store_adapter
+
+        store_adapter.check_quantities(config, selection)
+        store_directory = store_adapter.resolve(config.generator.input, project=config.project)
+
     card = card_file(config)
     card_bytes = hashing.read_card(card) if card is not None else None
     card_text = card_bytes.decode("utf-8", errors="replace") if card_bytes else ""
@@ -88,14 +97,23 @@ def build(config: Any, selection: Any, *, index: int | None = None, tool_version
         entries = group_analyses(points)
         warnings += rivet_adapter.check_analyses(entries, analysis_search_paths(config), str(config.path))
 
+    # A replay is identified by the store it replays plus its analysis configuration (11 §4), and
+    # the store's *own* hash is what identifies it — not the reference the user happened to type.
+    store_hash = ""
+    if store_directory is not None:
+        from ..store import index as index_module
+
+        store_hash = index_module.read(store_directory).hash or str(store_directory)
+
     identified = hashing.group_by_identity(
         points, tool=tool, card_bytes=card_bytes, card_text=card_text, tool_version=tool_version,
-        store_hash=config.generator.input if tool == "store" else "")
+        store_hash=store_hash)
 
     blocks = seeding.assign([(identity.names[0], identity.hash) for identity, _ in identified],
                             run_seed=config.run.seed, threads=config.run.threads)
 
     groups: list[Group] = []
+    plan_store = store_directory
     for identity, members in identified:
         # the directory is named after the events, not after the first analysis variant (07 §1)
         name = members[0].generation_name or identity.names[0]

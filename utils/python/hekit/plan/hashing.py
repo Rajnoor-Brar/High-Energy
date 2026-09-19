@@ -155,9 +155,12 @@ def identity_inputs(point: Any, *, tool: str, card_bytes: bytes | None, card_tex
         "replica": canonical_number(point.seed) if point.seed is not None else 0,
     }
     if store_hash:
-        # a replay point is identified by the store it replays plus its analysis configuration (03 §5)
+        # A replay is identified by the store it replays plus its analysis configuration (11 §4).
+        # The *analyses* part is added after grouping, in `group_by_identity`, because an
+        # analysis-option variant is not a separate generation (03 §4): R=0.4 and R=1.0 replay the
+        # same events and belong in one run. Hashing them per point made two generations that shared
+        # a directory, and the second overwrote the first.
         inputs["input"] = store_hash
-        inputs["analyses"] = list(point.analyses)
     return inputs
 
 
@@ -187,7 +190,25 @@ def group_by_identity(points: list[Any], **kwargs: Any) -> list[tuple[Identity, 
             members.append(point)
         else:
             groups[identity.hash] = (identity, [point])
-    return list(groups.values())
+    found = list(groups.values())
+    return _with_group_analyses(found) if kwargs.get("store_hash") else found
+
+
+def _with_group_analyses(groups: list[tuple[Identity, list[Any]]]) -> list[tuple[Identity, list[Any]]]:
+    """Fold a replay group's whole analysis set into its hash (11 §4).
+
+    A replay is "these events, analysed this way", so the analyses belong in the identity — but the
+    *group's* analyses, not each point's. Two replays of one store with different analyses are then
+    different points, while two option variants of one analysis stay one generation (03 §4).
+    """
+    rebuilt: list[tuple[Identity, list[Any]]] = []
+    for identity, members in groups:
+        analyses = sorted({entry for point in members for entry in point.analyses})
+        inputs = dict(identity.inputs)
+        inputs["analyses"] = analyses
+        rebuilt.append((Identity(hash=hash_inputs(inputs), inputs=inputs, names=identity.names),
+                        members))
+    return rebuilt
 
 
 # ── the skip rule (03 §5; used by hekit.results in P3-S03) ───────────────────

@@ -67,7 +67,9 @@ RIVET = Section("rivet", doc="In-process Rivet analyses.", fields={
 
 STORE = Section("store", doc="Optional HepMC3 event store (11).", fields={
     "enabled": Field("bool", False, "write events as a sharded HepMC3 store"),
-    "compression": Field("str", "gz", "shard compression", choices=("gz", "zst", "none")),
+    "compression": Field("str", "zst", "shard compression; zst is smaller and twice as fast to "
+                                       "write as gz (D-STORE-COMP, measured in P5-S01)",
+                         choices=("gz", "zst", "none")),
 })
 
 MODULE_SINK = Section("sinks.module", shape="array", doc="User C++ modules booking YODA objects (05 §5).",

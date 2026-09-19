@@ -20,7 +20,17 @@ results/<project>/points/<group>/events/
 - Each shard is a valid sample on its own.
 - Replay can read them in parallel, one reader per shard.
 
-**Compression.** `gz` is verified: header-only `HepMC3/WriterGZ.h` / `ReaderGZ.h` with `-DHEPMC3_USE_COMPRESSION -DHEPMC3_Z_SUPPORT` and `-lz`. `zst` and `xz` headers are present too. The default (gz vs zstd) is decided by a size/throughput spike in P5-S01 (decision D-STORE-COMP).
+**Compression.** Header-only `HepMC3/WriterGZ.h` / `ReaderGZ.h`, with the codec as a template parameter (`-DHEPMC3_USE_COMPRESSION`, `-DHEPMC3_Z_SUPPORT` and `-lz`; `-DHEPMC3_ZSTD_SUPPORT` and `-lzstd` when zstd is found).
+
+**The default is `zst`** (decision **D-STORE-COMP**, measured in P5-S01 on 10 000 real photoproduction events — the spike is `tests/cxx/spikes/store_compression.cc`):
+
+| codec | bytes/event | ratio | write ev/s | read ev/s |
+|---|---:|---:|---:|---:|
+| none | 29 197 | 1.00 | 6 333 | 6 249 |
+| gz | 10 223 | 2.86 | 1 086 | 4 461 |
+| **zst** | **9 866** | **2.96** | **2 289** | **5 624** |
+
+zstd is smaller, twice as fast to write and a quarter faster to read; nothing favours gz. `gz` remains the fallback for a build without zstd, the index records which codec was used, and a build that cannot read it says so instead of failing at the first event.
 
 **Serial mode.** With `processAsync = off`, callbacks run one at a time on changing threads. Shards are still keyed by `Parallelism:index` of the instance that generated the event, so the shard layout does not depend on the concurrency mode.
 

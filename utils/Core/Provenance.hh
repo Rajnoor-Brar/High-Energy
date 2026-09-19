@@ -70,6 +70,7 @@ namespace Core {
         int threads = 0;
         long long chunk = 0;                 // the effective chunk size (P2-S02, D-Q2)
         std::string mode = "serial";         // serial | sharded (P6-S01)
+        std::string source = "pythia";       // pythia | store | stream: generated, or replayed
         long long seed = 0;                  // the point seed, the base of its block (03 §5)
         std::vector<long long> seeds;        // read back from the instances, not assumed
         // Aggregated by source: message → how many times. A warning is not an error, but a run that
