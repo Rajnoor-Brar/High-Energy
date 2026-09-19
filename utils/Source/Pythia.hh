@@ -23,9 +23,12 @@
 //     bounded: `PythiaParallel::run` cannot be interrupted from inside.
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <exception>
 #include <functional>
+#include <mutex>
 #include <set>
 #include <string>
 #include <utility>
@@ -65,7 +68,8 @@ namespace Source {
             if (spec_.threads > 0)
                 parallel_.readString("Parallelism:numThreads = " + std::to_string(spec_.threads));
             parallel_.readString("Next:numberCount = 0");    // progress comes from the status stream
-            parallel_.readString("Parallelism:processAsync = off");   // serial sinks for now (05 §3)
+            parallel_.readString(std::string("Parallelism:processAsync = ") +
+                                 (async_ ? "on" : "off"));
             if (!spec_.instance_seeds.empty()) {
                 if (spec_.threads > 0 &&
                     spec_.instance_seeds.size() != static_cast<std::size_t>(spec_.threads))
@@ -80,6 +84,16 @@ namespace Source {
                 parallel_.readString("Parallelism:seeds = " + seeds);
             }
         }
+
+        // With `processAsync = off` Pythia still calls the callback from the worker threads, but
+        // holds one mutex while it does (`PythiaParallel.cc:201-208`); with it on, k callbacks run at
+        // once. Either way the callback is on a foreign thread, which is why `run()` catches.
+        void async(bool on) override {
+            async_ = on;
+            parallel_.readString(std::string("Parallelism:processAsync = ") + (on ? "on" : "off"));
+        }
+
+        int slots() const override { return async_ ? std::max(1, threads_) : 1; }
 
         // `init()` failing is its own exit code, because "the cards were fine but the physics is not"
         // is a different problem from a typo (06 §3.3).
@@ -120,26 +134,43 @@ namespace Source {
                          const std::function<void(std::int64_t)>& checkpoint = {}) override {
             Core::Counts counts;
             const std::int64_t step = chunkSize(chunk);
+            // The callback runs on a Pythia worker thread whether or not `processAsync` is on, so an
+            // exception escaping it would unwind through `std::thread` and call `std::terminate` —
+            // a sink error would kill the process instead of producing an exit code and a message.
+            // It is caught here, at the boundary where our code enters a foreign thread, and rethrown
+            // on the main thread once the chunk has joined.
+            std::exception_ptr failure;
+            std::mutex failure_mutex;
+            std::atomic<std::int64_t> accepted{0};
+
             while (counts.attempted < target) {
                 const std::int64_t remaining = target - counts.attempted;
                 const std::int64_t size = std::min(step, remaining);
-                // `processAsync` is off, so the callback runs one event at a time and these counters
-                // need no synchronisation (05 §3).
                 const std::vector<long> per_thread =
                     parallel_.run(size, [&](Pythia8::Pythia* instance) {
-                        const int worker = currentWorker(instance);
-                        Events::View view(instance, counts.accepted, worker);
-                        view.weights().values.assign(1, instance->info.weight());
-                        counts.accepted += 1;
-                        if (worker >= 0 && static_cast<std::size_t>(worker) < workers_.size())
-                            workers_[static_cast<std::size_t>(worker)] += 1;
-                        consume(view);
+                        if (failure) return;              // a sibling already failed; drain quietly
+                        try {
+                            const int worker = currentWorker(instance);
+                            // One instance per thread, so the worker index is also the consumer
+                            // slot; `fetch_add` because with processAsync on, k of these race.
+                            Events::View view(instance, accepted.fetch_add(1), worker, worker);
+                            view.weights().values.assign(1, instance->info.weight());
+                            if (worker >= 0 && static_cast<std::size_t>(worker) < workers_.size())
+                                workers_[static_cast<std::size_t>(worker)] += 1;
+                            consume(view);
+                        } catch (...) {
+                            const std::lock_guard<std::mutex> guard(failure_mutex);
+                            if (!failure) failure = std::current_exception();
+                        }
                     });
                 // What `run` returns is `next()` calls per thread — attempts, not successes (00/B21).
                 for (const long attempts : per_thread) counts.attempted += attempts;
+                counts.accepted = accepted.load();
+                if (failure) std::rethrow_exception(failure);
                 if (checkpoint) checkpoint(counts.accepted);
                 if (stop && stop()) break;
             }
+            counts.accepted = accepted.load();
             return counts;
         }
 
@@ -217,6 +248,7 @@ namespace Source {
         Pythia8::PythiaParallel parallel_;
         Core::Beams beams_;
         int threads_ = 1;
+        bool async_ = false;
         std::vector<long long> workers_;
         std::set<std::string> reported_;
     };

@@ -5,8 +5,8 @@
 //
 // The order matters, and it is the whole design:
 //
-//   1. each worker streams into `events.<k>.hepmc.<codec>.part`, with **no lock** — one file per
-//      worker is what makes that possible;
+//   1. each worker streams into `events.<k>.hepmc.<codec>.part` — one file per worker, so two
+//      workers never contend for the same stream;
 //   2. at the end every shard is closed, hashed, and renamed out of `.part`;
 //   3. only then is `events.index.json` written, atomically.
 //
@@ -17,12 +17,21 @@
 // The index is also the source of truth for a replay (11 §4): σ, beams, weight names and counts come
 // from it, which is why it carries them and why a partial store is marked `stopped` rather than
 // quietly missing events.
+//
+// **Under `[run].mode = "sharded"` several threads write at once.** One worker is still one stream,
+// but two things are shared and are guarded here rather than in every caller: the shard *map*, which
+// grows when a worker first appears, and the total count. The per-shard lock is held only across the
+// HepMC3 write, and is uncontended whenever a worker belongs to one thread (which it does for a
+// generator); a replay can hand the same source shard to two consumers, and then it is the thing
+// that keeps the file from interleaving.
 
+#include <atomic>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -96,13 +105,16 @@ namespace Store {
         /// Write one event into its worker's shard, opening that shard on first use.
         void write(int worker, const HepMC3::GenEvent& event) {
             Open& shard = open(worker);
-            shard.writer->write_event(const_cast<HepMC3::GenEvent&>(event));
-            if (shard.writer->failed())
-                throw Core::Error{Core::Exit::Sink,
-                                  "writing the event store failed: " + shard.partial,
-                                  "a full disk is the usual cause"};
-            shard.events += 1;
-            events_ += 1;
+            {
+                const std::lock_guard<std::mutex> guard(shard.lock);
+                shard.writer->write_event(const_cast<HepMC3::GenEvent&>(event));
+                if (shard.writer->failed())
+                    throw Core::Error{Core::Exit::Sink,
+                                      "writing the event store failed: " + shard.partial,
+                                      "a full disk is the usual cause"};
+                shard.events += 1;
+            }
+            events_.fetch_add(1, std::memory_order_relaxed);
         }
 
         /// Close every shard, hash it, and rename it into place. Safe to call twice.
@@ -138,7 +150,7 @@ namespace Store {
         Index finish(Index index) {
             index.compression = codec_;
             index.shards = closeShards();
-            index.events = index.events ? index.events : events_;
+            index.events = index.events ? index.events : events();
             if (!index.consistent())
                 throw Core::Error{Core::Exit::Sink,
                                   "the event store's shard counts do not add up: " +
@@ -171,7 +183,7 @@ namespace Store {
 
         const std::string& directory() const { return directory_; }
         const std::string& codec() const { return codec_; }
-        std::int64_t events() const { return events_; }
+        std::int64_t events() const { return events_.load(std::memory_order_relaxed); }
         std::size_t shardCount() const { return shards_.size(); }
 
         void setRunInfo(std::shared_ptr<HepMC3::GenRunInfo> run) { run_ = std::move(run); }
@@ -183,29 +195,34 @@ namespace Store {
             std::string partial;
             std::int64_t events = 0;
             bool closed = false;
+            std::mutex lock;                  // held across one write_event, never across a hash
         };
 
         std::string path(const std::string& name) const {
             return (std::filesystem::path(directory_) / name).string();
         }
 
+        // `std::map` nodes never move, so a reference handed out here stays valid while the map
+        // grows; the lock is only around the lookup and the insert.
         Open& open(int worker) {
+            const std::lock_guard<std::mutex> guard(shards_lock_);
             auto found = shards_.find(worker);
             if (found != shards_.end()) return found->second;
-            Open shard;
+            Open& shard = shards_[worker];
             shard.name = shardName(worker, codec_);
             shard.partial = path(shard.name) + ".part";
             shard.writer = makeWriter(shard.partial, codec_);
             if (shard.writer->failed())
                 throw Core::Error{Core::Exit::Sink, "cannot open the shard " + shard.partial};
             if (run_ != nullptr) shard.writer->set_run_info(run_);
-            return shards_.emplace(worker, std::move(shard)).first->second;
+            return shard;
         }
 
         std::string directory_;
         std::string codec_;
         std::map<int, Open> shards_;          // ordered, so the index lists shards by worker
-        std::int64_t events_ = 0;
+        std::mutex shards_lock_;              // guards the map's shape, not the streams
+        std::atomic<std::int64_t> events_{0};
         std::shared_ptr<HepMC3::GenRunInfo> run_;
     };
 

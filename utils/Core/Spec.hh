@@ -79,6 +79,7 @@ namespace Core {
         std::int64_t events = 0;
         std::int64_t seed = 0;
         int threads = 0;
+        std::string mode = "auto";              // "serial" | "sharded" | "auto" (05 §3)
         std::vector<std::int64_t> instance_seeds;
         // [source]
         std::string source_kind;
@@ -117,6 +118,9 @@ namespace Core {
             throw Error{Exit::Config, "[output] dir is empty"};
         if (spec.threads < 0)
             throw Error{Exit::Config, "[run] threads is negative"};
+        if (spec.mode != "auto" && spec.mode != "serial" && spec.mode != "sharded")
+            throw Error{Exit::Config, "[run] mode is not one of auto, serial, sharded: " + spec.mode,
+                        "\"auto\" shards only when every sink can be (05 §3)"};
         if (spec.events < 0)
             throw Error{Exit::Config, "[run] events is negative"};
 
@@ -238,6 +242,7 @@ namespace Core {
         spec.events = detail::value<std::int64_t>(run, "events", 0);
         spec.seed = detail::value<std::int64_t>(run, "seed", 0);
         spec.threads = static_cast<int>(detail::value<std::int64_t>(run, "threads", 0));
+        spec.mode = detail::value<std::string>(run, "mode", "auto");
         if (const toml::node* seeds = run.get("seeds")) {
             if (!seeds->is_table())
                 throw Error{Exit::Config, "[run.seeds] must be a table"};

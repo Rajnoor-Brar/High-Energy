@@ -33,7 +33,7 @@ hep studies  CONFIG                  list [study.*] with descriptions and point 
 hep config   init PROJECT | reference | migrate FILE | validate FILE
 hep pdf      check CONFIG | install SET… | list [PATTERN]
 hep build    [TARGET…] [--analyses PROJECT] [--modules PROJECT] [--clean]    (wraps cmake)
-hep bench    CONFIG [--events 10000]            sink cost → concurrency recommendation
+hep bench    CONFIG [--events 2000] [--json]     sink cost → concurrency recommendation
 hep doctor   [--json|--brief]                    tool versions, Python imports, capabilities, env sanity
 hep clean    [--cache] [--events AGE] [--plots] [--orphans] [--dry-run]
 hep new      analysis NAME PROJECT | module NAME PROJECT | project NAME

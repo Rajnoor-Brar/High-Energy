@@ -18,7 +18,7 @@ Each section is one TOML table unless it says otherwise. The design behind it is
 
 Run control: how much, how parallel, where to.
 
-A machine file (`~/.config/hekit/machine.toml`) may set `threads`.
+A machine file (`~/.config/hekit/machine.toml`) may set `threads`, `mode`.
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
@@ -26,6 +26,7 @@ A machine file (`~/.config/hekit/machine.toml`) may set `threads`.
 | `events` | int ≥ 0 | `0` | events to generate per point; 0 = whatever the native card says |
 | `seed` | int ≥ 0 ≤ 9e+08 | `0` | base of the identity seed policy (03 §5); never offset by sweep position |
 | `threads` | int ≥ 0 ≤ 4096 | `0` | worker threads; 0 = all cores, resolved by hep |
+| `mode` | str one of 'auto', 'serial', 'sharded' | `'auto'` | how the sinks see the threads (05 §3): "serial" calls them one event at a time, "sharded" gives each worker its own analysis handler and merges at the end, "auto" shards only when every sink and analysis can be. A performance choice, not a physics one: it is not part of a point's identity |
 | `skip_existing` | bool | `False` | skip a point whose name, hash and complete output all match |
 | `label` | str | — | free text kept in manifests, and appended to a study directory name |
 | `serial` | bool | `True` | number each study run: results/<project>/studies/01_pdf/ (D-Q3). Points are never numbered — they are named by physics, so two studies that reach the same events share one generation |
@@ -268,6 +269,7 @@ Written as one table per name: `[tools.<name>]`. A machine file (`~/.config/heki
 Only these, so that a machine can tune performance without changing physics (03 §2):
 
 - `run.threads`
+- `run.mode`
 - `terminal.dashboard`
 - `terminal.log_tail`
 - `terminal.stall_after`

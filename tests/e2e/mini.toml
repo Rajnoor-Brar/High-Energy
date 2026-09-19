@@ -47,9 +47,25 @@ values = ["LHAPDF6:MSTW2008lo68cl", "LHAPDF6:NNPDF23_lo_as_0130_qed"]
 tags = ["MSTW08lo", "NNPDF23lo"]
 labels = ["MSTW2008lo", "NNPDF2.3lo"]
 
+# An analysis option, not a generator setting: the two values are two analyses of the *same*
+# events, which is what makes the radius study one generation (03 §4, P6-S02).
+[quantity.radius]
+type = "option"
+option = "R"
+values = [0.4, 1.0]
+labels = ["R = 0.4", "R = 1.0"]
+tags = ["r04", "r10"]
+
 [sweep]
 across = ["pdf"]
 
 [study.pdf]
 description = "the two PDF sets, one generation each"
 across = ["pdf"]
+
+[study.radius]
+description = "two jet radii, one generation shared between them"
+across = ["radius"]
+
+[study.radius.pin]
+pdf = "MSTW08lo"

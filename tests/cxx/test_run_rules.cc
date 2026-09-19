@@ -123,6 +123,37 @@ void emptyView() {
     CHECK_EQ(borrowed.weights().nominal(), 1.0);  // and an empty weight list still weighs one
 }
 
+// Worker and slot are two different numbers, and confusing them is how a sharded run corrupts either
+// a store's layout or an analysis handler (05 §3). A generator's are the same; a replay's are not.
+void workerAndSlot() {
+    {   // a generator: one instance per thread, so the event's origin is also who carries it
+        Events::View generated(nullptr, 0, 2);
+        CHECK_EQ(generated.worker(), 2);
+        CHECK_EQ(generated.slot(), 2);
+    }
+    {   // a replay: shard 5 popped by consumer 1
+        Events::View replayed(nullptr, 0, 5, 1);
+        CHECK_EQ(replayed.worker(), 5);           // the store keeps its layout
+        CHECK_EQ(replayed.slot(), 1);             // the analysis handler is the consumer's
+    }
+    {   // a default-constructed view is slot 0, not a negative index into somebody's vector
+        Events::View empty;
+        CHECK_EQ(empty.worker(), 0);
+        CHECK_EQ(empty.slot(), 0);
+    }
+    {   // a source that does not track workers passes -1; a slot must still be a valid index
+        Events::View unknown(nullptr, 0, -1);
+        CHECK_EQ(unknown.worker(), -1);
+        CHECK_EQ(unknown.slot(), 0);
+    }
+    {   // and it can be set after the fact, which is what a consumer thread does
+        Events::View moved(nullptr, 0, 4);
+        moved.slot(1);
+        CHECK_EQ(moved.worker(), 4);
+        CHECK_EQ(moved.slot(), 1);
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -130,5 +161,6 @@ int main() {
     xsecCombination();
     countingSink();
     emptyView();
+    workerAndSlot();
     return check::finish("run_rules");
 }

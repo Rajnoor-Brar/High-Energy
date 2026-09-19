@@ -52,12 +52,19 @@ class Page:
 
 @dataclass
 class PointFile:
-    """A point as the plot pipeline sees it: a name, a legend and a YODA."""
+    """A point as the plot pipeline sees it: a name, a legend, a YODA and which variant is its own.
+
+    `analyses` matters when several points share one generation (03 §4): the file then holds *every*
+    variant, and without this each point would contribute all of them — four curves on a page with
+    two members. Empty means "whatever is in the file", which is right for a point that is the whole
+    generation.
+    """
 
     name: str
     yoda: Path
     legend: str = ""
     tag: str = ""
+    analyses: tuple[str, ...] = ()
 
 
 def points_of(plan: Any, layout: Any, page: Any) -> list[PointFile]:
@@ -71,7 +78,8 @@ def points_of(plan: Any, layout: Any, page: Any) -> list[PointFile]:
             partial = directory / "analysis.partial.yoda"
             yoda = partial if partial.is_file() else yoda
         found.append(PointFile(name=point.name, yoda=yoda, legend=legend or point.name,
-                               tag=getattr(point, "suffix", "")))
+                               tag=getattr(point, "suffix", ""),
+                               analyses=tuple(getattr(point, "analyses", ()) or ())))
     return found
 
 

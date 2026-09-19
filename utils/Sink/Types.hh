@@ -47,6 +47,20 @@ namespace Sink {
         virtual Needs needs() const { return {}; }
         virtual Concurrency concurrency() const { return Concurrency::Serial; }
 
+        /// Why this sink will not be sharded, when it will not. Empty means "no objection".
+        ///
+        /// The run reports it as a notice rather than an error: a sink that cannot be sharded is a
+        /// reason to run serially, not a reason to refuse the run (05 §3). It is a sentence because
+        /// "sharding is off" without "because ANALYSIS is not re-entrant" sends the reader to the
+        /// source.
+        virtual std::string serialReason() const { return {}; }
+
+        /// How many consumer slots the run will use, called once on the main thread after `prepare()`
+        /// and before `start()`. A `Sharded` sink builds its per-slot state here, where construction
+        /// is still single-threaded — Rivet's analysis loader and Pythia's settings are both global,
+        /// and building shards inside the event loop is how that bites.
+        virtual void shards(int count) { (void)count; }
+
         // Before anything is generated, and before `start`: load what may not exist (a Rivet
         // analysis, a module library) so a typo costs a second rather than a whole run. `--check`
         // stops right after this, which is what makes it worth checking.

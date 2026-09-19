@@ -49,6 +49,15 @@ namespace Source {
         /// The chunk actually used, given what was asked for (D-Q2).
         virtual std::int64_t chunkSize(std::int64_t wanted) const = 0;
 
+        /// Ask for the sinks to be called from several threads (05 §3). Called after `configure()`
+        /// and before `initialise()`, because both sources have to set it up before the expensive
+        /// step. A source that will not do it simply keeps `slots() == 1`, and the run stays serial.
+        virtual void async(bool on) { (void)on; }
+
+        /// How many consumer slots events will arrive on. 1 unless `async(true)` was accepted, and
+        /// the number a `Sharded` sink builds instances for. Valid after `initialise()`.
+        virtual int slots() const { return 1; }
+
         /// Produce up to `target` events, calling `consume` for each, asking `stop` between chunks.
         virtual Core::Counts run(std::int64_t target, std::int64_t chunk,
                                  const std::function<void(Events::View&)>& consume,

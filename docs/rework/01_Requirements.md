@@ -50,10 +50,15 @@
 ## 4. Constraints (from the environment)
 
 - Pythia `PythiaParallel`:
-  - callbacks are serial unless `processAsync = on`;
+  - callbacks are **always on a worker thread**; `processAsync = off` only serialises them with one
+    mutex, so an exception must never escape a callback (00/B32, measured in P6-S01);
   - there is no abort API;
   - merged `sigmaGen()` and `weightSum()` are available, but there is no merged σ error.
-- `Rivet::AnalysisHandler` is not thread-safe. Use one per worker and `merge()`. `RivetHooks::onStat` in 8.317 may double-merge (unverified), so use our own hook.
+- `Rivet::AnalysisHandler` is not thread-safe, but it owns its own `ProjectionHandler` and Rivet's
+  logging is `thread_local`, so one handler per worker and `merge()` is sound *in Rivet*. What is not
+  sound is jet clustering: SISCone keeps its cache and RNG in process-wide statics, and this FastJet
+  is built without `FASTJET_HAVE_LIMITED_THREAD_SAFETY` (00/B31, 05 §3). `RivetHooks::onStat` in
+  8.317 may double-merge (unverified), so use our own hook.
 - ThePEG has no HepMC or Rivet modules here. **Herwig integration requires rebuilding ThePEG `--with-hepmc --with-rivet`**, or piping through Herwig's LHE/other output (not viable for full events).
 - Delphes is single-threaded and ROOT-bound.
 - Rivet is not linked to ONNX Runtime. A plugin that uses `RivetONNXrt` must add the ONNX flags itself.
@@ -73,7 +78,7 @@
 | A1 | Runs are sequential on one machine. Parallelism is *within* a run (threads), not across runs. | Add a batch backend later (10 §4). The point spec is already self-contained. |
 | A2 | Physics settings stay in each generator's native language. TOML carries only run control, overrides and sweeps. | A physics-in-TOML layer would be a large, fragile translation effort. It is rejected. |
 | A3 | Rivet stays the primary analysis framework for comparisons. Custom C++ is for things Rivet does poorly: candidate reconstruction, ML features, detector-level. | — |
-| A4 | Rivet's CPU cost per event is comparable to or larger than Pythia's (three jet algorithms incl. SISCone). | If Rivet is cheap, single-handler serial mode is enough. Keep the threaded mode behind a switch either way (05 §3). |
+| A4 | Rivet's CPU cost per event is comparable to or larger than Pythia's (three jet algorithms incl. SISCone). | **Settled in P6-S01, and the answer moots the question for this project**: the three jet algorithms are exactly what makes `photo_eic` unshardable (00/B31), so it runs serially whatever its cost. The threaded mode exists, is measured (1.67x on four threads with a jet-free analysis) and is behind `[run].mode` (05 §3). |
 | A5 | Weight variations (Pythia `UncertaintyBands`, Sherpa on-the-fly) may later replace some re-generation sweeps. | The design supports multi-weight YODA from day one, since Rivet handles it natively. |
 | A6 | **PhotoProduction is a test bed** for the new stack (D20). Physics, maths and logic must be correct; specific physics choices (lepton charge, tag names, cut values) are not blockers. | — |
 
