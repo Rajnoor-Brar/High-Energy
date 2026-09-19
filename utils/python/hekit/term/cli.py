@@ -8,6 +8,7 @@ log is noise.
 
 from __future__ import annotations
 
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -145,10 +146,124 @@ def _feed(view: model.RunView, lines: list[str]) -> None:
         view.finish(fresh.exit_code or 0, fresh.finished)
 
 
-@click.command()
+@click.command("events")
 @click.argument("target", default="")
-@click.option("-n", "--events", default=3, show_default=True, help="how many events to show")
-def events(target: str, events: int) -> None:                # pragma: no cover - P5-S03
-    """Inspect events from a config, point or store."""
-    from ..errors import NotImplementedYet
-    raise NotImplementedYet("events", "P5-S03")
+@click.option("-n", "--events", "count", default=3, show_default=True,
+              help="how many events to show")
+@click.option("--from", "from_file", type=click.Path(exists=True, path_type=Path),
+              help="read this HepMC3 file instead of finding events for TARGET")
+@click.option("--tree", is_flag=True, help="show the decay tree instead of a table")
+@click.option("--final", "final_only", is_flag=True, help="final-state particles only")
+@click.option("--hard", "hard_only", is_flag=True, help="the hard process only")
+@click.option("--limit", default=0, help="at most this many particles per event (0 = all)")
+@click.pass_context
+def events(context: click.Context, target: str, count: int, from_file: Path | None, tree: bool,
+           final_only: bool, hard_only: bool, limit: int) -> None:
+    """Inspect events from a config, a point, a store or a HepMC3 file (06 §5).
+
+    TARGET is a store directory, a point directory, a config file, or a point name. With no target,
+    the newest store under the results tree is used.
+    """
+    from . import events as events_module
+    from . import theme
+
+    theme.autodetect(sys.stdout)
+    source = from_file if from_file is not None else _events_source(target, count)
+    found = events_module.read_events(source, limit=count)
+    if not found:
+        raise HepError(f"no events in {source}")
+
+    from rich.console import Console
+
+    console = Console(no_color=(context.obj or {}).get("plain", False))
+    console.print(f"[dim]{source}[/dim]")
+    for event in found:
+        particles = events_module.select(event, final=final_only, hard=hard_only, limit=limit)
+        console.print()
+        if tree:
+            console.print(events_module.tree_for(event, particles))
+        else:
+            console.print(events_module.table_for(event, particles))
+        console.print(f"[dim]  {events_module.summary_of(event)}[/dim]")
+
+
+def _events_source(target: str, count: int) -> Path:
+    """Where to read events from: a store, a file, or a config that has to generate a few first."""
+    from ..env import paths
+    from ..store import index as index_module
+
+    candidate = Path(target) if target else None
+    if candidate is not None and candidate.is_file() and candidate.suffix == ".toml":
+        return _generate_events(candidate, count)
+    if candidate is not None and candidate.exists():
+        if candidate.is_dir() and (candidate / "events").is_dir():
+            return candidate / "events"
+        return candidate
+
+    stores = index_module.find_stores(paths.results_root())
+    if target:
+        named = [store for store in stores if store.parent.name == target]
+        if named:
+            return named[0]
+        raise HepError(f"no events for '{target}'",
+                       hint="give a store, a point, a config, or a HepMC3 file with --from; "
+                            "`hep store ls` lists the stores")
+    if not stores:
+        raise HepError("there are no event stores to look at",
+                       hint="run with [store].enabled = true, or pass a config to generate a few")
+    return max(stores, key=lambda store: (store / index_module.NAME).stat().st_mtime)
+
+
+def _generate_events(config_file: Path, count: int) -> Path:
+    """Generate a handful of events into a scratch store, so a config can be inspected too.
+
+    06 §5 describes this as `hep-run --list`; a temporary store is the same thing with a renderer
+    that can show particles, and it reuses the pipeline instead of widening the status protocol.
+    """
+    import subprocess
+    import tomli_w
+
+    from ..config import load_config
+    from ..env import paths
+    from ..plan import build as builder
+    from ..plan import spec as spec_module
+    from ..sweep import select as select_points
+
+    config = load_config(config_file)
+    plan = builder.build(config, select_points(config), index=1, check_analyses=False)
+    group = plan.groups[0]
+
+    directory = paths.scratch_root() / "events" / group.name
+    shutil.rmtree(directory, ignore_errors=True)
+    directory.mkdir(parents=True, exist_ok=True)
+    card_name = f"point.{'cmnd' if config.generator.tool == 'pythia' else 'card'}"
+    if group.card:
+        (directory / card_name).write_text(group.card, encoding="utf-8")
+
+    document = dict(group.spec)
+    document["run"] = {**document.get("run", {}), "events": count, "threads": 1,
+                       "seeds": {"point": document.get("run", {}).get("seed", 1),
+                                 "instances": [document.get("run", {}).get("seed", 1)]}}
+    source = dict(document.get("source", {}))
+    if source.get("cards"):
+        cards = list(source["cards"])
+        cards[-1] = str(directory / card_name)
+        source["cards"] = cards
+    document["source"] = source
+    document["output"] = {**document.get("output", {}), "dir": str(directory)}
+    document["sink"] = [{"kind": "store", "dir": str(directory / "events"), "compression": "none"}]
+    spec_path = directory / "run.toml"
+    spec_path.write_text(tomli_w.dumps(document), encoding="utf-8")
+
+    from ..env.doctor import hep_run_path
+
+    binary = hep_run_path()
+    if not binary:
+        raise HepError("hep-run is not built", hint="`hep build`")
+    done = subprocess.run([binary, str(spec_path), "--plain"], capture_output=True, text=True,
+                          timeout=1800, cwd=paths.scratch_root())
+    if done.returncode != 0:
+        message = next((line for line in done.stderr.splitlines() if line.startswith("hep-run:")),
+                       f"exit {done.returncode}")
+        raise HepError(f"could not generate events: {message.replace('hep-run: ', '')}")
+    return directory / "events"
