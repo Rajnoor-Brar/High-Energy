@@ -38,6 +38,7 @@ from ..results import manifest as manifest_module
 from ..results import skip as skip_module
 from ..sweep import select
 from ..term import model, theme
+from . import bench as bench_module
 from . import journal as journal_module
 from . import signals as signal_policy
 from .supervisor import StageSpec, Supervisor
@@ -450,10 +451,92 @@ def _seconds(value: Any) -> float:
     return 0.0
 
 
-@click.command()
+@click.command("bench")
 @click.argument("config_file", type=click.Path(exists=True, dir_okay=False, path_type=Path))
-@click.option("--events", default=10000, show_default=True)
-def bench(config_file: Path, events: int) -> None:            # pragma: no cover - P6-S03
-    """Measure sink cost and recommend a concurrency mode."""
-    from ..errors import NotImplementedYet
-    raise NotImplementedYet("bench", "P6-S03")
+@click.option("--events", default=None, type=int,
+              help=f"events per leg (default {bench_module.DEFAULT_EVENTS})")
+@click.option("--threads", type=int, help="override [run].threads")
+@click.option("--point", "point_name", default="", help="which point to measure (default: the first)")
+@click.option("--no-replay", is_flag=True, help="skip the store/replay leg")
+@click.option("--refresh", is_flag=True, help="measure again instead of reading the cache")
+@click.option("--json", "as_json", is_flag=True, help="print the report as JSON")
+def bench(config_file: Path, events: int | None, threads: int | None, point_name: str,
+          no_replay: bool, refresh: bool, as_json: bool) -> None:
+    """Measure what the sinks cost and recommend a concurrency mode (05 §3).
+
+    Runs the first point of the config three ways — generating only, generating with its sinks
+    serially, and sharded — and reports which is faster. Nothing is written into `results/`: a
+    benchmark is not a result, so it runs in `output/scratch/bench/` and caches its numbers there.
+    """
+    from ..env import paths
+    from ..plan import build as builder
+
+    count = events if events is not None else bench_module.DEFAULT_EVENTS
+    overrides = [f"run.threads={threads}"] if threads is not None else []
+    config = load_config(config_file, sets=tuple(overrides))
+    selection = select(config)
+    plan = builder.build(config, selection)
+    if not plan.groups:
+        raise HepError("this config plans no points, so there is nothing to measure")
+
+    group = plan.groups[0]
+    if point_name:
+        found = [entry for entry in plan.groups
+                 if point_name in (entry.name, *getattr(entry, "aliases", ()))]
+        if not found:
+            raise HepError(f"no point called '{point_name}' in this config",
+                           hint="`hep plan` lists them")
+        group = found[0]
+
+    cached = None if refresh else bench_module.load_cached(config.project, group.name)
+    if cached is not None and cached.events == count:
+        _show_bench(cached, as_json=as_json, cached=True)
+        return
+
+    report = bench_module.measure(
+        config, group, _bench_binary(), paths.scratch_root() / "bench" / group.name,
+        events=count, threads=config.run.threads, replay=not no_replay)
+    bench_module.save_cached(report)
+    _show_bench(report, as_json=as_json, cached=False)
+
+
+def _bench_binary() -> str:
+    from ..env.doctor import hep_run_path
+
+    found = hep_run_path()
+    if not found:
+        raise HepError("hep-run is not built", hint="build it with `hep build`")
+    return str(found)
+
+
+def _show_bench(report: Any, *, as_json: bool, cached: bool) -> None:
+    if as_json:
+        from dataclasses import asdict
+
+        click.echo(json.dumps(asdict(report), indent=2))
+        return
+
+    theme.autodetect(sys.stdout)
+    click.echo(f"hep bench: {report.point} on {report.machine}, "
+               f"{report.events} events, {report.threads or 'all'} threads"
+               + (" (cached; --refresh to measure again)" if cached else ""))
+    click.echo("")
+    width = max((len(entry.name) for entry in report.measurements), default=10)
+    for entry in report.measurements:
+        if entry.refused:
+            click.echo(f"  {entry.name:<{width}}  refused: {_one_line(entry.refused)}")
+            if entry.detail:
+                click.echo(f"  {'':<{width}}           {_one_line(entry.detail)}")
+            continue
+        click.echo(f"  {entry.name:<{width}}  {entry.wall_s:8.2f}s  "
+                   f"{entry.rate:10.0f} ev/s  ({entry.events} events, {entry.mode})")
+    click.echo("")
+    if report.sink_share > 0:
+        # Assumption A4, answered with a number rather than an expectation.
+        click.echo(f"  the sinks are {report.sink_share * 100:.0f}% of a serial run's wall clock")
+    click.echo(f"  recommended: [run].mode = \"{report.mode}\"")
+    click.echo(f"  because {_one_line(report.reason)}")
+
+
+def _one_line(text: str) -> str:
+    return " ".join(str(text).split())

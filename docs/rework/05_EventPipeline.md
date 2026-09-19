@@ -106,7 +106,12 @@ handlers cannot reconstruct and `AnalysisHandler::merge` falls back to copying. 
 (P8-S01) follows: **`fill` merges, `set` does not.** A run's σ is not affected: it comes from the
 generator, is applied once to the merged total (D-Q1), and lands in `/_XSEC` and `run.summary.json`.
 
-**Decision rule.** Measure, don't guess: `hep bench` (P6-S03) times generation only, generation with sinks, and replay with k readers, then recommends a mode.
+**Decision rule.** Measure, don't guess: `hep bench` (P6-S03) times generation only, generation with
+sinks serially, the same sharded, and a replay, then recommends a mode. It recommends `sharded` only
+when it was *allowed* and measured at least 1.15x faster — a refused leg is reported as its reason,
+which is the more useful answer. Measured on PhotoProduction: the sinks are **~75 % of a serial run's
+wall clock** (assumption 01 A4, answered), a replay reads back ~1.5x faster than generating, and
+sharding is refused outright because the analysis clusters jets.
 
 **Reproducibility** (corrected; the earlier "timing-dependent" note was wrong):
 - `Parallelism:balanceLoad` is **on** by default. Events are split evenly between instances, and each instance has its own seed (`Parallelism:seeds`, or `Random:seed + i`).

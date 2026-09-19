@@ -55,15 +55,38 @@ Rows: `hep plan --study radius` → 1 group, 3 variants (and the `pdf` study is 
 control); one point directory whose YODA carries both variant paths and one `/_EVTCOUNT`; `hep plot`
 → 2 curves.
 
-## Next — P6-S03 (`hep bench`)
+## Just finished — P6-S03 (`hep bench`) — done. **Phase P6 is complete.**
 
-Read `docs/rework/steps/P6-S03_bench.md` and mirror it here before starting. It is the last step of
-phase P6: time generation only, generation with sinks, and replay with k readers, then recommend a
-mode — which now has a real constraint to report (00/B31: a jet analysis can only be serial).
+Four legs — generation only, generation + sinks serially, the same sharded, and a replay — then a
+recommendation. On PhotoProduction at 1 000 events:
+
+```
+  generation      0.18s        5523 ev/s
+  serial          0.75s        1327 ev/s
+  sharded     refused: photo_eic clusters jets, which cannot be done from several threads
+  replay          0.52s        1916 ev/s
+
+  the sinks are 76% of a serial run's wall clock
+  recommended: [run].mode = "serial"
+```
+
+**Assumption 01 A4 is now answered with a number**: Rivet's cost is not merely comparable to
+Pythia's, it is about **three times** it. The assumption was right, and P6-S01's finding is what
+makes it moot here — the analysis that costs the most is the one that cannot be shared out.
+
+`recommend()` asks *is it allowed?* before *is it faster?*, and is a pure function of three timings
+so the whole table is 15 unit tests. Verified in the positive direction too: `MC_FSPARTICLES` on
+four threads measures 1.91x and recommends `sharded`.
+
+## Next — P7-S01 (adapter framework), the start of phase P7
+
+**Phase P7 — external generators and Delphes** (8 steps, the largest phase). Read
+`docs/rework/steps/README.md` for P7's order, then `P7-S01_adapter-framework.md`, and mirror it here
+before starting.
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · P6 2/3 · P7–P10 todo — 37 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · P7–P10 todo — 38 of 55 steps done.
 
 ## Standing constraints
 
