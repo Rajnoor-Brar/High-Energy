@@ -177,7 +177,23 @@ seam, the same events.
 - `sample_format = hepmc` with `$sample = "<stem>"`. Whizard appends `.hepmc`, so the FIFO is created as `<stem>.hepmc`.
 - Whizard is parton-level unless its shower/hadronisation interface is enabled in the base card. The adapter reports which one is active (`?hadronization_active`).
 
-**Prepare:** integration in the cache directory. The generate stage re-reads the grids (`?rebuild_grids = false`).
+**Prepare:** integration in the cache directory, from an `integrate.sin` the stage writes beside the
+grids. It needs a card of its own because the base ends in `simulate` and Whizard's `--execute` runs
+*before* the card rather than after, so the integration cannot be told to write nothing — and without
+that it opens the FIFO at simulation time and blocks for ever. The generate stage re-reads the grids
+(`?rebuild_grids = false`) and runs in the cache directory too, with an absolute `$sample` so the
+events still reach the point's FIFO.
+
+**Beams are assembled from two halves.** The plan owns the particles and the energies; the
+*structure-function chain* after the `=>` is physics only the base can state. The base declares its
+half in a `# hep: beam_structure = pdf_builtin, epa` line and the adapter writes the whole assignment.
+
+**Measured in P7-S04, and both bite immediately:**
+- **Whizard writes no cross-section into HepMC3** — no `C` record at all — so a Whizard point must set
+  `[rivet].xsec` to a number. `hep-run` now refuses to normalise by an unmeasured σ rather than
+  writing a YODA divided by zero.
+- **Whizard's EPA record has no scattered lepton**, so a Rivet analysis using `DISKinematics` aborts
+  on it. Pythia's and Sherpa's EPA records keep the lepton; this is specific to Whizard's.
 
 ## 6. Herwig
 

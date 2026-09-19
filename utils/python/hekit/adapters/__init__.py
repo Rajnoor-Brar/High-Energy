@@ -17,11 +17,13 @@ from typing import Any
 
 from . import pythia
 from . import sherpa
+from . import whizard
 from .registry import (ADAPTERS, KNOWN_TOOLS, adapter_for, implemented, register, tools,
                        unregister)
 
 register("pythia", pythia, description=KNOWN_TOOLS["pythia"])
 register("sherpa", sherpa, description=KNOWN_TOOLS["sherpa"])
+register("whizard", whizard, description=KNOWN_TOOLS["whizard"])
 
 __all__ = ["ADAPTERS", "KNOWN_TOOLS", "adapter_for", "defaults_for", "implemented", "register",
            "tools", "unregister"]

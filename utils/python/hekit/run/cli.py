@@ -232,6 +232,10 @@ class Runner:
                 # does not until something makes it.
                 if stage.cwd is not None:
                     Path(stage.cwd).mkdir(parents=True, exist_ok=True)
+            for stage in chain:
+                for path, text in stage.writes:
+                    Path(path).parent.mkdir(parents=True, exist_ok=True)
+                    Path(path).write_text(text, encoding="utf-8")
 
             outcome = supervisor.run(
                 stages,

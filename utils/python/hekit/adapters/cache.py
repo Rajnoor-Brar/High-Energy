@@ -42,7 +42,9 @@ VOLATILE: dict[str, tuple[str, ...]] = {
     # `event_generation_mode` is deliberately *not* here: unweighting reads max-weights that the
     # integration writes, so a different mode deserves its own entry.
     "sherpa": ("random_seed", "events", "event_output", "result_directory"),
-    "whizard": ("seed", "n_events"),
+    # `$sample` carries the *point's* directory, so leaving it in gives every seed replica its own
+    # compiled library and integration — the exact opposite of what the cache is for.
+    "whizard": ("seed", "n_events", "$sample", "sample_format"),
     "herwig": ("set /herwig/random:seed", "run -s", "saverun"),
     "madgraph": ("iseed", "nevents"),
 }

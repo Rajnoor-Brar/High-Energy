@@ -88,6 +88,10 @@ class Stage:
     parser: str = ""                  # tool name for the progress parser (06 §4); "" = spinner
     timeout: float = 0.0              # 0 = no limit
     produces: list[Path] = field(default_factory=list)
+    #: Files to write before this stage is spawned, as (path, text). For a tool whose one card
+    #: cannot serve two stages: Whizard's base ends in `simulate`, and its `--execute` runs *before*
+    #: the card rather than after, so the integration needs a card of its own.
+    writes: list[tuple[str, str]] = field(default_factory=list)
     note: str = ""
 
     def to_plan_stage(self) -> Any:
@@ -96,7 +100,8 @@ class Stage:
 
         return PlanStage(name=self.name, role=self.role,
                          command=[str(entry) for entry in self.argv], note=self.note,
-                         cwd=str(self.cwd) if self.cwd else "", env=dict(self.env))
+                         cwd=str(self.cwd) if self.cwd else "", env=dict(self.env),
+                         writes=[(str(path), text) for path, text in self.writes])
 
 
 @runtime_checkable

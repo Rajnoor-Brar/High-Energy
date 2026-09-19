@@ -66,6 +66,9 @@ namespace Core {
         long long accepted = 0;              // events that reached the sinks
         double xsec_pb = 0.0;
         double xsec_error_pb = 0.0;
+        // Whether the source could measure one at all. A stream from a generator that writes no
+        // `GenCrossSection` cannot (04 §8), and a histogram normalised by zero looks like a result.
+        bool xsec_known = false;
         bool stopped = false;                // a signal ended it, so the outputs are partial
         int threads = 0;
         long long chunk = 0;                 // the effective chunk size (P2-S02, D-Q2)

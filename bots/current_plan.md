@@ -146,16 +146,38 @@ FIFO no one would write to. New rule: when every producer has exited **successfu
 `analyse` stage is still running and idle past the grace period, stop — it can never receive
 anything. Only for *successful* producers, because a failed one already gives a better answer.
 
-## Next — P7-S04 (Whizard adapter)
+## Just finished — P7-S04 (Whizard adapter) — done
 
-Read `docs/rework/steps/P7-S04_whizard.md` and mirror it here before starting. **P7-S02 already
-decided its scope**: Whizard cannot do resolved photoproduction (no photon structure function, by its
-own manual), so `photo_ep.sin` targets *direct* photoproduction as its own physics point rather than
-as a cross-check of the reference.
+Both rows run against the real Whizard 3.1.8: a toy `e+e- → u ubar`, and the ep card D-Q7 settled on.
+A two-seed study compiles and integrates **once** — for Whizard that means not rebuilding the
+matrix-element library, the dominant cost.
+
+**Two properties of Whizard that bite immediately, now pinned by tests.**
+
+1. **It writes no cross-section into HepMC3** — no `C` record at all, verified by reading the file.
+   The run had been quietly producing a YODA normalised by **zero**. 04 §8 already said that must be
+   an error; nothing enforced it. `RunRecord` now carries `xsec_known` and `Sink::Rivet` refuses,
+   naming the remedy.
+2. **Its EPA record has no scattered lepton**, so `photo_eic`'s `DISKinematics` aborts on it. Pythia's
+   and Sherpa's EPA records keep the lepton — this is Whizard's alone.
+
+**The card itself had to be taught four things**, each found by a failed run: `epa_mass` defaults to
+zero and that is fatal; a flavour alias may not mix masses (`ms = 0.095`, u and d massless); the
+process's incoming order must match the beam order; and the base may not assign what the plan owns,
+because SINDARIN runs it *after* the point card.
+
+`Stage` gained `writes` — the integration needs a card without the generation lines, and Whizard's
+`--execute` runs before the card rather than after.
+
+## Next — P7-S05 (MadGraph adapter: LHE → Pythia shower)
+
+Read `docs/rework/steps/P7-S05_madgraph.md` and mirror it here before starting. It differs from S03
+and S04 in shape: MadGraph produces **LHE**, which Pythia then showers *in `hep-run`* — so there is no
+FIFO and no stream source, and the prepare stage is a process-directory build.
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · P7 3/8 · P8–P10 todo — 41 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · P7 4/8 · P8–P10 todo — 42 of 55 steps done.
 
 ## Standing constraints
 

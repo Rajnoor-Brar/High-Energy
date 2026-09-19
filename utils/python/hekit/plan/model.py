@@ -22,6 +22,8 @@ class Stage:
     # (04 §1), and a tool that writes beside its working directory would otherwise fill the results.
     cwd: str = ""
     env: dict[str, str] = dataclass_field(default_factory=dict)
+    #: (path, text) pairs the runner writes before spawning this stage.
+    writes: list[tuple[str, str]] = dataclass_field(default_factory=list)
 
 
 @dataclass
