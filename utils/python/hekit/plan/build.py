@@ -71,8 +71,13 @@ def stage_chain(config: Any, group: Any) -> list[Stage]:
     run_stage = Stage(name="hep-run", role="generate+analyse",
                       command=["hep-run", str(naming.point_dir(config, name) / "run.toml")],
                       note="in-process source and sinks")
+    detector = detector_stages(config, group)
+    for stage in detector:
+        # *After* the run, not beside it: `DelphesHepMC3` sizes its input and skips anything of
+        # length zero, so it cannot read a pipe (P7-S08). The tee writes a file instead.
+        stage.phase = run_stage.phase + 1
     if tool in {"pythia", "store"}:
-        return [run_stage]
+        return [run_stage, *detector]
 
     adapter = adapter_for(tool)             # raises, naming the step, for one not written yet
     external = external_stages(config, group, adapter)
@@ -89,7 +94,20 @@ def stage_chain(config: Any, group: Any) -> list[Stage]:
         # The generator wrote a file, so it has to be finished before this reads it (MadGraph's LHE).
         run_stage.phase = max((stage.phase for stage in external), default=0) + 1
         run_stage.note = "showers the events the generator wrote"
-    return [*external, run_stage]
+    for stage in detector:
+        stage.phase = run_stage.phase + 1      # it reads the file this run wrote
+    return [*external, run_stage, *detector]
+
+
+def detector_stages(config: Any, group: Any) -> list[Stage]:
+    """The external Delphes stage, when `[delphes].card` asks for one (05 §5, P7-S08)."""
+    from ..adapters import delphes as delphes_adapter
+
+    if not delphes_adapter.enabled(config):
+        return []
+    name = group if isinstance(group, str) else group.name
+    return [delphes_adapter.stage(config, group,
+                                  naming.point_dir(config, name)).to_plan_stage()]
 
 
 def native_rivet(config: Any, adapter: Any) -> bool:

@@ -97,6 +97,10 @@ MODULE_SINK = Section("sinks.module", shape="array", doc="User C++ modules booki
 
 DELPHES = Section("delphes", doc="Detector simulation as an external stage.", fields={
     "card": Field("str", "", "Delphes .tcl card"),
+    "keep_events": Field("bool", False, "keep the uncompressed HepMC3 Delphes read. It can be "
+                                        "larger than every other output together, and delphes.root "
+                                        "is what the analysis wants; keep it to re-run Delphes with "
+                                        "a different card without regenerating"),
 })
 
 # ── outputs and presentation ─────────────────────────────────────────────────

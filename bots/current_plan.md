@@ -199,15 +199,31 @@ the decision record. The user chose **later**: Herwig is priority 4 of 5 and not
 **P7-S07 is `blocked`, not `todo`** — it is ready except for the rebuild, and a reader should not
 pick it up expecting to start.
 
-## Next — P7-S08 (external Delphes stage)
+## Just finished — P7-S08 (external Delphes) — done. **Phase P7 is complete** bar the blocked S07.
 
-The last step of phase P7. Read `docs/rework/steps/P7-S08_delphes-external.md` and mirror it here
-before starting. Delphes 3.5.1 is installed; it reads HepMC3 and writes ROOT, so this is a store or
-FIFO tee'd into `DelphesHepMC3` rather than a new event path.
+200 events → `delphes.root`, read back with uproot: 200 entries and the `Jet` branches. The Rivet
+sink still ran on the same events — the tee is a tee — and `delphes.json` beside the ROOT file names
+the card, its sha256 and the point's identity.
+
+**The design assumed a FIFO and that cannot work.** `DelphesHepMC3` sizes its input and *skips
+anything whose length is zero* (`readers/DelphesHepMC3.cpp:160-169`), which a FIFO always is —
+so it opened the pipe, decided it was empty, exited, and `hep-run` died writing into a closed pipe.
+The tee now writes a regular file and Delphes runs in the phase after, like MadGraph's LHE: a tool
+that seeks cannot be streamed to.
+
+**And the failure row found another**: Delphes creates the ROOT file *before* reading the card, so a
+bad card left a `delphes.root` that opened, contained nothing and looked like a result. Written as
+`.part` and renamed on success now (D22).
+
+## Next — P8-S01 (module API, YODA results layer, module sink)
+
+**Phase P8 — modules, YODA results, Phys, ML** (4 steps). Read `docs/rework/steps/README.md` for
+P8's order, then `P8-S01_module-sink-yoda.md`, and mirror it here before starting. P6-S01 left it a
+rule it has to follow: **`fill` merges, `set` does not** — a module's results must be filled.
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · P7 6/8 (S07 blocked by D-Q6) · P8–P10 todo — 44 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · **P7 7/8 — complete bar S07, blocked by D-Q6** · P8–P10 todo — 45 of 55 steps done.
 
 ## Standing constraints
 

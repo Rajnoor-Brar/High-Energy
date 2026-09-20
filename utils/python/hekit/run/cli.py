@@ -298,6 +298,7 @@ class Runner:
                 outcome.attribution.reason = short
             else:
                 self._mark_prepared(group)
+                self._write_detector_sidecar(group, directory)
 
         state = {0: model.DONE, signal_policy.EXIT_STOPPED: model.STOPPED}.get(
             outcome.exit_code, model.FAILED)
@@ -453,6 +454,23 @@ class Runner:
         producers = [stage.phase for stage in group.stages if stage.role == "generate"]
         return bool(producers) and run_stage.phase > max(producers)
 
+    def _write_detector_sidecar(self, group: Any, directory: Path) -> None:
+        """Record what produced `delphes.root`, and clear the intermediate it was read from.
+
+        The sidecar goes beside the ROOT file so it can be traced without opening it; the HepMC3 the
+        detector read is deleted unless `[delphes].keep_events` asks for it, because it is
+        uncompressed and routinely larger than everything else the point produced together.
+        """
+        from ..adapters import delphes as delphes_adapter
+
+        if not delphes_adapter.enabled(self.config):
+            return
+        if not (directory / delphes_adapter.OUTPUT).is_file():
+            return                                   # it failed; leave the input for inspection
+        delphes_adapter.write_sidecar(self.config, group, directory)
+        if not getattr(self.config.delphes, "keep_events", False):
+            (directory / delphes_adapter.FIFO_NAME).unlink(missing_ok=True)
+
     def _cache_entry(self, group: Any):
         """The prepare-cache entry for this group, or None when the tool has no prepare step."""
         from ..adapters import cache as cache_module
@@ -495,12 +513,15 @@ class Runner:
         No-op for the in-process tools, and for MadGraph — it writes an LHE file, so a pipe beside
         the results would be a thing nothing ever opens.
         """
+        from ..adapters import ADAPTERS
+        from ..adapters import base as adapter_base
+        from ..adapters import delphes as delphes_adapter
+
+        # No FIFO for the detector tee: Delphes cannot read one (P7-S08), so it is a plain file
+        # that `hep-run` writes and the Delphes stage reads afterwards.
         tool = self.config.generator.tool
         if tool in {"pythia", "store"}:
             return
-        from ..adapters import ADAPTERS
-        from ..adapters import base as adapter_base
-
         if not getattr(ADAPTERS.get(tool), "STREAMS", True):
             return
         adapter_base.make_fifo(adapter_base.fifo_path(directory))

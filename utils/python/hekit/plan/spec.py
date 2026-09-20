@@ -38,6 +38,11 @@ def sink_documents(config: Any, group: Any) -> list[dict[str, Any]]:
     if config.store.enabled:
         sinks.append({"kind": "store", "dir": str(group.directory / "events"),
                       "compression": config.store.compression})
+    from ..adapters import delphes as delphes_adapter
+
+    if delphes_adapter.enabled(config):
+        # The tee: `hep-run` writes HepMC3 into a FIFO that a `DelphesHepMC3` beside it reads (05 §5).
+        sinks.append(delphes_adapter.sink_document(group.directory))
     return sinks
 
 

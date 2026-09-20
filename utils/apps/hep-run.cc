@@ -133,11 +133,20 @@ void addSinks(Run::Loop& loop, const Core::Spec& spec, Status::Writer& status) {
             throw Core::Error{Core::Exit::Config, "this build has no HepMC3, but the spec asks for "
                               "an event store", "rebuild with HepMC3 available"};
 #endif
+        } else if (sink.kind == "delphes") {
+#if defined(HEKIT_WITH_HEPMC)
+            // The tee: events go down a FIFO to a `DelphesHepMC3` running beside us (05 §5).
+            loop.add(std::make_unique<Sink::Delphes>(sink, status));
+            added = true;
+#else
+            throw Core::Error{Core::Exit::Config, "this build has no HepMC3, but the spec asks for "
+                              "the Delphes tee", "rebuild with HepMC3 available"};
+#endif
         } else {
             // A sink this build does not know is refused rather than skipped: a run that silently
             // dropped its store or its module would look like a success and produce nothing.
             throw Core::Error{Core::Exit::Config, "unknown sink kind: " + sink.kind,
-                              "this hep-run knows: rivet, store (module arrives in P8-S01)"};
+                              "this hep-run knows: rivet, store, delphes (module arrives in P8-S01)"};
         }
     }
     if (!added) loop.add(std::make_unique<Sink::Count>());
