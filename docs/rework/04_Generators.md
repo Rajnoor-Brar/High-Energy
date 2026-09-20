@@ -47,8 +47,8 @@ The supervisor (06) runs every stage the same way.
 |---|---|---|---|---|---|
 | Runs as | in `hep-run` | subprocess | subprocess | subprocess (`read` + `run`) | subprocess, then Pythia in `hep-run` |
 | Base card | `.cmnd` | `Sherpa.yaml` | `.sin` | `.in` | `proc_card.dat` + run-card overrides |
-| Events out | in-memory → sinks | HepMC3 ✓ | HepMC3 ✓ | **✗ needs ThePEG `--with-hepmc`** | LHE → Pythia |
-| Native Rivet | (our sink) | ✓ `libSherpaRivetAnalysis` | ✗ | **✗ needs ThePEG `--with-rivet`** | via Pythia |
+| Events out | in-memory → sinks | HepMC3 ✓ | HepMC3 ✓ | **✗ — ThePEG built without it** (D-Q6: the flag was `--with-hepmc3`, which it ignores; a rebuild away) | LHE → Pythia |
+| Native Rivet | (our sink) | ✓ `libSherpaRivetAnalysis` | ✗ | **✗ — `--with-rivet` was never passed** (D-Q6) | via Pythia |
 | Threads | `Parallelism:numThreads` | 1 per process (MPI for integration) | 1 (OpenMP for integration) | `-j N` forks N processes | `nb_core` for the ME |
 | Prepare stage | — | integration (`Results/`) | integration (grids) | `Herwig read` → `.run` | process build + `launch` |
 | Seed | `Parallelism:seeds` (identity block, 03 §5) | `RANDOM_SEED` | `seed` | `run -s` | `iseed` |

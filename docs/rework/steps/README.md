@@ -97,8 +97,8 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P7-S03 | [Sherpa adapter](P7-S03_sherpa.md) | code | P7-S01, P7-S02 | 1.5 d | done |
 | P7-S04 | [Whizard adapter](P7-S04_whizard.md) | code | P7-S01, P7-S02 | 1 d | done |
 | P7-S05 | [MadGraph adapter (LHE → Pythia shower)](P7-S05_madgraph.md) | code | P7-S01, P2-S04 | 1 d | done |
-| P7-S06 | [Decide and (optionally) rebuild ThePEG/Herwig](P7-S06_decide-herwig-rebuild.md) | decision | P1-S07 | 0.25 d + build | todo |
-| P7-S07 | [Herwig adapter](P7-S07_herwig.md) | code | P7-S06, P7-S01 | 1 d | todo |
+| P7-S06 | [Decide and (optionally) rebuild ThePEG/Herwig](P7-S06_decide-herwig-rebuild.md) | decision | P1-S07 | 0.25 d + build | done |
+| P7-S07 | [Herwig adapter](P7-S07_herwig.md) | code | P7-S06, P7-S01 | 1 d | blocked |
 | P7-S08 | [External Delphes stage](P7-S08_delphes-external.md) | code | P7-S01 | 0.75 d | todo |
 | P8-S01 | [Module API, YODA results layer and module sink](P8-S01_module-sink-yoda.md) | code | P6-S01, P5-S01 | 1.5 d | todo |
 | P8-S02 | [Phys namespace](P8-S02_phys.md) | code | P2-S03 | 0.5 d | todo |
@@ -282,7 +282,7 @@ flowchart LR
 | D-Q3 | Numeric serial label? | P3-S01 | answered | yes, but on the **study** directory only (`studies/01_pdf/`), `[run].serial` default on, prefix form, `[run].label` optional; a point path stays name + hash so points remain shared and the skip rule keeps working |
 | D-Q4 | Import legacy results? | P3-S01 | answered | no import; moved to `results/PhotoProduction/legacy/` + README, 541 files, 25 YODA checksums re-verified (2026-09-18) |
 | D-Q5 | Add `rich`, `tomli_w`, `pytest` to the venv? | P0-S02 | answered | yes |
-| D-Q6 | Rebuild ThePEG/Herwig with HepMC + Rivet? | P7-S06 | open | — |
+| D-Q6 | Rebuild ThePEG/Herwig with HepMC + Rivet? | P7-S06 | answered | **later** (user sign-off). Not a missing dependency: ThePEG was configured `--with-hepmc3=` (it wants `--with-hepmc=`) and `--with-rivet` was never passed, so its config.log says both are *disabled* while the libraries sit installed. The rebuild commands are in the record; P7-S07 is **blocked**, not dropped |
 | D-Q7 | Cross-generator photoproduction equivalence | P7-S02 | answered | Sherpa: match every knob that has an equivalent (EPA Q²max, **photon PDF exactly** — Pythia's only one is CJKL, Sherpa has CJKLLO — proton PDF, order); the pT regulator and the MPI tune have no counterpart and are documented in the card. Measured 18×275 LO MPI-off: 11 950 ± 34 pb vs 9 636 ± 782 pb, ratio 0.81 ± 0.07. Whizard: **deferred** — no photon structure function, so direct-only (its own manual) |
 | D-Q8 | Port or archive Lambda? | P0-S06 | answered | archive frozen (D17) |
 | D-Q9 | HepMC3 gzip support? | P5-S01 | answered | yes, compile-time flags |

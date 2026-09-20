@@ -59,7 +59,7 @@
   sound is jet clustering: SISCone keeps its cache and RNG in process-wide statics, and this FastJet
   is built without `FASTJET_HAVE_LIMITED_THREAD_SAFETY` (00/B31, 05 §3). `RivetHooks::onStat` in
   8.317 may double-merge (unverified), so use our own hook.
-- ThePEG has no HepMC or Rivet modules here. **Herwig integration requires rebuilding ThePEG `--with-hepmc --with-rivet`**, or piping through Herwig's LHE/other output (not viable for full events).
+- ThePEG has no HepMC or Rivet modules here — **not for want of the libraries**, which are installed and in daily use. It was configured with `--with-hepmc3=`, an option it does not recognise, and `--with-rivet` was never passed, so its own config.log says both supports are disabled (D-Q6, P7-S06). **Herwig integration is a rebuild with the corrected flags**, whose commands are in that decision record.
 - Delphes is single-threaded and ROOT-bound.
 - Rivet is not linked to ONNX Runtime. A plugin that uses `RivetONNXrt` must add the ONNX flags itself.
 - Python 3.12 venv. `tomllib` is available (read-only TOML). `click`, `mplhep`, `hist`, `uproot`, `awkward`, `onnxruntime`, `scipy` and `pyHepMC3` are installed. `rich`, `tomli_w` and `pytest` are not; they are added in P0-S02 (Q5 = yes).

@@ -186,16 +186,28 @@ shower card — so MadGraph got a file with no `generate` line and said "No mode
 claimed `source.kind = "madgraph"`, which `hep-run` rightly refused; and the preflight ran
 `hep-run --check` before the LHE existed, so Pythia failed to initialise on every MadGraph point.
 
-## Next — P7-S06 (decide whether to rebuild ThePEG/Herwig)
+## Just finished — P7-S06 (decide the Herwig rebuild) — done. **D-Q6: later**, user sign-off.
 
-A **decision** step, and a short one: ThePEG here has no HepMC or Rivet modules, so Herwig cannot
-emit events we can read. The question is whether to rebuild it `--with-hepmc --with-rivet` or gate
-Herwig off. Read `docs/rework/steps/P7-S06_decide-herwig-rebuild.md` and mirror it here first; fill
-the **Decision record** and the register (D-Q6) before marking it done.
+The useful part was the diagnosis. 01 §4 recorded the symptom as a missing dependency; it is not.
+HepMC3 and Rivet are installed and in daily use. **ThePEG was configured `--with-hepmc3=`, an option
+it does not recognise** — it wants `--with-hepmc=` — and `--with-rivet` was never passed, so its own
+config.log says both supports are *disabled* while the headers sit installed.
+
+So "can Herwig work here?" became "a rebuild with two corrected flags", and those commands are in
+the decision record. The user chose **later**: Herwig is priority 4 of 5 and nothing depends on it.
+
+**P7-S07 is `blocked`, not `todo`** — it is ready except for the rebuild, and a reader should not
+pick it up expecting to start.
+
+## Next — P7-S08 (external Delphes stage)
+
+The last step of phase P7. Read `docs/rework/steps/P7-S08_delphes-external.md` and mirror it here
+before starting. Delphes 3.5.1 is installed; it reads HepMC3 and writes ROOT, so this is a store or
+FIFO tee'd into `DelphesHepMC3` rather than a new event path.
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · P7 5/8 · P8–P10 todo — 43 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · P7 6/8 (S07 blocked by D-Q6) · P8–P10 todo — 44 of 55 steps done.
 
 ## Standing constraints
 
