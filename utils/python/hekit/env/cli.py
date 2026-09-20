@@ -236,3 +236,43 @@ def build(targets: tuple[str, ...], analysis_project: str, module_project: str, 
                            hint="run it by hand: " + " ".join(command))
     if not dry_run:
         click.echo(f"hep build: {', '.join(wanted) if wanted else 'everything'} → {directory}")
+
+
+@click.command("new")
+@click.argument("kind", type=click.Choice(["analysis", "module", "project"]))
+@click.argument("name")
+@click.option("--project", default="", metavar="NAME",
+              help="which project an analysis or module belongs to (default: its own name)")
+@click.option("--into", type=click.Path(file_okay=False, path_type=Path),
+              help="write here instead of the repository's analyses/, modules/ or configs/")
+def new(kind: str, name: str, project: str, into: Path | None) -> None:
+    """Scaffold an analysis, module or project.
+
+    What it writes builds and runs as it stands — a template with a TODO where the important line
+    goes teaches nothing and costs a search through the docs anyway.
+    """
+    from . import paths, scaffold
+
+    scaffold.check_name(name, kind)
+    root = Path(into) if into else paths.repo_root()
+    written: list[Path] = []
+
+    if kind == "analysis":
+        where = root / "analyses" / (project or name)
+        written.append(scaffold.write(where / f"{name}.cc", scaffold.analysis_source(name)))
+        written.append(scaffold.write(where / f"{name}.info", scaffold.analysis_info(name)))
+        after = (f"hep build && hep analyses {name}    # then name it in [rivet].analyses")
+    elif kind == "module":
+        where = root / "modules" / (project or name)
+        written.append(scaffold.write(where / f"{name}.cc", scaffold.module_source(name)))
+        after = (f"hep build    # then [[sinks.module]] name = \"{name}\"")
+    else:
+        where = root / "configs" / name
+        written.append(scaffold.write(where / "base.cmnd", scaffold.project_card(name)))
+        written.append(scaffold.write(
+            where / f"{name.lower()}.toml", scaffold.project_config(name, f"{name}Analysis")))
+        after = f"hep new analysis {name}Analysis --project {name} && hep plan {written[-1]}"
+
+    for path in written:
+        click.echo(f"hep new: {path}")
+    click.echo(f"hep new: next, {after}")

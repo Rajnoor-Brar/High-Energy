@@ -391,15 +391,45 @@ and filtering whole events would give a different, plausible answer.
 
 Suite: **745 Python tests** (was 723).
 
-## Next — P10-S01
+## Just finished — P10-S01 (shims, `hep clean`, `hep new`) — done
 
-Read `docs/rework/steps/README.md` for P10's order, then the next step file, and mirror it here
-before starting. P10 is the last phase: cleanup and housekeeping, a final docs pass, then the
-portability check and release tag.
+17 new tests. **The command tree of 08 §2 is complete** — no entry in `COMMANDS` is a placeholder,
+and a test asserts that rather than skipping once it becomes true.
+
+**The grep row cannot pass, and making it pass would be a mistake.** As written it finds 345 hits;
+in *code*, 24, and every one is either (a) the 7 lines in `config/migrate.py` that read `[rivpyth]`
+out of a v1 file — precisely what the Goal permits — (b) one line in `validate.py` that *detects* a
+v1 file to say "run `hep config migrate`" instead of a wall of key errors, or (c) a docstring
+recording where a function was ported from. Deleting (c) to satisfy a grep would destroy the record
+of why some code is shaped as it is and remove no transitional behaviour.
+
+So the row was replaced with the question it means: **is there executable code outside `migrate`
+that still speaks v1?** An AST check parses every module and inspects literals and identifiers with
+docstrings excluded *by parsing*. Answer: **zero** — and proved to discriminate by reintroducing a
+`raw.get("rivpyth", …)` elsewhere and watching it fail. `sources/` is gone; `NtupleSink`/`RNTuple`
+appear nowhere in code.
+
+**`hep clean` is shaped by its second column.** 07 §6 says YODA files, `fits.json` and provenance
+are never touched, so no category is on by default, removals confirm, and `--older-than` makes
+`--events` safe on a live tree. Removing a store **keeps `events.index.json`** as a tombstone, and
+`--dry-run` ends with the largest directories *regardless of category* — "what is taking the space"
+is the real question and the answer is often something the tool will never remove.
+
+**The scaffolds build, and that was checked.** The analysis compiles against `rivet-config`, the
+module against the `hekit` headers, and the project config plans to one point. The module scaffold
+already obeys the scaling contract and carries the `threadSafe()` note, because those are the two
+things a first module gets wrong. Nothing is ever overwritten.
+
+Suite: **761 Python tests** (was 745).
+
+## Next — P10-S02
+
+Read `docs/rework/steps/README.md`, then the step file, and mirror it here before starting.
+P10-S02 is the final documentation pass; P10-S03 is the portability check and release tag.
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · **P7 7/8 — complete bar S07, blocked by D-Q6** · **P8 4/4 — P8 complete** · **P9 2/2 — P9 complete** · P10 todo — 51 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · **P7 7/8 — complete bar S07, blocked by D-Q6** · **P8 4/4 — P8 complete** · **P9 2/2 — P9 complete** · P10 1/3 — 52 of 55 steps done.
 
 ## Standing constraints
 

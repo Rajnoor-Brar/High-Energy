@@ -189,6 +189,17 @@ def test_the_landed_commands_are_all_real(tmp_path):
         assert cli.LazyGroup._resolve(name)[1], f"{name} is still a placeholder"
 
 
+def test_no_command_is_a_placeholder_any_more(tmp_path):
+    """P10-S01's end state: the command tree of 08 §2 is complete.
+
+    The test above names the commands that had landed at the time it was written and needs editing
+    as steps land; this one needs no editing ever, and going red means a command was *added* to
+    `COMMANDS` without an implementation rather than that one regressed.
+    """
+    pending = [name for name in cli.COMMANDS if not cli.LazyGroup._resolve(name)[1]]
+    assert not pending, f"still placeholders: {', '.join(sorted(pending))}"
+
+
 @pytest.mark.parametrize("name,step", [("plan", "P1-S05"), ("run", "P3-S05"), ("watch", "P3-S04"),
                                        ("runs", "P3-S04"), ("show", "P3-S04"),
                                        ("plot", "P4-S02")])

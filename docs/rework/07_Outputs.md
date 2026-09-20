@@ -131,4 +131,14 @@ These replace Paint's TOML booking.
 
 **Never touched automatically:** YODA files, `fits.json` and provenance.
 
-A size report (`hep clean --dry-run`) lists the largest directories.
+**No category is on by default.** `hep clean` with no flags reports and removes nothing — a cleaner
+whose default is to delete is one you run once by accident. `--all` takes every category;
+`--older-than DAYS` limits `--events` so it is safe to run on a live tree; and a removal asks for
+confirmation unless `--yes` is given.
+
+A size report (`hep clean --dry-run`) lists each category and then **the largest directories
+whatever their category** — including the ones this command will never remove, because "your YODA
+files are the 40 GB" is the useful answer even when the tool will not act on it.
+
+**Removing a store keeps its index.** `events.index.json` stays behind as a tombstone, so a store
+that has been cleaned can still say what it held and which run wrote it (11 §1).
