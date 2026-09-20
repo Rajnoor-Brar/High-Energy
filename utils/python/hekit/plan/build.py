@@ -29,6 +29,19 @@ def card_file(config: Any) -> Path | None:
     return (config.path.parent / candidate).resolve()
 
 
+def module_search_paths(config: Any) -> tuple[Path, ...]:
+    """Where a user C++ module's shared library could be (05 §5).
+
+    The build tree first, because that is what `hep build --modules` produces and what a module is
+    actually loaded from; the source directory after it, for a library built by hand beside its `.cc`.
+    """
+    found: list[Path] = []
+    if config.project:
+        found.append(paths.build_root() / "modules" / config.project)
+        found.append(paths.repo_root() / "modules" / config.project)
+    return tuple(found)
+
+
 def analysis_search_paths(config: Any) -> tuple[Path, ...]:
     """Where to look for analysis plugins and their `.info` files."""
     found: list[Path] = []

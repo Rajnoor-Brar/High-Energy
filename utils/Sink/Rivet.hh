@@ -52,6 +52,7 @@
 #include <atomic>
 #include <cstdlib>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -196,8 +197,12 @@ namespace Sink {
             // the file outright ("Missing cross-section for /RAW/_XSEC"), which would break the seed
             // replica merge of 07 §3. The legacy `rivet` command wrote them too, so this also keeps
             // the two pipelines' files comparable (P2-S06).
-            const std::string written = writer.writeYoda(
-                yoda_name_, merged->getYodaAOs(/*includeraw=*/true), record.stopped);
+            auto objects = merged->getYodaAOs(/*includeraw=*/true);
+            if (extra_) {
+                const auto more = extra_();
+                objects.insert(objects.end(), more.begin(), more.end());
+            }
+            const std::string written = writer.writeYoda(yoda_name_, objects, record.stopped);
             outputs_.push_back(Output{"yoda", written, record.stopped});
             status_.log(Status::Level::Info, "rivet",
                         std::to_string(analysed) + " events analysed, wrote " + written);
@@ -209,6 +214,17 @@ namespace Sink {
 
         /// How many handlers this sink is holding, for the tests and the summary.
         std::size_t handlerCount() const { return handlers_.size(); }
+
+        /// Objects from elsewhere to write into the same file (07 §1).
+        ///
+        /// Module results go beside Rivet's rather than into a second YODA, so that
+        /// `rivet-mkhtml` and `hep plot` treat them alike and nothing downstream learns a second
+        /// format. The provider is called after every sink has finished, so the objects it returns
+        /// are merged and scaled by then.
+        void alsoWrite(
+            std::function<std::vector<std::shared_ptr<YODA::AnalysisObject>>()> provider) {
+            extra_ = std::move(provider);
+        }
 
       private:
         // Every handler is built the same way; the only thing that differs between them is which
@@ -360,6 +376,7 @@ namespace Sink {
         std::mutex init_mutex_;
         std::atomic<long long> analysed_{0};
         std::string reason_;
+        std::function<std::vector<std::shared_ptr<YODA::AnalysisObject>>()> extra_;
         std::vector<Output> outputs_;
     };
 

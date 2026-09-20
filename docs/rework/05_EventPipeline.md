@@ -212,6 +212,7 @@ public:
     virtual void process(const Events::View&, Results::Worker&) = 0;   // fill this worker's clones
     virtual void finalize(Results::Final&, const Run::Result&) {}      // scale/derive after the merge (σ, ΣW known)
     virtual unsigned needs() const { return unsigned(Sink::Needs::HepMC); }
+    virtual bool threadSafe() const { return true; }                   // false if it clusters jets (00/B31, B36)
 };
 }
 HEKIT_MODULE("mymodule", MyModule);
@@ -226,6 +227,16 @@ HEKIT_MODULE("mymodule", MyModule);
 - **One output file:** module objects are written into the **same** `analysis.yoda` as Rivet, under `/<module>[:opts]/<name>`, so `rivet-mkhtml` and `hep plot` treat them alike.
 - **Merge caveat.** `rivet-merge` re-runs `finalize` only for loadable Rivet analyses, so `hekit` merges module objects itself for seed replicas (07 §3).
 - **Loading:** modules are loaded with `dlopen` from the configured paths, like Rivet plugins, so `hep-run` is not rebuilt per project.
+- **`Phys` is what a module writes with** (13 §2, P8-S02): `Phys::finalState(event, acceptance)` for the
+  selection, `HepMC3::FourVector` for the momentum it already has, `Phys::deltaR`/`disKinematics` for the
+  derived quantities, and `Phys::jetDefinition("antikt:0.4")` + `Phys::cluster` for jets.
+- **Thread safety is the module's to declare.** `Sink::Modules` is the one sink that shards, so `process`
+  is called from several workers at once by default — which is only sound because a module fills nothing
+  but its own worker's clones. A module that touches anything shared says `threadSafe() == false`, and
+  **jet clustering is the case that matters**: FastJet keeps clustering state in process-wide statics, so
+  a module that makes jets races in exactly the way that stops the Rivet sink from sharding (00/B31).
+  The sink then reports `Concurrency::Locked` rather than `Sharded`; the run still shards, and only the
+  sink call is serialised. Measured in P8-S02: 92 µs/event that way against 124 µs/event fully serial.
 - **ML:** a module may hold an `ML::OnnxModel`.
 - **Derived per-candidate tables** (ML features) are **deferred** (decision D-DERIVED, P8-S04). Modules produce YODA only.
 
@@ -259,15 +270,21 @@ namespace ML {
 class OnnxModel {
 public:
     explicit OnnxModel(const std::filesystem::path&, Options = {});   // checks input/output names and shapes
-    std::span<const float> run(std::span<const float> in, Scratch&) const;   // thread-safe; Scratch is per worker
-    const std::string& sha256() const;                                   // into provenance
+    Floats run(Floats in, Scratch&) const;                            // thread-safe; Scratch is per worker
+    std::size_t features() const;                                     // the input width, from the file
+    const std::string& sha256() const;                                // into provenance
 };
+class Features { ... };   // an ordered, named schema
+class Row { ... };        // one row, filled by name, refused until complete
 }
 ```
 
-- **Sessions:** one `Ort::Env` and one session per model. `Session::Run` is thread-safe, so shards share the session and own their scratch buffers.
-- **Optional component:** `HEKIT_WITH_ONNX`.
-- **In Rivet plugins:** use Rivet's `RivetONNXrt`. The build adds ONNX flags to `rivet-build` when a plugin's `.info` lists `ONNX` under `Requires:` (a project convention).
+- **Sessions:** one `Ort::Env` and one session per model. `Session::Run` is thread-safe, so shards share the session and own their scratch buffers. Measured in P8-S03: 20 workers on one session give **bit-identical** outputs to a single-threaded Python `onnxruntime` run — all 1 000 floats equal, not equal to a tolerance.
+- **`Floats` is `std::span<const float>`** under a different name, because this build is C++17. Same members; the alias changes if the project moves to C++20.
+- **Named features, not positional ones.** `Features` is an ordered list of names and `Row::set` takes one of them, because the bug this prevents — a model trained on `[pt, eta, phi, m]` fed `[pt, phi, eta, m]` — throws nothing, evaluates happily and is wrong in a way that looks like bad training. `Row::values()` also refuses a row that is not completely filled: an unset feature is a zero meaning "no signal", indistinguishable from a real zero once it is in the tensor.
+- **Optional component:** `HEKIT_WITH_ONNX`. `ML/Types.hh` and `ML/Features.hh` have no ONNX in them, so a module builds its features identically either way and only the call disappears.
+- **In Rivet plugins:** use Rivet's `RivetONNXrt`. The build adds ONNX flags to `rivet-build` when a plugin's `.info` lists `ONNX` under `Requires:` (a project convention). **Two include paths, not one** — `RivetONNXrt.hh` includes `"onnxruntime/onnxruntime_cxx_api.h"`, which a source install does not have, so the build also passes a directory holding one symlink that bridges the two layouts (00/B37).
+- **The toy model is generated, not committed.** `tests/tools/toy_model.py` is the tracked artefact; a binary in git is a thing nobody can read a diff of.
 - **Training data export** is deferred with the derived-tables decision (P8-S04).
 
 ## 7. FastJet and LHAPDF

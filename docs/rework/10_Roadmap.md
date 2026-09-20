@@ -74,7 +74,7 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | D20 | PhotoProduction | A test bed: correctness required, specifics (lepton charge, tags, cut values) not blockers | Pedantic physics review as a gate |
 | D21 | Seeds | Identity-derived, disjoint per-instance `Parallelism:seeds` blocks (03 §5) | Position-based `seed + (i−1)·step` |
 | D22 | Partial outputs | Written only as `analysis.partial.yoda` / `.part`; atomic renames everywhere | Rivet's default "write whatever you have" at the final path |
-| D23 | Derived tables | **Deferred** (P8-S04; trigger: first ML training dataset) | ML feature export in the first phases |
+| D23 | Derived tables | **Deferred** (P8-S04; trigger: first ML training dataset). Options costed there: Parquet either way needs a dependency that is not installed; RNTuple needs none; writing tables from the event loop would contradict D15 | ML feature export in the first phases |
 
 ## 3. Risks
 

@@ -47,6 +47,10 @@ namespace Sink {
         virtual Needs needs() const { return {}; }
         virtual Concurrency concurrency() const { return Concurrency::Serial; }
 
+        /// What this sink wants recorded about its inputs: `(key, value)` pairs for
+        /// `run.summary.json`. Read once, after `finish`.
+        virtual std::vector<std::pair<std::string, std::string>> provenance() const { return {}; }
+
         /// Why this sink will not be sharded, when it will not. Empty means "no objection".
         ///
         /// The run reports it as a notice rather than an error: a sink that cannot be sharded is a

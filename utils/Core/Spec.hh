@@ -16,6 +16,8 @@
 #include <algorithm>
 #include <cstdint>
 #include <fstream>
+#include <iomanip>
+#include <sstream>
 #include <iterator>
 #include <optional>
 #include <string>
@@ -64,6 +66,7 @@ namespace Core {
         bool check_beams = true;
         std::string name;                       // module
         std::string library;                    // module
+        Options options;                        // module: whatever that module invented
         std::string dir;                        // store
         std::string compression;                // store
         std::string card;                       // delphes
@@ -308,6 +311,29 @@ namespace Core {
                 sink.dir = detail::value<std::string>(*table, "dir", "");
                 sink.compression = detail::value<std::string>(*table, "compression", "");
                 sink.card = detail::value<std::string>(*table, "card", "");
+                if (const toml::node* options = table->get("options")) {
+                    if (!options->is_table())
+                        throw Error{Exit::Config, "[[sink]].options must be a table"};
+                    // Everything becomes text: a module's options are that module's own invention,
+                    // and `Core::Options` gives it typed readers that say what was expected (05 §5).
+                    for (const auto& [key, node] : *options->as_table()) {
+                        std::string text;
+                        if (const auto* as_string = node.as_string()) text = as_string->get();
+                        else if (const auto* as_int = node.as_integer())
+                            text = std::to_string(as_int->get());
+                        else if (const auto* as_float = node.as_floating_point()) {
+                            std::ostringstream stream;
+                            stream << std::setprecision(17) << as_float->get();
+                            text = stream.str();
+                        } else if (const auto* as_bool = node.as_boolean())
+                            text = as_bool->get() ? "true" : "false";
+                        else
+                            throw Error{Exit::Config, "[[sink]].options." +
+                                                          std::string(key.str()) +
+                                                          " is not a scalar"};
+                        sink.options.set(std::string(key.str()), text);
+                    }
+                }
                 spec.sinks.push_back(std::move(sink));
             }
         }

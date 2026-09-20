@@ -215,15 +215,125 @@ that seeks cannot be streamed to.
 bad card left a `delphes.root` that opened, contained nothing and looked like a result. Written as
 `.part` and renamed on success now (D22).
 
-## Next — P8-S01 (module API, YODA results layer, module sink)
+## Just finished — P8-S01 (module API, YODA results layer, module sink) — done
 
-**Phase P8 — modules, YODA results, Phys, ML** (4 steps). Read `docs/rework/steps/README.md` for
-P8's order, then `P8-S01_module-sink-yoda.md`, and mirror it here before starting. P6-S01 left it a
-rule it has to follow: **`fill` merges, `set` does not** — a module's results must be filled.
+A user C++ module is `dlopen`'d, books YODA per worker, and its objects land in the **same**
+`analysis.yoda` as Rivet's. All four rows measured:
+
+- **Exact totals**: serial and sharded give identical objects (every `sumW` equal to 1e-12). Read as
+  *the merge is exact* — 1 vs 4 vs 20 threads are different **event sets** at a fixed seed, so equal
+  integrals there would mean something was wrong.
+- **Scaling**: the normalised histogram integrates to 71 632.737 pb against σ = 71 632.735 pb —
+  3 × 10⁻⁸, which is floating-point summation.
+- **Dumps**: non-empty, and deliberately without module objects (they are unscaled mid-run).
+- **Plotting**: `hep plot --points` renders them.
+
+**The scaling contract is a type.** `Results::Worker` has `fill` and no `scale`; `Results::Final` has
+`scale` and no `fill` and is only reachable from `finalize`. So the three mistakes `legacy/Record`
+made — scaled during the run, scaled twice, scaled by a σ that was not final — are not expressible.
+
+## Just finished — P8-S02 (Phys namespace) — done
+
+`Phys` replaces `legacy/utils/Physics/` on `HepMC3::FourVector`, so nothing in the physics layer
+links ROOT or converts a particle out of the event it is already holding. Five headers, a facade,
+and 167 checks in the new ctest test `phys`.
+
+**Both rows measured.** The PDG table is checked against Pythia's own `ParticleData` — 13/13 rows
+agree on mass, charge and name — and perturbing one mass by 1e-4 fails the row, so it is a live
+comparison rather than a tautology. `jetDefinition("antikt:0.4")` matches a hand-written
+`fastjet::JetDefinition` through FastJet's own `description()`.
+
+**Three defects, 00/B34-B36.**
+
+- **B34** — `Physics::particle(-211).charge3` was **+3**: the lookup resolved an antiparticle to its
+  particle's row and handed back that row's charge, so every negative code came out positive.
+- **B35** — the Δφ guard the step asked for, and it is **not legacy-only**: `while (d > π) d -= 2π`
+  never terminates for ±∞, and `HepMC3::FourVector::delta_phi` has the same loop, guarding NaN but
+  not ∞. `std::remainder` wraps over the same range in one step. The test times the call, so the
+  loop coming back hangs a 0.05 s test rather than a run.
+- **B36** — this step hands modules `Phys::cluster`, and `Sink::Modules` is the one sink that
+  shards, so 00/B31 applied to modules with nothing to detect it. `Module::Base::threadSafe()` (true
+  by default) lets a module opt out and the sink reports `Locked` rather than `Sharded`.
+
+**And a throughput bug B36's fix exposed.** With the module locked, `auto` dropped the *whole run*
+to serial: `decideMode` asked "can any sink be sharded?" when the question is "is there anything to
+gain?" — a `Locked` sink still lets the generator run on k threads. Measured **124 µs/event serial
+against 92 µs/event with the lock**, so the rule now counts anything that is not `Serial`. Only the
+new case changes: Rivet-with-jets and `Count` both report `Serial`.
+
+**`Phys` has a real user.** `ToyJets` carried its own final-state loop, its own pT and a hand-written
+pseudorapidity with a beam-axis guard; all three are one `Phys::Acceptance`, and it finally clusters
+the jets it is named after. `test_modules.py` re-measures the physics unchanged.
+
+Suite: **28 ctest tests** (was 27) and **706 Python tests**, all passing.
+
+## Just finished — P8-S03 (ML namespace, ONNX Runtime) — done
+
+ONNX Runtime 1.29.0 is installed here, so both rows were measured rather than reasoned about.
+
+**Parity is exact.** 20 C++ workers sharing one `Ort::Session`, each with its own `ML::Scratch`,
+against single-threaded Python `onnxruntime`: **all 1 000 output floats bit-identical**, max
+difference 0. Only true because both sides pin `intra_op_num_threads = 1`; the test asserts equality
+rather than a tolerance, because a tolerance loose enough to survive a kernel change would hide the
+bug the row exists to catch.
+
+**Optional row.** `-DHEKIT_WITH_ONNX=OFF` builds green, 14/14 cxx tests. `ML/Types.hh` and
+`ML/Features.hh` have no ONNX in them, so a module builds features identically either way.
+
+**00/B37 — the plugin convention had never been run, and was wrong.** `Requires: ONNX` has added
+`-I<onnx include>` to `rivet-build` since an earlier step, but no `.info` declares it, so nothing
+had ever compiled through that path. `Rivet/Tools/RivetONNXrt.hh:11` includes
+`"onnxruntime/onnxruntime_cxx_api.h"` — the Debian spelling — and a source build puts the headers
+straight into `<prefix>/include`, with no `onnxruntime/` directory here or in `/usr/include`. Fixed
+with `build/onnx-compat/`, one symlink; the test builds a probe plugin through the real
+`rivet-build`, loads it, **and** checks the old flags still fail.
+
+**Named features, because of one bug.** A model trained on `[pt, eta, phi, m]` fed
+`[pt, phi, eta, m]` throws nothing and is wrong in a way that looks like bad training. `Row::set`
+takes a name and `Row::values()` refuses an incompletely filled row.
+
+**`sha256()` now goes somewhere.** 05 §6 said "into provenance" and nothing wrote it down.
+`Module::Base::provenance()` and `Sink::Sink::provenance()` feed a new `inputs` block in
+`run.summary.json` — `ToyJets.model` and `ToyJets.model_sha256`, asserted against the file's hash.
+
+`ToyJets` gained an **optional** model (off unless `model = "..."`), so the Goal is checked end to
+end through `hep-run`; the existing `modules` test is untouched and still passes.
+
+**One cost, and what was done about it.** `rivet-build` hardcodes `-O2`, and at `-O2` gcc spends
+**12 m 43 s** of CPU optimising ONNX's inline templates for a twenty-line plugin — the same
+translation unit is **3.3 s** at `-O0`. So `onnx_plugin` compiles and links with the same flags at
+`-O0` and takes 5 s; that `rivet-build` forwards the flags at all was checked separately, by reading
+the `cc1plus` command line of a real invocation mid-compile.
+
+## Just finished — P8-S04 (derived-tables format) — done. **Phase P8 is complete.**
+
+A decision step. The decision is unchanged and was not mine to revisit: **deferred**, trigger the
+first ML training dataset. What this step added is the half that was a placeholder — the
+**Evidence**, which P5-S03, P8-S01 and P8-S03 have since made answerable.
+
+- **Parquet cannot be written here at all.** No pyarrow, no fastparquet; `pandas.to_parquet` raises
+  `ImportError: Unable to find a usable engine`. Arrow C++ absent too. So *both* Parquet options
+  carry a new dependency, which 01 N5 makes a real cost.
+- **RNTuple is free.** ROOT 6.40.04 ships `RNTupleWriter/Reader/Model.hxx` and uproot 5.7.6 reads
+  RNTuple — the only option that works today with nothing new installed, from both languages.
+- **Deferring is cheap, and now demonstrably so.** P5-S03 measured replay as exact, so any offline
+  table can be built later from stores that already exist, without touching `hep-run`.
+
+Also recorded: **D15 is the sharpest criterion** — a derived table is neither an event (D13) nor a
+result (D14), but writing one *from the event loop* would contradict "`hep-run` doesn't link ROOT",
+which rules on the C++/Arrow option without waiting for the trigger. And `ML::Features` already
+fixes the column names and their order, so what is open is the container, not the schema.
+
+No code, no new dependency, nothing to roll back.
+
+## Next — P9-S01
+
+Read `docs/rework/steps/README.md` for P9's order, then the next step file, and mirror it here
+before starting. P9 is the ROOT processing layer (D15: processing only, `hep-run` never links ROOT).
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · **P7 7/8 — complete bar S07, blocked by D-Q6** · P8–P10 todo — 45 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · **P7 7/8 — complete bar S07, blocked by D-Q6** · **P8 4/4 — P8 complete** · P9–P10 todo — 49 of 55 steps done.
 
 ## Standing constraints
 

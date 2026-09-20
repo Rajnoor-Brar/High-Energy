@@ -39,7 +39,7 @@ Date: 2026-09-17 · Source: [10_Roadmap.md](../10_Roadmap.md) · 55 steps in 11 
 | P5 | HepMC3 event store and replay | Sharded HepMC3 store with an index; `tool = "store"` replay into any sinks. | Write → replay reproduces the in-process YODA; σ comes from the index; one reader per shard. | P3 (can run alongside P4) | 2.5 d | 3 | done |
 | P6 | Throughput | Sharded Rivet, event groups, benchmark. | Serial ≡ sharded; the radius study needs one generation; `hep bench` recommends a mode. | P4-S05, P5 | 2 d | 3 | done |
 | P7 | External generators and Delphes | Sherpa, Whizard, MadGraph, Herwig (gated) and external Delphes through the same pipeline. | Sherpa and MG+Pythia points via `hep run`; prepare cache hit on a seed study; `delphes.root` produced; Herwig runs or is explicitly gated. | P3, P5-S02 | 7 d | 8 | done (S07 blocked) |
-| P8 | Modules, YODA results, Phys, ML | User C++ modules book YODA into `analysis.yoda`; physics helpers; ONNX inference. | Toy module exact at 1/4/20 threads; ONNX toy works; derived-tables decision recorded. | P2, P5-S01, P6-S01 | 3 d | 4 | todo |
+| P8 | Modules, YODA results, Phys, ML | User C++ modules book YODA into `analysis.yoda`; physics helpers; ONNX inference. | Toy module exact at 1/4/20 threads; ONNX toy works; derived-tables decision recorded. | P2, P5-S01, P6-S01 | 3 d | 4 | in-progress |
 | P9 | ROOT processing layer | `hep proc` fits and RDataFrame histograms → `fits.json` + YODA. | Minuit2 ≡ scipy on synthetic fits; RDF ≡ uproot on `delphes.root`. | P4 (+ P7-S08 for S02) | 2.5 d | 2 | todo |
 | P10 | Cleanup, docs, release | No transitional code; documentation matches reality. | Clean greps; minimal build green; tag `rework/v1`. | P4 (+ whichever optional phases are done) | 1.25 d | 3 | todo |
 
@@ -100,10 +100,10 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P7-S06 | [Decide and (optionally) rebuild ThePEG/Herwig](P7-S06_decide-herwig-rebuild.md) | decision | P1-S07 | 0.25 d + build | done |
 | P7-S07 | [Herwig adapter](P7-S07_herwig.md) | code | P7-S06, P7-S01 | 1 d | blocked |
 | P7-S08 | [External Delphes stage](P7-S08_delphes-external.md) | code | P7-S01 | 0.75 d | done |
-| P8-S01 | [Module API, YODA results layer and module sink](P8-S01_module-sink-yoda.md) | code | P6-S01, P5-S01 | 1.5 d | todo |
-| P8-S02 | [Phys namespace](P8-S02_phys.md) | code | P2-S03 | 0.5 d | todo |
-| P8-S03 | [ML namespace (ONNX Runtime)](P8-S03_onnx.md) | code | P8-S01 | 0.75 d | todo |
-| P8-S04 | [Decide the derived-tables format (deferred)](P8-S04_decide-derived-tables.md) | decision | P8-S01 | 0.1 d | todo |
+| P8-S01 | [Module API, YODA results layer and module sink](P8-S01_module-sink-yoda.md) | code | P6-S01, P5-S01 | 1.5 d | done |
+| P8-S02 | [Phys namespace](P8-S02_phys.md) | code | P2-S03 | 0.5 d | done |
+| P8-S03 | [ML namespace (ONNX Runtime)](P8-S03_onnx.md) | code | P8-S01 | 0.75 d | done |
+| P8-S04 | [Decide the derived-tables format (deferred)](P8-S04_decide-derived-tables.md) | decision | P8-S01 | 0.1 d | done |
 | P9-S01 | [hep proc: fits](P9-S01_proc-fits.md) | code | P4-S04 | 1.5 d | todo |
 | P9-S02 | [hep proc: RDataFrame histograms on Delphes output](P9-S02_proc-rdf-delphes.md) | code | P9-S01, P7-S08 | 1 d | todo |
 | P10-S01 | [Remove transition shims; housekeeping commands](P10-S01_cleanup-housekeeping.md) | code | P4-S06 | 0.5 d | todo |
@@ -287,7 +287,7 @@ flowchart LR
 | D-Q8 | Port or archive Lambda? | P0-S06 | answered | archive frozen (D17) |
 | D-Q9 | HepMC3 gzip support? | P5-S01 | answered | yes, compile-time flags |
 | D-STORE-COMP | Default store compression (gz vs zstd) | P5-S01 | answered | **zst**, measured on 10 000 real events: 9 866 B/event vs 10 223 (2.96× vs 2.86×), **2.1× faster to write** (2 289 vs 1 086 ev/s) and 1.26× faster to read (5 624 vs 4 461). No axis favours gz. `gz` stays the fallback where zstd is not compiled in, and the codec is recorded in the index |
-| D-DERIVED | Derived per-candidate tables | P8-S04 | deferred | trigger: first ML training dataset (D23) |
+| D-DERIVED | Derived per-candidate tables | P8-S04 | deferred | trigger: first ML training dataset (D23). Recorded P8-S04 with the four options costed: Parquet needs pyarrow/Arrow (**neither installed**), RNTuple needs **nothing** (ROOT 6.40.04 + uproot), and exact replay (P5-S03) means any offline table can be built later against stores that already exist |
 | D-B11 | EIC studies run e⁺ via `[settle.use]` | P0-S05 | answered | no action (test bed, D20) |
 | D-B12 | PDF tags `NNLO`/`NNNLO` misleading | P1-S06 | answered | rename in v2 migration with alias map |
 | D-B22 | Pin selector precedence | P1-S03 | answered | tag → exact value (numeric-aware) → `#N` index; `use` stays an index |
