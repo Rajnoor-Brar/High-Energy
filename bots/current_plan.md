@@ -422,14 +422,42 @@ things a first module gets wrong. Nothing is ever overwritten.
 
 Suite: **761 Python tests** (was 745).
 
-## Next — P10-S02
+## Just finished — P10-S02 (final documentation pass) — done
 
-Read `docs/rework/steps/README.md`, then the step file, and mirror it here before starting.
-P10-S02 is the final documentation pass; P10-S03 is the portability check and release tag.
+Two new documents, three rewritten, and **both rows turned into tests** so the docs cannot rot
+silently.
+
+- **`docs/GUIDE.md`** — how to get work done, in the order a session happens (plan → run → proc →
+  plot), with the surprising things given their own sections: why threads are sometimes not used,
+  what a seed is derived from, what `hep clean` refuses to touch. Ends with a symptom→command table
+  and the exit codes.
+- **`docs/MAP.md`** — where things live: the two halves and the narrow contract between them, the
+  C++ layering, the `hekit` packages, a results directory, and a "finding your way in" table. It
+  names the two invariants to know before opening the code (the scaling contract; concurrency is a
+  property of the sink).
+- **The design is a record now, not a proposal.** `rework/README.md` says so and carries a table of
+  the **eleven places building it changed it** — so a reader does not have to find them one at a
+  time.
+
+**Links:** 0 broken over **504 relative links in 76 documents**, anchors checked against the target's
+headings (a link to a renamed section is as broken as one to a missing file, and much harder to
+spot). **Commands:** all 19 documented, *and* the converse — no document mentions a `hep <word>`
+that does not exist, which is what protects a reader from typing something that fails. Both proved
+to discriminate against a deliberate break.
+
+`bots/BOT.md`'s layout table was stale — it still listed `sources/` and `tools/`, both gone —
+refreshed under the standing `bots/` approval.
+
+Suite: **769 Python tests** (was 762).
+
+## Next — P10-S03
+
+The last step: portability check and release tag. **The tag needs user approval** (repo rule 5);
+standing approval covers tags on 2364ccf only, not a new `rework/v1`.
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · **P7 7/8 — complete bar S07, blocked by D-Q6** · **P8 4/4 — P8 complete** · **P9 2/2 — P9 complete** · P10 1/3 — 52 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · **P7 7/8 — complete bar S07, blocked by D-Q6** · **P8 4/4 — P8 complete** · **P9 2/2 — P9 complete** · P10 2/3 — 53 of 55 steps done.
 
 ## Standing constraints
 

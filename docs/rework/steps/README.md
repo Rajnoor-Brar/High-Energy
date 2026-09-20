@@ -39,9 +39,9 @@ Date: 2026-09-17 · Source: [10_Roadmap.md](../10_Roadmap.md) · 55 steps in 11 
 | P5 | HepMC3 event store and replay | Sharded HepMC3 store with an index; `tool = "store"` replay into any sinks. | Write → replay reproduces the in-process YODA; σ comes from the index; one reader per shard. | P3 (can run alongside P4) | 2.5 d | 3 | done |
 | P6 | Throughput | Sharded Rivet, event groups, benchmark. | Serial ≡ sharded; the radius study needs one generation; `hep bench` recommends a mode. | P4-S05, P5 | 2 d | 3 | done |
 | P7 | External generators and Delphes | Sherpa, Whizard, MadGraph, Herwig (gated) and external Delphes through the same pipeline. | Sherpa and MG+Pythia points via `hep run`; prepare cache hit on a seed study; `delphes.root` produced; Herwig runs or is explicitly gated. | P3, P5-S02 | 7 d | 8 | done (S07 blocked) |
-| P8 | Modules, YODA results, Phys, ML | User C++ modules book YODA into `analysis.yoda`; physics helpers; ONNX inference. | Toy module exact at 1/4/20 threads; ONNX toy works; derived-tables decision recorded. | P2, P5-S01, P6-S01 | 3 d | 4 | in-progress |
-| P9 | ROOT processing layer | `hep proc` fits and RDataFrame histograms → `fits.json` + YODA. | Minuit2 ≡ scipy on synthetic fits; RDF ≡ uproot on `delphes.root`. | P4 (+ P7-S08 for S02) | 2.5 d | 2 | todo |
-| P10 | Cleanup, docs, release | No transitional code; documentation matches reality. | Clean greps; minimal build green; tag `rework/v1`. | P4 (+ whichever optional phases are done) | 1.25 d | 3 | todo |
+| P8 | Modules, YODA results, Phys, ML | User C++ modules book YODA into `analysis.yoda`; physics helpers; ONNX inference. | Toy module exact at 1/4/20 threads; ONNX toy works; derived-tables decision recorded. | P2, P5-S01, P6-S01 | 3 d | 4 | done |
+| P9 | ROOT processing layer | `hep proc` fits and RDataFrame histograms → `fits.json` + YODA. | Minuit2 ≡ scipy on synthetic fits; RDF ≡ uproot on `delphes.root`. | P4 (+ P7-S08 for S02) | 2.5 d | 2 | done |
+| P10 | Cleanup, docs, release | No transitional code; documentation matches reality. | Clean greps; minimal build green; tag `rework/v1`. | P4 (+ whichever optional phases are done) | 1.25 d | 3 | in-progress |
 
 ```
 P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬──────────────► P10
@@ -107,7 +107,7 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P9-S01 | [hep proc: fits](P9-S01_proc-fits.md) | code | P4-S04 | 1.5 d | done |
 | P9-S02 | [hep proc: RDataFrame histograms on Delphes output](P9-S02_proc-rdf-delphes.md) | code | P9-S01, P7-S08 | 1 d | done |
 | P10-S01 | [Remove transition shims; housekeeping commands](P10-S01_cleanup-housekeeping.md) | code | P4-S06 | 0.5 d | done |
-| P10-S02 | [Final documentation pass](P10-S02_docs-final.md) | docs | P10-S01 | 0.5 d | todo |
+| P10-S02 | [Final documentation pass](P10-S02_docs-final.md) | docs | P10-S01 | 0.5 d | done |
 | P10-S03 | [Portability check and release tag](P10-S03_portability-release.md) | test | P10-S02 | 0.25 d | todo |
 
 ## 6. Dependency graph
@@ -363,6 +363,14 @@ flowchart LR
 
 ## 10. Change log
 
+- 2026-09-20 — **P8, P9 and P10-S01 complete; 53 of 55 steps done.** P8: user C++ modules with the
+  scaling contract expressed as types, the `Phys` namespace on `HepMC3::FourVector`, ONNX inference
+  bit-identical across 20 workers, and D-DERIVED recorded as deferred *with evidence*. P9: `hep proc`
+  fits (Minuit2 and scipy agreeing to 3.9e-06) and derived histograms (RDF and uproot identical).
+  P10-S01: `hep clean` and `hep new`, and the command tree of 08 §2 complete. New findings
+  00/B34-B37. Two Verification rows were replaced by the question they meant rather than satisfied
+  literally — see P9-S01 and P10-S01's Logs. Remaining: P10-S02 (this pass) and P10-S03 (the release
+  check); P7-S07 stays blocked by D-Q6.
 - 2026-09-17 — created by P0-S00 (roadmap revision b).
 - 2026-09-18 — **P1 complete** (S01-S07). Exit criteria verified: `hep plan` reproduces the legacy point
   sets, pages and legends for all 17 golden cases (the only difference is lossless option text, 00/B9);

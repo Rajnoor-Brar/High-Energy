@@ -1,8 +1,39 @@
 # utils/ rework — from-scratch design
 
-Date: 2026-09-17 (revision b) · Status: **Proposed**; execution is step-based ([steps/README.md](steps/README.md)).
+Date: 2026-09-17 (revision b) · Updated 2026-09-20 · Status: **Implemented** — 53 of 55 steps done
+(P7-S07 blocked by D-Q6; P10-S03 is the release check). Execution was step-based and each step's
+**Log** ([steps/README.md](steps/README.md)) records what it measured.
+
+> **This is now a record, not a proposal.** Where a document and the code disagree, the code is
+> right: the design was changed by what running it revealed, and the step Logs say where and why.
+> The larger corrections are collected in [§ Where the design was wrong](#where-the-design-was-wrong)
+> below.
 
 **Question:** if `utils/` and the `~/HEP` commands were designed from scratch, what would they be? The design covers the full installed stack: Pythia, Rivet, YODA, HepMC3, LHAPDF, FastJet, ROOT, Herwig/ThePEG, Sherpa, Whizard, MadGraph, Delphes and ONNX Runtime. It aims for TOML configuration, a presentable terminal, and a merit-based split between code and commands.
+
+## Where the design was wrong
+
+Eleven places where building it changed it. Each is recorded in full in the named step's Log; this
+list exists so a reader of the design does not have to find them one at a time.
+
+| The design said | What running it showed | Step |
+|---|---|---|
+| Rivet analyses can be sharded across workers | Jet clustering cannot: FastJet keeps its state in process-wide statics, and a race changes the jets rather than crashing (00/B31) | P6-S01 |
+| A sink error would propagate normally | It unwound through `std::thread` and would have called `std::terminate` (00/B32) | P6-S01 |
+| Delphes can read the tee through a FIFO | It sizes its input and skips anything of length zero, which a FIFO always is. It reads a regular file, in a later phase | P7-S08 |
+| Whizard can do resolved photoproduction | Its manual says there is no photon structure function; `pdf_builtin_photon` throws. Direct only, and deferred (D-Q7) | P7-S02 |
+| `Physics` kinematics on a ROOT four-vector | Dropped for `HepMC3::FourVector` — no conversion, no ROOT dependency in the physics layer | P8-S02 |
+| Δφ wraps with a `while` loop | It does not terminate for ±∞, and HepMC3's own `delta_phi` has the same defect (00/B35) | P8-S02 |
+| `Requires: ONNX` hands a plugin working flags | It had never been run, and the include path was wrong for a source build (00/B37) | P8-S03 |
+| A module sink can always shard | Not once a module clusters jets; it declares `threadSafe()` and the sink takes one lock (00/B36) | P8-S02 |
+| `scipy.optimize` fits a χ² | Not with a general minimiser: `L-BFGS-B` stopped at χ²/ndf = 12.5 where `least_squares` reached 0.835 | P9-S01 |
+| Derived histograms are a YODA `Histo1D` | YODA 2 splits fillable from finished; a `Histo1D` is silently skipped by every plotting path | P9-S02 |
+| Per-candidate tables need deciding now | Deferred with evidence: exact replay means any table can be built later from stores that already exist (D-DERIVED) | P8-S04 |
+
+Two rows of the plan were also found to be untestable as written and were replaced by the question
+they meant: P9-S01's "parameters within 1σ" (flaky by construction for five parameters and one seed)
+and P10-S01's "the grep is empty" (it cannot be, and making it so would delete the record of why the
+code is shaped as it is).
 
 ## TL;DR
 
