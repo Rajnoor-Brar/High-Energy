@@ -215,15 +215,31 @@ that seeks cannot be streamed to.
 bad card left a `delphes.root` that opened, contained nothing and looked like a result. Written as
 `.part` and renamed on success now (D22).
 
-## Next — P8-S01 (module API, YODA results layer, module sink)
+## Just finished — P8-S01 (module API, YODA results layer, module sink) — done
 
-**Phase P8 — modules, YODA results, Phys, ML** (4 steps). Read `docs/rework/steps/README.md` for
-P8's order, then `P8-S01_module-sink-yoda.md`, and mirror it here before starting. P6-S01 left it a
-rule it has to follow: **`fill` merges, `set` does not** — a module's results must be filled.
+A user C++ module is `dlopen`'d, books YODA per worker, and its objects land in the **same**
+`analysis.yoda` as Rivet's. All four rows measured:
+
+- **Exact totals**: serial and sharded give identical objects (every `sumW` equal to 1e-12). Read as
+  *the merge is exact* — 1 vs 4 vs 20 threads are different **event sets** at a fixed seed, so equal
+  integrals there would mean something was wrong.
+- **Scaling**: the normalised histogram integrates to 71 632.737 pb against σ = 71 632.735 pb —
+  3 × 10⁻⁸, which is floating-point summation.
+- **Dumps**: non-empty, and deliberately without module objects (they are unscaled mid-run).
+- **Plotting**: `hep plot --points` renders them.
+
+**The scaling contract is a type.** `Results::Worker` has `fill` and no `scale`; `Results::Final` has
+`scale` and no `fill` and is only reachable from `finalize`. So the three mistakes `legacy/Record`
+made — scaled during the run, scaled twice, scaled by a σ that was not final — are not expressible.
+
+## Next — P8-S02
+
+Read `docs/rework/steps/README.md` for P8's order, then the next step file, and mirror it here
+before starting.
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · **P7 7/8 — complete bar S07, blocked by D-Q6** · P8–P10 todo — 45 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · **P7 7/8 — complete bar S07, blocked by D-Q6** · P8–P10 todo — 46 of 55 steps done.
 
 ## Standing constraints
 

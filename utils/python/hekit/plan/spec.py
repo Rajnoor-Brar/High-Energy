@@ -34,7 +34,9 @@ def sink_documents(config: Any, group: Any) -> list[dict[str, Any]]:
             "check_beams": config.rivet.check_beams,
         })
     for module in config.module_sinks:
-        sinks.append({"kind": "module", "name": module["name"], "options": module.get("options", {})})
+        sinks.append({"kind": "module", "name": module["name"],
+                      "paths": [str(path) for path in _module_paths(config)],
+                      "options": module.get("options", {})})
     if config.store.enabled:
         sinks.append({"kind": "store", "dir": str(group.directory / "events"),
                       "compression": config.store.compression})
@@ -44,6 +46,12 @@ def sink_documents(config: Any, group: Any) -> list[dict[str, Any]]:
         # The tee: `hep-run` writes HepMC3 into a FIFO that a `DelphesHepMC3` beside it reads (05 §5).
         sinks.append(delphes_adapter.sink_document(group.directory))
     return sinks
+
+
+def _module_paths(config: Any) -> tuple[Path, ...]:
+    from .build import module_search_paths
+
+    return module_search_paths(config)
 
 
 def _search_paths(config: Any) -> tuple[Path, ...]:

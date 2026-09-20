@@ -207,8 +207,12 @@ foreach(project IN LISTS _analysis_dirs)
   endforeach()
   add_custom_target(rivet_${project} ALL DEPENDS ${_outputs})
 endforeach()
-
-# ── user modules, one MODULE library per source (P8-S01) ─────────────────────
+# ── user modules, one MODULE library per source (05 §5, P8-S01) ──────────────
+# `modules/<project>/<Name>.cc` → `libhekit_<Name>.so`, dlopen'd at run time, so adding a module
+# never rebuilds `hep-run` — the same arrangement Rivet plugins have. **The library is named after
+# the file**, and `[[sinks.module]].name` is that name, so the config and the build cannot drift.
+# A module books YODA objects, so this only exists where YODA does.
+if(HEKIT_WITH_RIVET)
 file(GLOB _module_dirs RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}/modules ${CMAKE_CURRENT_SOURCE_DIR}/modules/*)
 foreach(project IN LISTS _module_dirs)
   if(NOT IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/modules/${project})
@@ -218,11 +222,12 @@ foreach(project IN LISTS _module_dirs)
   foreach(source IN LISTS _sources)
     get_filename_component(_name ${source} NAME_WE)
     add_library(hekit_${_name} MODULE ${source})
-    target_link_libraries(hekit_${_name} PRIVATE hekit_Module)
+    target_link_libraries(hekit_${_name} PRIVATE hekit_Module Rivet::Rivet)
     set_target_properties(hekit_${_name} PROPERTIES
-      LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/modules/${project})
+      PREFIX "lib" LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/modules/${project})
   endforeach()
 endforeach()
+endif()
 
 # ── tests ────────────────────────────────────────────────────────────────────
 include(CTest)
@@ -287,6 +292,10 @@ if(HEKIT_PYTEST)
   add_test(NAME delphes COMMAND ${HEKIT_PYTEST} -q
            ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_delphes.py)
   set_tests_properties(delphes PROPERTIES LABELS "slow" TIMEOUT 3600)
+
+  add_test(NAME modules COMMAND ${HEKIT_PYTEST} -q
+           ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_modules.py)
+  set_tests_properties(modules PROPERTIES LABELS "slow" TIMEOUT 3600)
 
   # The analysis plugin's own defects and its re-entrant merge (P4-S05).
   add_test(NAME photo_eic COMMAND ${HEKIT_PYTEST} -q

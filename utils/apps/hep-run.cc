@@ -116,10 +116,40 @@ std::unique_ptr<Source::Base> makeSource(const Core::Spec& spec, Status::Writer&
 // its events so the run still reports something.
 void addSinks(Run::Loop& loop, const Core::Spec& spec, Status::Writer& status) {
     bool added = false;
+#if defined(HEKIT_WITH_RIVET)
+    // The modules go in first, so they are merged and finalized before the Rivet sink writes the
+    // file they share (05 §5, 07 §1).
+    std::vector<Core::SinkSpec> module_specs;
+    std::vector<std::string> module_paths;
     for (const Core::SinkSpec& sink : spec.sinks) {
+        if (sink.kind == "module") module_specs.push_back(sink);
+        for (const std::string& path : sink.paths) module_paths.push_back(path);
+    }
+    Sink::Modules* modules = nullptr;
+    Sink::Rivet* rivet = nullptr;
+    if (!module_specs.empty()) {
+        auto owned = std::make_unique<Sink::Modules>(module_specs, module_paths, status);
+        modules = owned.get();
+        loop.add(std::move(owned));
+        added = true;
+    }
+#endif
+    for (const Core::SinkSpec& sink : spec.sinks) {
+        if (sink.kind == "module") {
+#if defined(HEKIT_WITH_RIVET)
+            continue;                              // already added above, as one sink for all of them
+#else
+            throw Core::Error{Core::Exit::Config,
+                              "this build has no YODA, but the spec asks for a module sink",
+                              "rebuild with Rivet (and so YODA) available"};
+#endif
+        }
         if (sink.kind == "rivet") {
 #if defined(HEKIT_WITH_RIVET)
-            loop.add(std::make_unique<Sink::Rivet>(sink, spec.output_dir, spec.yoda_name, status));
+            auto owned = std::make_unique<Sink::Rivet>(sink, spec.output_dir, spec.yoda_name,
+                                                       status);
+            rivet = owned.get();
+            loop.add(std::move(owned));
             added = true;
 #else
             throw Core::Error{Core::Exit::Config, "this build has no Rivet, but the spec asks for it",
@@ -149,6 +179,15 @@ void addSinks(Run::Loop& loop, const Core::Spec& spec, Status::Writer& status) {
                               "this hep-run knows: rivet, store, delphes (module arrives in P8-S01)"};
         }
     }
+#if defined(HEKIT_WITH_RIVET)
+    if (modules != nullptr) {
+        // One `analysis.yoda` holds both (07 §1). Whoever writes it, the modules' objects are in it.
+        if (rivet != nullptr)
+            rivet->alsoWrite([modules] { return modules->objects(); });
+        else
+            modules->writesOwnFile(spec.output_dir, spec.yoda_name);
+    }
+#endif
     if (!added) loop.add(std::make_unique<Sink::Count>());
 }
 

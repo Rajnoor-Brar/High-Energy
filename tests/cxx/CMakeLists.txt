@@ -8,6 +8,9 @@ list(APPEND HEKIT_CXX_TESTS store_queue)          # the replay queue needs only 
 if(HEKIT_HEPMC)
   list(APPEND HEKIT_CXX_TESTS store_writer)       # the event store needs HepMC3
 endif()
+if(HEKIT_WITH_RIVET)
+  list(APPEND HEKIT_CXX_TESTS results_objects)    # a module's YODA objects need YODA
+endif()
 if(TARGET TomlPlusPlus::TomlPlusPlus)
   list(APPEND HEKIT_CXX_TESTS core_spec)        # the spec reader needs toml++
 endif()
@@ -15,7 +18,7 @@ endif()
 foreach(name IN LISTS HEKIT_CXX_TESTS)
   add_executable(test_${name} test_${name}.cc)
   target_link_libraries(test_${name} PRIVATE hekit_Status)
-  if(name STREQUAL "results_writer")
+  if(name STREQUAL "results_writer" OR name STREQUAL "results_objects")
     target_link_libraries(test_${name} PRIVATE hekit_Results)      # YODA
   elseif(name STREQUAL "store_writer" OR name STREQUAL "store_queue")
     target_link_libraries(test_${name} PRIVATE hekit_Store)        # HepMC3 (+ compression)
