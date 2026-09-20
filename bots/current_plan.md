@@ -267,14 +267,52 @@ the jets it is named after. `test_modules.py` re-measures the physics unchanged.
 
 Suite: **28 ctest tests** (was 27) and **706 Python tests**, all passing.
 
-## Next — P8-S03
+## Just finished — P8-S03 (ML namespace, ONNX Runtime) — done
+
+ONNX Runtime 1.29.0 is installed here, so both rows were measured rather than reasoned about.
+
+**Parity is exact.** 20 C++ workers sharing one `Ort::Session`, each with its own `ML::Scratch`,
+against single-threaded Python `onnxruntime`: **all 1 000 output floats bit-identical**, max
+difference 0. Only true because both sides pin `intra_op_num_threads = 1`; the test asserts equality
+rather than a tolerance, because a tolerance loose enough to survive a kernel change would hide the
+bug the row exists to catch.
+
+**Optional row.** `-DHEKIT_WITH_ONNX=OFF` builds green, 14/14 cxx tests. `ML/Types.hh` and
+`ML/Features.hh` have no ONNX in them, so a module builds features identically either way.
+
+**00/B37 — the plugin convention had never been run, and was wrong.** `Requires: ONNX` has added
+`-I<onnx include>` to `rivet-build` since an earlier step, but no `.info` declares it, so nothing
+had ever compiled through that path. `Rivet/Tools/RivetONNXrt.hh:11` includes
+`"onnxruntime/onnxruntime_cxx_api.h"` — the Debian spelling — and a source build puts the headers
+straight into `<prefix>/include`, with no `onnxruntime/` directory here or in `/usr/include`. Fixed
+with `build/onnx-compat/`, one symlink; the test builds a probe plugin through the real
+`rivet-build`, loads it, **and** checks the old flags still fail.
+
+**Named features, because of one bug.** A model trained on `[pt, eta, phi, m]` fed
+`[pt, phi, eta, m]` throws nothing and is wrong in a way that looks like bad training. `Row::set`
+takes a name and `Row::values()` refuses an incompletely filled row.
+
+**`sha256()` now goes somewhere.** 05 §6 said "into provenance" and nothing wrote it down.
+`Module::Base::provenance()` and `Sink::Sink::provenance()` feed a new `inputs` block in
+`run.summary.json` — `ToyJets.model` and `ToyJets.model_sha256`, asserted against the file's hash.
+
+`ToyJets` gained an **optional** model (off unless `model = "..."`), so the Goal is checked end to
+end through `hep-run`; the existing `modules` test is untouched and still passes.
+
+**One cost, and what was done about it.** `rivet-build` hardcodes `-O2`, and at `-O2` gcc spends
+**12 m 43 s** of CPU optimising ONNX's inline templates for a twenty-line plugin — the same
+translation unit is **3.3 s** at `-O0`. So `onnx_plugin` compiles and links with the same flags at
+`-O0` and takes 5 s; that `rivet-build` forwards the flags at all was checked separately, by reading
+the `cc1plus` command line of a real invocation mid-compile.
+
+## Next — P8-S04
 
 Read `docs/rework/steps/README.md` for P8's order, then the next step file, and mirror it here
-before starting.
+before starting. P8-S04 is a **decision** step (derived-tables format), not code.
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · **P7 7/8 — complete bar S07, blocked by D-Q6** · P8 2/4 · P9–P10 todo — 47 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · **P7 7/8 — complete bar S07, blocked by D-Q6** · P8 3/4 · P9–P10 todo — 48 of 55 steps done.
 
 ## Standing constraints
 

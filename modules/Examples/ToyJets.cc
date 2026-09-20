@@ -25,11 +25,14 @@
 // costs one mutex around this sink; generation stays parallel, and the alternative is a race that
 // changes the jets rather than crashing.
 
+#include "ML.hh"
 #include "Module/Registry.hh"
 #include "Module/Types.hh"
 #include "Phys.hh"
 
 #include "HepMC3/GenEvent.h"
+
+#include <memory>
 
 namespace {
 
@@ -42,6 +45,26 @@ namespace {
             acceptance_.eta_max = options.number("eta_max", 5.0);
             jet_pt_min_ = options.number("jet_pt_min", 5.0);
             jets_ = Phys::jetDefinition(options.text("jets", "antikt:0.4"));
+
+            // `model = "..."` turns on the ML half; with no model this is an ordinary module and
+            // nothing below it runs. The schema is named next to the model it belongs to, and
+            // `matches` checks the two agree now rather than after a generation (05 §6).
+            const std::string model = options.text("model", "");
+            if (!model.empty()) {
+#if defined(HEKIT_WITH_ONNX)
+                features_ = ML::Features({"pt", "eta", "phi", "mass"});
+                // Rebuilt *after* the schema, not before: a `Row` is sized and named by the schema
+                // it was made from, so one made against the default would quietly survive a schema
+                // of the same width and be wrong for any other.
+                row_ = features_.row();
+                model_ = std::make_unique<ML::OnnxModel>(model);
+                features_.matches(*model_);
+#else
+                throw Core::Error{Core::Exit::Config,
+                                  "this build has no ONNX Runtime, so ToyJets cannot load " + model,
+                                  "configure with -DHEKIT_WITH_ONNX=ON"};
+#endif
+            }
         }
 
         void book(Results::Booker& booker) override {
@@ -54,6 +77,10 @@ namespace {
             jet_count_ = booker.histo1D("jets", 10, -0.5, 9.5, "jets per event");
             jet_pt_ = booker.histo1D("jet_pt", 40, 0.0, 40.0, "jet $E_T$ [GeV]");
             counted_ = booker.counter("events", "events this module saw");
+#if defined(HEKIT_WITH_ONNX)
+            // Booked only when there is a model, so a run without one writes no empty histogram.
+            if (model_) score_ = booker.histo1D("score", 20, 0.0, 1.0, "network score per jet");
+#endif
         }
 
         void process(Events::View& view, Results::Worker& worker) override {
@@ -77,6 +104,25 @@ namespace {
             worker.fill(jet_count_, static_cast<double>(jets.size()), weight);
             for (const Phys::FourVector& jet : jets) worker.fill(jet_pt_, jet.perp(), weight);
 
+#if defined(HEKIT_WITH_ONNX)
+            if (model_) {
+                // `scratch_` and `row_` are **one per module**, which is only safe because this
+                // module already declares `threadSafe() == false` for the clustering above, so the
+                // sink runs it under one lock. A module without that declaration would have to keep
+                // a `Scratch` per worker — which is exactly what `ML::Scratch` is for, and what
+                // `tests/cxx/test_ml.cc` runs 20 of.
+                for (const Phys::FourVector& jet : jets) {
+                    row_.clear();
+                    row_.set("pt", jet.perp());
+                    row_.set("eta", std::isfinite(jet.eta()) ? jet.eta() : 0.0);
+                    row_.set("phi", jet.phi());
+                    row_.set("mass", jet.m());
+                    const ML::Floats out = model_->run(row_.values(), scratch_);
+                    worker.fill(score_, out[0], weight);
+                }
+            }
+#endif
+
             worker.count(counted_, weight);
         }
 
@@ -88,7 +134,19 @@ namespace {
             results.normalise(eta_);
             results.normalise(jet_count_);
             results.normalise(jet_pt_);
+#if defined(HEKIT_WITH_ONNX)
+            if (model_) results.normalise(score_);
+#endif
             // A profile is a *mean*, so scaling it would be wrong: it is already per-entry.
+        }
+
+        /// Which weights answered. A hash nothing writes down is no better than no hash (05 §6).
+        std::vector<std::pair<std::string, std::string>> provenance() const override {
+#if defined(HEKIT_WITH_ONNX)
+            if (model_)
+                return {{"model", model_->path()}, {"model_sha256", model_->sha256()}};
+#endif
+            return {};
         }
 
         /// See the header note: clustering jets is not something two threads may do at once.
@@ -105,6 +163,13 @@ namespace {
         Results::Handle jet_count_ = 0;
         Results::Handle jet_pt_ = 0;
         Results::Handle counted_ = 0;
+#if defined(HEKIT_WITH_ONNX)
+        ML::Features features_{std::vector<std::string>{"pt", "eta", "phi", "mass"}};
+        ML::Row row_{features_};
+        std::unique_ptr<ML::OnnxModel> model_;
+        mutable ML::Scratch scratch_;
+        Results::Handle score_ = 0;
+#endif
     };
 
 }  // namespace

@@ -138,16 +138,19 @@ namespace Run {
 
             status_.phase("finish", result.stopped ? "stopped: writing partial outputs" : "");
             const Core::RunRecord record = recordOf(result, started);
+            std::vector<std::pair<std::string, std::string>> inputs;
             for (const auto& sink : sinks_) {
                 sink->finish(record);
                 for (const Sink::Output& output : sink->outputs()) result.outputs.push_back(output);
+                for (const auto& entry : sink->provenance()) inputs.push_back(entry);
             }
             // Written last, because it names what the sinks produced. `hekit.prov` folds it into
             // provenance.json (07 §2); it is not provenance itself.
             result.summary_path =
                 Results::Writer(spec_.output_dir)
                     .writeText(spec_.summary_name,
-                               Results::summaryJson(record, result.outputs, Core::timestamp()));
+                               Results::summaryJson(record, result.outputs, Core::timestamp(),
+                                                    inputs));
 
             result.exit = result.stopped ? Core::Exit::Stopped : Core::Exit::Ok;
             return result;

@@ -14,6 +14,29 @@ endif()
 if(HEKIT_HEPMC AND HEKIT_RIVET)
   list(APPEND HEKIT_CXX_TESTS phys)              # four-vectors from HepMC3, jets from FastJet
 endif()
+list(APPEND HEKIT_CXX_TESTS ml)                  # the feature schema needs nothing; inference needs ONNX
+
+# The toy model is **generated**, never committed: a binary in git is a thing nobody can read a diff
+# of, so `tests/tools/toy_model.py` is the tracked artefact and this runs it (05 §6, P8-S03). It
+# needs the `onnx` package, which is not a build dependency — without it the model is simply not
+# made and `test_ml` says so and checks the rest.
+set(HEKIT_TOY_MODEL "")
+find_program(HEKIT_PYTHON NAMES python3 python)
+if(HEKIT_ONNX AND HEKIT_PYTHON)
+  execute_process(COMMAND ${HEKIT_PYTHON} -c "import onnx"
+                  RESULT_VARIABLE _onnx_module OUTPUT_QUIET ERROR_QUIET)
+  if(_onnx_module EQUAL 0)
+    set(HEKIT_TOY_MODEL ${CMAKE_CURRENT_BINARY_DIR}/toy.onnx)
+    add_custom_command(
+      OUTPUT ${HEKIT_TOY_MODEL}
+      COMMAND ${HEKIT_PYTHON} ${CMAKE_CURRENT_SOURCE_DIR}/../tools/toy_model.py ${HEKIT_TOY_MODEL}
+      DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../tools/toy_model.py
+      COMMENT "hekit: generating the toy ONNX model")
+    add_custom_target(hekit_toy_model DEPENDS ${HEKIT_TOY_MODEL})
+  else()
+    message(STATUS "hekit: no `onnx` package, so the toy model is not generated")
+  endif()
+endif()
 if(TARGET TomlPlusPlus::TomlPlusPlus)
   list(APPEND HEKIT_CXX_TESTS core_spec)        # the spec reader needs toml++
 endif()
@@ -29,6 +52,12 @@ foreach(name IN LISTS HEKIT_CXX_TESTS)
     # `hekit_Phys` brings HepMC3 and FastJet; Pythia comes through it too, and the PDG row compares
     # the table against Pythia's own `ParticleData`.
     target_link_libraries(test_${name} PRIVATE hekit_Phys)
+  elseif(name STREQUAL "ml")
+    target_link_libraries(test_${name} PRIVATE hekit_ML)          # ONNX Runtime, when it is there
+    if(HEKIT_TOY_MODEL)
+      target_compile_definitions(test_${name} PRIVATE HEKIT_TOY_MODEL="${HEKIT_TOY_MODEL}")
+      add_dependencies(test_${name} hekit_toy_model)
+    endif()
   endif()
   target_include_directories(test_${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
   add_test(NAME ${name} COMMAND test_${name})

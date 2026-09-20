@@ -114,7 +114,7 @@ target_link_libraries(hekit_Store INTERFACE hekit_Events)
 target_link_libraries(hekit_Phys INTERFACE hekit_Events)
 target_link_libraries(hekit_ML INTERFACE hekit_Events)
 target_link_libraries(hekit_Source INTERFACE hekit_Events Pythia8::Pythia8)
-target_link_libraries(hekit_Module INTERFACE hekit_Results hekit_Phys)
+target_link_libraries(hekit_Module INTERFACE hekit_Results hekit_Phys hekit_ML)
 target_link_libraries(hekit_Sink INTERFACE hekit_Results hekit_Store hekit_Module)
 target_link_libraries(hekit_Run INTERFACE hekit_Sink hekit_Source)
 
@@ -143,6 +143,15 @@ endif()
 if(HEKIT_ONNX)
   target_link_libraries(hekit_ML INTERFACE OnnxRuntime::OnnxRuntime)
   target_compile_definitions(hekit_ML INTERFACE HEKIT_WITH_ONNX=1)
+  # A directory whose only entry is a symlink `onnxruntime` → the real include directory, so that
+  # `#include "onnxruntime/onnxruntime_cxx_api.h"` resolves against a source build that installs the
+  # headers straight into `<prefix>/include`. Rivet's `RivetONNXrt.hh` uses that spelling and a
+  # plugin therefore cannot compile without it (00/B37); our own `ML/OnnxModel.hh` uses the bare
+  # name, which is why both paths are passed wherever this is used.
+  get_target_property(_onnx_include OnnxRuntime::OnnxRuntime INTERFACE_INCLUDE_DIRECTORIES)
+  set(HEKIT_ONNX_COMPAT ${CMAKE_BINARY_DIR}/onnx-compat)
+  file(MAKE_DIRECTORY ${HEKIT_ONNX_COMPAT})
+  file(CREATE_LINK ${_onnx_include} ${HEKIT_ONNX_COMPAT}/onnxruntime SYMBOLIC)
 endif()
 if(HEKIT_DELPHES)
   target_link_libraries(hekit_Sink INTERFACE Delphes::Delphes)
@@ -195,7 +204,14 @@ foreach(project IN LISTS _analysis_dirs)
       file(READ ${CMAKE_CURRENT_SOURCE_DIR}/analyses/${project}/${_name}.info _info)
       if(_info MATCHES "Requires:.*ONNX")
         get_target_property(_onnx_include OnnxRuntime::OnnxRuntime INTERFACE_INCLUDE_DIRECTORIES)
-        set(_extra -I${_onnx_include} ${OnnxRuntime_LIBRARY})
+        # **Both** include paths, and P8-S03 measured why. `Rivet/Tools/RivetONNXrt.hh:11` includes
+        # `"onnxruntime/onnxruntime_cxx_api.h"` — the spelling the Debian package installs — while a
+        # source build (this one) puts the headers straight into `<prefix>/include`. So `-I<include>`
+        # alone, which is what this convention used to pass, cannot compile a plugin that uses
+        # Rivet's own ONNX helper at all. `HEKIT_ONNX_COMPAT` is a directory holding one symlink
+        # named `onnxruntime` pointing at that include directory, which makes the prefixed spelling
+        # resolve without moving anything in `~/HEP` (00/B37).
+        set(_extra -I${_onnx_include} -I${HEKIT_ONNX_COMPAT} ${OnnxRuntime_LIBRARY})
       endif()
     endif()
     add_custom_command(
@@ -299,6 +315,19 @@ if(HEKIT_PYTEST)
   add_test(NAME modules COMMAND ${HEKIT_PYTEST} -q
            ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_modules.py)
   set_tests_properties(modules PROPERTIES LABELS "slow" TIMEOUT 3600)
+
+  # One ONNX session across 20 workers against Python's onnxruntime (P8-S03). Fast — it is in the
+  # integration set because it needs a built binary and a generated model, not because it is slow.
+  if(HEKIT_ONNX)
+    add_test(NAME ml_parity COMMAND ${HEKIT_PYTEST} -q
+             ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_ml.py)
+    set_tests_properties(ml_parity PROPERTIES LABELS "cxx" TIMEOUT 900)
+
+    # The `Requires: ONNX` convention, which had never been run before P8-S03 and was wrong (00/B37).
+    add_test(NAME onnx_plugin COMMAND ${HEKIT_PYTEST} -q
+             ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_onnx_plugin.py)
+    set_tests_properties(onnx_plugin PROPERTIES LABELS "cxx" TIMEOUT 1800)
+  endif()
 
   # The analysis plugin's own defects and its re-entrant merge (P4-S05).
   add_test(NAME photo_eic COMMAND ${HEKIT_PYTEST} -q

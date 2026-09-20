@@ -270,15 +270,21 @@ namespace ML {
 class OnnxModel {
 public:
     explicit OnnxModel(const std::filesystem::path&, Options = {});   // checks input/output names and shapes
-    std::span<const float> run(std::span<const float> in, Scratch&) const;   // thread-safe; Scratch is per worker
-    const std::string& sha256() const;                                   // into provenance
+    Floats run(Floats in, Scratch&) const;                            // thread-safe; Scratch is per worker
+    std::size_t features() const;                                     // the input width, from the file
+    const std::string& sha256() const;                                // into provenance
 };
+class Features { ... };   // an ordered, named schema
+class Row { ... };        // one row, filled by name, refused until complete
 }
 ```
 
-- **Sessions:** one `Ort::Env` and one session per model. `Session::Run` is thread-safe, so shards share the session and own their scratch buffers.
-- **Optional component:** `HEKIT_WITH_ONNX`.
-- **In Rivet plugins:** use Rivet's `RivetONNXrt`. The build adds ONNX flags to `rivet-build` when a plugin's `.info` lists `ONNX` under `Requires:` (a project convention).
+- **Sessions:** one `Ort::Env` and one session per model. `Session::Run` is thread-safe, so shards share the session and own their scratch buffers. Measured in P8-S03: 20 workers on one session give **bit-identical** outputs to a single-threaded Python `onnxruntime` run — all 1 000 floats equal, not equal to a tolerance.
+- **`Floats` is `std::span<const float>`** under a different name, because this build is C++17. Same members; the alias changes if the project moves to C++20.
+- **Named features, not positional ones.** `Features` is an ordered list of names and `Row::set` takes one of them, because the bug this prevents — a model trained on `[pt, eta, phi, m]` fed `[pt, phi, eta, m]` — throws nothing, evaluates happily and is wrong in a way that looks like bad training. `Row::values()` also refuses a row that is not completely filled: an unset feature is a zero meaning "no signal", indistinguishable from a real zero once it is in the tensor.
+- **Optional component:** `HEKIT_WITH_ONNX`. `ML/Types.hh` and `ML/Features.hh` have no ONNX in them, so a module builds its features identically either way and only the call disappears.
+- **In Rivet plugins:** use Rivet's `RivetONNXrt`. The build adds ONNX flags to `rivet-build` when a plugin's `.info` lists `ONNX` under `Requires:` (a project convention). **Two include paths, not one** — `RivetONNXrt.hh` includes `"onnxruntime/onnxruntime_cxx_api.h"`, which a source install does not have, so the build also passes a directory holding one symlink that bridges the two layouts (00/B37).
+- **The toy model is generated, not committed.** `tests/tools/toy_model.py` is the tracked artefact; a binary in git is a thing nobody can read a diff of.
 - **Training data export** is deferred with the derived-tables decision (P8-S04).
 
 ## 7. FastJet and LHAPDF

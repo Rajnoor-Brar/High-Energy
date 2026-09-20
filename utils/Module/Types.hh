@@ -19,6 +19,8 @@
 // adding one never rebuilds `hep-run` — the same arrangement Rivet plugins have.
 
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "Core/Types.hh"
 #include "Events/Types.hh"
@@ -51,6 +53,15 @@ namespace Module {
 
         /// What this module needs of an event. HepMC by default, which is what a replay can give.
         virtual Sink::Needs needs() const { return Sink::Needs{/*pythia=*/false, /*hepmc=*/true}; }
+
+        /// What this module wants recorded about the inputs it used: `(key, value)` pairs that
+        /// land in `run.summary.json` under `inputs`.
+        ///
+        /// The case this exists for is a model file. `ML::OnnxModel::sha256()` says which weights
+        /// answered, and two runs that disagree and were "the same model" is the commonest way to
+        /// lose a day — but a hash nothing writes down is no better than no hash. Called once, after
+        /// `finalize`, on the main thread.
+        virtual std::vector<std::pair<std::string, std::string>> provenance() const { return {}; }
 
         /// May `process` be called from several worker threads at once?
         ///

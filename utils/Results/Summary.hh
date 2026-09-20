@@ -20,9 +20,10 @@
 
 namespace Results {
 
-    inline std::string summaryJson(const Core::RunRecord& record,
-                                   const std::vector<Sink::Output>& outputs,
-                                   const std::string& finished_at) {
+    inline std::string summaryJson(
+        const Core::RunRecord& record, const std::vector<Sink::Output>& outputs,
+        const std::string& finished_at,
+        const std::vector<std::pair<std::string, std::string>>& inputs = {}) {
         const Core::Build build = Core::build();
         std::string json = "{\n";
         json += "  \"schema\": 2,\n";
@@ -64,7 +65,15 @@ namespace Results {
                     Status::escape(output.kind) + "\", \"path\": \"" + Status::escape(output.path) +
                     "\", \"partial\": " + (output.partial ? "true" : "false") + "}";
         }
-        json += outputs.empty() ? "]\n" : "\n  ]\n";
+        json += outputs.empty() ? "]" : "\n  ]";
+        // What the sinks read, as opposed to what they wrote: a model file and its hash, so two runs
+        // that disagree can be asked whether they really used the same weights (05 §6).
+        json += ",\n  \"inputs\": {";
+        for (std::size_t index = 0; index < inputs.size(); ++index)
+            json += (index ? ",\n" : "\n") + std::string("    \"") +
+                    Status::escape(inputs[index].first) + "\": \"" +
+                    Status::escape(inputs[index].second) + "\"";
+        json += inputs.empty() ? "}\n" : "\n  }\n";
         json += "}\n";
         return json;
     }

@@ -154,6 +154,15 @@ namespace Sink {
 
         std::vector<Output> outputs() const override { return outputs_; }
 
+        /// Each module's inputs, keyed by module so two modules cannot collide.
+        std::vector<std::pair<std::string, std::string>> provenance() const override {
+            std::vector<std::pair<std::string, std::string>> found;
+            for (const Loaded& loaded : loaded_)
+                for (const auto& entry : loaded.module->provenance())
+                    found.emplace_back(loaded.name + "." + entry.first, entry.second);
+            return found;
+        }
+
         /// Where to write when there is no Rivet sink to hand the objects to.
         void writesOwnFile(std::string output_dir, std::string yoda_name) {
             writes_own_ = true;
