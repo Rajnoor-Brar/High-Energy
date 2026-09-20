@@ -1,4 +1,13 @@
-"""Overlaying a fitted curve on the histogram it was fitted to (12 §3, `[plot].show_fits`).
+"""Bringing `hep proc`'s output onto a page (12 §3, `[plot].show_fits`).
+
+Two kinds of object come out of `proc.yoda`, and they join a page in opposite ways.
+
+**A fitted curve is an overlay.** It belongs *on* the histogram it was fitted to, so it is renamed
+to that target — see below.
+
+**A derived histogram is its own plot.** `/PROC/jet_pt` was filled from a Delphes tree and is not a
+claim about any existing figure, so it is passed through unchanged and gets a figure of its own,
+exactly as 12 §2.2 intends when it says `hep plot` should treat it like any other result.
 
 `hep proc` writes `/PROC/<fit>/curve` into `proc.yoda`. That path says which *fit* a curve is, which
 is what `fits.json` wants — and it is the wrong path for drawing, because a plotter puts objects on
@@ -79,9 +88,12 @@ def overlay(proc_yoda: Path, *, on: Sequence[str], destination: Path,
     for path, obj in objects.items():
         if not path.startswith("/PROC/"):
             continue
-        # `/PROC/<fit>/curve` or `/PROC/<fit>/<point>/curve`.
+        # `/PROC/<fit>/curve` or `/PROC/<fit>/<point>/curve` is a fit; anything shallower is a
+        # derived histogram, which keeps its path and becomes its own figure.
         parts = path.strip("/").split("/")
-        if len(parts) < 3:
+        if len(parts) < 3 or parts[-1] != "curve":
+            keep.append(obj.clone())
+            made.names.append(parts[-1] if parts else path)
             continue
         name = parts[1]
         target = (targets or {}).get(name, "")

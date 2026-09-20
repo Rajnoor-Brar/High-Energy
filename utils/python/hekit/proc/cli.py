@@ -25,15 +25,17 @@ from ..sweep import select as select_points
 @click.command("proc")
 @click.argument("config_file", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @selectors
-@click.option("--only", metavar="NAME", help="run just this one [[proc.fit]] entry")
+@click.option("--only", metavar="NAME", help="run just this one [[proc.fit]] or [[proc.hist]] entry")
 @click.option("--backend", type=click.Choice(["auto", "minuit2", "roofit", "scipy"]),
               help="override the backend of every fit")
+@click.option("--engine", type=click.Choice(["auto", "rdf", "uproot"]),
+              help="override the engine of every derived histogram")
 @click.option("--out", type=click.Path(file_okay=False, path_type=Path),
               help="write into this directory instead of the study's proc/")
 @click.option("--keep-root", is_flag=True, help="also write proc.root for inspection")
 @click.pass_context
 def proc(context: click.Context, config_file: Path, study, pins, across, style, overlay, sets,
-         only, backend, out, keep_root) -> None:
+         only, backend, engine, out, keep_root) -> None:
     """Fits and derived histograms (ROOT processing)."""
     from ..plan import build as builder
     from . import backends as backends_module
@@ -42,16 +44,17 @@ def proc(context: click.Context, config_file: Path, study, pins, across, style, 
 
     config = load_config(config_file, sets=tuple(sets))
     entries = _fits_of(config)
+    histograms = [dict(item) for item in (getattr(config, "proc_hists", None) or [])]
     if only:
+        every = [str(item.get("name")) for item in entries + histograms]
         entries = [entry for entry in entries if str(entry.get("name")) == only]
-        if not entries:
-            raise HepError(f"no [[proc.fit]] called {only!r}",
-                           hint="names in this config: " +
-                                (", ".join(str(item.get("name")) for item in _fits_of(config))
-                                 or "none"))
-    if not entries:
-        raise HepError("this config declares no [[proc.fit]]",
-                       hint="12 §2.1 has the block; `hep config reference proc.fit` prints the keys")
+        histograms = [item for item in histograms if str(item.get("name")) == only]
+        if not entries and not histograms:
+            raise HepError(f"no [[proc.fit]] or [[proc.hist]] called {only!r}",
+                           hint="names in this config: " + (", ".join(every) or "none"))
+    if not entries and not histograms:
+        raise HepError("this config declares no [[proc.fit]] or [[proc.hist]]",
+                       hint="12 §2 has the blocks; `hep config reference proc.fit` prints the keys")
 
     selection = select_points(config, study=study, pins=tuple(pins), across=across, style=style,
                               overlay=overlay)
@@ -92,10 +95,24 @@ def proc(context: click.Context, config_file: Path, study, pins, across, style, 
         fitted, destination, inputs=inputs,
         config_hash=str(getattr(plan, "hash", "") or ""),
         pyroot=backends_module.available("minuit2"),
-        backend=", ".join(used))
+        backend=", ".join(used), merge=bool(only))
     click.echo(f"hep proc: {len(fitted)} fits → {written}")
 
-    curves = outputs_module.write_yoda(fitted, destination)
+    # ── derived histograms (12 §2.2) ─────────────────────────────────────────
+    filled: list[Any] = []
+    for entry in histograms:
+        for name, path in _points_for(entry, points):
+            source = _source_of(entry, path)
+            from . import hist as hist_module
+
+            one = hist_module.fill(entry, source, engine=engine or str(entry.get("engine") or "auto"))
+            one.name = f"{one.name}/{name}" if len(points) > 1 else one.name
+            filled.append(one)
+            inputs.setdefault(str(source), outputs_module.sha256_of(source))
+            click.echo(f"hep proc: {one.name}: {entry.get('expression')} on {source.name} "
+                       f"({one.engine}, {one.entries} entries, {one.total:.0f} in range)")
+
+    curves = outputs_module.write_yoda(fitted, destination, histograms=filled, merge=bool(only))
     if curves:
         click.echo(f"hep proc: curves → {curves}")
     if keep_root or any(bool(entry.get("keep_root")) for entry in entries):
@@ -181,3 +198,17 @@ def _proc_dir(layout: Any, plan: Any) -> Path:
     if latest is None:
         latest = layout.new_study(study, serial=bool(getattr(plan.config.run, "serial", True)))
     return latest / outputs_module.PROC_DIR
+
+
+def _source_of(entry: dict, point_yoda: Path) -> Path:
+    """The file a `[[proc.hist]]` reads.
+
+    `source = "delphes"` means the group's own `delphes.root`, which sits beside its
+    `analysis.yoda` (07 §1) — the point of naming it that way is that a study of twenty points does
+    not repeat the path twenty times. Anything else is taken as a path.
+    """
+    wanted = str(entry.get("source") or "delphes").strip()
+    if wanted in ("delphes", "delphes.root"):
+        return Path(point_yoda).parent / "delphes.root"
+    path = Path(wanted)
+    return path if path.is_absolute() else Path(point_yoda).parent / path

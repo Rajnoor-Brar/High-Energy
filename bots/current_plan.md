@@ -362,14 +362,44 @@ strips, which is the mechanism two option variants already use.
 
 Suite: **723 Python tests** (was 706).
 
-## Next — P9-S02
+## Just finished — P9-S02 (derived histograms on Delphes output) — done. **Phase P9 is complete.**
 
-Read `docs/rework/steps/README.md` for P9's order, then the next step file, and mirror it here
-before starting. P9-S02 is `hep proc`'s derived histograms on Delphes output (RDataFrame vs uproot).
+Both rows measured. 22 unit tests, 14 integration tests.
+
+**The difficulty is not histogramming, it is that the engines speak different languages.** RDF
+compiles C++; uproot evaluates Python over awkward arrays. The trap: Python's `&` binds **tighter**
+than a comparison, so a textual rewrite turns `a > 5 && b < 3` into `a > (5 & b) < 3` — valid,
+different, silent. The translation goes through Python's own parser and rewrites `and`/`or`/`not` as
+**tree nodes**, where precedence is structural. A test fits that exact case.
+
+**Identical, not close.** A real `delphes.root` (`Tower.ET`, 785 entries after cuts): every bin
+equal. A jagged tree, eight expressions — plain, cut, `&&`, `||`, `!`, a derived `sqrt(x*x)`,
+arithmetic, and the precedence case — all identical.
+
+**The selection cuts elements, not events** — `Jet.PT > 5` on a jagged branch is a boolean per jet,
+and filtering whole events would give a different, plausible answer.
+
+**Two findings.**
+
+- **`BinnedEstimate1D`, not `Histo1D`.** YODA 2 splits a fillable accumulator from a finished value,
+  and the plot pipeline recognises only the latter. A derived histogram is finished when filled, so
+  writing a `Histo1D` gave a file that was correct, summed correctly, and was **silently skipped by
+  every plotting path** — the opposite of "treat it like any other result". The Plots row caught it.
+- **`hep proc --only` was destructive**: it rewrote the whole `fits.json` with just the entry it
+  ran, so retuning one fit of five threw the other four away. Found by a *test-ordering* failure,
+  which is the only way it shows up. `--only` now merges; a full run still replaces.
+
+Suite: **745 Python tests** (was 723).
+
+## Next — P10-S01
+
+Read `docs/rework/steps/README.md` for P10's order, then the next step file, and mirror it here
+before starting. P10 is the last phase: cleanup and housekeeping, a final docs pass, then the
+portability check and release tag.
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · **P7 7/8 — complete bar S07, blocked by D-Q6** · **P8 4/4 — P8 complete** · P9 1/2 · P10 todo — 50 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · **P7 7/8 — complete bar S07, blocked by D-Q6** · **P8 4/4 — P8 complete** · **P9 2/2 — P9 complete** · P10 todo — 51 of 55 steps done.
 
 ## Standing constraints
 

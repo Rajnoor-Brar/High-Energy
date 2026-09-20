@@ -164,6 +164,16 @@ def histograms_on(page: Page) -> dict[str, list[tuple[str, Any]]]:
             if key is None:
                 continue
             found.setdefault(key, []).append((curve.legend or curve.name, obj))
+
+    # `hep proc`'s derived histograms are results in their own right (12 §2.2), so they get their
+    # own figure rather than being overlaid on someone else's.
+    fits = getattr(page, "fits", None)
+    if fits is not None and getattr(fits, "path", None) is not None:
+        for obj_path, obj in io.read(fits.path).items():
+            if not io.is_binned_1d(obj):
+                continue                                # a fitted curve: `fits_on` draws those
+            key = io.plot_key(obj_path) or obj_path
+            found.setdefault(key, []).append((obj.title() or obj_path, obj))
     return found
 
 

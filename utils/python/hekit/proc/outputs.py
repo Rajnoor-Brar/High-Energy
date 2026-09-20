@@ -61,26 +61,61 @@ def curve_objects(fits: Sequence[Fitted]) -> list[Any]:
     return made
 
 
-def write_yoda(fits: Sequence[Fitted], directory: Path) -> Path | None:
-    """`proc.yoda`, or nothing when no fit produced a curve."""
+def write_yoda(fits: Sequence[Fitted], directory: Path, *,
+               histograms: Sequence[Any] = (), merge: bool = False) -> Path | None:
+    """`proc.yoda`: the fitted curves and the derived histograms, in one file (12 §3).
+
+    One file, because `hep plot` reads one file and both kinds are results of the same command. A
+    fit is a `Scatter2D` and a derived histogram is a `Histo1D`, which is the honest difference
+    between a continuous claim and binned counts.
+    """
     import yoda
 
+    from .hist import as_yoda
+
     objects = curve_objects(fits)
+    objects += [as_yoda(filled, path=f"/PROC/{filled.name}") for filled in histograms]
+    destination = directory / PROC_YODA
+    if merge and destination.is_file():
+        # The same rule as `fits.json`: `--only` keeps what it did not recompute.
+        made = {obj.path(): obj for obj in yoda.read(str(destination)).values()}
+        made.update({obj.path(): obj for obj in objects})
+        objects = list(made.values())
     if not objects:
         return None
     directory.mkdir(parents=True, exist_ok=True)
-    destination = directory / PROC_YODA
     yoda.write(objects, str(destination))
     return destination
 
 
+def merge_into(directory: Path, entries: list[dict]) -> list[dict]:
+    """Keep the fits an earlier run produced that this one did not recompute.
+
+    Only used by `--only`, and that is the whole reason it exists: "redo just this fit" should not
+    quietly throw away the other four. A full run writes the complete set and replaces, because then
+    what is on disk is exactly what the config says.
+    """
+    existing = directory / FITS_JSON
+    if not existing.is_file():
+        return entries
+    try:
+        previous = json.loads(existing.read_text(encoding="utf-8")).get("fits", [])
+    except (OSError, ValueError):
+        return entries
+    fresh = {(entry.get("name"), entry.get("point")) for entry in entries}
+    kept = [entry for entry in previous if (entry.get("name"), entry.get("point")) not in fresh]
+    return kept + entries
+
+
 def write_json(fits: Sequence[Fitted], directory: Path, *, inputs: dict[str, str],
-               config_hash: str = "", pyroot: bool = False, backend: str = "") -> Path:
+               config_hash: str = "", pyroot: bool = False, backend: str = "",
+               merge: bool = False) -> Path:
     """`fits.json`, with the provenance block 12 §3 asks for."""
     directory.mkdir(parents=True, exist_ok=True)
+    entries = [as_json(fitted) for fitted in fits]
     payload = {
         "schema": 1,
-        "fits": [as_json(fitted) for fitted in fits],
+        "fits": merge_into(directory, entries) if merge else entries,
         "provenance": {
             "inputs": inputs,
             "config_hash": config_hash,

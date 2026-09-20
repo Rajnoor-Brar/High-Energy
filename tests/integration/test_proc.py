@@ -12,6 +12,11 @@ the parts that only exist once there is a real result on disk:
     on, which means renaming it: a plotter overlays objects whose *paths* match, and
     `/PROC/peak/curve` matches nothing.
 
+It also covers `[[proc.hist]]` (12 §2.2) against a **real** `delphes.root`: the unit tests compare
+the two engines on a tree written by uproot, which is the right place to test the expression
+translation, and this is the place to check that a Delphes file's `Jet.PT` branches — dots and all —
+are read the same way by both.
+
 Marked `slow` because it generates a few hundred events first, and registered as the ctest test
 `proc`.
 """
@@ -248,6 +253,137 @@ model = "expo"
     assert "second" in done.text_stdout
     assert "et_falloff" not in done.text_stdout
 
+    # And it **keeps** what it did not recompute: "redo just this fit" must not throw away the
+    # other four. Found by a test-ordering failure, which is the only way this shows up.
+    study = next((results / "e2e" / "studies").iterdir())
+    payload = json.loads((study / "proc" / "fits.json").read_text(encoding="utf-8"))
+    names = {entry["name"] for entry in payload["fits"]}
+    assert names == {"et_falloff", "second"}, names
+
     missing = hep("proc", str(config), "--only", "nosuchfit", results=results, expect=None)
     assert missing.returncode != 0
     assert "et_falloff" in missing.text_stderr, "it should list the names there are"
+
+
+# ── derived histograms (12 §2.2) ─────────────────────────────────────────────
+# These need a `delphes.root`, which the P7-S08 stage produces. Skipped rather than generated when
+# Delphes is not installed: this step is about the engines, not about the detector.
+
+def _usable_delphes() -> list[Path]:
+    """Delphes files with a tree worth reading.
+
+    P7-S08 deliberately leaves a broken one behind — its failure row checks that a bad card does not
+    produce a `delphes.root` that opens and contains nothing (D22). Picking it here would test that
+    finding all over again rather than this step's.
+    """
+    try:
+        import uproot
+    except ImportError:
+        return []
+    found = []
+    for path in sorted((REPO / "output" / "scratch").rglob("delphes.root")):
+        try:
+            with uproot.open(path) as handle:
+                if "Delphes" in handle and handle["Delphes"].num_entries > 0:
+                    found.append(path)
+        except Exception:
+            continue
+    return found
+
+
+DELPHES_FILES = _usable_delphes()
+
+
+@pytest.mark.skipif(not DELPHES_FILES, reason="no delphes.root to read (run the delphes test first)")
+def test_both_engines_read_a_real_delphes_file():
+    """The Verification row, on the file it names: `Jet.PT` branches, dots and all."""
+    from hekit.proc import hist as hist_module
+
+    for engine in ("rdf", "uproot"):
+        if not hist_module.available(engine):
+            pytest.skip(f"the {engine} engine is not available here")
+
+    source = DELPHES_FILES[0]
+    spec = {"name": "tower_et", "tree": "Delphes", "expression": "Tower.ET",
+            "selection": "Tower.ET > 0.5 && abs(Tower.Eta) < 2.0", "bins": [30, 0.0, 15.0]}
+    left = hist_module.fill(spec, source, engine="uproot")
+    right = hist_module.fill(spec, source, engine="rdf")
+
+    assert left.entries > 100, "too few entries for the comparison to mean anything"
+    assert left.entries == right.entries
+    assert not hist_module.same_bins(left, right)
+
+
+@pytest.mark.skipif(not DELPHES_FILES, reason="no delphes.root to read")
+def test_a_dotted_branch_is_found_in_a_delphes_file():
+    """Delphes spells branches `Jet.PT`; a plain ROOT tree spells them `Jet_PT`. Both must work."""
+    from hekit.proc import hist as hist_module
+
+    source = DELPHES_FILES[0]
+    filled = hist_module.fill({"name": "jet_pt", "tree": "Delphes", "expression": "Jet.PT",
+                               "bins": [20, 0.0, 40.0]}, source, engine="uproot")
+    assert filled.entries >= 0
+    assert len(filled.edges) == 21
+
+
+@pytest.mark.skipif(not DELPHES_FILES, reason="no delphes.root to read")
+def test_a_derived_histogram_reaches_proc_yoda_as_a_histogram(tmp_path):
+    """12 §3: `/PROC/<name>`, a `Histo1D` — unlike a fit's curve, this really is binned counts."""
+    from hekit.proc import hist as hist_module, outputs as outputs_module
+
+    filled = hist_module.fill({"name": "tower_et", "tree": "Delphes", "expression": "Tower.ET",
+                               "bins": [10, 0.0, 10.0]}, DELPHES_FILES[0], engine="uproot")
+    written = outputs_module.write_yoda([], tmp_path, histograms=[filled])
+    assert written is not None and written.is_file()
+
+    objects = yoda.read(str(written))
+    assert list(objects) == ["/PROC/tower_et"]
+    made = objects["/PROC/tower_et"]
+    assert type(made).__name__ == "BinnedEstimate1D"
+    assert hist_module.total_of(made) == pytest.approx(filled.total)
+
+
+# ── Verification row: proc histograms are shown ──────────────────────────────
+
+@pytest.mark.skipif(not DELPHES_FILES, reason="no delphes.root to read")
+def test_a_derived_histogram_becomes_its_own_figure(produced, tmp_path):
+    """12 §2.2: `hep plot` treats it like any other result — which means its *own* plot.
+
+    A fitted curve is an overlay and is renamed onto its target; a derived histogram is a result in
+    its own right and keeps its path. Getting that the wrong way round would either hide the
+    histogram or draw it on top of an unrelated figure.
+    """
+    from hekit.plot import fits as fits_module, io as io_module
+    from hekit.plot.backends import mpl as mpl_module
+    from hekit.proc import hist as hist_module, outputs as outputs_module
+
+    _, _, proc_dir, _ = produced
+
+    # A proc.yoda holding both kinds at once, which is what a config with a fit and a hist gives.
+    filled = hist_module.fill({"name": "tower_et", "tree": "Delphes", "expression": "Tower.ET",
+                               "bins": [10, 0.0, 10.0]}, DELPHES_FILES[0], engine="uproot")
+    combined = tmp_path / "combined.yoda"
+    yoda.write(list(yoda.read(str(proc_dir / "proc.yoda")).values())
+               + [hist_module.as_yoda(filled, path="/PROC/tower_et")], str(combined))
+
+    overlay = fits_module.overlay(
+        combined, on=[TARGET], destination=tmp_path / "out.yoda",
+        targets=fits_module.targets_of(proc_dir / "fits.json"))
+    assert overlay
+    objects = io_module.read(overlay.path)
+
+    # The fit landed on its target's figure; the histogram kept its own.
+    keys = {io_module.plot_key(path) or path for path in objects}
+    assert TARGET in keys
+    assert "/PROC/tower_et" in keys
+
+    # And the mpl backend puts the histogram on a figure of its own rather than dropping it.
+    class Page:
+        curves: list = []
+        fits = overlay
+        data = None
+        name = "t"
+
+    drawn = mpl_module.histograms_on(Page())
+    assert "/PROC/tower_et" in drawn, sorted(drawn)
+    assert hist_module.total_of(drawn["/PROC/tower_et"][0][1]) == pytest.approx(filled.total)

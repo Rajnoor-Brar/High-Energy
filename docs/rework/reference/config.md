@@ -182,18 +182,19 @@ Written as an array of tables: repeat `[[proc.fit]]` once per entry.
 
 ### `[proc.hist]`
 
-Histograms derived with RDataFrame or uproot (12).
+Histograms derived with RDataFrame or uproot (12 §2.2).
 
 Written as an array of tables: repeat `[[proc.hist]]` once per entry.
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `name` | str | — | name of the resulting YODA object |
-| `source` | str | — | input file, e.g. delphes.root |
+| `source` | str | `'delphes'` | input file: 'delphes' for the group's delphes.root, or a path |
 | `tree` | str | `'Delphes'` | tree name |
-| `expression` | str | — | expression to histogram |
-| `selection` | str | — | optional selection expression |
+| `expression` | str | — | expression to histogram, e.g. 'Jet.PT' |
+| `selection` | str | — | selection on **elements**, e.g. 'Jet.PT > 5 && abs(Jet.Eta) < 3.5' |
 | `bins` | list of number ≥ 3 ≤ 3 | — | [n, low, high] |
+| `engine` | str one of 'auto', 'rdf', 'uproot' | `'auto'` | which engine fills it |
 
 ### `[quantity]`
 

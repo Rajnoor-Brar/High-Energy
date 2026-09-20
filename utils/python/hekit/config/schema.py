@@ -170,14 +170,15 @@ PROC_FIT = Section("proc.fit", shape="array", doc="Fits run after a study (12 §
     "keep_root": Field("bool", False, "also write proc.root (TF1 and fit result) for inspection"),
 })
 
-PROC_HIST = Section("proc.hist", shape="array", doc="Histograms derived with RDataFrame or uproot (12).",
-                    fields={
+PROC_HIST = Section("proc.hist", shape="array",
+                    doc="Histograms derived with RDataFrame or uproot (12 §2.2).", fields={
     "name": Field("str", "", "name of the resulting YODA object", required=True),
-    "source": Field("str", "", "input file, e.g. delphes.root", required=True),
+    "source": Field("str", "delphes", "input file: 'delphes' for the group's delphes.root, or a path"),
     "tree": Field("str", "Delphes", "tree name"),
-    "expression": Field("str", "", "expression to histogram", required=True),
-    "selection": Field("str", "", "optional selection expression"),
+    "expression": Field("str", "", "expression to histogram, e.g. 'Jet.PT'", required=True),
+    "selection": Field("str", "", "selection on **elements**, e.g. 'Jet.PT > 5 && abs(Jet.Eta) < 3.5'"),
     "bins": Field("list", [], "[n, low, high]", item="number", minimum=3, maximum=3),
+    "engine": Field("str", "auto", "which engine fills it", choices=("auto", "rdf", "uproot")),
 })
 
 # ── sweeps (semantics in P1-S03) ─────────────────────────────────────────────

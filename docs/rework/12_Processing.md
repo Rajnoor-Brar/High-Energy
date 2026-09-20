@@ -30,6 +30,7 @@ hep proc CONFIG [selectors…] [--only NAME] [--backend auto|minuit2|roofit|scip
 - **Inputs:** results that `hep run` has already produced (group `analysis.yoda` files, `delphes.root`).
 - **Outputs:** written into the study directory (07 §1).
 - **Idempotence:** re-running with unchanged inputs and config is a no-op (hash check, like points).
+- **`--only NAME` merges.** It recomputes that one entry and **keeps** the others already in `fits.json` and `proc.yoda`, because "redo just this fit" should not discard the other four. A full run writes the complete set and replaces, so what is on disk is then exactly what the config says.
 
 ### 2.1 Fits
 
@@ -71,9 +72,13 @@ engine = "auto"                             # auto → rdf if PyROOT, else uproo
 
 - **Engines:**
   - `rdf`: `ROOT.RDataFrame` with `EnableImplicitMT`.
-  - `uproot`: `uproot` + `awkward` + `hist` (all installed).
-  - Both must give identical bins (tested in P9-S02).
-- **Output:** YODA `Histo1D`/`Histo2D` in `proc.yoda` under `/PROC/<name>`, so `hep plot` treats it like any other result.
+  - `uproot`: `uproot` + `awkward` (both installed).
+  - Both must give identical bins (measured in P9-S02: identical on every expression tested, including the precedence case below).
+- **The selection cuts *elements*, not events.** A Delphes branch is jagged, so `Jet.PT > 5` is a boolean per jet; what the config means is "the jets that pass", not "the events in which one does". Both engines apply it as an element mask (`Jet.PT[cut]`), never as an event filter.
+- **One expression language, translated once.** RDF compiles C++ and uproot evaluates Python, so `&&`, `||` and `!` have to be converted — and the trap is that Python's `&` binds **tighter** than a comparison, so rewriting the text turns `a > 5 && b < 3` into `a > (5 & b) < 3`: valid, different, silent. The translation therefore goes through Python's own parser and rewrites `and`/`or`/`not` as **tree nodes**, where precedence is structural. Calls are restricted to a list that means the same thing on both sides (`abs`, `sqrt`, `log`, `log10`, `exp`, `sin`, `cos`, `tan`, `min`, `max`).
+- **Branch spelling is the file's business:** Delphes writes `Jet.PT`, a plain ROOT tree writes `Jet_PT`, and a config may use either.
+- **Output:** `/PROC/<name>` in `proc.yoda` — a **`BinnedEstimate1D`**, not a `Histo1D`. YODA 2 splits the two: a `Histo1D` is a fillable accumulator and an estimate is a *finished* value with uncertainties, which is what a finalized Rivet analysis writes and what the plot pipeline recognises. A derived histogram is finished the moment it is filled, and writing a `Histo1D` would give a file that is correct, sums correctly, and is silently skipped by every plotting path.
+- **On a page** a derived histogram is its *own* figure — unlike a fitted curve, which is an overlay on the histogram it was fitted to.
 
 ## 3. Outputs
 
