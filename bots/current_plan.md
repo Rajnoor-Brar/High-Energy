@@ -305,14 +305,35 @@ translation unit is **3.3 s** at `-O0`. So `onnx_plugin` compiles and links with
 `-O0` and takes 5 s; that `rivet-build` forwards the flags at all was checked separately, by reading
 the `cc1plus` command line of a real invocation mid-compile.
 
-## Next — P8-S04
+## Just finished — P8-S04 (derived-tables format) — done. **Phase P8 is complete.**
 
-Read `docs/rework/steps/README.md` for P8's order, then the next step file, and mirror it here
-before starting. P8-S04 is a **decision** step (derived-tables format), not code.
+A decision step. The decision is unchanged and was not mine to revisit: **deferred**, trigger the
+first ML training dataset. What this step added is the half that was a placeholder — the
+**Evidence**, which P5-S03, P8-S01 and P8-S03 have since made answerable.
+
+- **Parquet cannot be written here at all.** No pyarrow, no fastparquet; `pandas.to_parquet` raises
+  `ImportError: Unable to find a usable engine`. Arrow C++ absent too. So *both* Parquet options
+  carry a new dependency, which 01 N5 makes a real cost.
+- **RNTuple is free.** ROOT 6.40.04 ships `RNTupleWriter/Reader/Model.hxx` and uproot 5.7.6 reads
+  RNTuple — the only option that works today with nothing new installed, from both languages.
+- **Deferring is cheap, and now demonstrably so.** P5-S03 measured replay as exact, so any offline
+  table can be built later from stores that already exist, without touching `hep-run`.
+
+Also recorded: **D15 is the sharpest criterion** — a derived table is neither an event (D13) nor a
+result (D14), but writing one *from the event loop* would contradict "`hep-run` doesn't link ROOT",
+which rules on the C++/Arrow option without waiting for the trigger. And `ML::Features` already
+fixes the column names and their order, so what is open is the container, not the schema.
+
+No code, no new dependency, nothing to roll back.
+
+## Next — P9-S01
+
+Read `docs/rework/steps/README.md` for P9's order, then the next step file, and mirror it here
+before starting. P9 is the ROOT processing layer (D15: processing only, `hep-run` never links ROOT).
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · **P7 7/8 — complete bar S07, blocked by D-Q6** · P8 3/4 · P9–P10 todo — 48 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · **P7 7/8 — complete bar S07, blocked by D-Q6** · **P8 4/4 — P8 complete** · P9–P10 todo — 49 of 55 steps done.
 
 ## Standing constraints
 

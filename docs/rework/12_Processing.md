@@ -97,4 +97,5 @@ results/<project>/studies/<study>/proc/
 ## 5. Not in scope
 - Unfolding (RooUnfold is not installed).
 - TMVA (ONNX Runtime covers inference; 05 §6).
-- Storing per-candidate tables (decision D-DERIVED is deferred; P8-S04).
+- Storing per-candidate tables (decision D-DERIVED is deferred; P8-S04 records the options, their
+  dependency cost here, and the revisit trigger — the first ML training dataset).

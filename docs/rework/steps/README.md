@@ -103,7 +103,7 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P8-S01 | [Module API, YODA results layer and module sink](P8-S01_module-sink-yoda.md) | code | P6-S01, P5-S01 | 1.5 d | done |
 | P8-S02 | [Phys namespace](P8-S02_phys.md) | code | P2-S03 | 0.5 d | done |
 | P8-S03 | [ML namespace (ONNX Runtime)](P8-S03_onnx.md) | code | P8-S01 | 0.75 d | done |
-| P8-S04 | [Decide the derived-tables format (deferred)](P8-S04_decide-derived-tables.md) | decision | P8-S01 | 0.1 d | todo |
+| P8-S04 | [Decide the derived-tables format (deferred)](P8-S04_decide-derived-tables.md) | decision | P8-S01 | 0.1 d | done |
 | P9-S01 | [hep proc: fits](P9-S01_proc-fits.md) | code | P4-S04 | 1.5 d | todo |
 | P9-S02 | [hep proc: RDataFrame histograms on Delphes output](P9-S02_proc-rdf-delphes.md) | code | P9-S01, P7-S08 | 1 d | todo |
 | P10-S01 | [Remove transition shims; housekeeping commands](P10-S01_cleanup-housekeeping.md) | code | P4-S06 | 0.5 d | todo |
@@ -287,7 +287,7 @@ flowchart LR
 | D-Q8 | Port or archive Lambda? | P0-S06 | answered | archive frozen (D17) |
 | D-Q9 | HepMC3 gzip support? | P5-S01 | answered | yes, compile-time flags |
 | D-STORE-COMP | Default store compression (gz vs zstd) | P5-S01 | answered | **zst**, measured on 10 000 real events: 9 866 B/event vs 10 223 (2.96× vs 2.86×), **2.1× faster to write** (2 289 vs 1 086 ev/s) and 1.26× faster to read (5 624 vs 4 461). No axis favours gz. `gz` stays the fallback where zstd is not compiled in, and the codec is recorded in the index |
-| D-DERIVED | Derived per-candidate tables | P8-S04 | deferred | trigger: first ML training dataset (D23) |
+| D-DERIVED | Derived per-candidate tables | P8-S04 | deferred | trigger: first ML training dataset (D23). Recorded P8-S04 with the four options costed: Parquet needs pyarrow/Arrow (**neither installed**), RNTuple needs **nothing** (ROOT 6.40.04 + uproot), and exact replay (P5-S03) means any offline table can be built later against stores that already exist |
 | D-B11 | EIC studies run e⁺ via `[settle.use]` | P0-S05 | answered | no action (test bed, D20) |
 | D-B12 | PDF tags `NNLO`/`NNNLO` misleading | P1-S06 | answered | rename in v2 migration with alias map |
 | D-B22 | Pin selector precedence | P1-S03 | answered | tag → exact value (numeric-aware) → `#N` index; `use` stays an index |
