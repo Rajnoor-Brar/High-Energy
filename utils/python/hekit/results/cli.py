@@ -355,3 +355,81 @@ def compare(context: click.Context, config_file: Path, study, pins, across, over
                 latest = layout.latest_study(plan.study or "adhoc")
                 if latest is not None:
                     click.echo(f"hep compare: wrote {table.write(latest)}")
+
+
+@click.command()
+@click.argument("config_file", required=False,
+                type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--cache", is_flag=True, help="prepare caches (regenerated on the next run)")
+@click.option("--events", is_flag=True, help="HepMC event stores; the index is kept as a tombstone")
+@click.option("--plots", is_flag=True, help="study plots (regenerable with `hep plot`)")
+@click.option("--orphans", is_flag=True, help="point directories with no result in them")
+@click.option("--all", "everything", is_flag=True, help="every category above")
+@click.option("--older-than", "days", default=0.0, metavar="DAYS",
+              help="only things untouched for this long (events)")
+@click.option("--dry-run", is_flag=True, help="report sizes and remove nothing")
+@click.option("--yes", is_flag=True, help="do not ask before removing")
+@click.pass_context
+def clean(context: click.Context, config_file, cache, events, plots, orphans, everything,
+          days, dry_run, yes) -> None:
+    """Remove caches, old events, orphaned outputs (07 §6).
+
+    With no category flags this reports and removes nothing: a cleaner whose default is to delete is
+    one you run once by accident. YODA files, `fits.json` and provenance are never touched.
+    """
+    from ..config import load_config
+    from . import clean as clean_module
+    from .layout import Layout
+
+    if config_file is None:
+        raise HepError("hep clean needs a config, to know which project's results to look at",
+                       hint="hep clean configs/<project>/<file>.toml --dry-run")
+    config = load_config(config_file)
+    layout = Layout.of(config)
+    if not layout.root.is_dir():
+        raise HepError(f"no results under {layout.root}", hint="nothing to clean")
+
+    chosen = {kind for kind, flag in (("cache", cache), ("events", events),
+                                      ("plots", plots), ("orphans", orphans)) if flag}
+    if everything:
+        chosen = set(clean_module.KINDS)
+    reporting = dry_run or not chosen
+
+    groups = clean_module.survey(layout, kinds=chosen or set(clean_module.KINDS), days=days)
+    total = sum(group.bytes for group in groups)
+
+    for group in groups:
+        head = f"{group.kind:<8} {clean_module.human(group.bytes):>10}  {len(group.items)} items"
+        click.echo(f"hep clean: {head}   {clean_module.KINDS[group.kind]}")
+        for item in group.items[:10]:
+            click.echo(f"             {clean_module.human(item.bytes):>10}  "
+                       f"{item.path.name}" + (f"  ({item.note})" if item.note else ""))
+        if len(group.items) > 10:
+            click.echo(f"             … {len(group.items) - 10} more")
+
+    if reporting:
+        # The question being asked is "what is taking the space", and the answer often is not
+        # something this command would remove.
+        biggest = clean_module.largest(layout)
+        if biggest:
+            click.echo("hep clean: largest directories")
+            for item in biggest:
+                click.echo(f"             {clean_module.human(item.bytes):>10}  "
+                           f"{item.note}/{item.path.name}")
+        click.echo(f"hep clean: {clean_module.human(total)} could be freed"
+                   + ("" if chosen else " (name a category, or --all, to remove it)"))
+        return
+
+    if total == 0:
+        click.echo("hep clean: nothing to remove")
+        return
+    if not yes:
+        click.confirm(f"hep clean: remove {clean_module.human(total)}?", abort=True)
+
+    removed = 0
+    freed = 0
+    for group in groups:
+        count, bytes_freed = clean_module.remove(group)
+        removed += count
+        freed += bytes_freed
+    click.echo(f"hep clean: removed {removed} items, freed {clean_module.human(freed)}")

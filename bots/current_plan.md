@@ -391,15 +391,108 @@ and filtering whole events would give a different, plausible answer.
 
 Suite: **745 Python tests** (was 723).
 
-## Next — P10-S01
+## Just finished — P10-S01 (shims, `hep clean`, `hep new`) — done
 
-Read `docs/rework/steps/README.md` for P10's order, then the next step file, and mirror it here
-before starting. P10 is the last phase: cleanup and housekeeping, a final docs pass, then the
-portability check and release tag.
+17 new tests. **The command tree of 08 §2 is complete** — no entry in `COMMANDS` is a placeholder,
+and a test asserts that rather than skipping once it becomes true.
+
+**The grep row cannot pass, and making it pass would be a mistake.** As written it finds 345 hits;
+in *code*, 24, and every one is either (a) the 7 lines in `config/migrate.py` that read `[rivpyth]`
+out of a v1 file — precisely what the Goal permits — (b) one line in `validate.py` that *detects* a
+v1 file to say "run `hep config migrate`" instead of a wall of key errors, or (c) a docstring
+recording where a function was ported from. Deleting (c) to satisfy a grep would destroy the record
+of why some code is shaped as it is and remove no transitional behaviour.
+
+So the row was replaced with the question it means: **is there executable code outside `migrate`
+that still speaks v1?** An AST check parses every module and inspects literals and identifiers with
+docstrings excluded *by parsing*. Answer: **zero** — and proved to discriminate by reintroducing a
+`raw.get("rivpyth", …)` elsewhere and watching it fail. `sources/` is gone; `NtupleSink`/`RNTuple`
+appear nowhere in code.
+
+**`hep clean` is shaped by its second column.** 07 §6 says YODA files, `fits.json` and provenance
+are never touched, so no category is on by default, removals confirm, and `--older-than` makes
+`--events` safe on a live tree. Removing a store **keeps `events.index.json`** as a tombstone, and
+`--dry-run` ends with the largest directories *regardless of category* — "what is taking the space"
+is the real question and the answer is often something the tool will never remove.
+
+**The scaffolds build, and that was checked.** The analysis compiles against `rivet-config`, the
+module against the `hekit` headers, and the project config plans to one point. The module scaffold
+already obeys the scaling contract and carries the `threadSafe()` note, because those are the two
+things a first module gets wrong. Nothing is ever overwritten.
+
+Suite: **761 Python tests** (was 745).
+
+## Just finished — P10-S02 (final documentation pass) — done
+
+Two new documents, three rewritten, and **both rows turned into tests** so the docs cannot rot
+silently.
+
+- **`docs/GUIDE.md`** — how to get work done, in the order a session happens (plan → run → proc →
+  plot), with the surprising things given their own sections: why threads are sometimes not used,
+  what a seed is derived from, what `hep clean` refuses to touch. Ends with a symptom→command table
+  and the exit codes.
+- **`docs/MAP.md`** — where things live: the two halves and the narrow contract between them, the
+  C++ layering, the `hekit` packages, a results directory, and a "finding your way in" table. It
+  names the two invariants to know before opening the code (the scaling contract; concurrency is a
+  property of the sink).
+- **The design is a record now, not a proposal.** `rework/README.md` says so and carries a table of
+  the **eleven places building it changed it** — so a reader does not have to find them one at a
+  time.
+
+**Links:** 0 broken over **504 relative links in 76 documents**, anchors checked against the target's
+headings (a link to a renamed section is as broken as one to a missing file, and much harder to
+spot). **Commands:** all 19 documented, *and* the converse — no document mentions a `hep <word>`
+that does not exist, which is what protects a reader from typing something that fails. Both proved
+to discriminate against a deliberate break.
+
+`bots/BOT.md`'s layout table was stale — it still listed `sources/` and `tools/`, both gone —
+refreshed under the standing `bots/` approval.
+
+Suite: **769 Python tests** (was 762).
+
+## Just finished — P10-S03 — done. **The rework is complete.**
+
+54 of 55 steps; P7-S07 stays blocked by D-Q6 (the Herwig rebuild, deferred by the user). Tagged
+`rework/v1` with approval.
+
+**N5 holds.** With `RIVET`, `HEPMC` and `ONNX` all `OFF` the build configures, `hep-run` and eight
+test binaries link, and `ctest -L cxx` passes **11/11**. `hep-run --capabilities` answers
+`"components": []` — it degrades to a working Pythia-and-YODA binary that still speaks the same
+spec schema, not to one that cannot start.
+
+**N6 holds.** `hep doctor` with the toolchain hidden exits **0**, names each missing module *and
+what to check*, and marks each generator `—`. A diagnostic that fails when things are broken is the
+one tool that must not.
+
+**The size report, and one budget missed.**
+
+| | Budget | Measured | |
+|---|---|---|---|
+| C++ | 3 150 | 4 659 | 1.48x |
+| Python | ~4 000 | 13 261 | **3.32x — missed** |
+
+The C++ replaced **10 404 lines with 4 659**, covering more tools. The Python budget was missed in
+every area by 2-5x, and the reason is how it was set: "port `rivpyth_common`" (1 147 lines) plus
+glue, estimated before the four external-generator adapters, the phased supervisor, three fit
+backends, two histogram engines and the live terminal existed as designs. Recorded as a miss rather
+than revised, so the next estimate starts from a known error.
+
+**And the degradation check found a defect of its own (00/B38).** `hep doctor --refresh` in the
+stripped shell wrote its findings to a cache keyed on the install root alone, so the *next* `hep
+doctor` in a good shell was told "herwig: not installed" for a day. It surfaced as an unrelated test
+failing. `PATH` and `PYTHONPATH` are part of the key now — every check resolves through them — and a
+report is reused only in the environment that produced it.
+
+## What is left
+
+- **P7-S07 (Herwig adapter)** — blocked, not forgotten. D-Q6 deferred the ThePEG rebuild; the two
+  corrected configure flags are in P7-S06's Log. Unblocking is a rebuild, then the adapter.
+- **`[plot].merge = "yodamerge"`** — declared in the schema, implemented as `results/merge.py`, but
+  the *command* that drives it has no owning step (noted in P8-S01's Log).
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · **P7 7/8 — complete bar S07, blocked by D-Q6** · **P8 4/4 — P8 complete** · **P9 2/2 — P9 complete** · P10 todo — 51 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · **P7 7/8 — complete bar S07, blocked by D-Q6** · **P8 4/4 — P8 complete** · **P9 2/2 — P9 complete** · **P10 3/3 — every phase complete** — 54 of 55 steps done (P7-S07 blocked by D-Q6).
 
 ## Standing constraints
 

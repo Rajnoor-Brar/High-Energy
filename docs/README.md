@@ -1,10 +1,19 @@
 # docs/
 
-- **[rework/](rework/)** — the active design and execution plan for the new stack: `README.md`, the numbered
-  design documents 00–13, and `steps/` (step index, dependency graph, decision register, traceability).
+- **[GUIDE.md](GUIDE.md)** — using the toolkit: a config, a run, results, your own analysis or
+  module, and what to do when something goes wrong. Start here.
+- **[MAP.md](MAP.md)** — where everything lives and what owns what: the two halves, the C++
+  namespaces, the `hekit` packages, and the shape of a results directory.
+- **[rework/](rework/)** — the design: `README.md`, the numbered documents 00–13, the generated
+  [config reference](rework/reference/config.md), and `steps/` (the step index, dependency graph,
+  decision register and traceability).
 
-Everything else that used to live here describes the pre-rework code and has been archived, with its history,
-under **[../legacy/docs/](../legacy/docs/)**: `MAP.md`, `Architecture.md`, `DataContract.md`, `UtilsAudit.md`,
-`UtilsDependencyMap.md`, `Audit.md`, `archive/`, `plans/` and the old `bots/{CLAUDE,plan,GEMINI}.md`.
+**The design documents are now a record, not a plan.** They describe the system that was built,
+with each step's Log recording what was *measured* rather than what was intended — including the
+places where the design turned out to be wrong and what replaced it. When a document and the code
+disagree, the code is right and the Log usually says why.
 
-A new `docs/MAP.md` for the implemented system is written in P10-S02.
+Everything describing the pre-rework code is archived, with its history, under
+**[../legacy/docs/](../legacy/docs/)**: the old `MAP.md`, `Architecture.md`, `DataContract.md`,
+`UtilsAudit.md`, `UtilsDependencyMap.md`, `Audit.md`, `archive/`, `plans/` and the old
+`bots/{CLAUDE,plan,GEMINI}.md`. Nothing current links into it for how the system works.

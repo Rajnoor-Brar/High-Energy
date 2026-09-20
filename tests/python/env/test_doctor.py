@@ -274,3 +274,33 @@ def test_pdf_list(tmp_path):
     done = run_hep("pdf", "list", "NNPDF", cwd=tmp_path)
     assert done.returncode == 0, done.stderr
     assert all("NNPDF" in line for line in done.stdout.splitlines() if line)
+
+
+def test_a_probe_from_a_stripped_shell_does_not_poison_a_normal_one(tmp_path, monkeypatch):
+    """00/B38: the cache is keyed on the environment it probed, not only on the install root.
+
+    Every check resolves through `PATH` and `PYTHONPATH`, so a probe run in a container, a stripped
+    shell or a test finds almost nothing — and keying only on the install root handed that answer
+    back to a normal shell for the next day. Found in P10-S03 by running the N6 degradation check
+    and watching it break an unrelated test.
+    """
+    from hekit.env import doctor
+
+    cache = tmp_path / "doctor.json"
+    rich = doctor.report(cache=cache)
+    assert cache.is_file()
+
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    monkeypatch.setenv("PYTHONPATH", "")
+    assert doctor.environment_key() != _key_of(cache), "the key ignored the environment"
+
+    # A cached report from a different environment must not be reused.
+    monkeypatch.undo()
+    again = doctor.report(cache=cache)
+    assert again.toolchain.keys() == rich.toolchain.keys()
+
+
+def _key_of(cache):
+    import json
+
+    return json.loads(cache.read_text(encoding="utf-8")).get("env_key")

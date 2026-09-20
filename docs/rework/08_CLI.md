@@ -35,8 +35,9 @@ hep pdf      check CONFIG | install SET… | list [PATTERN]
 hep build    [TARGET…] [--analyses PROJECT] [--modules PROJECT] [--clean]    (wraps cmake)
 hep bench    CONFIG [--events 2000] [--json]     sink cost → concurrency recommendation
 hep doctor   [--json|--brief]                    tool versions, Python imports, capabilities, env sanity
-hep clean    [--cache] [--events AGE] [--plots] [--orphans] [--dry-run]
-hep new      analysis NAME PROJECT | module NAME PROJECT | project NAME
+hep clean    CONFIG [--cache] [--events] [--plots] [--orphans] [--all]
+                    [--older-than DAYS] [--dry-run] [--yes]
+hep new      analysis|module|project NAME [--project NAME] [--into DIR]
 ```
 
 **Mapping from today's commands:**
@@ -48,7 +49,7 @@ hep new      analysis NAME PROJECT | module NAME PROJECT | project NAME
 | `ydplt` | `hep plot --points` |
 | `ydmrg` | `hep plot` (pages) |
 | `hep_status` | `hep doctor` (the shell function becomes a thin alias) |
-| `rivet-mkanalysis` + manual `.info`/`.plot` edits | `hep new analysis` (a template with options, `.info` and `.plot` skeletons) |
+| `rivet-mkanalysis` + manual `.info`/`.plot` edits | `hep new analysis` — a plugin that **compiles as it stands**, with its `.info`; likewise `hep new module` (the four verbs and the scaling contract already obeyed) and `hep new project` (a config `hep plan` accepts, plus a base card). Nothing is ever overwritten |
 | `make folder/x.so` | `hep build --analyses PhotoProduction` |
 | `probe`-style re-reading of stored events | `[generator] tool = "store"` + `hep run` (replay), `hep store …` |
 | ROOT macros / Paint for fits and plots | `hep proc` (fits, RDF) + `hep plot` |

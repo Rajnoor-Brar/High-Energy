@@ -15,21 +15,24 @@
 
 | Path         | Purpose                                                                      |
 | ------------ | ---------------------------------------------------------------------------- |
+| `analyses/`  | Rivet analysis plugins per project (`analyses/<Project>/`), built by `hep build` |
 | `aux/`       | VSCode extensions and tooling for HEP UX                                     |
 | `bots/`      | Bot configuration, plans (`current_plan.md`, `intent.md`), and `lessons.md`   |
+| `cmake/`     | `Find*.cmake` modules for the `~/HEP` stack                                  |
 | `configs/`   | User configs per project (`configs/<Project>/`)                              |
 | `datasets/`  | Third-party datasets downloaded from the internet                            |
-| `docs/`      | Documentation; `docs/rework/` holds the active design and step plan          |
+| `docs/`      | `GUIDE.md` (use), `MAP.md` (layout), `rework/` (design and step Logs)        |
 | `env/`       | Versioned shell environment (`hep_env.sh`), sourced by the `~/HEP` stub      |
-| `legacy/`    | Frozen pre-rework code, tests, configs and docs — never included from outside |
+| `legacy/`    | Frozen pre-rework code, tests, configs, docs and the retired tools — never included from outside |
+| `modules/`   | User C++ analysis modules (`modules/<Project>/`), one shared library each    |
 | `output/`    | Build artefacts and scratch (`output/scratch/` for tests and dry runs)       |
 | `results/`   | Presentable outputs (YODA, images, HTML pages)                               |
-| `sources/`   | Driver and Rivet-analysis sources per project (`sources/<Project>/`)         |
-| `tests/`     | Tests; `tests/golden/` holds the legacy golden fixtures                      |
-| `tools/`     | Versioned legacy tools (`rivpyth`, `ydplt`, `ydmrg`), retired in P4-S06      |
-| `utils/`     | Core logic not tied to a specific project (being rebuilt by the rework)      |
+| `tests/`     | `python/`, `integration/`, `cxx/`, `golden/` (frozen fixtures), `e2e/`       |
+| `utils/`     | The toolkit: C++ namespaces (`utils/<Namespace>.hh` + `<Namespace>/`) and the `hekit` Python package under `utils/python/` |
 
 - For any module or utility `Foo`, its submodules reside in `Foo/`.
+- `sources/` and `tools/` are gone: the drivers became `hep-run` and the analyses moved to
+  `analyses/`; the legacy tools were retired into `legacy/` in P4-S06.
 - `legacy/` is reference only: copy or adapt from it, never `#include` or import it
   (see `legacy/PORTING.md`).
 - `BOT.md` contains directives for bots and agents (BOTs).
