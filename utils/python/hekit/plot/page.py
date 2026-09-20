@@ -37,6 +37,7 @@ class Page:
     plot_file: Path | None = None
     ranges: Path | None = None
     data: data_module.DataOverlay | None = None
+    fits: Any = None
     workdir: Path | None = None
     warnings: list[str] = field(default_factory=list)
     voided: transform.VoidReport | None = None
@@ -44,6 +45,18 @@ class Page:
     @property
     def paths(self) -> list[Path]:
         return [curve.path for curve in self.curves]
+
+    @property
+    def drawable(self) -> list[Path]:
+        """Everything a backend should put on the axes: the curves, then the fits (12 §3).
+
+        Kept separate from `paths` because voiding, unification and auto-ranging all operate on the
+        *curves* — a fitted function has no bins to void and no analysis name to unify.
+        """
+        found = list(self.paths)
+        if self.fits is not None and getattr(self.fits, "path", None) is not None:
+            found.append(self.fits.path)
+        return found
 
     @property
     def legends(self) -> list[str]:
@@ -95,7 +108,8 @@ def prepare(points: list[PointFile], workdir: Path, *, name: str = "", project: 
             analysis: str = "", legends: str = "label", void_empty: bool = False,
             min_entries: int = 0, auto_range: bool = False, range_pad: int = 0,
             data_file: Path | str = "", data_map: dict[str, str] | None = None,
-            data_reference: bool = True, data_show: bool = True) -> Page:
+            data_reference: bool = True, data_show: bool = True,
+            proc_dir: Path | None = None) -> Page:
     """Run the pipeline for one page and return everything a backend needs."""
     absent = missing(points)
     if absent:
@@ -125,6 +139,20 @@ def prepare(points: list[PointFile], workdir: Path, *, name: str = "", project: 
             reference=data_reference, show=data_show)
         page.warnings.extend(page.data.warnings)
 
+    # `[plot].show_fits`: `hep proc`'s curves, renamed onto the histograms they were fitted to, as
+    # one more input file (12 §3). Nothing edits `proc.yoda` itself — that is the record.
+    if proc_dir is not None:
+        from . import fits as fits_module
+
+        proc_yoda = Path(proc_dir) / "proc.yoda"
+        if proc_yoda.is_file():
+            page.fits = fits_module.overlay(
+                proc_yoda, on=io.read(page.paths[0]).keys() if page.paths else (),
+                destination=workdir / "fits.yoda",
+                targets=fits_module.targets_of(Path(proc_dir) / "fits.json"))
+            for reason in page.fits.skipped:
+                page.warnings.append(f"fit not drawn: {reason}")
+
     if auto_range:
         inputs = list(page.paths)
         if page.data is not None and page.data.path is not None:
@@ -133,7 +161,8 @@ def prepare(points: list[PointFile], workdir: Path, *, name: str = "", project: 
     return page
 
 
-def prepare_from_config(plan: Any, layout: Any, page_spec: Any, workdir: Path) -> Page:
+def prepare_from_config(plan: Any, layout: Any, page_spec: Any, workdir: Path,
+                        proc_dir: Path | None = None) -> Page:
     """The same, reading every option from a config's `[plot]` section."""
     config = plan.config
     plot = config.plot
@@ -143,7 +172,8 @@ def prepare_from_config(plan: Any, layout: Any, page_spec: Any, workdir: Path) -
         legends=plot.legends, void_empty=plot.void_empty, min_entries=plot.min_entries,
         auto_range=plot.auto_range, range_pad=plot.range_pad,
         data_file=_data_path(config), data_map=dict(getattr(plot.data, "map", {}) or {}),
-        data_reference=plot.data.reference, data_show=plot.data.show)
+        data_reference=plot.data.reference, data_show=plot.data.show,
+        proc_dir=proc_dir if getattr(plot, "show_fits", False) else None)
 
 
 def _data_path(config: Any) -> str:

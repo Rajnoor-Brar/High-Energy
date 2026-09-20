@@ -164,6 +164,34 @@ def histograms_on(page: Page) -> dict[str, list[tuple[str, Any]]]:
             if key is None:
                 continue
             found.setdefault(key, []).append((curve.legend or curve.name, obj))
+
+    # `hep proc`'s derived histograms are results in their own right (12 §2.2), so they get their
+    # own figure rather than being overlaid on someone else's.
+    fits = getattr(page, "fits", None)
+    if fits is not None and getattr(fits, "path", None) is not None:
+        for obj_path, obj in io.read(fits.path).items():
+            if not io.is_binned_1d(obj):
+                continue                                # a fitted curve: `fits_on` draws those
+            key = io.plot_key(obj_path) or obj_path
+            found.setdefault(key, []).append((obj.title() or obj_path, obj))
+    return found
+
+
+def fits_on(page: Page) -> dict[str, list[tuple[str, Any]]]:
+    """`{plot key: [(name, scatter)]}` — the fitted curves for each figure (12 §3).
+
+    A fit is a `Scatter2D`, not a histogram, so it is collected separately from `histograms_on`:
+    it has no bins, takes no part in the ratio panel, and must not be voided or auto-ranged.
+    """
+    found: dict[str, list[tuple[str, Any]]] = {}
+    fits = getattr(page, "fits", None)
+    if fits is None or getattr(fits, "path", None) is None:
+        return found
+    for obj_path, obj in io.read(fits.path).items():
+        key = io.plot_key(obj_path)
+        if key is None:
+            continue
+        found.setdefault(key, []).append((str(obj.title() or "fit"), obj))
     return found
 
 
@@ -194,7 +222,8 @@ def _steps(obj: Any) -> tuple[list[float], list[float], list[float]]:
 
 def draw_one(key: str, curves: list[tuple[str, Any]], reference: Any | None,
              settings: dict[str, Any], output: Path, *, formats=("pdf", "png"),
-             ratio: bool = True, data_legend: str = "Data") -> list[Path]:
+             ratio: bool = True, data_legend: str = "Data",
+             fits: list[tuple[str, Any]] | None = None) -> list[Path]:
     """One figure, with a ratio panel when there is something to divide by."""
     import matplotlib.pyplot as pyplot
     import numpy
@@ -210,6 +239,17 @@ def draw_one(key: str, curves: list[tuple[str, Any]], reference: Any | None,
 
     # mkhtml's rule: the denominator is the reference when there is one, else the first curve.
     denominator = reference if reference is not None else (curves[0][1] if curves else None)
+
+    for name, scatter in (fits or []):
+        # A smooth line, drawn under the data: a fit is a claim about the curve, not another
+        # measurement, so it must not look like one.
+        try:
+            xs = [float(point.x()) for point in scatter.points()]
+            ys = [float(point.y()) for point in scatter.points()]
+        except Exception:
+            continue
+        if xs:
+            axes.plot(xs, ys, linestyle="-", linewidth=1.4, color="0.25", zorder=1.5, label=name)
 
     for legend, obj in curves:
         edges, values, errors = _steps(obj)
@@ -281,13 +321,14 @@ def draw(page: Page, output: Path, *, style: Style | None = None,
         raise HepError(f"page {page.name} has nothing to draw",
                        hint="the results hold no 1D histograms for this analysis")
     references = reference_on(page)
+    fits = fits_on(page)
 
     for key in sorted(curves):
         settings = plot_settings(page, key)
         try:
             result.files += draw_one(key, curves[key], references.get(key), settings, output,
                                      formats=style.formats, ratio=style.ratio,
-                                     data_legend=data_legend)
+                                     data_legend=data_legend, fits=fits.get(key))
         except Exception as error:                         # noqa: BLE001 - one bad plot, not the page
             result.skipped[key] = str(error)
     return result

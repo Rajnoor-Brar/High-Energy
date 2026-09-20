@@ -30,6 +30,7 @@ hep proc CONFIG [selectors…] [--only NAME] [--backend auto|minuit2|roofit|scip
 - **Inputs:** results that `hep run` has already produced (group `analysis.yoda` files, `delphes.root`).
 - **Outputs:** written into the study directory (07 §1).
 - **Idempotence:** re-running with unchanged inputs and config is a no-op (hash check, like points).
+- **`--only NAME` merges.** It recomputes that one entry and **keeps** the others already in `fits.json` and `proc.yoda`, because "redo just this fit" should not discard the other four. A full run writes the complete set and replaces, so what is on disk is then exactly what the config says.
 
 ### 2.1 Fits
 
@@ -47,12 +48,14 @@ backend  = "auto"                           # auto → minuit2 if PyROOT importa
 likelihood = "chi2"                         # chi2 | poisson (binned)
 ```
 
-- **Backends** share one interface: `fit(hist, model, range, init, limits) → Result(params, errors, cov, chi2, ndf, status)`.
-  - `minuit2`: PyROOT `ROOT.Math.Minimizer` (Minuit2).
-  - `roofit`: PyROOT RooFit, for extended likelihood and composite PDFs.
-  - `scipy`: `scipy.optimize.curve_fit` or `minimize` (scipy 1.18 is installed). This is the fallback when PyROOT is missing, and it is reported in the output.
-- **Model library:** a small Python registry. Each model knows its parameter names, its ROOT `TF1` formula and a NumPy callable, so every backend evaluates the same function.
-- **Voided bins** (07 §4): NaN bins are excluded from the fit.
+- **Backends** share one interface: `fit(model, points, init, limits, likelihood) → Result(params, errors, cov, chi2, ndf, status, backend)`.
+  - `minuit2`: PyROOT `ROOT.Math.Minimizer` (Minuit2), driven with a `ROOT::Math::Functor` that wraps **the model's own NumPy callable** — not a `TF1`. So Minuit2 and scipy minimise a byte-identical objective and "do the backends agree" is a question about minimisers rather than about transcribing a formula twice. Measured in P9-S01: **3.9 × 10⁻⁶** worst relative difference over five parameters.
+  - `roofit`: PyROOT RooFit, for extended likelihood and composite PDFs. This is the one backend that *does* use the `TF1` spelling (through `RooGenericPdf`), and its parameters are not comparable to the others' term by term.
+  - `scipy`: **`least_squares` for a χ²** and `minimize` for a Poisson likelihood. The split matters: a χ² is a nonlinear least-squares problem, and a general minimiser handles the parameter scaling badly. P9-S01 measured `L-BFGS-B` stopping at χ²/ndf = 12.5 with 5σ biases where `least_squares` and Minuit2 both reach χ²/ndf ≈ 0.8. This is the fallback when PyROOT is missing, and it is reported in the output rather than substituted silently.
+- **Model library:** a small Python registry — `gauss`, `breitwigner`, `crystalball`, `voigt`, `expo`, `polyN`, `threshold`. Each knows its **parameter names** (so a config writes `init = { mean = … }` and not `[1] = …`), a NumPy callable and a `TF1` formula. Composition is `+`; repeated components are numbered (`gauss1.mean`), and a lone one keeps the plain name.
+- **Initial guesses are read off the data**, background terms first so a peak's guess is made against what the background has not already explained. A Gaussian started on the wrong side of a peak converges somewhere plausible and wrong.
+- **Voided bins** (07 §4): NaN bins are excluded from the fit, and so are bins with no uncertainty — a zero error is an infinite weight. Both are *counted*, and the count is in `fits.json`.
+- **What is being fitted matters.** A `Histo1D` bin carries `sumW`, a sum over the bin, so the fit uses `sumW / width`; a **`BinnedEstimate1D`** — which is what a finalized Rivet analysis writes, and so what nearly every fit targets — carries `val()`, already finished, and must **not** be divided again. On a uniform binning that error is a constant factor, so the fit still converges and the amplitude is quietly wrong.
 
 ### 2.2 Derived histograms on Delphes output
 
@@ -69,9 +72,13 @@ engine = "auto"                             # auto → rdf if PyROOT, else uproo
 
 - **Engines:**
   - `rdf`: `ROOT.RDataFrame` with `EnableImplicitMT`.
-  - `uproot`: `uproot` + `awkward` + `hist` (all installed).
-  - Both must give identical bins (tested in P9-S02).
-- **Output:** YODA `Histo1D`/`Histo2D` in `proc.yoda` under `/PROC/<name>`, so `hep plot` treats it like any other result.
+  - `uproot`: `uproot` + `awkward` (both installed).
+  - Both must give identical bins (measured in P9-S02: identical on every expression tested, including the precedence case below).
+- **The selection cuts *elements*, not events.** A Delphes branch is jagged, so `Jet.PT > 5` is a boolean per jet; what the config means is "the jets that pass", not "the events in which one does". Both engines apply it as an element mask (`Jet.PT[cut]`), never as an event filter.
+- **One expression language, translated once.** RDF compiles C++ and uproot evaluates Python, so `&&`, `||` and `!` have to be converted — and the trap is that Python's `&` binds **tighter** than a comparison, so rewriting the text turns `a > 5 && b < 3` into `a > (5 & b) < 3`: valid, different, silent. The translation therefore goes through Python's own parser and rewrites `and`/`or`/`not` as **tree nodes**, where precedence is structural. Calls are restricted to a list that means the same thing on both sides (`abs`, `sqrt`, `log`, `log10`, `exp`, `sin`, `cos`, `tan`, `min`, `max`).
+- **Branch spelling is the file's business:** Delphes writes `Jet.PT`, a plain ROOT tree writes `Jet_PT`, and a config may use either.
+- **Output:** `/PROC/<name>` in `proc.yoda` — a **`BinnedEstimate1D`**, not a `Histo1D`. YODA 2 splits the two: a `Histo1D` is a fillable accumulator and an estimate is a *finished* value with uncertainties, which is what a finalized Rivet analysis writes and what the plot pipeline recognises. A derived histogram is finished the moment it is filled, and writing a `Histo1D` would give a file that is correct, sums correctly, and is silently skipped by every plotting path.
+- **On a page** a derived histogram is its *own* figure — unlike a fitted curve, which is an overlay on the histogram it was fitted to.
 
 ## 3. Outputs
 
@@ -83,7 +90,7 @@ results/<project>/studies/<study>/proc/
   proc.log
 ```
 
-- **Plotting:** `hep plot` overlays `/PROC/<fit>/curve` on its target histogram when `[plot].show_fits = true`.
+- **Plotting:** `hep plot` overlays `/PROC/<fit>/curve` on its target histogram when `[plot].show_fits = true`. The curve is **renamed to its target** on a copy — a plotter overlays objects whose paths match, and `/PROC/peak/curve` matches nothing. When several points on a page were each fitted, their curves are kept apart by an analysis option (`/photo_eic:fit=<point>/…`), which `io.plot_key` strips, so they all land on the one figure instead of overwriting each other.
 - **Tables:** `hep compare` and `hep show` print fit tables from `fits.json`.
 - **Provenance:** each entry records the input YODA sha256, the proc config hash, the backend and version, and PyROOT availability.
 

@@ -329,6 +329,11 @@ if(HEKIT_PYTEST)
     set_tests_properties(onnx_plugin PROPERTIES LABELS "cxx" TIMEOUT 1800)
   endif()
 
+  # `hep proc`: fits over results that already exist, and the overlay `hep plot` draws (P9-S01).
+  add_test(NAME proc COMMAND ${HEKIT_PYTEST} -q
+           ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_proc.py)
+  set_tests_properties(proc PROPERTIES LABELS "slow" TIMEOUT 3600)
+
   # The analysis plugin's own defects and its re-entrant merge (P4-S05).
   add_test(NAME photo_eic COMMAND ${HEKIT_PYTEST} -q
            ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_photo_eic_plugin.py)
