@@ -41,7 +41,7 @@ Date: 2026-09-17 · Source: [10_Roadmap.md](../10_Roadmap.md) · 55 steps in 11 
 | P7 | External generators and Delphes | Sherpa, Whizard, MadGraph, Herwig (gated) and external Delphes through the same pipeline. | Sherpa and MG+Pythia points via `hep run`; prepare cache hit on a seed study; `delphes.root` produced; Herwig runs or is explicitly gated. | P3, P5-S02 | 7 d | 8 | done (S07 blocked) |
 | P8 | Modules, YODA results, Phys, ML | User C++ modules book YODA into `analysis.yoda`; physics helpers; ONNX inference. | Toy module exact at 1/4/20 threads; ONNX toy works; derived-tables decision recorded. | P2, P5-S01, P6-S01 | 3 d | 4 | done |
 | P9 | ROOT processing layer | `hep proc` fits and RDataFrame histograms → `fits.json` + YODA. | Minuit2 ≡ scipy on synthetic fits; RDF ≡ uproot on `delphes.root`. | P4 (+ P7-S08 for S02) | 2.5 d | 2 | done |
-| P10 | Cleanup, docs, release | No transitional code; documentation matches reality. | Clean greps; minimal build green; tag `rework/v1`. | P4 (+ whichever optional phases are done) | 1.25 d | 3 | in-progress |
+| P10 | Cleanup, docs, release | No transitional code; documentation matches reality. | Clean greps; minimal build green; tag `rework/v1`. | P4 (+ whichever optional phases are done) | 1.25 d | 3 | done |
 
 ```
 P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬──────────────► P10
@@ -108,7 +108,7 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P9-S02 | [hep proc: RDataFrame histograms on Delphes output](P9-S02_proc-rdf-delphes.md) | code | P9-S01, P7-S08 | 1 d | done |
 | P10-S01 | [Remove transition shims; housekeeping commands](P10-S01_cleanup-housekeeping.md) | code | P4-S06 | 0.5 d | done |
 | P10-S02 | [Final documentation pass](P10-S02_docs-final.md) | docs | P10-S01 | 0.5 d | done |
-| P10-S03 | [Portability check and release tag](P10-S03_portability-release.md) | test | P10-S02 | 0.25 d | todo |
+| P10-S03 | [Portability check and release tag](P10-S03_portability-release.md) | test | P10-S02 | 0.25 d | done |
 
 ## 6. Dependency graph
 

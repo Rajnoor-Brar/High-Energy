@@ -249,22 +249,41 @@ def probe() -> Report:
     )
 
 
+def environment_key() -> str:
+    """What the probe's answers actually depend on.
+
+    The install root is not enough. Every check here resolves through `PATH` and `PYTHONPATH`, so a
+    probe run in a stripped shell — a container, a `env -u` invocation, a test — finds almost
+    nothing, and keying only on the install root means that answer is then handed back to a *normal*
+    shell for the next day. Found in P10-S03, by running the N6 degradation check and watching it
+    poison the cache for everything afterwards.
+    """
+    import hashlib
+
+    parts = [str(versions.install_root()), os.environ.get("PATH", ""),
+             os.environ.get("PYTHONPATH", "")]
+    return hashlib.sha256("\0".join(parts).encode("utf-8")).hexdigest()[:16]
+
+
 def report(*, refresh: bool = False, cache: Path = CACHE) -> Report:
-    """The cached report, re-probing when it is older than a day or the install moved."""
+    """The cached report, re-probing when it is older than a day or the environment changed."""
     if not refresh and cache.is_file():
         try:
             stored = json.loads(cache.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             stored = {}
         fresh = time.time() - stored.get("when", 0) < CACHE_SECONDS
-        if fresh and stored.get("install") == str(versions.install_root()):
+        if fresh and stored.get("install") == str(versions.install_root()) \
+                and stored.get("env_key") == environment_key():
             return Report(**{key: stored[key] for key in
                              ("toolchain", "python", "generators", "hep_run", "data", "env", "when",
                               "install") if key in stored})
     found = probe()
     try:
         cache.parent.mkdir(parents=True, exist_ok=True)
-        cache.write_text(json.dumps(found.as_dict(), indent=1), encoding="utf-8")
+        payload = found.as_dict()
+        payload["env_key"] = environment_key()
+        cache.write_text(json.dumps(payload, indent=1), encoding="utf-8")
     except OSError:                     # a read-only home must not break the command
         pass
     return found

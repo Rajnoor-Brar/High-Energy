@@ -450,14 +450,49 @@ refreshed under the standing `bots/` approval.
 
 Suite: **769 Python tests** (was 762).
 
-## Next — P10-S03
+## Just finished — P10-S03 — done. **The rework is complete.**
 
-The last step: portability check and release tag. **The tag needs user approval** (repo rule 5);
-standing approval covers tags on 2364ccf only, not a new `rework/v1`.
+54 of 55 steps; P7-S07 stays blocked by D-Q6 (the Herwig rebuild, deferred by the user). Tagged
+`rework/v1` with approval.
+
+**N5 holds.** With `RIVET`, `HEPMC` and `ONNX` all `OFF` the build configures, `hep-run` and eight
+test binaries link, and `ctest -L cxx` passes **11/11**. `hep-run --capabilities` answers
+`"components": []` — it degrades to a working Pythia-and-YODA binary that still speaks the same
+spec schema, not to one that cannot start.
+
+**N6 holds.** `hep doctor` with the toolchain hidden exits **0**, names each missing module *and
+what to check*, and marks each generator `—`. A diagnostic that fails when things are broken is the
+one tool that must not.
+
+**The size report, and one budget missed.**
+
+| | Budget | Measured | |
+|---|---|---|---|
+| C++ | 3 150 | 4 659 | 1.48x |
+| Python | ~4 000 | 13 261 | **3.32x — missed** |
+
+The C++ replaced **10 404 lines with 4 659**, covering more tools. The Python budget was missed in
+every area by 2-5x, and the reason is how it was set: "port `rivpyth_common`" (1 147 lines) plus
+glue, estimated before the four external-generator adapters, the phased supervisor, three fit
+backends, two histogram engines and the live terminal existed as designs. Recorded as a miss rather
+than revised, so the next estimate starts from a known error.
+
+**And the degradation check found a defect of its own (00/B38).** `hep doctor --refresh` in the
+stripped shell wrote its findings to a cache keyed on the install root alone, so the *next* `hep
+doctor` in a good shell was told "herwig: not installed" for a day. It surfaced as an unrelated test
+failing. `PATH` and `PYTHONPATH` are part of the key now — every check resolves through them — and a
+report is reused only in the environment that produced it.
+
+## What is left
+
+- **P7-S07 (Herwig adapter)** — blocked, not forgotten. D-Q6 deferred the ThePEG rebuild; the two
+  corrected configure flags are in P7-S06's Log. Unblocking is a rebuild, then the adapter.
+- **`[plot].merge = "yodamerge"`** — declared in the schema, implemented as `results/merge.py`, but
+  the *command* that drives it has no owning step (noted in P8-S01's Log).
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · **P7 7/8 — complete bar S07, blocked by D-Q6** · **P8 4/4 — P8 complete** · **P9 2/2 — P9 complete** · P10 2/3 — 53 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · **P7 7/8 — complete bar S07, blocked by D-Q6** · **P8 4/4 — P8 complete** · **P9 2/2 — P9 complete** · **P10 3/3 — every phase complete** — 54 of 55 steps done (P7-S07 blocked by D-Q6).
 
 ## Standing constraints
 
