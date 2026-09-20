@@ -53,6 +53,11 @@ def arguments(page: Page, *, rivet_refs: bool = False, data_legend: str = "Data"
     inputs = [f"{curve.path}:Title={curve.legend.replace(':', ' ')}" if curve.legend
               else str(curve.path) for curve in page.curves]
 
+    # `[plot].show_fits`: the fitted curves, already renamed onto their targets (12 §3).
+    fits = getattr(page, "fits", None)
+    if fits is not None and getattr(fits, "path", None) is not None:
+        inputs.append(f"{fits.path}:Title=fit")
+
     overlay = page.data
     if overlay is None or overlay.path is None:
         return [*found, *inputs]

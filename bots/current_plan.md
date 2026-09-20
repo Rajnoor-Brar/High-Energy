@@ -326,14 +326,50 @@ fixes the column names and their order, so what is open is the container, not th
 
 No code, no new dependency, nothing to roll back.
 
-## Next — P9-S01
+## Just finished — P9-S01 (`hep proc`: fits) — done
+
+All four rows measured. 17 unit tests, 10 integration tests, ctest `proc`.
+
+**The backends really do fit the same function.** The obvious design — a `TF1` formula for ROOT, a
+NumPy callable for scipy — makes "do the backends agree" a question about transcription. So Minuit2
+drives `ROOT::Math::Minimizer` with a `Functor` wrapping **the model's own callable**. They agree to
+**3.9 × 10⁻⁶** against a 1e-3 requirement.
+
+**A χ² is not a general minimisation.** The first scipy backend used `L-BFGS-B`; on a Gaussian with
+amplitude ~1e5 and width ~2e-3 it stopped at **χ²/ndf = 12.5** with background parameters **4.9σ**
+from truth, where Minuit2 reached 0.835. Scaling, not tolerance — `least_squares` on the residual
+vector matches Minuit2 to six figures. Poisson still goes through `minimize`; it is not a sum of
+squares.
+
+**The recovery row as written is a flaky test** — "within 1σ" for five parameters and one seed fails
+~30 % of the time whatever the code does. Asserted as |pull| < 3 on a fixed seed (the broken
+minimiser gave 4.9σ, so it discriminates) **plus** the pull distribution over 20 seeds: RMS in
+[0.5, 1.8]. That second one is what a single fit cannot check — errors uniformly half their true
+size give perfect parameters and an RMS of 2.
+
+**Two traps, both found by running it against real results.**
+
+- **A finalized Rivet object is a `BinnedEstimate1D`, not a `Histo1D`** — `val()` not `sumW()`, and
+  already finished. Dividing by the bin width (right for a histogram) would scale the amplitude by
+  1/width; on a uniform binning that is a constant, so the fit still converges and is quietly wrong.
+- **A colon in a YODA title is unparseable YAML**, so the file writes cleanly and the *next* command
+  fails on reading it.
+
+**The overlay needed a rename, then a way to keep several apart.** A plotter overlays objects whose
+paths match, so `show_fits` copies each curve onto its target. Several points fitted on one page
+then collide — so each carries an analysis option (`/photo_eic:fit=<point>/…`) that `io.plot_key`
+strips, which is the mechanism two option variants already use.
+
+Suite: **723 Python tests** (was 706).
+
+## Next — P9-S02
 
 Read `docs/rework/steps/README.md` for P9's order, then the next step file, and mirror it here
-before starting. P9 is the ROOT processing layer (D15: processing only, `hep-run` never links ROOT).
+before starting. P9-S02 is `hep proc`'s derived histograms on Delphes output (RDataFrame vs uproot).
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · **P7 7/8 — complete bar S07, blocked by D-Q6** · **P8 4/4 — P8 complete** · P9–P10 todo — 49 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · **P7 7/8 — complete bar S07, blocked by D-Q6** · **P8 4/4 — P8 complete** · P9 1/2 · P10 todo — 50 of 55 steps done.
 
 ## Standing constraints
 

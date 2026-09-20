@@ -71,7 +71,8 @@ def plot(context: click.Context, config_file: Path, study, pins, across, style, 
             else:
                 workdir = Path(stack.enter_context(
                     tempfile.TemporaryDirectory(prefix="hekit-plot-")))
-            built = page_module.prepare_from_config(plan, layout, spec, workdir)
+            built = page_module.prepare_from_config(plan, layout, spec, workdir,
+                                                    proc_dir=_proc_dir(layout, plan))
             for warning in built.warnings:
                 click.echo(f"hep plot: {warning}", err=True)
             if built.voided is not None and built.voided.bins:
@@ -125,6 +126,12 @@ def _study_plots(layout: Any, plan: Any) -> Path:
     if latest is None:
         latest = layout.new_study(study, serial=bool(getattr(plan.config.run, "serial", True)))
     return layout.pages(latest)
+
+
+def _proc_dir(layout: Any, plan: Any) -> Path | None:
+    """Where `hep proc` wrote, when it has been run for this study (12 §3)."""
+    latest = layout.latest_study(getattr(plan, "study", "") or "adhoc")
+    return (latest / "proc") if latest is not None else None
 
 
 def _suggest(plan: Any, layout: Any) -> None:

@@ -47,12 +47,14 @@ backend  = "auto"                           # auto → minuit2 if PyROOT importa
 likelihood = "chi2"                         # chi2 | poisson (binned)
 ```
 
-- **Backends** share one interface: `fit(hist, model, range, init, limits) → Result(params, errors, cov, chi2, ndf, status)`.
-  - `minuit2`: PyROOT `ROOT.Math.Minimizer` (Minuit2).
-  - `roofit`: PyROOT RooFit, for extended likelihood and composite PDFs.
-  - `scipy`: `scipy.optimize.curve_fit` or `minimize` (scipy 1.18 is installed). This is the fallback when PyROOT is missing, and it is reported in the output.
-- **Model library:** a small Python registry. Each model knows its parameter names, its ROOT `TF1` formula and a NumPy callable, so every backend evaluates the same function.
-- **Voided bins** (07 §4): NaN bins are excluded from the fit.
+- **Backends** share one interface: `fit(model, points, init, limits, likelihood) → Result(params, errors, cov, chi2, ndf, status, backend)`.
+  - `minuit2`: PyROOT `ROOT.Math.Minimizer` (Minuit2), driven with a `ROOT::Math::Functor` that wraps **the model's own NumPy callable** — not a `TF1`. So Minuit2 and scipy minimise a byte-identical objective and "do the backends agree" is a question about minimisers rather than about transcribing a formula twice. Measured in P9-S01: **3.9 × 10⁻⁶** worst relative difference over five parameters.
+  - `roofit`: PyROOT RooFit, for extended likelihood and composite PDFs. This is the one backend that *does* use the `TF1` spelling (through `RooGenericPdf`), and its parameters are not comparable to the others' term by term.
+  - `scipy`: **`least_squares` for a χ²** and `minimize` for a Poisson likelihood. The split matters: a χ² is a nonlinear least-squares problem, and a general minimiser handles the parameter scaling badly. P9-S01 measured `L-BFGS-B` stopping at χ²/ndf = 12.5 with 5σ biases where `least_squares` and Minuit2 both reach χ²/ndf ≈ 0.8. This is the fallback when PyROOT is missing, and it is reported in the output rather than substituted silently.
+- **Model library:** a small Python registry — `gauss`, `breitwigner`, `crystalball`, `voigt`, `expo`, `polyN`, `threshold`. Each knows its **parameter names** (so a config writes `init = { mean = … }` and not `[1] = …`), a NumPy callable and a `TF1` formula. Composition is `+`; repeated components are numbered (`gauss1.mean`), and a lone one keeps the plain name.
+- **Initial guesses are read off the data**, background terms first so a peak's guess is made against what the background has not already explained. A Gaussian started on the wrong side of a peak converges somewhere plausible and wrong.
+- **Voided bins** (07 §4): NaN bins are excluded from the fit, and so are bins with no uncertainty — a zero error is an infinite weight. Both are *counted*, and the count is in `fits.json`.
+- **What is being fitted matters.** A `Histo1D` bin carries `sumW`, a sum over the bin, so the fit uses `sumW / width`; a **`BinnedEstimate1D`** — which is what a finalized Rivet analysis writes, and so what nearly every fit targets — carries `val()`, already finished, and must **not** be divided again. On a uniform binning that error is a constant factor, so the fit still converges and the amplitude is quietly wrong.
 
 ### 2.2 Derived histograms on Delphes output
 
@@ -83,7 +85,7 @@ results/<project>/studies/<study>/proc/
   proc.log
 ```
 
-- **Plotting:** `hep plot` overlays `/PROC/<fit>/curve` on its target histogram when `[plot].show_fits = true`.
+- **Plotting:** `hep plot` overlays `/PROC/<fit>/curve` on its target histogram when `[plot].show_fits = true`. The curve is **renamed to its target** on a copy — a plotter overlays objects whose paths match, and `/PROC/peak/curve` matches nothing. When several points on a page were each fitted, their curves are kept apart by an analysis option (`/photo_eic:fit=<point>/…`), which `io.plot_key` strips, so they all land on the one figure instead of overwriting each other.
 - **Tables:** `hep compare` and `hep show` print fit tables from `fits.json`.
 - **Provenance:** each entry records the input YODA sha256, the proc config hash, the backend and version, and PyROOT availability.
 

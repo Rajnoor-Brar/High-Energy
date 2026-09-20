@@ -143,6 +143,7 @@ PLOT = Section("plot", doc="Plotting (was [yoda] in schema 1).", fields={
     "range_pad": Field("int", 0, "empty bins to keep on each side of an auto range", minimum=0),
     "legends": Field("str", "label", "what a curve legend shows", choices=("label", "tag", "value")),
     "analysis": Field("str", "", "common analysis name when plugins differ; '' = the first one"),
+    "show_fits": Field("bool", False, "overlay /PROC/<fit>/curve from proc.yoda on its target (12 §3)"),
 }, subsections={"data": PLOT_DATA, "style": PLOT_STYLE})
 
 TERMINAL = Section("terminal", doc="Live view (06).", machine_keys=("dashboard", "log_tail", "stall_after"),
@@ -155,13 +156,18 @@ TERMINAL = Section("terminal", doc="Live view (06).", machine_keys=("dashboard",
 
 # ── processing (12) ──────────────────────────────────────────────────────────
 
-PROC_FIT = Section("proc.fit", shape="array", doc="Fits run after a study (12).", fields={
+PROC_FIT = Section("proc.fit", shape="array", doc="Fits run after a study (12 §2.1).", fields={
     "name": Field("str", "", "name of this fit in fits.json", required=True),
     "target": Field("str", "", "YODA path to fit", required=True),
-    "model": Field("str", "", "model expression, e.g. 'gauss + poly2'", required=True),
+    "points": Field("str", "all", "which points to fit: 'all', a page name, or a comma-separated list"),
+    "model": Field("str", "", "model expression, e.g. 'gauss + poly2'"),
+    "expr": Field("str", "", "explicit formula instead of a model name, in TF1 spelling"),
     "range": Field("list", [], "fit range [low, high]", item="number", minimum=2, maximum=2),
     "init": Field("table", {}, "initial parameter values", free=True, value_kind="number"),
+    "limits": Field("table", {}, "parameter bounds, name = [low, high]", free=True, value_kind="list"),
+    "likelihood": Field("str", "chi2", "what is minimised", choices=("chi2", "poisson")),
     "backend": Field("str", "auto", "fitting backend", choices=("auto", "minuit2", "roofit", "scipy")),
+    "keep_root": Field("bool", False, "also write proc.root (TF1 and fit result) for inspection"),
 })
 
 PROC_HIST = Section("proc.hist", shape="array", doc="Histograms derived with RDataFrame or uproot (12).",

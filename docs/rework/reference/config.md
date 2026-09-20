@@ -120,6 +120,7 @@ Plotting (was [yoda] in schema 1).
 | `range_pad` | int ≥ 0 | `0` | empty bins to keep on each side of an auto range |
 | `legends` | str one of 'label', 'tag', 'value' | `'label'` | what a curve legend shows |
 | `analysis` | str | — | common analysis name when plugins differ; '' = the first one |
+| `show_fits` | bool | `False` | overlay /PROC/<fit>/curve from proc.yoda on its target (12 §3) |
 
 ### `[plot.data]`
 
@@ -161,7 +162,7 @@ A machine file (`~/.config/hekit/machine.toml`) may set `dashboard`, `log_tail`,
 
 ### `[proc.fit]`
 
-Fits run after a study (12).
+Fits run after a study (12 §2.1).
 
 Written as an array of tables: repeat `[[proc.fit]]` once per entry.
 
@@ -169,10 +170,15 @@ Written as an array of tables: repeat `[[proc.fit]]` once per entry.
 |---|---|---|---|
 | `name` | str | — | name of this fit in fits.json |
 | `target` | str | — | YODA path to fit |
+| `points` | str | `'all'` | which points to fit: 'all', a page name, or a comma-separated list |
 | `model` | str | — | model expression, e.g. 'gauss + poly2' |
+| `expr` | str | — | explicit formula instead of a model name, in TF1 spelling |
 | `range` | list of number ≥ 2 ≤ 2 | — | fit range [low, high] |
 | `init` | table | — | initial parameter values |
+| `limits` | table | — | parameter bounds, name = [low, high] |
+| `likelihood` | str one of 'chi2', 'poisson' | `'chi2'` | what is minimised |
 | `backend` | str one of 'auto', 'minuit2', 'roofit', 'scipy' | `'auto'` | fitting backend |
+| `keep_root` | bool | `False` | also write proc.root (TF1 and fit result) for inspection |
 
 ### `[proc.hist]`
 
