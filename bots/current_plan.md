@@ -487,6 +487,10 @@ report is reused only in the environment that produced it.
 
 - **P7-S07 (Herwig adapter)** — blocked, not forgotten. D-Q6 deferred the ThePEG rebuild; the two
   corrected configure flags are in P7-S06's Log. Unblocking is a rebuild, then the adapter.
+- **00/B39 — the MadGraph stage opens a browser.** `automatic_html_opening` defaults to `True` and
+  our launch script never turns it off, so every MadGraph point spawns a GUI from a batch stage.
+  Found after `rework/v1` was tagged; **recorded, not applied**, by user decision, so the tag points
+  at what was measured. One line in `launch_script()`: `set automatic_html_opening False`.
 - **`[plot].merge = "yodamerge"`** — declared in the schema, implemented as `results/merge.py`, but
   the *command* that drives it has no owning step (noted in P8-S01's Log).
 
