@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from ..adapters import adapter_for
+from ..adapters import base as adapter_base
 from ..adapters import rivet as rivet_adapter
 from ..env import paths
 from ..errors import HepError
@@ -54,20 +55,92 @@ def group_analyses(points: list[Any]) -> list[str]:
     return seen
 
 
-def stage_chain(config: Any, group_name: str) -> list[Stage]:
+def stage_chain(config: Any, group: Any) -> list[Stage]:
     """The processes one generation needs.
 
-    Pythia and a store replay run inside `hep-run`, so the chain has one stage. External generators add
-    a prepare and a generate stage in P7, and an external Delphes tee adds a stage in P7-S08; the chain
-    stays a closed list, never a general dependency graph (02 §3).
+    Pythia and a store replay run inside `hep-run`, so the chain has one stage. An external generator
+    adds up to two more — a cached `prepare` and a `generate` that writes the FIFO `hep-run` reads
+    (04 §1, §8) — and an external Delphes tee adds one in P7-S08. The chain stays a closed list,
+    never a general dependency graph (02 §3).
+
+    The order is always prepare → generate → hep-run, and `hep-run` is always last: it is the one
+    that decides whether the run succeeded, because it is the one counting events.
     """
     tool = config.generator.tool
+    name = group if isinstance(group, str) else group.name
+    run_stage = Stage(name="hep-run", role="generate+analyse",
+                      command=["hep-run", str(naming.point_dir(config, name) / "run.toml")],
+                      note="in-process source and sinks")
+    detector = detector_stages(config, group)
+    for stage in detector:
+        # *After* the run, not beside it: `DelphesHepMC3` sizes its input and skips anything of
+        # length zero, so it cannot read a pipe (P7-S08). The tee writes a file instead.
+        stage.phase = run_stage.phase + 1
     if tool in {"pythia", "store"}:
-        return [Stage(name="hep-run", role="generate+analyse",
-                      command=["hep-run", str(naming.point_dir(config, group_name) / "run.toml")],
-                      note="in-process source and sinks")]
-    raise HepError(f"stage chains for '{tool}' arrive with its adapter",
-                   hint="P7 adds Sherpa, Whizard, MadGraph and Herwig")
+        return [run_stage, *detector]
+
+    adapter = adapter_for(tool)             # raises, naming the step, for one not written yet
+    external = external_stages(config, group, adapter)
+    if native_rivet(config, adapter):
+        # The generator runs Rivet itself and writes the YODA, so there is nothing for `hep-run` to
+        # read. Faster for a Rivet-only run, and it gives up every other sink (04 §4).
+        return external
+    run_stage.role = "analyse"
+    if getattr(adapter, "STREAMS", True):
+        # It shares the generator's phase: a FIFO's two ends must be open at once or they deadlock.
+        run_stage.phase = max((stage.phase for stage in external), default=1)
+        run_stage.note = "reads the FIFO the generator writes (Source::Stream)"
+    else:
+        # The generator wrote a file, so it has to be finished before this reads it (MadGraph's LHE).
+        run_stage.phase = max((stage.phase for stage in external), default=0) + 1
+        run_stage.note = "showers the events the generator wrote"
+    for stage in detector:
+        stage.phase = run_stage.phase + 1      # it reads the file this run wrote
+    return [*external, run_stage, *detector]
+
+
+def detector_stages(config: Any, group: Any) -> list[Stage]:
+    """The external Delphes stage, when `[delphes].card` asks for one (05 §5, P7-S08)."""
+    from ..adapters import delphes as delphes_adapter
+
+    if not delphes_adapter.enabled(config):
+        return []
+    name = group if isinstance(group, str) else group.name
+    return [delphes_adapter.stage(config, group,
+                                  naming.point_dir(config, name)).to_plan_stage()]
+
+
+def native_rivet(config: Any, adapter: Any) -> bool:
+    """Is this run letting the generator do the analysing?"""
+    return (getattr(config.rivet, "mode", "inprocess") == "native"
+            and bool(getattr(adapter, "RUNS_RIVET", False)))
+
+
+def external_stages(config: Any, group: Any, adapter: Any) -> list[Stage]:
+    """The adapter's own stages, as the planner shows them (04 §1).
+
+    A `prepare` stage is only in the chain when the cache has not already got it: that is the whole
+    point of the cache, and it has to be visible in `hep plan` or a seed study would look as though
+    it integrates ten times.
+    """
+
+    from ..adapters import cache as cache_module
+
+    directory = naming.point_dir(config, group.name)
+    stages: list[Stage] = []
+
+    entry = cache_module.for_group(config, group)
+    prepare = adapter.prepare(config, group, entry.directory) if entry is not None else []
+    if prepare and not entry.ready:
+        stages += [stage.to_plan_stage() for stage in prepare]
+
+    # `stages()` for a tool that needs more than one step to produce its events — MadGraph launches
+    # and then unpacks — and `generate()` for the usual single one.
+    fifo = adapter_base.fifo_path(directory)
+    produced = (adapter.stages(config, group, fifo) if hasattr(adapter, "stages")
+                else [adapter.generate(config, group, fifo)])
+    stages += [stage.to_plan_stage() for stage in produced]
+    return stages
 
 
 def build(config: Any, selection: Any, *, index: int | None = None, tool_version: str = "",
@@ -122,7 +195,7 @@ def build(config: Any, selection: Any, *, index: int | None = None, tool_version
             block = seeding.legacy_block(config.run.seed, members[0].number,
                                          config.run.legacy_seed_step, config.run.threads)
         group = Group(name=name, identity=identity, points=members, seeds=block,
-                      analyses=group_analyses(members), stages=stage_chain(config, name),
+                      analyses=group_analyses(members), stages=[],
                       directory=naming.point_dir(config, name))
         if adapter is not None:
             for point in members:
@@ -130,10 +203,34 @@ def build(config: Any, selection: Any, *, index: int | None = None, tool_version
                 warning = adapter.frame_warning(point)
                 if warning and warning not in warnings:
                     warnings.append(warning)
+            group.base_card = card_text
             group.card = adapter.render_card(
                 members[0], seeds=block, threads=config.run.threads,
                 card_path=str(card), card_sha=identity.inputs["card"],
-                identity_hash=identity.hash, origin=describe_origin(config, selection, members[0]))
+                identity_hash=identity.hash, origin=describe_origin(config, selection, members[0]),
+                # An external adapter renders the whole card rather than appending to a base, and
+                # needs to know where its events go; Pythia ignores these.
+                base_text=card_text, events=members[0].events,
+                fifo=str(adapter_base.fifo_path(naming.point_dir(config, name))),
+                mode=getattr(config.rivet, "mode", "inprocess"),
+                analyses=group_analyses(members),
+                lhe=str(adapter.lhe_path(config, group)) if hasattr(adapter, "lhe_path") else "")
+            if hasattr(adapter, "launch_script"):
+                # MadGraph's launch carries the seed, the event count and the beams, so it is
+                # rendered with the point like the card is (04 §7).
+                from ..adapters import cache as cache_module
+
+                entry = cache_module.for_group(config, group)
+                group.launch = adapter.launch_script(
+                    members[0], seeds=block, events=members[0].events,
+                    process_dir=adapter.process_dir(entry.directory))
+            if hasattr(adapter, "merging_warning"):
+                notice = adapter.merging_warning(card_text)
+                if notice and notice not in warnings:
+                    warnings.append(notice)
+        # After the card: an external generator's prepare stage is keyed on the rendered card, so
+        # the chain cannot be built before there is one (04 §1).
+        group.stages = stage_chain(config, group)
         groups.append(group)
 
     pages = [Page(name=page_name(config, selection, key), suffix=page_suffix(config, selection, key),

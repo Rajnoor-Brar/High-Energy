@@ -232,7 +232,22 @@ HEKIT_MODULE("mymodule", MyModule);
 ### `Sink::Delphes` (optional)
 | Mode | How |
 |---|---|
-| `external` (the only mode for now) | A `Sink::Store` tee on a FIFO feeds `DelphesHepMC3 <card> delphes.root <fifo>` as a supervised stage. This keeps Delphes' ROOT/`TObject` global state out of our process. |
+| `external` (the only mode for now) | `Sink::Delphes` tees the events to `events.delphes.hepmc` and a supervised `DelphesHepMC3 <card> delphes.root <events>` stage reads it **afterwards**. This keeps Delphes' ROOT/`TObject` global state out of our process. |
+
+**Not a FIFO, measured in P7-S08.** `DelphesHepMC3` sizes its input before reading and *skips any
+input whose length is zero* (`readers/DelphesHepMC3.cpp:160-169`: `fseek(END); ftello(); if (length
+<= 0) { fclose; continue; }`), which a FIFO always is. Pointed at a pipe it opens it, decides it is
+empty, exits, and `hep-run` then dies writing into a closed pipe. There is no flag for it — the
+sizing is how its progress bar works — so the tee writes a **regular file** and the detector stage
+runs in the phase after `hep-run`, like MadGraph's LHE and for the same reason.
+
+The intermediate is uncompressed and routinely larger than every other output together, so it is
+deleted once Delphes has succeeded; `[delphes].keep_events` keeps it, which is what re-running the
+detector with a different card needs.
+
+**The output is renamed on success** (D22), because Delphes creates the ROOT file *before* it reads
+the card: a card with a syntax error otherwise leaves a `delphes.root` that opens, contains nothing,
+and looks exactly like a result.
 | `inprocess` (deferred) | `DelphesFactory` fed from `Events::View`, like `DelphesPythia8`. Serial only. It would link ROOT, and Delphes' global `class Event` clashes are the reason the namespace is called `Events` (13 §3). |
 
 **Detector-level analysis:** RDataFrame/uproot on `delphes.root` via `hep proc` ([12](12_Processing.md)), with results written as YODA. Rivet 4's built-in smearing projections are an alternative for quick studies.

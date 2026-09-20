@@ -1,7 +1,7 @@
 #pragma once
 
 // ── Sink.hh ──────────────────────────────────────────────────────────────────
-// Everything that consumes events (05 §2, 13 §2). `Sink::Modules` in P8-S01 and `Sink::Delphes` in P7-S08.
+// Everything that consumes events (05 §2, 13 §2). `Sink::Modules` arrives in P8-S01.
 
 #include "Sink/Types.hh"
 #include "Sink/Count.hh"
@@ -9,5 +9,6 @@
 #include "Sink/Rivet.hh"
 #endif
 #if defined(HEKIT_WITH_HEPMC)
+#include "Sink/Delphes.hh"
 #include "Sink/Store.hh"
 #endif

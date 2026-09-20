@@ -2,14 +2,14 @@
 
 | Field | Value |
 |---|---|
-| Status | todo |
+| Status | blocked |
 | Kind | code |
 | Phase | P7 — External generators and Delphes |
 | Depends on | [P7-S06](P7-S06_decide-herwig-rebuild.md), [P7-S01](P7-S01_adapter-framework.md) |
 | Blocks | — |
 | Effort | 1 d |
 | Findings / decisions | R7; 04 §6 |
-| Updated | 2026-09-17 |
+| Updated | 2026-09-20 |
 
 ## Goal
 
@@ -76,3 +76,8 @@ Revert.
 ## Log
 
 - 2026-09-17 — step file created (P0-S00).
+- 2026-09-20 — **blocked** by D-Q6 (P7-S06), not by anything in this step. ThePEG here was built
+  without HepMC and Rivet support — a configure-flag mistake, not a missing library — so Herwig
+  cannot emit events `hep-run` can read. The rebuild commands are in P7-S06's decision record and the
+  user chose to do it later. Unblock by running them and confirming
+  `ls $PREFIX/lib/ThePEG | grep -iE "hepmc|rivet"` lists the modules.

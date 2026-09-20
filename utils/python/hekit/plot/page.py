@@ -75,8 +75,12 @@ def points_of(plan: Any, layout: Any, page: Any) -> list[PointFile]:
         directory = layout.point(group.name)
         yoda = directory / "analysis.yoda"
         if not yoda.is_file():
-            partial = directory / "analysis.partial.yoda"
-            yoda = partial if partial.is_file() else yoda
+            # A generator running Rivet itself writes a gzipped YODA (`rivet.mode = "native"`,
+            # 04 §4), and a stopped run leaves a partial one (D22). YODA reads both.
+            for candidate in ("analysis.yoda.gz", "analysis.partial.yoda"):
+                if (directory / candidate).is_file():
+                    yoda = directory / candidate
+                    break
         found.append(PointFile(name=point.name, yoda=yoda, legend=legend or point.name,
                                tag=getattr(point, "suffix", ""),
                                analyses=tuple(getattr(point, "analyses", ()) or ())))

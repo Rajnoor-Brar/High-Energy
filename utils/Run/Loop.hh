@@ -169,6 +169,7 @@ namespace Run {
             record.accepted = result.counts.accepted;
             record.xsec_pb = result.xsec_pb;
             record.xsec_error_pb = result.xsec_error_pb;
+            record.xsec_known = result.xsec_known;
             record.stopped = result.stopped;
             record.threads = result.threads;
             record.chunk = result.chunk;

@@ -321,8 +321,19 @@ namespace Sink {
         // "generator" means the σ the run measured (the default); a number in the spec overrides it,
         // which is what a fixed-σ normalisation needs.
         std::pair<double, double> crossSection(const Core::RunRecord& record) const {
-            if (spec_.xsec.empty() || spec_.xsec == "generator")
+            if (spec_.xsec.empty() || spec_.xsec == "generator") {
+                // Every histogram is scaled by this. A source that could not measure one leaves it
+                // at zero, and a YODA normalised by zero is not a smaller result — it is a wrong one
+                // that looks like a result (04 §8).
+                if (!record.xsec_known)
+                    throw Core::Error{
+                        Core::Exit::Sink,
+                        "the " + record.source + " source reported no cross-section, and the rivet "
+                        "sink normalises by it",
+                        "a generator that writes no GenCrossSection cannot supply one: set "
+                        "[rivet].xsec to a number for this point"};
                 return {record.xsec_pb, record.xsec_error_pb};
+            }
             try {
                 return {std::stod(spec_.xsec), 0.0};
             } catch (const std::exception&) {

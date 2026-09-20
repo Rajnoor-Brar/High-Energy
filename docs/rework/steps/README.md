@@ -38,7 +38,7 @@ Date: 2026-09-17 · Source: [10_Roadmap.md](../10_Roadmap.md) · 55 steps in 11 
 | P4 | Plotting, compare, retirement of the legacy tools | `hep plot`/`hep compare` replace `ydplt`/`ydmrg`; `photo_eic` is re-entrant; legacy tools retired. | Golden page comparisons pass; real-study cross-check passes; tools in `legacy/`; v2 configs canonical; Makefile wraps CMake. | P3 | 4.25 d | 6 | done |
 | P5 | HepMC3 event store and replay | Sharded HepMC3 store with an index; `tool = "store"` replay into any sinks. | Write → replay reproduces the in-process YODA; σ comes from the index; one reader per shard. | P3 (can run alongside P4) | 2.5 d | 3 | done |
 | P6 | Throughput | Sharded Rivet, event groups, benchmark. | Serial ≡ sharded; the radius study needs one generation; `hep bench` recommends a mode. | P4-S05, P5 | 2 d | 3 | done |
-| P7 | External generators and Delphes | Sherpa, Whizard, MadGraph, Herwig (gated) and external Delphes through the same pipeline. | Sherpa and MG+Pythia points via `hep run`; prepare cache hit on a seed study; `delphes.root` produced; Herwig runs or is explicitly gated. | P3, P5-S02 | 7 d | 8 | todo |
+| P7 | External generators and Delphes | Sherpa, Whizard, MadGraph, Herwig (gated) and external Delphes through the same pipeline. | Sherpa and MG+Pythia points via `hep run`; prepare cache hit on a seed study; `delphes.root` produced; Herwig runs or is explicitly gated. | P3, P5-S02 | 7 d | 8 | done (S07 blocked) |
 | P8 | Modules, YODA results, Phys, ML | User C++ modules book YODA into `analysis.yoda`; physics helpers; ONNX inference. | Toy module exact at 1/4/20 threads; ONNX toy works; derived-tables decision recorded. | P2, P5-S01, P6-S01 | 3 d | 4 | todo |
 | P9 | ROOT processing layer | `hep proc` fits and RDataFrame histograms → `fits.json` + YODA. | Minuit2 ≡ scipy on synthetic fits; RDF ≡ uproot on `delphes.root`. | P4 (+ P7-S08 for S02) | 2.5 d | 2 | todo |
 | P10 | Cleanup, docs, release | No transitional code; documentation matches reality. | Clean greps; minimal build green; tag `rework/v1`. | P4 (+ whichever optional phases are done) | 1.25 d | 3 | todo |
@@ -92,14 +92,14 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P6-S01 | [Sharded Rivet and concurrency modes](P6-S01_sharded-rivet.md) | code | P4-S05, P5-S02 | 1 d | done |
 | P6-S02 | [Shared generation for analysis-only variants](P6-S02_event-groups.md) | code | P4-S01, P1-S05 | 0.5 d | done |
 | P6-S03 | [hep bench](P6-S03_bench.md) | code | P6-S01 | 0.5 d | done |
-| P7-S01 | [External adapter framework and prepare cache](P7-S01_adapter-framework.md) | code | P3-S05, P5-S02 | 1 d | todo |
-| P7-S02 | [Decide cross-generator photoproduction set-ups](P7-S02_decide-photoproduction-equivalence.md) | decision | P7-S01 | 0.5 d | todo |
-| P7-S03 | [Sherpa adapter](P7-S03_sherpa.md) | code | P7-S01, P7-S02 | 1.5 d | todo |
-| P7-S04 | [Whizard adapter](P7-S04_whizard.md) | code | P7-S01, P7-S02 | 1 d | todo |
-| P7-S05 | [MadGraph adapter (LHE → Pythia shower)](P7-S05_madgraph.md) | code | P7-S01, P2-S04 | 1 d | todo |
-| P7-S06 | [Decide and (optionally) rebuild ThePEG/Herwig](P7-S06_decide-herwig-rebuild.md) | decision | P1-S07 | 0.25 d + build | todo |
-| P7-S07 | [Herwig adapter](P7-S07_herwig.md) | code | P7-S06, P7-S01 | 1 d | todo |
-| P7-S08 | [External Delphes stage](P7-S08_delphes-external.md) | code | P7-S01 | 0.75 d | todo |
+| P7-S01 | [External adapter framework and prepare cache](P7-S01_adapter-framework.md) | code | P3-S05, P5-S02 | 1 d | done |
+| P7-S02 | [Decide cross-generator photoproduction set-ups](P7-S02_decide-photoproduction-equivalence.md) | decision | P7-S01 | 0.5 d | done |
+| P7-S03 | [Sherpa adapter](P7-S03_sherpa.md) | code | P7-S01, P7-S02 | 1.5 d | done |
+| P7-S04 | [Whizard adapter](P7-S04_whizard.md) | code | P7-S01, P7-S02 | 1 d | done |
+| P7-S05 | [MadGraph adapter (LHE → Pythia shower)](P7-S05_madgraph.md) | code | P7-S01, P2-S04 | 1 d | done |
+| P7-S06 | [Decide and (optionally) rebuild ThePEG/Herwig](P7-S06_decide-herwig-rebuild.md) | decision | P1-S07 | 0.25 d + build | done |
+| P7-S07 | [Herwig adapter](P7-S07_herwig.md) | code | P7-S06, P7-S01 | 1 d | blocked |
+| P7-S08 | [External Delphes stage](P7-S08_delphes-external.md) | code | P7-S01 | 0.75 d | done |
 | P8-S01 | [Module API, YODA results layer and module sink](P8-S01_module-sink-yoda.md) | code | P6-S01, P5-S01 | 1.5 d | todo |
 | P8-S02 | [Phys namespace](P8-S02_phys.md) | code | P2-S03 | 0.5 d | todo |
 | P8-S03 | [ML namespace (ONNX Runtime)](P8-S03_onnx.md) | code | P8-S01 | 0.75 d | todo |
@@ -282,8 +282,8 @@ flowchart LR
 | D-Q3 | Numeric serial label? | P3-S01 | answered | yes, but on the **study** directory only (`studies/01_pdf/`), `[run].serial` default on, prefix form, `[run].label` optional; a point path stays name + hash so points remain shared and the skip rule keeps working |
 | D-Q4 | Import legacy results? | P3-S01 | answered | no import; moved to `results/PhotoProduction/legacy/` + README, 541 files, 25 YODA checksums re-verified (2026-09-18) |
 | D-Q5 | Add `rich`, `tomli_w`, `pytest` to the venv? | P0-S02 | answered | yes |
-| D-Q6 | Rebuild ThePEG/Herwig with HepMC + Rivet? | P7-S06 | open | — |
-| D-Q7 | Cross-generator photoproduction equivalence | P7-S02 | open | — |
+| D-Q6 | Rebuild ThePEG/Herwig with HepMC + Rivet? | P7-S06 | answered | **later** (user sign-off). Not a missing dependency: ThePEG was configured `--with-hepmc3=` (it wants `--with-hepmc=`) and `--with-rivet` was never passed, so its config.log says both are *disabled* while the libraries sit installed. The rebuild commands are in the record; P7-S07 is **blocked**, not dropped |
+| D-Q7 | Cross-generator photoproduction equivalence | P7-S02 | answered | Sherpa: match every knob that has an equivalent (EPA Q²max, **photon PDF exactly** — Pythia's only one is CJKL, Sherpa has CJKLLO — proton PDF, order); the pT regulator and the MPI tune have no counterpart and are documented in the card. Measured 18×275 LO MPI-off: 11 950 ± 34 pb vs 9 636 ± 782 pb, ratio 0.81 ± 0.07. Whizard: **deferred** — no photon structure function, so direct-only (its own manual) |
 | D-Q8 | Port or archive Lambda? | P0-S06 | answered | archive frozen (D17) |
 | D-Q9 | HepMC3 gzip support? | P5-S01 | answered | yes, compile-time flags |
 | D-STORE-COMP | Default store compression (gz vs zstd) | P5-S01 | answered | **zst**, measured on 10 000 real events: 9 866 B/event vs 10 223 (2.96× vs 2.86×), **2.1× faster to write** (2 289 vs 1 086 ev/s) and 1.26× faster to read (5 624 vs 4 461). No axis favours gz. `gz` stays the fallback where zstd is not compiled in, and the codec is recorded in the index |

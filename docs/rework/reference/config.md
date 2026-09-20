@@ -95,6 +95,7 @@ Detector simulation as an external stage.
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `card` | str | — | Delphes .tcl card |
+| `keep_events` | bool | `False` | keep the uncompressed HepMC3 Delphes read. It can be larger than every other output together, and delphes.root is what the analysis wants; keep it to re-run Delphes with a different card without regenerating |
 
 ### `[output]`
 
