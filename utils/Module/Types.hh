@@ -51,6 +51,19 @@ namespace Module {
 
         /// What this module needs of an event. HepMC by default, which is what a replay can give.
         virtual Sink::Needs needs() const { return Sink::Needs{/*pythia=*/false, /*hepmc=*/true}; }
+
+        /// May `process` be called from several worker threads at once?
+        ///
+        /// True by default, which is true of a module that only reads the event and fills its own
+        /// worker's clones — that is the whole reason the module sink is the one sink that shards.
+        ///
+        /// **Say false if you cluster jets.** `Phys::cluster` and everything else built on FastJet
+        /// keeps state in process-wide statics — SISCone its clustering cache and its RNG, and this
+        /// FastJet is built without even limited thread safety (00/B31). A race there does not
+        /// crash; it changes the jets. Say false too for anything else shared: a file, a network
+        /// handle, a lazily built lookup table. The sink then runs every module under one mutex
+        /// rather than forcing the whole run serial, so generation stays parallel.
+        virtual bool threadSafe() const { return true; }
     };
 
 }  // namespace Module

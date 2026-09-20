@@ -224,10 +224,15 @@ namespace Run {
         // 05 §3's rule, with the reasons kept so the notice can name them.
         std::string decideMode() {
             if (spec_.mode == "serial") return "serial";
+            // "Is there anything to gain?" — which is not the same question as "can a sink hold one
+            // instance per worker?". A `Locked` sink still lets the *generator* run on k threads and
+            // only serialises the sink call, and P8-S02 measured that: a module that clusters jets
+            // has to be locked, and the loop is still 1.35x faster on four threads (124 µs/event
+            // serial against 92 µs/event). A `Serial` sink gains nothing, so it does not count.
             bool shardable = false;
             std::vector<std::string> objections;
             for (const auto& sink : sinks_) {
-                if (sink->concurrency() == Sink::Concurrency::Sharded) shardable = true;
+                if (sink->concurrency() != Sink::Concurrency::Serial) shardable = true;
                 const std::string why = sink->serialReason();
                 if (!why.empty()) objections.push_back(sink->name() + ": " + why);
             }

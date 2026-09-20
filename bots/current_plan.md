@@ -232,14 +232,49 @@ A user C++ module is `dlopen`'d, books YODA per worker, and its objects land in 
 `scale` and no `fill` and is only reachable from `finalize`. So the three mistakes `legacy/Record`
 made — scaled during the run, scaled twice, scaled by a σ that was not final — are not expressible.
 
-## Next — P8-S02
+## Just finished — P8-S02 (Phys namespace) — done
+
+`Phys` replaces `legacy/utils/Physics/` on `HepMC3::FourVector`, so nothing in the physics layer
+links ROOT or converts a particle out of the event it is already holding. Five headers, a facade,
+and 167 checks in the new ctest test `phys`.
+
+**Both rows measured.** The PDG table is checked against Pythia's own `ParticleData` — 13/13 rows
+agree on mass, charge and name — and perturbing one mass by 1e-4 fails the row, so it is a live
+comparison rather than a tautology. `jetDefinition("antikt:0.4")` matches a hand-written
+`fastjet::JetDefinition` through FastJet's own `description()`.
+
+**Three defects, 00/B34-B36.**
+
+- **B34** — `Physics::particle(-211).charge3` was **+3**: the lookup resolved an antiparticle to its
+  particle's row and handed back that row's charge, so every negative code came out positive.
+- **B35** — the Δφ guard the step asked for, and it is **not legacy-only**: `while (d > π) d -= 2π`
+  never terminates for ±∞, and `HepMC3::FourVector::delta_phi` has the same loop, guarding NaN but
+  not ∞. `std::remainder` wraps over the same range in one step. The test times the call, so the
+  loop coming back hangs a 0.05 s test rather than a run.
+- **B36** — this step hands modules `Phys::cluster`, and `Sink::Modules` is the one sink that
+  shards, so 00/B31 applied to modules with nothing to detect it. `Module::Base::threadSafe()` (true
+  by default) lets a module opt out and the sink reports `Locked` rather than `Sharded`.
+
+**And a throughput bug B36's fix exposed.** With the module locked, `auto` dropped the *whole run*
+to serial: `decideMode` asked "can any sink be sharded?" when the question is "is there anything to
+gain?" — a `Locked` sink still lets the generator run on k threads. Measured **124 µs/event serial
+against 92 µs/event with the lock**, so the rule now counts anything that is not `Serial`. Only the
+new case changes: Rivet-with-jets and `Count` both report `Serial`.
+
+**`Phys` has a real user.** `ToyJets` carried its own final-state loop, its own pT and a hand-written
+pseudorapidity with a beam-axis guard; all three are one `Phys::Acceptance`, and it finally clusters
+the jets it is named after. `test_modules.py` re-measures the physics unchanged.
+
+Suite: **28 ctest tests** (was 27) and **706 Python tests**, all passing.
+
+## Next — P8-S03
 
 Read `docs/rework/steps/README.md` for P8's order, then the next step file, and mirror it here
 before starting.
 
 ## Progress
 
-- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · **P7 7/8 — complete bar S07, blocked by D-Q6** · P8–P10 todo — 46 of 55 steps done.
+- P0 8/8 · P1 7/7 · **P2 6/6** · **P3 5/5** · **P4 6/6** · **P5 3/3 — P0–P5 all complete** · **P6 3/3 — P0–P6 all complete** · **P7 7/8 — complete bar S07, blocked by D-Q6** · P8 2/4 · P9–P10 todo — 47 of 55 steps done.
 
 ## Standing constraints
 

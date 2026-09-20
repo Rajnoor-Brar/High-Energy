@@ -11,6 +11,9 @@ endif()
 if(HEKIT_WITH_RIVET)
   list(APPEND HEKIT_CXX_TESTS results_objects)    # a module's YODA objects need YODA
 endif()
+if(HEKIT_HEPMC AND HEKIT_RIVET)
+  list(APPEND HEKIT_CXX_TESTS phys)              # four-vectors from HepMC3, jets from FastJet
+endif()
 if(TARGET TomlPlusPlus::TomlPlusPlus)
   list(APPEND HEKIT_CXX_TESTS core_spec)        # the spec reader needs toml++
 endif()
@@ -22,6 +25,10 @@ foreach(name IN LISTS HEKIT_CXX_TESTS)
     target_link_libraries(test_${name} PRIVATE hekit_Results)      # YODA
   elseif(name STREQUAL "store_writer" OR name STREQUAL "store_queue")
     target_link_libraries(test_${name} PRIVATE hekit_Store)        # HepMC3 (+ compression)
+  elseif(name STREQUAL "phys")
+    # `hekit_Phys` brings HepMC3 and FastJet; Pythia comes through it too, and the PDG row compares
+    # the table against Pythia's own `ParticleData`.
+    target_link_libraries(test_${name} PRIVATE hekit_Phys)
   endif()
   target_include_directories(test_${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
   add_test(NAME ${name} COMMAND test_${name})

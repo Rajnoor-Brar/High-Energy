@@ -212,6 +212,7 @@ public:
     virtual void process(const Events::View&, Results::Worker&) = 0;   // fill this worker's clones
     virtual void finalize(Results::Final&, const Run::Result&) {}      // scale/derive after the merge (σ, ΣW known)
     virtual unsigned needs() const { return unsigned(Sink::Needs::HepMC); }
+    virtual bool threadSafe() const { return true; }                   // false if it clusters jets (00/B31, B36)
 };
 }
 HEKIT_MODULE("mymodule", MyModule);
@@ -226,6 +227,16 @@ HEKIT_MODULE("mymodule", MyModule);
 - **One output file:** module objects are written into the **same** `analysis.yoda` as Rivet, under `/<module>[:opts]/<name>`, so `rivet-mkhtml` and `hep plot` treat them alike.
 - **Merge caveat.** `rivet-merge` re-runs `finalize` only for loadable Rivet analyses, so `hekit` merges module objects itself for seed replicas (07 §3).
 - **Loading:** modules are loaded with `dlopen` from the configured paths, like Rivet plugins, so `hep-run` is not rebuilt per project.
+- **`Phys` is what a module writes with** (13 §2, P8-S02): `Phys::finalState(event, acceptance)` for the
+  selection, `HepMC3::FourVector` for the momentum it already has, `Phys::deltaR`/`disKinematics` for the
+  derived quantities, and `Phys::jetDefinition("antikt:0.4")` + `Phys::cluster` for jets.
+- **Thread safety is the module's to declare.** `Sink::Modules` is the one sink that shards, so `process`
+  is called from several workers at once by default — which is only sound because a module fills nothing
+  but its own worker's clones. A module that touches anything shared says `threadSafe() == false`, and
+  **jet clustering is the case that matters**: FastJet keeps clustering state in process-wide statics, so
+  a module that makes jets races in exactly the way that stops the Rivet sink from sharding (00/B31).
+  The sink then reports `Concurrency::Locked` rather than `Sharded`; the run still shards, and only the
+  sink call is serialised. Measured in P8-S02: 92 µs/event that way against 124 µs/event fully serial.
 - **ML:** a module may hold an `ML::OnnxModel`.
 - **Derived per-candidate tables** (ML features) are **deferred** (decision D-DERIVED, P8-S04). Modules produce YODA only.
 

@@ -1,9 +1,9 @@
 // ── modules/Examples/ToyJets.cc ──────────────────────────────────────────────
-// The smallest useful module, and the one the tests measure (05 §5, P8-S01).
+// The smallest useful module, and the one the tests measure (05 §5, P8-S01; `Phys`, P8-S02).
 //
 // It exists to show the four verbs and the scaling contract in something short enough to read
-// whole. The physics is deliberately trivial — final-state multiplicity, pT and η — because the
-// point being made is about *where* things happen, not about what is being measured:
+// whole. The physics is deliberately trivial — final-state multiplicity, pT, η, and jets — because
+// the point being made is about *where* things happen, not about what is being measured:
 //
 //   * `book` declares, once, before any event. A duplicate name or an inverted range is caught here.
 //   * `process` fills **this worker's** clones with the event's raw weight. There is no `scale()`
@@ -13,27 +13,35 @@
 //
 // That last point is what the "exact totals at 1, 4 and 20 threads" test checks: fills add, so k
 // workers give the same integral as one.
+//
+// **And it is where `Phys` earns its place.** This file used to carry its own final-state loop, its
+// own pT, and a hand-written pseudorapidity with a divide-by-zero guard around a particle travelling
+// along the beam. All three are one `Phys::Acceptance` now, and the jets — which the module was
+// named after and never had — are two lines. The physics is unchanged, which is what
+// `tests/integration/test_modules.py` re-measures.
+//
+// **It clusters jets, so it says `threadSafe() == false`.** FastJet keeps clustering state in
+// process-wide statics (00/B31), which is the same reason the Rivet sink refuses to shard. Saying so
+// costs one mutex around this sink; generation stays parallel, and the alternative is a race that
+// changes the jets rather than crashing.
 
 #include "Module/Registry.hh"
 #include "Module/Types.hh"
+#include "Phys.hh"
 
 #include "HepMC3/GenEvent.h"
-#include "HepMC3/GenParticle.h"
-
-#include <cmath>
 
 namespace {
-
-    /// HepMC3 status 1: a particle that is really final.
-    constexpr int FINAL = 1;
 
     class ToyJets : public Module::Base {
       public:
         void configure(const Core::Options& options) override {
             // A module's options are its own invention; `Core::Options` only says what was expected
             // when a value is not a number.
-            pt_min_ = options.number("pt_min", 0.5);
-            eta_max_ = options.number("eta_max", 5.0);
+            acceptance_.pt_min = options.number("pt_min", 0.5);
+            acceptance_.eta_max = options.number("eta_max", 5.0);
+            jet_pt_min_ = options.number("jet_pt_min", 5.0);
+            jets_ = Phys::jetDefinition(options.text("jets", "antikt:0.4"));
         }
 
         void book(Results::Booker& booker) override {
@@ -43,6 +51,8 @@ namespace {
             eta_ = booker.histo1D("eta", 40, -5.0, 5.0, "particle $\\eta$");
             pt_vs_eta_ = booker.profile1D("pt_vs_eta", 20, -5.0, 5.0,
                                           "mean $p_T$ against $\\eta$");
+            jet_count_ = booker.histo1D("jets", 10, -0.5, 9.5, "jets per event");
+            jet_pt_ = booker.histo1D("jet_pt", 40, 0.0, 40.0, "jet $E_T$ [GeV]");
             counted_ = booker.counter("events", "events this module saw");
         }
 
@@ -51,28 +61,22 @@ namespace {
             if (event == nullptr) return;
             const double weight = view.weights().nominal();
 
-            long long kept = 0;
-            for (const auto& particle : event->particles()) {
-                if (particle->status() != FINAL) continue;
-                const HepMC3::FourVector& momentum = particle->momentum();
-                const double pt = std::hypot(momentum.px(), momentum.py());
-                if (pt < pt_min_) continue;
-                const double magnitude = std::sqrt(momentum.px() * momentum.px() +
-                                                   momentum.py() * momentum.py() +
-                                                   momentum.pz() * momentum.pz());
-                // A particle exactly along the beam has no finite eta; skipping it is honest, and
-                // an arbitrary large number would put a spike in the outermost bin.
-                if (magnitude <= std::abs(momentum.pz())) continue;
-                const double eta =
-                    0.5 * std::log((magnitude + momentum.pz()) / (magnitude - momentum.pz()));
-                if (std::abs(eta) > eta_max_) continue;
-
-                worker.fill(pt_, pt, weight);
-                worker.fill(eta_, eta, weight);
-                worker.fill(pt_vs_eta_, eta, pt, weight);
-                kept += 1;
+            // Status 1, inside the acceptance. A particle exactly along the beam has infinite η and
+            // fails the |η| cut, which is the honest answer — it is not in the detector either.
+            const Phys::Particles kept = Phys::finalState(*event, acceptance_);
+            for (const Phys::Particle& particle : kept) {
+                const Phys::FourVector& momentum = particle->momentum();
+                worker.fill(pt_, momentum.perp(), weight);
+                worker.fill(eta_, momentum.eta(), weight);
+                worker.fill(pt_vs_eta_, momentum.eta(), momentum.perp(), weight);
             }
-            worker.fill(multiplicity_, static_cast<double>(kept), weight);
+            worker.fill(multiplicity_, static_cast<double>(kept.size()), weight);
+
+            const std::vector<Phys::FourVector> jets =
+                Phys::cluster(Phys::momenta(kept), jets_, jet_pt_min_);
+            worker.fill(jet_count_, static_cast<double>(jets.size()), weight);
+            for (const Phys::FourVector& jet : jets) worker.fill(jet_pt_, jet.perp(), weight);
+
             worker.count(counted_, weight);
         }
 
@@ -82,16 +86,24 @@ namespace {
             results.normalise(multiplicity_);
             results.normalise(pt_);
             results.normalise(eta_);
+            results.normalise(jet_count_);
+            results.normalise(jet_pt_);
             // A profile is a *mean*, so scaling it would be wrong: it is already per-entry.
         }
 
+        /// See the header note: clustering jets is not something two threads may do at once.
+        bool threadSafe() const override { return false; }
+
       private:
-        double pt_min_ = 0.5;
-        double eta_max_ = 5.0;
+        Phys::Acceptance acceptance_;
+        double jet_pt_min_ = 5.0;
+        fastjet::JetDefinition jets_{fastjet::antikt_algorithm, 0.4};
         Results::Handle multiplicity_ = 0;
         Results::Handle pt_ = 0;
         Results::Handle eta_ = 0;
         Results::Handle pt_vs_eta_ = 0;
+        Results::Handle jet_count_ = 0;
+        Results::Handle jet_pt_ = 0;
         Results::Handle counted_ = 0;
     };
 

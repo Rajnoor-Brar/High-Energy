@@ -51,8 +51,20 @@ namespace Sink {
             return loaded_.empty() ? Needs{false, true} : wanted;
         }
 
-        // Nothing here is shared between workers, so there is nothing to lock (05 §3).
-        Concurrency concurrency() const override { return Concurrency::Sharded; }
+        // Nothing here is shared between workers, so there is nothing to lock (05 §3) — unless a
+        // module says otherwise. `Phys::cluster` is the case that matters: FastJet keeps clustering
+        // state in process-wide statics, so a module that makes jets races in exactly the way that
+        // stopped the Rivet sink from sharding (00/B31). One mutex around this sink is enough;
+        // making the whole run serial would give up parallel generation for one sink's sake.
+        Concurrency concurrency() const override {
+            return threadSafe() ? Concurrency::Sharded : Concurrency::Locked;
+        }
+
+        bool threadSafe() const {
+            for (const Loaded& loaded : loaded_)
+                if (!loaded.module->threadSafe()) return false;
+            return true;
+        }
 
         // Load, configure and book — all of it before the first event, so a missing library or a
         // duplicate object name costs a second rather than a run (06 §3.3).
@@ -71,6 +83,13 @@ namespace Sink {
                 loaded_.push_back(std::move(loaded));
             }
             status_.log(Status::Level::Info, "modules", "loaded " + joined());
+            std::string unsafe;
+            for (const Loaded& loaded : loaded_)
+                if (!loaded.module->threadSafe())
+                    unsafe += (unsafe.empty() ? "" : ", ") + loaded.name;
+            if (!unsafe.empty())
+                status_.log(Status::Level::Info, "modules",
+                            unsafe + " is not thread-safe, so modules run under one lock");
         }
 
         /// One set of objects per worker; built here, on the main thread, before any event.
