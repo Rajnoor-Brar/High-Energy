@@ -1,0 +1,21 @@
+# utils/Env/master.toml — how each standard tool consumes named quantities (docs/rework_v2/04_Config.md §2).
+#
+# [quantities.<tool>.compatible_quantities].<quantity> = one of
+#   { key = "K" }                     the card line K = value
+#   { keys = ["K1", "K2"] }           a list value spread over several keys, in order
+#   { key = "K", format = "X{}" }     with the value written through a format
+#   { flag = "-N" }                   a command-line argument instead of a card line
+#   { render = "fn" }                 a function in utils/Env/<tool>/render.py
+# A project may overlay this with configs/<Project>/master.toml ([master].master_toml).
+
+[quantities.pythia.compatible_quantities]
+energies = { keys = ["Beams:eA", "Beams:eB"] }      # [E_A, E_B], beam A first
+sqrts    = { key = "Beams:eCM" }
+beam_a   = { key = "Beams:idA" }
+beam_b   = { key = "Beams:idB" }
+pdf      = { key = "PDF:pSet", format = "LHAPDF6:{}" }
+events   = { key = "Main:numberOfEvents" }          # built-in
+threads  = { key = "Parallelism:numThreads" }       # built-in
+
+# rivet consumes no named quantity: it reads beams and energies from the events, and its analysis
+# options are always targeted explicitly (target = "<tag>/<analysis>", key = "<OPTION>").

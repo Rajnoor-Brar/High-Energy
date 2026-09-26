@@ -161,3 +161,38 @@ Revert the step commits. The work is additive on the P0 skeleton.
   log, and the runner's filters surface errors from there.
 - **Card hashes left to the runner.** The sidecar lists the cards but not their sha256s (05 §4 said
   it would); the runner's provenance hashes the cards instead.
+
+### S2 — 2026-09-26 — done
+
+| Row | Result |
+|---|---|
+| 1 | `hep run PhotoProduction/eic single --plan` shows 1 group (pythia, rivet), the FIFO connection, the five static quantities with their consumers, and paths under `output/…/03_eic/single/point/` and `results/…` |
+| 2 | 100k events, 1 thread: the runner's `photo.yoda` is **byte-identical** to App_Pythia → rivet run by hand on the runner's own cards. Count check ok (99,991 events). A second run skips the point: "complete, skipped". |
+| 3 | App_Pythia killed mid-stream: exit 1, *FAILED [pythia]: … SIGKILL*; no `.complete`, no `photo.yoda`; the runner exited within 30 s of the kill |
+| 4 | Init failure (missing PDF set) while rivet is blocked at open: exit 1, pythia blamed ("exit code 3"), no hang |
+| 5 | rivet killed: pythia dies of SIGPIPE and **rivet** is blamed. Ctrl-C: exit 6, point partial. |
+| 6 | Refused at plan time: a FIFO into a non-streamable tool, a FIFO across groups, two readers on one FIFO, a FIFO with no writer, two writers of one output |
+| 7 | One bad config per rule C1 (unknown key or section, wrong type), C2, C3, C4, C5, C12, C13: each fails with `where` and `hint` |
+| 8 | An export's `[standard.pythia_cmnd]` has `path` = the combined card and `parts` = exactly App_Pythia's argv cards. The combined card ends with the point card, seeds included. |
+| 9 | A custom tool with `pythia_card = true` and no pythia in `tools`: the card is rendered, C7 passes through the export, pythia is not run |
+| 10 | Two pythia tables and `pythia_cmnd = true`: C13 error with the hint `pythia_cmnd = "<tag>"` |
+
+Tests: `tests/runner` 47 (config 15, plan 18, paths 10, imports 4); `tests/integration`: app_pythia
+8, failures 4 (slow), gates 3 (slow). `make test`: 55 passed. `make test-slow`: 7 passed, 46 s.
+
+**Deviations:**
+- **One finding from failure injection.** When the consumer is killed, both exits can be seen in one
+  poll, and the producer's SIGPIPE was blamed. The rule is now: a SIGPIPE death is never the cause.
+- **Pulled forward from P2.** `quantities.py` and `sweep.py` were written here, since the eic
+  `single` configuration already has five static quantities. P2 keeps its gates (the counts, the
+  translated configs) and adds what is left.
+- **eic.toml translated in full now.** All eleven configurations are in the v2 schema, but without
+  `yd2rt` in their chains until P3.
+- **`executable` falls back to `PATH`** when nothing is built under `build/<project>/`. That lets a
+  custom tool run `python3 …`, and 03 §2 now says so. It is shown by `--plan`.
+- **A custom tool gets its config argument only if it has one:** a `[tools.<tag>.config]`,
+  consumed quantities or export requests. A bare `executable` + `arguments` tool gets exactly its
+  arguments.
+- **Provenance** records each tool's version (`[identity].version`), binary sha256, argv, card
+  sha256 and result, plus git revision/dirty, host and times.
+

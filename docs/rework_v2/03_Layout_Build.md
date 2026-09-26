@@ -65,7 +65,7 @@ because a lookup that tries several places is how v1's `00/B18` happened.
 | `hep run <config>` | `configs/` (`.toml` optional) | `hep run PhotoProduction/eic` → `configs/PhotoProduction/eic.toml` |
 | `[master].master_toml` | `configs/<project>/` | `master.toml` → `configs/PhotoProduction/master.toml` |
 | `[tools.*].baseconfig` | `configs/<project>/` | `photo_ep.cmnd` |
-| `[tools.*].executable` | `build/<project>/` | `Lambda.exe` → `build/Lambda/Lambda.exe` |
+| `[tools.*].executable` | `build/<project>/`; if nothing is built there, a command of that name on `PATH` (shown by `--plan`) | `Lambda.exe` → `build/Lambda/Lambda.exe`; `python3` → the one on `PATH` |
 | `[prelim].fifo`, `[prelim].files` | the **point's output directory** (§3) | `events.hepmc` |
 | `[tools.*].input` | the name of a `[prelim]` entry or an earlier `output_file`; otherwise a path under the point's output directory | `events.hepmc` |
 | `[tools.*].output_file` | a `[prelim]` name → the point's **output** directory; any other name → the point's **results** directory | `photo.yoda` → `results/…/<point>/photo.yoda` |

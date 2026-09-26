@@ -1,0 +1,320 @@
+"""Running a point: [prelim], the tool groups, supervision, the checks (rank 3).
+
+docs/rework_v2/02_Architecture.md §9. A FIFO chain fails in two ways a single process does not,
+and both are handled here by construction:
+
+* **Deadlock at open (L8).** A FIFO blocks until both ends are open. If the writer dies before
+  opening, the reader waits for ever and gets no SIGPIPE. So each tool runs in its own process
+  group. The first nonzero exit is the cause, and after a grace period the rest of the group gets
+  SIGTERM, then SIGKILL. A tool silent for `stall_after` seconds (no output, status or heartbeat)
+  counts as failed.
+* **A partial result that looks complete.** If the generator dies mid-stream, Rivet sees end of file
+  and exits 0. So a consumer's event count is checked against the producer's sidecar, and a product
+  keeps its `.partial` name until every check has passed. `.complete` is written last.
+
+Attribution: the cause is the first process to exit nonzero before the runner sent any signal. A
+SIGPIPE death is a consequence (its reader went away), never the cause: the reader is blamed, even
+when both exits are seen in the same poll (found by P1's failure injection).
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import signal
+import stat
+import subprocess
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from .errors import HepError
+from .paths import repo_root
+from .record import complete_marker, now, provenance, write_atomic
+from .status import Journal, Reader, ToolState
+from .tools import PointPlan, Step, expand
+
+GRACE = 2.0                  # after the first failure, before the rest of the group is asked to stop
+TERM_GRACE = 5.0             # after SIGTERM, before SIGKILL
+POLL = 0.2
+
+
+class Stopper:
+    """Set by the CLI's SIGINT/SIGTERM handler; the supervisor turns it into the stop ladder."""
+
+    def __init__(self):
+        self.requested = False
+
+
+@dataclass
+class ToolResult:
+    tag: str
+    exit: int | None = None
+    seconds: float = 0.0
+    cause: str = ""                      # failed | stalled | timeout | stopped | count | missing
+    message: str = ""
+
+
+@dataclass
+class PointResult:
+    ok: bool
+    stopped: bool = False
+    cause: str = ""                      # the tag to blame
+    message: str = ""
+    tools: dict[str, ToolResult] = field(default_factory=dict)
+
+
+class NullSink:
+    def point_started(self, plan): pass
+    def tool_started(self, state): pass
+    def tick(self, states): pass
+    def tool_finished(self, state, result): pass
+    def point_finished(self, plan, result): pass
+
+
+# ── the count check ────────────────────────────────────────────────────────────────────────────
+
+def read_count(path: Path, reader: str) -> float | None:
+    """`yoda:/RAW/_EVTCOUNT` → the counter's numEntries, read from the YODA text."""
+    kind, _, obj = reader.partition(":")
+    if kind != "yoda" or not path.exists():
+        return None
+    text = path.read_text(encoding="utf-8", errors="replace")
+    match = re.search(re.escape(obj) + r"\n.*?# sumW[^\n]*\n\S+\s+\S+\s+(\S+)", text, re.S)
+    return float(match.group(1)) if match else None
+
+
+# ── [prelim] ───────────────────────────────────────────────────────────────────────────────────
+
+def prepare(plan: PointPlan) -> None:
+    for directory in (plan.out, plan.out / "logs", plan.res):
+        directory.mkdir(parents=True, exist_ok=True)
+    marker = complete_marker(plan)
+    if marker.exists():
+        marker.unlink()                  # an attempt is under way: whatever was complete no longer is
+    for path, text in plan.writes.items():
+        write_atomic(path, text)
+    for interface in plan.interfaces.values():
+        if interface.kind == "fifo":
+            if interface.path.exists() or interface.path.is_symlink():
+                if not stat.S_ISFIFO(interface.path.stat().st_mode):
+                    raise HepError(f"{interface.path} exists and is not a FIFO", hint="remove it")
+                interface.path.unlink()  # fresh per attempt
+            os.mkfifo(interface.path)
+        elif interface.kind == "file" and interface.name in plan.prelim.get("files", []):
+            interface.path.touch(exist_ok=True)
+    for command in plan.prelim.get("commands", []):
+        context = {"repo": str(repo_root()), "out": str(plan.out), "res": str(plan.res),
+                   "file:": {n: str(i.path) for n, i in plan.interfaces.items()}}
+        argv = [x for a in command for x in ([expand(str(a), context, "[prelim].commands")])]
+        done = subprocess.run(argv, cwd=plan.out, capture_output=True, text=True)
+        (plan.out / "logs" / "prelim.log").open("a", encoding="utf-8").write(
+            f"$ {' '.join(argv)}\n{done.stdout}{done.stderr}")
+        if done.returncode != 0:
+            raise HepError(f"[prelim] command failed ({done.returncode}): {' '.join(argv)}",
+                           where=str(plan.out / "logs" / "prelim.log"))
+
+
+# ── one group ──────────────────────────────────────────────────────────────────────────────────
+
+@dataclass
+class _Running:
+    step: Step
+    process: subprocess.Popen
+    state: ToolState
+    reader: Reader
+    fd: int | None
+    started: float
+    exited_at: float | None = None
+
+
+def _signal(entry: _Running, sig: int) -> None:
+    try:
+        os.killpg(entry.process.pid, sig)
+    except (ProcessLookupError, PermissionError):
+        pass
+
+
+def run_group(plan: PointPlan, group: list[Step], *, sink, journal: Journal | None, stopper: Stopper,
+              results: dict[str, ToolResult]) -> tuple[bool, str, str]:
+    """Run one group to the end. Returns (ok, blamed tag, message)."""
+    running: list[_Running] = []
+    for step in group:
+        step.log.parent.mkdir(parents=True, exist_ok=True)
+        log = open(step.log, "ab")
+        env = dict(os.environ)
+        env.update(step.env)
+        env.pop("HEP_STATUS_FD", None)
+        read_fd = write_fd = None
+        if step.status == "standard":
+            read_fd, write_fd = os.pipe()
+            env["HEP_STATUS_FD"] = str(write_fd)
+        try:
+            process = subprocess.Popen(step.argv, cwd=plan.out, env=env, stdin=subprocess.DEVNULL, stdout=log,
+                                       stderr=subprocess.STDOUT, start_new_session=True,
+                                       pass_fds=(write_fd,) if write_fd is not None else ())
+        except OSError as error:
+            for entry in running:
+                _signal(entry, signal.SIGKILL)
+            raise HepError(f"cannot start {step.tag}: {error}", where=" ".join(step.argv[:2]))
+        finally:
+            log.close()
+            if write_fd is not None:
+                os.close(write_fd)
+        state = ToolState(point=plan.point.name, tag=step.tag)
+        entry = _Running(step, process, state, Reader(state, fd=read_fd, log=step.log, rules=step.filters,
+                                                      journal=journal), read_fd, time.monotonic())
+        running.append(entry)
+        sink.tool_started(state)
+
+    failure: tuple[str, str, str] | None = None      # (tag, cause, message)
+    failed_at = 0.0
+    termed = killed = interrupted = False
+    exits: list[_Running] = []
+    while True:
+        for entry in running:
+            entry.reader.poll()
+        for entry in running:
+            if entry.exited_at is None and entry.process.poll() is not None:
+                entry.exited_at = time.monotonic()
+                entry.state.running, entry.state.exit = False, entry.process.returncode
+                entry.reader.poll()
+                exits.append(entry)
+                results[entry.step.tag] = ToolResult(entry.step.tag, entry.process.returncode,
+                                                     entry.exited_at - entry.started)
+                sink.tool_finished(entry.state, results[entry.step.tag])
+        sink.tick([e.state for e in running])
+        alive = [e for e in running if e.exited_at is None]
+        clock = time.monotonic()
+
+        if failure is None:
+            failed = [e for e in exits if e.process.returncode != 0]
+            if failed:
+                # A SIGPIPE death is a consequence (the reader went away), never the cause: blame the
+                # first real failure, else the process that left first, even if it exited 0.
+                real = [e for e in failed if e.process.returncode != -signal.SIGPIPE]
+                blamed = real[0] if real else exits[0]
+                piped = [e.step.tag for e in failed if e.process.returncode == -signal.SIGPIPE]
+                message = f"{blamed.step.tag} exited with {_describe(blamed.process.returncode)}"
+                if piped and blamed.step.tag not in piped:
+                    message += f"; {', '.join(piped)} then lost its pipe"
+                failure, failed_at = (blamed.step.tag, "failed", message), clock
+        if failure is None:
+            for entry in alive:
+                if clock - entry.state.last_activity > entry.step.stall_after:
+                    failure = (entry.step.tag, "stalled", f"{entry.step.tag} was silent for {entry.step.stall_after:.0f} s")
+                elif entry.step.timeout and clock - entry.started > entry.step.timeout:
+                    failure = (entry.step.tag, "timeout", f"{entry.step.tag} ran past its timeout of {entry.step.timeout:.0f} s")
+                if failure:
+                    failed_at = clock
+                    break
+        if failure is None and stopper.requested:
+            failure, failed_at = ("", "stopped", "stopped by the user"), clock
+            for entry in alive:
+                _signal(entry, signal.SIGINT)
+            interrupted = True
+
+        if not alive:
+            break
+        if failure is not None:
+            waited = clock - failed_at
+            if not termed and waited >= GRACE:
+                for entry in alive:
+                    _signal(entry, signal.SIGTERM)
+                termed = True
+            elif termed and not killed and waited >= GRACE + TERM_GRACE:
+                for entry in alive:
+                    _signal(entry, signal.SIGKILL)
+                killed = True
+        time.sleep(POLL)
+
+    for entry in running:
+        if entry.fd is not None:
+            os.close(entry.fd)
+    if failure is None:
+        return True, "", ""
+    tag, cause, message = failure
+    if tag and tag in results:
+        results[tag].cause, results[tag].message = cause, message
+    if interrupted:
+        return False, "", message
+    return False, tag, message
+
+
+def _describe(code: int) -> str:
+    if code < 0:
+        try:
+            return f"signal {signal.Signals(-code).name}"
+        except ValueError:
+            return f"signal {-code}"
+    return f"exit code {code}"
+
+
+# ── one point ──────────────────────────────────────────────────────────────────────────────────
+
+def run_point(plan: PointPlan, run, configuration, *, sink=None, journal: Journal | None = None,
+              stopper: Stopper | None = None) -> PointResult:
+    sink = sink or NullSink()
+    stopper = stopper or Stopper()
+    started = now()
+    results: dict[str, ToolResult] = {}
+    sink.point_started(plan)
+    try:
+        prepare(plan)
+    except HepError as error:
+        result = PointResult(False, cause="prelim", message=error.render())
+        sink.point_finished(plan, result)
+        return result
+
+    for group in plan.groups:
+        ok, blamed, message = run_group(plan, group, sink=sink, journal=journal, stopper=stopper, results=results)
+        if not ok:
+            result = PointResult(False, stopped=stopper.requested, cause=blamed, message=message, tools=results)
+            _cleanup(plan)
+            sink.point_finished(plan, result)
+            return result
+
+    # the checks: event counts against the producer's sidecar, then every declared product exists
+    for step in plan.rendered.values():
+        if step.count_check is None:
+            continue
+        product, sidecar, reader = step.count_check
+        counted = read_count(product, reader)
+        try:
+            written = json.loads(sidecar.read_text(encoding="utf-8"))["written"]
+        except (OSError, ValueError, KeyError):
+            written = None
+        if counted is None or written is None or round(counted) != written:
+            message = (f"{step.tag} analysed {counted if counted is None else round(counted)} events; "
+                       f"the producer wrote {written} ({sidecar.name})")
+            results.setdefault(step.tag, ToolResult(step.tag)).cause = "count"
+            result = PointResult(False, cause=step.tag, message=message, tools=results)
+            _cleanup(plan)
+            sink.point_finished(plan, result)
+            return result
+        results[step.tag].message = f"count ok: {written} events"
+    for step in plan.rendered.values():
+        for final, partial in step.products:
+            if partial.exists():
+                partial.replace(final)
+            elif not final.exists():
+                result = PointResult(False, cause=step.tag, message=f"{step.tag} did not write {final.name}", tools=results)
+                sink.point_finished(plan, result)
+                return result
+
+    _cleanup(plan)
+    record = provenance(plan, run, configuration, started, now(),
+                        {tag: {"exit": r.exit, "seconds": round(r.seconds, 3), "note": r.message} for tag, r in results.items()})
+    write_atomic(plan.res / "provenance.json", json.dumps(record, indent=1, default=str) + "\n")
+    write_atomic(complete_marker(plan), plan.identity + "\n")
+    result = PointResult(True, tools=results)
+    sink.point_finished(plan, result)
+    return result
+
+
+def _cleanup(plan: PointPlan) -> None:
+    """FIFOs are removed when the point ends (04 §5); files are kept."""
+    for interface in plan.interfaces.values():
+        if interface.kind == "fifo" and interface.path.exists() and stat.S_ISFIFO(interface.path.stat().st_mode):
+            interface.path.unlink()
