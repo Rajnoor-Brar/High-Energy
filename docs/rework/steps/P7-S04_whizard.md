@@ -86,7 +86,7 @@ Revert.
   | Row | Result |
   |---|---|
   | Toy | `e+e- -> u ubar` at the Z runs end to end: compile and integrate (cached), generate into the FIFO, `hep-run` reads it as `Source::Stream`, a YODA is written. The point card shows `beams = e1, E1` — PDG codes turned into the model's own names — and `beams_momentum = 45.6, 45.6` |
-  | ep | the card D-Q7 settled on runs: 50 events, `beams = p, e1 => pdf_builtin, epa` assembled from the plan's half and the card's half, and a YODA normalised by the σ the config supplied |
+  | ep | the card D-Q7 static on runs: 50 events, `beams = p, e1 => pdf_builtin, epa` assembled from the plan's half and the card's half, and a YODA normalised by the σ the config supplied |
 
   A two-seed study compiles and integrates **once**, which for Whizard means not rebuilding the
   matrix-element library — the dominant cost.
@@ -96,7 +96,7 @@ Revert.
   1. **It writes no cross-section into HepMC3.** Not a zero — no `C` record at all, verified by
      reading the file. A stream therefore has none to take, and the run was quietly producing a YODA
      normalised by **zero**. 04 §8 already said this must be an error ("unless `rivet.xsec` is a
-     number"); nothing enforced it. `Core::RunRecord` now carries `xsec_known` and `Sink::Rivet`
+     number"); nothing enforced it. `Core::RunRecord` now carries `xsec_known` and `Analyzer::Rivet`
      refuses, naming the remedy. A Whizard point must set `[rivet].xsec`; Whizard's own integration
      prints it as `n_events / corr. to luminosity`.
   2. **Its EPA record has no scattered lepton**, so `photo_eic` — which applies `DISKinematics` to

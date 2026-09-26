@@ -70,7 +70,7 @@ def test_misleading_pdf_tags_are_renamed_with_a_note(migrated):
 
 def test_the_selectors_follow_the_quantities(migrated):
     config = load_config(migrated, machine_file=None, project="PhotoProduction")
-    assert config.settle.use == {"energies": "27x920", "beams": "ep"}
+    assert config.static.use == {"energies": "27x920", "beams": "ep"}
     assert config.studies["radius"].pin == {"energies": "18x275"}
     assert config.studies["energy_pdf"].across == ["energies", "pdf"]
 
@@ -78,9 +78,9 @@ def test_the_selectors_follow_the_quantities(migrated):
 def test_an_index_selector_becomes_an_explicit_index():
     """D-B22: a v1 integer pin meant a position, which is now written `#N`."""
     raw = tomllib.loads((INPUTS / "eic.toml").read_text(encoding="utf-8"))
-    raw["settle"]["use"]["cmnd.pdf"] = 3
+    raw["static"]["use"]["cmnd.pdf"] = 3
     document = migrate_document(raw, drop_undeclared_options=False).document
-    assert document["settle"]["use"]["pdf"] == "#3"
+    assert document["static"]["use"]["pdf"] == "#3"
 
 
 def test_undeclared_option_quantities_are_dropped(tmp_path):
@@ -198,7 +198,7 @@ def test_long_arrays_are_wrapped():
 
 
 def test_keys_that_need_quoting_get_it():
-    text = to_toml({"settle": {"gen": {"PhaseSpace:pTHatMin": 6.0, "plain": 1}}})
+    text = to_toml({"static": {"gen": {"PhaseSpace:pTHatMin": 6.0, "plain": 1}}})
     assert '"PhaseSpace:pTHatMin" = 6.0' in text
     assert "plain = 1" in text
 
@@ -209,9 +209,9 @@ def test_a_table_of_tables_gets_no_empty_header():
 
 
 def test_arrays_of_tables_are_emitted(tmp_path):
-    text = to_toml({"sinks": {"module": [{"name": "a"}, {"name": "b"}]}})
-    assert text.count("[[sinks.module]]") == 2
-    assert tomllib.loads(text)["sinks"]["module"][1]["name"] == "b"
+    text = to_toml({"analyzers": {"module": [{"name": "a"}, {"name": "b"}]}})
+    assert text.count("[[analyzers.module]]") == 2
+    assert tomllib.loads(text)["analyzers"]["module"][1]["name"] == "b"
 
 
 def test_the_emitter_round_trips_the_whole_config(migrated):

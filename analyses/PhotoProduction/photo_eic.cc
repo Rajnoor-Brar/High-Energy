@@ -4,7 +4,7 @@
 // Replaces photo_5x41 / photo_10x100 / photo_18x275, which differed only by
 // their hard-coded W window (the HERA inelasticity range 0.1992 < y < 0.8483
 // expressed in GeV for each sqrt(s)). Here the cuts are analysis options, set
-// from the run TOML ([settle.rivet].options or [sweep.rivet.*] quantities):
+// from the run TOML ([static.rivet].options or [sweep.rivet.*] quantities):
 //
 //   YMIN, YMAX   inelasticity window (default 0.1992, 0.8483), used unless
 //   WMIN, WMAX   a photon-proton W window in GeV is given (reproduces the old plugins)
@@ -47,8 +47,8 @@ namespace Rivet {
       _ymin    = getOption<double>("YMIN", 0.1992);
       _ymax    = getOption<double>("YMAX", 0.8483);
       _q2max   = getOption<double>("Q2MAX", 1.0);
-      _etmin   = getOption<double>("ETMIN", 5.0);
-      _etmin2  = getOption<double>("ETMIN2", 10.0);
+      _etmin   = getOption<double>("ETMIN", 17.0);
+      _etmin2  = getOption<double>("ETMIN2", 21.0);
       _etamax  = getOption<double>("ETAMAX", 3.5);
       const double chEtaMax = getOption<double>("CHETAMAX", 3.5);
       const double chPtMin  = getOption<double>("CHPTMIN", 0.1);
@@ -184,7 +184,7 @@ namespace Rivet {
   private:
 
     double _wmin = -1, _wmax = -1, _ymin = 0.1992, _ymax = 0.8483;
-    double _q2max = 1.0, _etmin = 5.0, _etmin2 = 10.0, _etamax = 3.5;
+    double _q2max = 1.0, _etmin = 17.0, _etmin2 = 21.0, _etamax = 3.5;
     bool _useW = false;
 
     /// @name Histograms

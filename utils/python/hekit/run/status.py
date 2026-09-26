@@ -82,7 +82,7 @@ class StatusReader:
     beams: dict[str, Any] = dataclass_field(default_factory=dict)
     threads: int = 0
     mode: str = ""
-    sinks: list[str] = dataclass_field(default_factory=list)
+    analyzers: list[str] = dataclass_field(default_factory=list)
     logs: list[dict[str, str]] = dataclass_field(default_factory=list)
     checkpoints: list[dict[str, Any]] = dataclass_field(default_factory=list)
     summary: dict[str, Any] = dataclass_field(default_factory=dict)
@@ -124,7 +124,7 @@ class StatusReader:
                       "sqrt_s": message.get("sqrt_s")}
         self.threads = int(message.get("threads", 0) or 0)
         self.mode = message.get("mode", "")
-        self.sinks = list(message.get("sinks", []))
+        self.analyzers = list(message.get("analyzers", []))
 
     def _on_progress(self, message: Message) -> None:
         self.done = int(message.get("done", 0) or 0)

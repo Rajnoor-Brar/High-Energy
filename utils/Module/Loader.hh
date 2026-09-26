@@ -4,7 +4,7 @@
 // Finding and opening a user's module (05 §5).
 //
 // `dlopen` from the configured paths, exactly as Rivet finds its analysis plugins, so that adding a
-// module never rebuilds `hep-run`. Two things it is careful about, both learned from the Rivet sink:
+// module never rebuilds `hep-run`. Two things it is careful about, both learned from the Rivet analyzer:
 //
 //   * **a module that is not there fails before the first event.** The library is opened and its
 //     entry point resolved in `prepare()`, which is where `--check` stops (06 §3.3) — a typo costs a

@@ -12,7 +12,7 @@
 #   - [rivpyth].generator dropped: hep-run replaces the per-project generator binary
 #   - [rivpyth].path_literal dropped: paths are resolved by hep (00/B18)
 #   - [sweep].seed_step dropped: seeds come from a point's identity now (03 §5, D21)
-#   - [settle.cmnd].beams held energies; it becomes [beams].energies
+#   - [static.cmnd].beams held energies; it becomes [beams].energies
 #   - [beams].ids = [2212, 11] was implicit in the base card; schema 2 states it (check it against your card)
 #   - [sweep.cmnd.beams] held energies; it becomes type = "energies" named 'energies' (03 §3)
 #   - [sweep.cmnd.lepton] set Beams:idB; it is now a beams quantity with side = "b" (03 §3)
@@ -54,7 +54,7 @@ rivet_refs = true
 [output]
 tag_style = "tag"
 
-[settle.use]
+[static.use]
 beams = "ep"
 
 [quantity.energies]

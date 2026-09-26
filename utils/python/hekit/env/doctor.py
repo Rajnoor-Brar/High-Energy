@@ -147,7 +147,8 @@ def generators(tools: dict[str, versions.Tool]) -> dict[str, Any]:
             "features": [],
             "detail": f"ThePEG has no {missing} module{'s' if len(absent) > 1 else ''}, so Herwig "
                       "events cannot reach a file or Rivet",
-            "fix": "rebuild ThePEG --with-hepmc --with-rivet, then Herwig (P7-S06)",
+            "fix": "rebuild ThePEG --with-hepmc --with-hepmcversion=3 --with-rivet, then Herwig "
+                  "(P7-S06)",
         }
     return found
 

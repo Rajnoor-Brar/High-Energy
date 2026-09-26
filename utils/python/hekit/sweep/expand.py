@@ -109,9 +109,9 @@ def build_point(config: Any, selection: Selection, number: int, choice: dict[str
     options: dict[str, dict[str, Any]] = {"": dict(config.rivet.options)}
     analyses = list(config.rivet.analyses)
 
-    for key, value in config.settle.gen.items():
-        _claim(settings, owners, key, value, "[settle.gen]")
-    for key, value in config.settle.ana.items():
+    for key, value in config.static.gen.items():
+        _claim(settings, owners, key, value, "[static.gen]")
+    for key, value in config.static.ana.items():
         options[""][key] = value
 
     tags: list[str] = []
@@ -153,9 +153,9 @@ def build_point(config: Any, selection: Selection, number: int, choice: dict[str
         if name not in analysis_choice:
             generation_tags.append(rendered_tag)
 
-    if config.settle.tag:
-        tags.append(config.settle.tag)
-        generation_tags.append(config.settle.tag)
+    if config.static.tag:
+        tags.append(config.static.tag)
+        generation_tags.append(config.static.tag)
 
     suffix = "_".join(part for part in tags if part)
     generation_suffix = "_".join(part for part in generation_tags if part)

@@ -188,7 +188,7 @@ class Section:
 
     name: str
     fields: dict[str, Field]
-    #: "table" ([run]), "array" ([[sinks.module]]), "named" ([quantity.<name>])
+    #: "table" ([run]), "array" ([[analyzers.module]]), "named" ([quantity.<name>])
     shape: str = "table"
     doc: str = ""
     #: machine.toml may set these keys (dotted, relative to the section); () means none

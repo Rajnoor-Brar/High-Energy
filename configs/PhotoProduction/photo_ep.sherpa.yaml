@@ -76,7 +76,7 @@ MI_HANDLER: None
 SCALES: METS{H_T2/4}{H_T2/4}{H_T2/4}
 ME_GENERATORS: [Comix]
 
-# Unweighted events, so the sample is what `Sink::Rivet` expects from a generator.
+# Unweighted events, so the sample is what `Analyzer::Rivet` expects from a generator.
 EVENT_GENERATION_MODE: Weighted
 
 # `EVENTS`, `RANDOM_SEED` and `EVENT_OUTPUT` are written by `hep` into the point card.

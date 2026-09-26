@@ -33,9 +33,9 @@ Never `#include`/import from `legacy/`; copy or adapt.
 
 **In**
 
-- Sections: `[run]`, `[generator]` (tools incl. `store` + `input`), `[beams]` (`ids`, `energies`), `[rivet]`, `[store]`, `[[sinks.module]]`, `[delphes]`, `[output]`, `[plot]`, `[plot.data]` (incl. `map`), `[terminal]`, `[[proc.fit]]`, `[[proc.hist]]`, `[settle]`, `[quantity.*]`, `[sweep]`, `[study.*]`
+- Sections: `[run]`, `[generator]` (tools incl. `store` + `input`), `[beams]` (`ids`, `energies`), `[rivet]`, `[store]`, `[[analyzers.module]]`, `[delphes]`, `[output]`, `[plot]`, `[plot.data]` (incl. `map`), `[terminal]`, `[[proc.fit]]`, `[[proc.hist]]`, `[static]`, `[quantity.*]`, `[sweep]`, `[study.*]`
 - Field metadata: doc, type, default, range, since (feeds `hep config reference`)
-- Layering: defaults < machine file (allow-list) < extends chain < file < settle < study < pins/--set < sweep values; origin per value
+- Layering: defaults < machine file (allow-list) < extends chain < file < static < study < pins/--set < sweep values; origin per value
 - Unknown keys at **every** level (incl. top level) are errors
 
 **Out (non-goals)**
@@ -93,20 +93,20 @@ Revert the package directory.
     - `schema.py` — all 18 sections of 03 §1 as field tables. The section dataclasses are **generated** from
       those tables (`make_dataclass`), so defaults, types and documentation cannot drift; `hep config
       reference` (P1-S06) will read the same tables. `section_of()` maps a dotted path to its section,
-      including `[plot.data]`, `[[sinks.module]]`, `[[proc.fit]]`, `[[proc.hist]]`, `[quantity.<n>]`,
+      including `[plot.data]`, `[[analyzers.module]]`, `[[proc.fit]]`, `[[proc.hist]]`, `[quantity.<n>]`,
       `[study.<n>]`.
     - `load.py` — file reading, **origin scanning** (a line scanner: `tomllib` reports no line numbers, so a
       separate pass records `file:line` per key, indexing repeated `[[array]]` headers), schema-aware
       flattening, `Layer`/`Resolved` with a per-key layer chain, the machine allow-list, the `extends` chain
       with cycle detection, and `--set` parsed as TOML so types survive.
-    - `model.py` — `Config` (typed sections, `quantities`, `studies`, `module_sinks`, `proc_fits`,
+    - `model.py` — `Config` (typed sections, `quantities`, `studies`, `module_analyzers`, `proc_fits`,
       `proc_hists`, `warnings`), `Study` (its own scan plus captured section overrides), `load_config()`,
       `origin()`, `explain()`, `quantity()` with a did-you-mean.
     - `validate.py` — schema version, quantity shape, and the cross-section rules.
   - **Design decisions taken while implementing:**
     - *Flattening stops at single-value keys.* Tables merge deeply, but a table on a key that holds one value
       (`[quantity.<q>].key = { pythia = "PDF:pSet" }`) replaces as a whole; only *free* tables
-      (`[settle.gen]`, `[rivet].options`, `[plot.data].map`, `[settle.use]`, `pin`, `init`) merge key by key.
+      (`[static.gen]`, `[rivet].options`, `[plot.data].map`, `[static.use]`, `pin`, `init`) merge key by key.
       Without this the per-tool `key` table of 03 §3 was split into leaves and rejected. Recorded in 03 §2.
     - *A field's own default always passes its `choices`.* Several keys use `""` for "not set" while listing
       choices (`sweep.style`, `quantity.side`, `quantity.type`); the emptiness is caught by the rule that

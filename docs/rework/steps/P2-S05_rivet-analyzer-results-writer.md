@@ -1,4 +1,4 @@
-# P2-S05 — Serial Rivet sink and atomic results writer
+# P2-S05 — Serial Rivet analyzer and atomic results writer
 
 | Field | Value |
 |---|---|
@@ -32,7 +32,7 @@ Never `#include`/import from `legacy/`; copy or adapt.
 
 **In**
 
-- `Sink::Rivet` (serial): analyses + options, check_beams, weights policy, `setCrossSection(σ, err, true)`, finalize, `getYodaAOs()`
+- `Analyzer::Rivet` (serial): analyses + options, check_beams, weights policy, `setCrossSection(σ, err, true)`, finalize, `getYodaAOs()`
 - `Results::Writer`: `.tmp` → rename; partial naming; `analysis.dump.yoda` via `setFinalizePeriod` for re-entrant analyses only; `run.summary.json`
 
 **Out (non-goals)**
@@ -51,7 +51,7 @@ Never `#include`/import from `legacy/`; copy or adapt.
 
 ## Outputs
 
-- `utils/Sink/Rivet.hh`, `utils/Results*`
+- `utils/Analyzer/Rivet.hh`, `utils/Results*`
 - `tests/cpp/rivet_*`
 
 ## Verification
@@ -77,8 +77,8 @@ Revert.
 ## Log
 
 - 2026-09-17 — step file created (P0-S00).
-- 2026-09-18 — implemented `Sink::Rivet` (206 lines), `Results::{Writer,Summary}` (203) and the facade;
-  `hep-run` now builds its sinks from `[[sink]]` instead of always counting. Rivet runs **in process**:
+- 2026-09-18 — implemented `Analyzer::Rivet` (206 lines), `Results::{Writer,Summary}` (203) and the facade;
+  `hep-run` now builds its analyzers from `[[analyzer]]` instead of always counting. Rivet runs **in process**:
   the same `GenEvent` the legacy FIFO carried, without the FIFO (D4).
 
   **Verification, all rows measured** (200 events, 2 threads, run from `output/scratch/`):
@@ -94,7 +94,7 @@ Revert.
   warning counts (2 distinct messages in this run).
 
   **Tests:** ctest `results_writer` (naming, atomic write, stale-file removal in both directions, a
-  failed write leaving nothing, the summary's fields) and `tests/python/run/test_rivet_sink.py`,
+  failed write leaving nothing, the summary's fields) and `tests/python/run/test_rivet_analyzer.py`,
   13 cases against the real binary — including the one that matters for 03 §4: `--study radius` puts
   `photo_eic:R=0.4`, `:R=0.7` and `:R=1.0` in **one** YODA from **one** generation, with a single
   `/_EVTCOUNT`. Suite: 10/10 ctest, 372 Python.
@@ -106,9 +106,9 @@ Revert.
      `Rivet_photo_eic.so` — so the very first real run could not find its analysis. Added
      `hekit.env.paths.build_root()` (honouring `HEKIT_BUILD`) and put the build tree first.
   2. **A missing analysis had to be caught by hand.** `AnalysisHandler::addAnalysis` only *warns* on an
-     unknown name, so the sink resolves each name through `AnalysisLoader::getAnalysis` first and then
+     unknown name, so the analyzer resolves each name through `AnalysisLoader::getAnalysis` first and then
      re-checks `analysisNames().size()`, which also catches a name Rivet drops over a bad option value.
-  3. **New `Sink::Sink::prepare()` hook**, called by `Run::Loop::prepare()` after the generator's
+  3. **New `Analyzer::Analyzer::prepare()` hook**, called by `Run::Loop::prepare()` after the generator's
      `init()` and before any event. This is what makes the missing-analysis check work under `--check`
      — the step only asked for "before any event", and `--check` is strictly better.
   4. `dump_every` is **refused with a warning** rather than honoured for a non-re-entrant analysis
@@ -124,7 +124,7 @@ Revert.
   7. A run that analysed **no** events writes no YODA at all (with a warning) instead of an empty one:
      `hep` reads a missing output as "not run", which is the truth, whereas an empty YODA would be
      taken for a result.
-  8. An unknown sink kind is exit 1, not a skip — a silently dropped store or module would look like a
+  8. An unknown analyzer kind is exit 1, not a skip — a silently dropped store or module would look like a
      successful run that produced nothing.
   9. `RunRecord` grew the fields the summary needs (`events_requested`, `mode`, `seed`, `seeds`,
      `warnings`); `Run::Result` grew `summary_path`.

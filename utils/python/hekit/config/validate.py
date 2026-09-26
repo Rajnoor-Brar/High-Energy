@@ -193,10 +193,10 @@ def cross_check(config: Any) -> None:
                 "[beams] a scalar energy is √s in the CM frame, but the beams differ "
                 f"({beams.ids}): events are generated in the CM frame, so lab-frame η observables shift")
 
-    # analyses and sinks
+    # analyses and analyzers
     if config.rivet.mode == "native" and generator.tool != "sherpa":
         raise HepError("[rivet] mode = \"native\" is only available for Sherpa", where=where,
-                       hint="use the in-process sink: mode = \"inprocess\"")
+                       hint="use the in-process analyzer: mode = \"inprocess\"")
     if not isinstance(config.rivet.xsec, str):
         if isinstance(config.rivet.xsec, bool) or not isinstance(config.rivet.xsec, (int, float)) \
                 or config.rivet.xsec <= 0:
@@ -204,10 +204,10 @@ def cross_check(config: Any) -> None:
     elif config.rivet.xsec != "generator":
         raise HepError(f"[rivet] xsec {config.rivet.xsec!r} is not understood", where=where,
                        hint="\"generator\", or a number in pb")
-    if not config.rivet.analyses and not config.module_sinks and not config.store.enabled \
+    if not config.rivet.analyses and not config.module_analyzers and not config.store.enabled \
             and not any(quantity.type == "analysis" for quantity in config.quantities.values()):
         raise HepError("nothing would consume the events", where=where,
-                       hint="set [rivet].analyses, add a [[sinks.module]], or enable [store]")
+                       hint="set [rivet].analyses, add a [[analyzers.module]], or enable [store]")
 
     # plotting
     swept = _mentioned_quantities(config.sweep.across)
@@ -241,7 +241,7 @@ def cross_check(config: Any) -> None:
                                                  f"{', '.join(_mentioned_quantities(study.across)) or 'nothing'}")
         for name in study.pin:
             config.quantity(name)
-    for name in config.settle.use:
+    for name in config.static.use:
         config.quantity(name)
 
     # processing

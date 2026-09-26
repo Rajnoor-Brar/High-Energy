@@ -53,7 +53,7 @@ class Capabilities:
     version: str = ""
     executable: str = ""
     hepmc: bool = False               # can it write HepMC3 events?
-    native_rivet: bool = False        # does it run Rivet itself? (we use our own sink anyway)
+    native_rivet: bool = False        # does it run Rivet itself? (we use our own analyzer anyway)
     threads: bool = False             # can one process use several threads?
     seeds: bool = False               # can the seed be set from outside?
     prepare: bool = False             # does it have a cacheable, seed-independent step?

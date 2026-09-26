@@ -20,11 +20,11 @@ SPEC_VERSION = 2
 SPEC_SCHEMA = Path(__file__).with_name("spec_v2.json")
 
 
-def sink_documents(config: Any, group: Any) -> list[dict[str, Any]]:
-    """One entry per sink, in the order `hep-run` should attach them (05 §5)."""
-    sinks: list[dict[str, Any]] = []
+def analyzer_documents(config: Any, group: Any) -> list[dict[str, Any]]:
+    """One entry per analyzer, in the order `hep-run` should attach them (05 §5)."""
+    analyzers: list[dict[str, Any]] = []
     if group.analyses:
-        sinks.append({
+        analyzers.append({
             "kind": "rivet",
             "analyses": list(group.analyses),
             "paths": [str(path) for path in _search_paths(config)],
@@ -33,19 +33,19 @@ def sink_documents(config: Any, group: Any) -> list[dict[str, Any]]:
             "dump_every": config.rivet.dump_every,
             "check_beams": config.rivet.check_beams,
         })
-    for module in config.module_sinks:
-        sinks.append({"kind": "module", "name": module["name"],
+    for module in config.module_analyzers:
+        analyzers.append({"kind": "module", "name": module["name"],
                       "paths": [str(path) for path in _module_paths(config)],
                       "options": module.get("options", {})})
     if config.store.enabled:
-        sinks.append({"kind": "store", "dir": str(group.directory / "events"),
+        analyzers.append({"kind": "store", "dir": str(group.directory / "events"),
                       "compression": config.store.compression})
     from ..adapters import delphes as delphes_adapter
 
     if delphes_adapter.enabled(config):
         # The tee: `hep-run` writes HepMC3 into a FIFO that a `DelphesHepMC3` beside it reads (05 §5).
-        sinks.append(delphes_adapter.sink_document(group.directory))
-    return sinks
+        analyzers.append(delphes_adapter.analyzer_document(group.directory))
+    return analyzers
 
 
 def _module_paths(config: Any) -> tuple[Path, ...]:
@@ -134,7 +134,7 @@ def document(config: Any, group: Any, *, origin: str = "") -> dict[str, Any]:
             "events": group.points[0].events or 0,
             "seed": group.seeds.point,
             "threads": config.run.threads,
-            # Not in the identity hash: how many threads see the sinks changes the wall clock, not
+            # Not in the identity hash: how many threads see the analyzers changes the wall clock, not
             # the events (05 §3).
             "mode": config.run.mode,
             "seeds": {"point": group.seeds.point, "instances": list(group.seeds.instances)},
@@ -145,7 +145,7 @@ def document(config: Any, group: Any, *, origin: str = "") -> dict[str, Any]:
             "yoda": "analysis.yoda",
             "summary": "run.summary.json",
         },
-        "sink": sink_documents(config, group),
+        "analyzer": analyzer_documents(config, group),
         "status": {"fd": 3, "heartbeat_ms": 500},
     }
 
@@ -160,7 +160,7 @@ def attach_specs(plan: Any) -> None:
 
 
 def dumps(spec: dict[str, Any]) -> str:
-    """The spec as TOML, with the sinks as an array of tables."""
+    """The spec as TOML, with the analyzers as an array of tables."""
     return tomli_w.dumps(spec)
 
 

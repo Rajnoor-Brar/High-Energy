@@ -5,7 +5,7 @@
 #   ydplt   configs/PhotoProduction/eic.toml --study <name>     # one page per point
 #
 # Without --study the file scans [sweep].across (the PDF set) with every other quantity at its
-# pinned or catalogue value: 27x920 GeV e+p ([settle.use]), pT0Ref 3.2, MPI on.
+# pinned or catalogue value: 27x920 GeV e+p ([static.use]), pT0Ref 3.2, MPI on.
 # One-offs: --pin cmnd.beams=10x100, --across "cmnd.beams,cmnd.pdf", --overlay cmnd.pdf
 # The same physics point always gets the same file name, so studies share runs
 # (e.g. study "energies" point 18x275 = study "single").
@@ -39,11 +39,11 @@ plugin_dir = "."
 threads    = 20                           # Parallelism:numThreads
 path_literal = false
 
-[settle.rivet]                            # fixed analysis
+[static.rivet]                            # fixed analysis
 plugin = "photo_eic"                      # options: YMIN YMAX WMIN WMAX Q2MAX ETMIN ETMIN2 ETAMAX R CHETAMAX CHPTMIN
 # options = { R = 1.0 }
 
-[settle.use]                            # file-wide pins; override the catalogue `use` defaults
+[static.use]                            # file-wide pins; override the catalogue `use` defaults
 "cmnd.beams" = "27x920"
 "cmnd.lepton" = "ep"
 
@@ -56,14 +56,14 @@ seed_step    = 20                         # >= [rivpyth].threads: Pythia gives t
 
 # ── Quantity catalogue ──
 # `use = n` applies value n everywhere unless the quantity is scanned or pinned
-# ([settle.use], a study's `pin`, --pin); no `use` = left to the base cmnd.
+# ([static.use], a study's `pin`, --pin); no `use` = left to the base cmnd.
 
 [sweep.cmnd.beams]
 type   = "beams"                          # [eA, eB] → frameType 2; single eCM → frameType 1
 values = [[41, 5], [100, 10], [275, 18], [920, 27.5]]
 labels = ["5x41 GeV ($\\sqrt{s}$ = 28.6 GeV)", "10x100 GeV ($\\sqrt{s}$ = 63.2 GeV)", "18x275 GeV ($\\sqrt{s}$ = 140.7 GeV)", "27x920 GeV ($\\sqrt{s}$ = 318.1 GeV)"]
 tags   = ["5x41", "10x100", "18x275","27x920"]
-use    = 1                                # catalogue default; [settle.use] pins 27x920
+use    = 1                                # catalogue default; [static.use] pins 27x920
 
 [sweep.cmnd.lepton]
 type    = "pythia"
@@ -71,7 +71,7 @@ setting = "Beams:idB"
 values  = [11, -11]
 labels  = ["$e^-$", "$e^+$"]
 tags    = ["em", "ep"]
-use    = 1                                # catalogue default; [settle.use] pins ep
+use    = 1                                # catalogue default; [static.use] pins ep
 
 [sweep.cmnd.pdf]
 type    = "pythia"

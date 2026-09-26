@@ -4,7 +4,7 @@
 // Running a trained model from inside the event loop (05 §6, 13 §2).
 //
 // It sits beside `Phys` in the layering — above `Events`, below `Module` — so it knows about ONNX
-// Runtime and nothing about sinks, sources or the run.
+// Runtime and nothing about analyzers, sources or the run.
 //
 // **Two of the three headers have no ONNX in them.** `Types` and `Features` are buffers and names,
 // so a module builds its feature row identically whether or not this build has ONNX Runtime, and

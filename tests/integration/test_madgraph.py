@@ -93,7 +93,7 @@ paths = []
 [output]
 tag_style = "tag"
 
-[settle.use]
+[static.use]
 energies = "91"
 
 [quantity.energies]

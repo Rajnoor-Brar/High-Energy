@@ -17,7 +17,7 @@
 ### Components
 
 ```cmake
-option(HEKIT_WITH_RIVET   "Sink::Rivet + analyses"            AUTO)   # AUTO = on if found
+option(HEKIT_WITH_RIVET   "Analyzer::Rivet + analyses"            AUTO)   # AUTO = on if found
 option(HEKIT_WITH_HEPMC   "Store, Source::StoreReplay/Stream"  AUTO)   # adds HEPMC3_USE_COMPRESSION + HEPMC3_Z_SUPPORT (+ZSTD if found)
 option(HEKIT_WITH_ONNX    "ML::OnnxModel"                      AUTO)
 option(HEKIT_WITH_DELPHES "in-process Delphes (links ROOT)"    OFF)    # deferred; external Delphes needs no build option
@@ -92,7 +92,7 @@ tests/
   integration/   slow end-to-end and equivalence tests (pytest + ctest label "slow")
   spikes/        decision experiments (e.g. PythiaParallel chunked run, gz vs zstd); kept for provenance
   tools/         yodacmp.py (→ hekit.results.compare in P4-S04)
-  cpp/           ctest sources (Core, Status, Store, Results, Sink)
+  cpp/           ctest sources (Core, Status, Store, Results, Analyzer)
 ```
 
 The old C++ tests move to `legacy/tests/` (P0-S06), together with their fixtures and `run_all.sh`.
@@ -100,7 +100,7 @@ The old C++ tests move to `legacy/tests/` (P0-S06), together with their fixtures
 | Layer | Test | Tooling |
 |---|---|---|
 | legacy golden | `rivpyth` plan expansion per study (points, pages, settings with origin); mini-run YODAs and plot intermediates; study counts | `pytest tests/golden` |
-| config / sweep | Schema errors (unknown key, did-you-mean, migration); precedence chain; `across` grammar; settle clashes; study pins; one test per legacy bug (00/B6, B7, B9, B22) | `pytest`, pure Python, <2 s |
+| config / sweep | Schema errors (unknown key, did-you-mean, migration); precedence chain; `across` grammar; static clashes; study pins; one test per legacy bug (00/B6, B7, B9, B22) | `pytest`, pure Python, <2 s |
 | identity / seeds | Same seed for the same point across studies; disjoint `Parallelism:seeds` blocks; catalogue-order independence; equal-hash aliases | `pytest` (property tests) |
 | adapters | Golden files: point → rendered card for each tool; Pythia ids + energies (pair / scalar √s / LHE); PDG → Whizard/Herwig/MadGraph mapping; the Whizard insertion rule; Rivet option validation against `.info` | `pytest` + `tests/golden/` |
 | plan | `eic` studies → expected point, group and page counts; analysis-only variants share one group; migrated plan equals the in-memory migration | `pytest` |
@@ -108,7 +108,7 @@ The old C++ tests move to `legacy/tests/` (P0-S06), together with their fixtures
 | status protocol | C++ `Status::Writer` ↔ Python reader round-trip; unknown `k` values ignored | `ctest` + `pytest` |
 | hep-run core | Spec parsing errors; `--check` on good and bad cards (unknown key → 1, `ProcessType = 2` → 3); SIGINT → 6 with a `.partial` output | `ctest` |
 | Pythia spike | Repeated `run()` vs single `run()`; σ-error combination vs `stat(true)`; `Parallelism:seeds` readback | `tests/spikes/` (decision evidence) |
-| Rivet sink | **Legacy equivalence:** in-process vs `generator.exe` → FIFO → `rivet`, 1 thread, fixed seed. **Serial vs sharded:** 50k events. σ equals `sigmaGen()`. | `ctest -L slow` |
+| Rivet analyzer | **Legacy equivalence:** in-process vs `generator.exe` → FIFO → `rivet`, 1 thread, fixed seed. **Serial vs sharded:** 50k events. σ equals `sigmaGen()`. | `ctest -L slow` |
 | store | Write → verify (counts, hashes, truncation detection) → replay → same YODA and σ; build without zstd | `ctest` + `ctest -L slow` |
 | modules | Toy-module totals exact for 1/4/20 threads; scaled integral correct; non-empty dumps; module objects merged by hekit for replicas | `ctest` + `pytest` |
 | plot | Voiding, auto-range, data map, `.plot` parser → mpl kwargs; outputs equal the legacy functions | `pytest` with small YODA fixtures |

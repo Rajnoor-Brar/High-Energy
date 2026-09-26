@@ -102,7 +102,7 @@ Revert.
      real exit code beats a signal death; consumers are considered before producers because a consumer
      that exits early is what closes the pipe on the producer. `test_a_readers_own_error_wins_over_the_writers_sigpipe`
      is the case the old tool got wrong.
-  2. **"Reader dies → exit 4" needed a reading.** A dead consumer is a *sink* crash by role, which
+  2. **"Reader dies → exit 4" needed a reading.** A dead consumer is an *analyzer* crash by role, which
      would be 5. 06 §3.3 defines code 4 as "source I/O (**FIFO closed early**)", which is exactly this
      situation seen from the writer's side, so the exit code follows the doc — and the attribution
      message still names the crash (`rivet was killed by SIGSEGV, so generator wrote into a closed

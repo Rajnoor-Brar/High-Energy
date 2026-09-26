@@ -138,6 +138,6 @@ def init(project: str, write: Path | None):
         write.parent.mkdir(parents=True, exist_ok=True)
         write.write_text(text, encoding="utf-8")
         click.echo(f"wrote {write}")
-        click.echo("next: set [rivet].analyses (or add a [[sinks.module]]), then run hep plan")
+        click.echo("next: set [rivet].analyses (or add a [[analyzers.module]]), then run hep plan")
     else:
         click.echo(text)

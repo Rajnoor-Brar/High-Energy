@@ -5,7 +5,7 @@
 | Status | done |
 | Kind | decision |
 | Phase | P8 — Modules, YODA results, Phys, ML |
-| Depends on | [P8-S01](P8-S01_module-sink-yoda.md) |
+| Depends on | [P8-S01](P8-S01_module-analyzer-yoda.md) |
 | Blocks | — |
 | Effort | 0.1 d |
 | Findings / decisions | D23; Q10 |

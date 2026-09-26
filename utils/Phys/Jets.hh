@@ -25,7 +25,7 @@
 //
 // **Nothing here is thread-safe**, and `threadSafe()` says so rather than leaving it to be found:
 // SISCone keeps its clustering cache and its RNG in process-wide statics in every build, and this
-// FastJet is compiled without even limited thread safety (00/B31). The Rivet sink refuses to shard
+// FastJet is compiled without even limited thread safety (00/B31). The Rivet analyzer refuses to shard
 // for the same reason.
 
 #include <algorithm>

@@ -1,7 +1,7 @@
 """Schema 1 → schema 2 (03 §6).
 
 The rework kept the shape of the configuration that worked — a base card plus typed quantities, `across`,
-`settle`, studies — and changed the vocabulary around it. This translates a schema-1 file into the new
+`static`, studies — and changed the vocabulary around it. This translates a schema-1 file into the new
 vocabulary, reports every change it made, and refuses to guess: anything it does not understand is an
 error, not a silent omission.
 
@@ -14,13 +14,13 @@ What moves:
 | `[rivpyth] serial / generator / hepmc_file / path_literal` | dropped (07 §1: directories, not serial prefixes) |
 | `[yoda] plot_merge_type / void_empty / …` | `[plot]`, `[plot.data]` |
 | `[sweep] tag_style / yoda_legends / skip_existing / seed_step` | `[output].tag_style`, `[plot].legends`, `[run].skip_existing`, dropped (identity seeds, D21) |
-| `[settle.rivet] plugin / options` | `[rivet].analyses` / `[rivet].options` |
-| `[settle.cmnd] beams / seed / "Key:x"` | `[beams].energies`, `[run].seed`, `[settle.gen]` |
+| `[static.rivet] plugin / options` | `[rivet].analyses` / `[rivet].options` |
+| `[static.cmnd] beams / seed / "Key:x"` | `[beams].energies`, `[run].seed`, `[static.gen]` |
 | `[sweep.cmnd.<n>] type = "pythia"` | `[quantity.<n>] type = "setting"`, `setting` → `key` |
 | `[sweep.cmnd.<n>] type = "beams"` | `[quantity.energies] type = "energies"` — v1 "beams" held energies |
 | a `pythia` quantity on `Beams:idA` / `idB` | `[quantity.beams] type = "beams"`, `side = "a"` / `"b"` |
 | `[sweep.rivet.<n>] type = "option"` / `"plugin"` | `type = "option"` / `type = "analysis"` |
-| `cmnd.x` / `rivet.x` in `across`, `overlay`, `pin`, `[settle.use]` | the bare name |
+| `cmnd.x` / `rivet.x` in `across`, `overlay`, `pin`, `[static.use]` | the bare name |
 """
 
 from __future__ import annotations
@@ -179,7 +179,7 @@ def migrate_document(raw: dict[str, Any], *, rename_tags: bool = True,
     yoda = raw.get("yoda", {})
     rivpyth = raw.get("rivpyth", {})
     sweep = raw.get("sweep", {})
-    settle = raw.get("settle", {})
+    static = raw.get("static", {})
     if "schema" in raw:
         raise HepError("this file already declares a schema version", hint="nothing to migrate")
     if not analysis:
@@ -206,22 +206,22 @@ def migrate_document(raw: dict[str, Any], *, rename_tags: bool = True,
     document["generator"] = {"tool": "pythia", "card": analysis["cmnd_file"]}
 
     beams: dict[str, Any] = {"ids": list(DEFAULT_IDS)}
-    settle_cmnd = dict(settle.get("cmnd", {}))
-    if "beams" in settle_cmnd:
-        beams["energies"] = settle_cmnd.pop("beams")
-        migration.note("[settle.cmnd].beams held energies; it becomes [beams].energies")
+    static_cmnd = dict(static.get("cmnd", {}))
+    if "beams" in static_cmnd:
+        beams["energies"] = static_cmnd.pop("beams")
+        migration.note("[static.cmnd].beams held energies; it becomes [beams].energies")
     document["beams"] = beams
     migration.note(f"[beams].ids = {DEFAULT_IDS} was implicit in the base card; schema 2 states it "
                    "(check it against your card)")
-    if "seed" in settle_cmnd:
-        document["run"]["seed"] = settle_cmnd.pop("seed")
+    if "seed" in static_cmnd:
+        document["run"]["seed"] = static_cmnd.pop("seed")
 
     rivet_section: dict[str, Any] = {}
-    settle_rivet = settle.get("rivet", {})
-    if settle_rivet.get("plugin"):
-        rivet_section["analyses"] = [settle_rivet["plugin"]]
-    if settle_rivet.get("options"):
-        rivet_section["options"] = settle_rivet["options"]
+    static_rivet = static.get("rivet", {})
+    if static_rivet.get("plugin"):
+        rivet_section["analyses"] = [static_rivet["plugin"]]
+    if static_rivet.get("options"):
+        rivet_section["options"] = static_rivet["options"]
     if rivpyth.get("plugin_dir"):
         rivet_section["paths"] = [rivpyth["plugin_dir"]]
     document["rivet"] = rivet_section
@@ -254,15 +254,15 @@ def migrate_document(raw: dict[str, Any], *, rename_tags: bool = True,
     if sweep.get("tag_style"):
         document["output"] = {"tag_style": sweep["tag_style"]}
 
-    new_settle: dict[str, Any] = {}
-    if settle_cmnd:
-        new_settle["gen"] = settle_cmnd
-    if settle.get("use"):
-        new_settle["use"] = {bare(key): _selector(value) for key, value in settle["use"].items()}
-    if settle.get("tag"):
-        new_settle["tag"] = settle["tag"]
-    if new_settle:
-        document["settle"] = new_settle
+    new_static: dict[str, Any] = {}
+    if static_cmnd:
+        new_static["gen"] = static_cmnd
+    if static.get("use"):
+        new_static["use"] = {bare(key): _selector(value) for key, value in static["use"].items()}
+    if static.get("tag"):
+        new_static["tag"] = static["tag"]
+    if new_static:
+        document["static"] = new_static
 
     quantities: dict[str, Any] = {}
     for section in ("cmnd", "rivet"):

@@ -3,7 +3,7 @@
 The measuring is slow and lives in `tests/integration/test_bench.py`; the *decision* is a pure
 function of three timings, so it is checked here, instantly, including the cases a real machine would
 be awkward to produce on demand — a sharded leg that was refused, one that is marginally faster, and
-sinks so cheap there is nothing to parallelise.
+analyzers so cheap there is nothing to parallelise.
 
 The order of the questions is the part worth pinning: "is it allowed?" before "is it faster?". A
 sharded run of an analysis that clusters jets is not a faster run, it is a wrong one (00/B31).
@@ -62,7 +62,7 @@ def test_the_threshold_is_the_boundary():
     assert bench.recommend(measurement("generation", 1.0), serial, under)[0] == "serial"
 
 
-def test_cheap_sinks_are_reported_as_nothing_to_parallelise():
+def test_cheap_analyzers_are_reported_as_nothing_to_parallelise():
     """A different reason from "it did not help": here the generator is the bottleneck."""
     mode, why = bench.recommend(measurement("generation", 4.0), measurement("serial", 4.2),
                                 measurement("sharded", 4.1))
@@ -85,21 +85,21 @@ def test_an_unmeasured_sharded_leg_without_a_reason_still_recommends_serial():
 
 # ── assumption A4, as a number ───────────────────────────────────────────────
 
-def test_the_sink_share_is_what_the_sinks_add():
+def test_the_analyzer_share_is_what_the_analyzers_add():
     """01 A4 asked whether Rivet's cost is comparable to Pythia's; this is how it gets answered."""
-    assert bench.sink_share(measurement("generation", 1.0),
+    assert bench.analyzer_share(measurement("generation", 1.0),
                             measurement("serial", 4.0)) == pytest.approx(0.75)
-    assert bench.sink_share(measurement("generation", 1.0),
+    assert bench.analyzer_share(measurement("generation", 1.0),
                             measurement("serial", 1.0)) == pytest.approx(0.0)
 
 
-def test_the_sink_share_never_goes_negative():
+def test_the_analyzer_share_never_goes_negative():
     """Two runs of the same thing differ by noise, and a negative share would read as nonsense."""
-    assert bench.sink_share(measurement("generation", 1.1), measurement("serial", 1.0)) == 0.0
+    assert bench.analyzer_share(measurement("generation", 1.1), measurement("serial", 1.0)) == 0.0
 
 
-def test_the_sink_share_is_zero_when_a_leg_is_missing():
-    assert bench.sink_share(measurement("generation"), measurement("serial", 4.0)) == 0.0
+def test_the_analyzer_share_is_zero_when_a_leg_is_missing():
+    assert bench.analyzer_share(measurement("generation"), measurement("serial", 4.0)) == 0.0
 
 
 # ── derived numbers ──────────────────────────────────────────────────────────

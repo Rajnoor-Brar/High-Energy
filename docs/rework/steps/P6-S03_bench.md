@@ -13,7 +13,7 @@
 
 ## Goal
 
-`hep bench CONFIG` measures generation only, generation with sinks, and replay with k readers, and recommends a concurrency mode.
+`hep bench CONFIG` measures generation only, generation with analyzers, and replay with k readers, and recommends a concurrency mode.
 
 ## Context
 
@@ -82,7 +82,7 @@ Revert.
   | Row | Result |
   |---|---|
   | Runtime | `hep bench tests/e2e/mini.toml` at 600 events: **~11 s** for four legs, well inside the row's 2 minutes. The integration test asserts a 120 s ceiling so a loaded machine cannot flake it |
-  | Logic | 15 unit tests over the pure `recommend`, covering every row of the table below, plus `sink_share`, the cache round-trip and a corrupt cache |
+  | Logic | 15 unit tests over the pure `recommend`, covering every row of the table below, plus `analyzer_share`, the cache round-trip and a corrupt cache |
 
   **What it reports**, on PhotoProduction at 1 000 events, two threads:
 
@@ -92,13 +92,13 @@ Revert.
     sharded     refused: photo_eic clusters jets, which cannot be done from several threads
     replay          0.52s        1916 ev/s
 
-    the sinks are 76% of a serial run's wall clock
+    the analyzers are 76% of a serial run's wall clock
     recommended: [run].mode = "serial"
     because photo_eic clusters jets, which cannot be done from several threads
   ```
 
   **This answers assumption 01 A4 with a number.** "Is Rivet's CPU cost per event comparable to or
-  larger than Pythia's?" — **larger, about three times**: the sinks are ~75 % of a serial run's wall
+  larger than Pythia's?" — **larger, about three times**: the analyzers are ~75 % of a serial run's wall
   clock, so generation is a quarter of it. The assumption was right, and P6-S01's finding is what
   makes it moot for this project: the analysis that costs the most is the one that cannot be shared
   out.
@@ -115,11 +115,11 @@ Revert.
   | any | measured | refused | `serial`, quoting the refusal verbatim |
   | any | measured | ≥ 1.15x faster | `sharded`, with the speedup |
   | any | measured | < 1.15x faster | `serial` — "not worth the extra moving parts" |
-  | ≈ serial | measured | marginal | `serial` — "the sinks cost almost nothing, so there is nothing to parallelise" |
+  | ≈ serial | measured | marginal | `serial` — "the analyzers cost almost nothing, so there is nothing to parallelise" |
   | any | not measured | any | `serial` — nothing to compare |
 
-  The last two are different answers to the same speedup and lead somewhere different: cheap sinks
-  mean more threads would help, while expensive-but-unparallelisable sinks mean something is under a
+  The last two are different answers to the same speedup and lead somewhere different: cheap analyzers
+  mean more threads would help, while expensive-but-unparallelisable analyzers mean something is under a
   lock. Verified in the other direction too — with `MC_FSPARTICLES` + `MC_XS` on four threads it
   measures 1.91x and recommends `sharded`.
 

@@ -99,7 +99,7 @@ void writesText() {
     fs::remove_all(directory);
 }
 
-// A file that cannot be written is a sink error (exit 5), and it must not leave a temporary behind.
+// A file that cannot be written is an analyzer error (exit 5), and it must not leave a temporary behind.
 void failureLeavesNothing() {
     const fs::path directory = freshDirectory("failure");
     Results::Writer writer(directory.string());
@@ -126,7 +126,7 @@ void summaryCarriesTheRun() {
     record.xsec_error_pb = 2212.24;
     record.wall_seconds = 1.5;
     record.warnings = {{"maximum for cross section violated", 3}};
-    const std::vector<Sink::Output> outputs{{"yoda", "/tmp/point/analysis.yoda", false}};
+    const std::vector<Analyzer::Output> outputs{{"yoda", "/tmp/point/analysis.yoda", false}};
 
     const std::string json = Results::summaryJson(record, outputs, "2026-09-18T04:00:02Z");
     for (const char* fragment :

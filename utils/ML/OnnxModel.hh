@@ -70,7 +70,7 @@ namespace ML {
             : path_(path.string()), options_(std::move(options)), environment_(detail::environment()) {
             if (!Core::isRegularFile(path_))
                 throw Core::Error{Core::Exit::Config, "no ONNX model at " + path_,
-                                  "[[sinks.module]].options names it; check the path"};
+                                  "[[analyzers.module]].options names it; check the path"};
             sha256_ = Core::sha256File(path_);
 
             Ort::SessionOptions settings;
@@ -135,7 +135,7 @@ namespace ML {
                 session_->Run(Ort::RunOptions{nullptr}, input_names, &input_tensor, 1,
                               output_names, &output_tensor, 1);
             } catch (const Ort::Exception& error) {
-                throw Core::Error{Core::Exit::Sink,
+                throw Core::Error{Core::Exit::Analyzer,
                                   std::string("ONNX Runtime failed on ") + path_ + ": " +
                                       error.what()};
             }

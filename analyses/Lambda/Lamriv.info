@@ -1,0 +1,47 @@
+Name: Lamriv
+Year: 2026
+Summary: Lambda -> p pi- candidates: full combinatorics, the mass window, and the one-to-one matching
+Experiment: MC
+Collider: any
+Status: UNVALIDATED NOHEPDATA SINGLEWEIGHT
+Reentrant: true
+Authors:
+ - Rajnoor S. Brar
+References:
+ - 'Ported from the legacy Lambda module (legacy/lambda/modules/Lambda)'
+RunInfo: 'Any hadronic collision in which Lambda is allowed to decay to p pi-. The generator card
+  must enable that decay (3122:onIfMatch = 2212 -211) or there is nothing to reconstruct.'
+Beams: [[p+, p+]]
+Options:
+ - SET=all,unvalidated,validated,selected  # which candidate set to record; 'all' books all three,
+                                           # prefixed. A named set books the same seven
+                                           # distributions unprefixed, so the three can be swept
+                                           # across and drawn as curves on one page.
+ - MASSTOL=#      # |m(p pi) - m(Lambda)| accepted in GeV (default 0.15)
+ - COSTHETATOL=#  # 0 = off; else |cos(theta*) + 1| tolerance (default 0.0)
+ - RESERVED=#     # beam protons per event that cannot come from a Lambda, 2 x Z (default 2, pp)
+ - TRACKPTMIN=#   # track pT threshold in GeV (default 0.0)
+ - TRACKETAMAX=#  # track |eta| acceptance (default 8.0)
+ - BINS=#         # bins per distribution (default 100)
+ - MASSAXIS=#     # half-width of the mass axis about m(Lambda) in GeV (default 0.4)
+ - ENERGYAXIS=#   # upper edge of the energy axis in GeV (default 200)
+ - MOMENTUMAXIS=# # upper edge of the momentum axis in GeV (default 200)
+ - PTAXIS=#       # upper edge of the pT axis in GeV (default 20)
+ - ETAAXIS=#      # half-width of the eta axis (default 8)
+ - COUNTAXIS=#    # highest candidate multiplicity binned (default 50)
+Description:
+  'Reconstructs Lambda -> p pi- from final-state protons and negative pions, and records three
+   nested candidate sets: every (p, pi-) pair (unvalidated), the pairs inside the mass window
+   (validated), and the greedy one-to-one matching that takes the best mass agreement first and
+   never reuses a track (selected). Each set carries the invariant mass, energy, momentum,
+   transverse and longitudinal momentum, pseudorapidity, and the per-event candidate count.
+
+   The reconstruction itself is shared verbatim with the C++ module of the same measurement
+   (modules/Lambda/Reconstruction.hh), so running both on one sample compares the two analysis
+   paths rather than two implementations of the physics.'
+ValidationInfo:
+  'Compared against modules/Lambda/Lambda.cc on identical events; the two fill the same
+   distributions from the same shared reconstruction.'
+Keywords: [strangeness, lambda, invariant mass]
+BibKey: ''
+BibTeX: ''

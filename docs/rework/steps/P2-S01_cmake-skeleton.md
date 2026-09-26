@@ -91,7 +91,7 @@ Revert; `git mv` photo_eic back.
     standard the project chose. `-L` directories also become `-rpath`, so a built binary runs without
     `LD_LIBRARY_PATH`.
   - **Options:** `HEKIT_WITH_{RIVET,HEPMC,ONNX}` are AUTO/ON/OFF (AUTO = on when found; ON demands it),
-    `HEKIT_WITH_DELPHES` defaults to OFF because the in-process sink is deferred. Pythia and YODA are the
+    `HEKIT_WITH_DELPHES` defaults to OFF because the in-process analyzer is deferred. Pythia and YODA are the
     hard requirements.
   - **Facades:** one INTERFACE library per namespace of 13 §2, linked in dependency order so that a lower
     layer can never link a higher one. Compression flags land on `hekit_Store` exactly as verified in

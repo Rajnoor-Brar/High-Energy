@@ -47,8 +47,8 @@ RESERVED = {
     "sqrts": "[beams] energies",
     "beams": "[beams] ids",
     "beams_momentum": "[beams] energies",
-    "$sample": "the sink chain owns where events go",
-    "sample_format": "the sink chain owns the event format",
+    "$sample": "the analyzer chain owns where events go",
+    "sample_format": "the analyzer chain owns the event format",
 }
 
 #: `key = value` at the start of a line, which is how SINDARIN assigns. The sigils matter: `$name` is

@@ -181,7 +181,7 @@ def test_a_second_run_skips_what_is_already_there(tmp_path):
     # A *physics* change, not a seed: the seed is derived from the identity (03 §5), so changing it
     # deliberately does not change the hash — pTHatMin does.
     changed = hep("run", str(CONFIG), "--study", "pdf", "--plain",
-                  "--set", "settle.gen.PhaseSpace:pTHatMin=5", results=results, expect=None)
+                  "--set", "static.gen.PhaseSpace:pTHatMin=5", results=results, expect=None)
     assert changed.returncode != 0
     assert "different identity" in changed.text_stderr
     assert "--rerun" in changed.text_stderr
@@ -203,7 +203,7 @@ def test_a_point_that_cannot_initialise_stops_before_anything_is_generated(tmp_p
     """The 'Preflight' row: `hep-run --check` for every generation before the first spawn."""
     results = tmp_path / "results"
     done = hep("run", str(CONFIG), "--study", "pdf", "--plain",
-               "--set", "settle.gen.Photon:ProcessType=2", results=results, expect=None)
+               "--set", "static.gen.Photon:ProcessType=2", results=results, expect=None)
     assert done.returncode == 3, done.text_stderr
     assert "cannot run" in done.text_stderr and "failed to initialise" in done.text_stderr
     assert not list(project_root(results).rglob("*.yoda")), "nothing was generated"

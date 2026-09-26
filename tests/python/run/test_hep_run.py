@@ -351,4 +351,4 @@ def test_sigint_stops_within_one_chunk_and_exits_six(spec_path: Path, tmp_path: 
     assert 0 < reader.summary["events"] < 400000, "it stopped early, but it did generate"
     chunk = reader.summary["chunk"]
     assert reader.summary["attempted"] % chunk == 0, "it stopped at a chunk boundary"
-    assert reader.phase == "finish", "a stopped run still finishes its sinks"
+    assert reader.phase == "finish", "a stopped run still finishes its analyzers"

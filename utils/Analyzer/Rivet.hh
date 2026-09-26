@@ -1,6 +1,6 @@
 #pragma once
 
-// ── Sink/Rivet.hh ────────────────────────────────────────────────────────────
+// ── Analyzer/Rivet.hh ────────────────────────────────────────────────────────────
 // Rivet in process (05 §5), serial or one handler per slot (05 §3). This is the change the whole
 // rework is for: the legacy pipeline wrote HepMC3 into a FIFO and ran the `rivet` command on the
 // other end, which cost a full serialisation of every event and made the two halves fail
@@ -69,24 +69,24 @@
 #include "Core.hh"
 #include "Events.hh"
 #include "Results.hh"
-#include "Sink/Types.hh"
+#include "Analyzer/Types.hh"
 #include "Status.hh"
 
-namespace Sink {
+namespace Analyzer {
 
-    // The class is `Sink::Rivet`, as 05 §5 names it, so every mention of the framework inside is
+    // The class is `Analyzer::Rivet`, as 05 §5 names it, so every mention of the framework inside is
     // spelled `::Rivet::` — the class name shadows the namespace in here (13 §3 has the same problem
     // with Delphes' global `Event`, solved the same way).
-    class Rivet : public Sink {
+    class Rivet : public Analyzer {
       public:
-        Rivet(const Core::SinkSpec& spec, std::string output_dir, std::string yoda_name,
+        Rivet(const Core::AnalyzerSpec& spec, std::string output_dir, std::string yoda_name,
                   Status::Writer& status)
             : spec_(spec), output_dir_(std::move(output_dir)), yoda_name_(std::move(yoda_name)),
               status_(status) {}
 
         std::string name() const override { return "rivet"; }
 
-        // Rivet analyses take a HepMC event and nothing else; a run whose only sink is this one
+        // Rivet analyses take a HepMC event and nothing else; a run whose only analyzer is this one
         // therefore pays for exactly one conversion per event (05 §1).
         Needs needs() const override { return Needs{/*pythia=*/false, /*hepmc=*/true}; }
 
@@ -101,7 +101,7 @@ namespace Sink {
         void prepare() override {
             addSearchPaths();
             if (spec_.analyses.empty())
-                throw Core::Error{Core::Exit::Config, "the rivet sink has no analyses"};
+                throw Core::Error{Core::Exit::Config, "the rivet analyzer has no analyses"};
             handlers_.clear();
             initialised_.clear();
             handlers_.push_back(makeHandler());
@@ -154,7 +154,7 @@ namespace Sink {
             HepMC3::GenEvent* genEvent = view.hepmcOrNull();
             if (genEvent == nullptr)
                 throw Core::Error{Core::Exit::Internal,
-                                  "the Rivet sink was given an event with no HepMC record"};
+                                  "the Rivet analyzer was given an event with no HepMC record"};
             const std::size_t slot =
                 handlers_.size() == 1 ? 0 : static_cast<std::size_t>(view.slot()) % handlers_.size();
             ::Rivet::AnalysisHandler& handler = *handlers_[slot];
@@ -212,14 +212,14 @@ namespace Sink {
 
         long long analysed() const { return analysed_.load(std::memory_order_relaxed); }
 
-        /// How many handlers this sink is holding, for the tests and the summary.
+        /// How many handlers this analyzer is holding, for the tests and the summary.
         std::size_t handlerCount() const { return handlers_.size(); }
 
         /// Objects from elsewhere to write into the same file (07 §1).
         ///
         /// Module results go beside Rivet's rather than into a second YODA, so that
         /// `rivet-mkhtml` and `hep plot` treat them alike and nothing downstream learns a second
-        /// format. The provider is called after every sink has finished, so the objects it returns
+        /// format. The provider is called after every analyzer has finished, so the objects it returns
         /// are merged and scaled by then.
         void alsoWrite(
             std::function<std::vector<std::shared_ptr<YODA::AnalysisObject>>()> provider) {
@@ -258,7 +258,7 @@ namespace Sink {
 
         // Fold the other slots into the first initialised one. `AnalysisHandler::merge` adds the
         // event counters, the σ error accumulator and every analysis object path by path, and leaves
-        // `finalize()` to the caller — which is exactly the order this sink wants (D-Q1: σ is applied
+        // `finalize()` to the caller — which is exactly the order this analyzer wants (D-Q1: σ is applied
         // once, to the merged total).
         ::Rivet::AnalysisHandler* mergeShards() {
             ::Rivet::AnalysisHandler* first = nullptr;
@@ -286,7 +286,7 @@ namespace Sink {
                     }
             if (clustering.empty()) return;
             throw Core::Error{
-                Core::Exit::Sink,
+                Core::Exit::Analyzer,
                 joined(clustering) + " clusters jets, which cannot be done from several threads",
 #if defined(FASTJET_HAVE_LIMITED_THREAD_SAFETY)
                 "SISCone keeps its clustering cache and its RNG in process-wide statics "
@@ -301,7 +301,7 @@ namespace Sink {
             };
         }
 
-        // `[[sink]].paths` are prepended to RIVET_ANALYSIS_PATH, which is how the legacy pipeline
+        // `[[analyzer]].paths` are prepended to RIVET_ANALYSIS_PATH, which is how the legacy pipeline
         // found `photo_eic` (`tools/rivpyth:252`) and what `rivet-build` produces plugins for.
         void addSearchPaths() const {
             if (spec_.paths.empty()) return;
@@ -343,9 +343,9 @@ namespace Sink {
                 // that looks like a result (04 §8).
                 if (!record.xsec_known)
                     throw Core::Error{
-                        Core::Exit::Sink,
+                        Core::Exit::Analyzer,
                         "the " + record.source + " source reported no cross-section, and the rivet "
-                        "sink normalises by it",
+                        "analyzer normalises by it",
                         "a generator that writes no GenCrossSection cannot supply one: set "
                         "[rivet].xsec to a number for this point"};
                 return {record.xsec_pb, record.xsec_error_pb};
@@ -354,7 +354,7 @@ namespace Sink {
                 return {std::stod(spec_.xsec), 0.0};
             } catch (const std::exception&) {
                 throw Core::Error{Core::Exit::Config,
-                                  "[[sink]].xsec is neither 'generator' nor a number: " + spec_.xsec};
+                                  "[[analyzer]].xsec is neither 'generator' nor a number: " + spec_.xsec};
             }
         }
 
@@ -364,7 +364,7 @@ namespace Sink {
             return out;
         }
 
-        Core::SinkSpec spec_;
+        Core::AnalyzerSpec spec_;
         std::string output_dir_;
         std::string yoda_name_;
         Status::Writer& status_;
@@ -380,4 +380,4 @@ namespace Sink {
         std::vector<Output> outputs_;
     };
 
-}  // namespace Sink
+}  // namespace Analyzer

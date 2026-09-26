@@ -5,7 +5,7 @@
 | Status | done |
 | Kind | test |
 | Phase | P2 — C++ core, CMake, hep-run v1 |
-| Depends on | [P2-S05](P2-S05_rivet-sink-results-writer.md), [P0-S04](P0-S04_golden-fixtures.md) |
+| Depends on | [P2-S05](P2-S05_rivet-analyzer-results-writer.md), [P0-S04](P0-S04_golden-fixtures.md) |
 | Blocks | [P4-S06](P4-S06_retire-legacy-tools.md) |
 | Effort | 0.5 d |
 | Findings / decisions | F8; rule 1 |
@@ -91,16 +91,16 @@ n/a.
   and the new run reproduces **both** numbers. A pipeline that treated attempts as successes (00/B21)
   would agree everywhere else and disagree here.
 
-  This also settles two things by measurement rather than by argument: chunking does not change the
+  This also stays static two things by measurement rather than by argument: chunking does not change the
   event set (D-Q2 — the new run generated in ten chunks of 500, the legacy one in a single call to
   `PythiaParallel::run`), and in-process HepMC conversion produces the same events the FIFO carried
   (D4).
 
-  **Defect found by the gate:** the Rivet sink wrote `getYodaAOs()` with its default
+  **Defect found by the gate:** the Rivet analyzer wrote `getYodaAOs()` with its default
   `includeraw = false`, so our files had 20 objects where the legacy ones had 39 — and
   `rivet-merge -e` refused them outright (`Missing cross-section for /RAW/_XSEC`). Since 07 §3 merges
   seed replicas exactly that way, the whole merge path was broken and no test before this one would
-  have noticed. Fixed in `Sink::Rivet::finish` (`includeraw = true`), which is also what the legacy
+  have noticed. Fixed in `Analyzer::Rivet::finish` (`includeraw = true`), which is also what the legacy
   `rivet` command did.
 
   With that fixed, the merge chain was verified end to end: `rivet-merge -e` on two copies of one run

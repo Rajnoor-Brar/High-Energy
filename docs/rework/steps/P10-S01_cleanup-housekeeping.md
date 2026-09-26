@@ -61,7 +61,7 @@ Never `#include`/import from `legacy/`; copy or adapt.
 
 | Check | Command | Expected | Measured |
 |---|---|---|---|
-| Clean greps | the row as written, then the question it means | empty | **Not empty, and should not be** — see the Log. Replaced by an AST check (`test_no_executable_code_speaks_v1_outside_migrate`): **zero** executable references outside `config/migrate.py` and `config/validate.py`. Proved to discriminate by reintroducing a `raw.get("rivpyth", …)` and watching it fail. `NtupleSink`/`RNTuple`: zero anywhere in code. `sources/`: gone |
+| Clean greps | the row as written, then the question it means | empty | **Not empty, and should not be** — see the Log. Replaced by an AST check (`test_no_executable_code_speaks_v1_outside_migrate`): **zero** executable references outside `config/migrate.py` and `config/validate.py`. Proved to discriminate by reintroducing a `raw.get("rivpyth", …)` and watching it fail. `NtupleAnalyzer`/`RNTuple`: zero anywhere in code. `sources/`: gone |
 | Dry run | `hep clean --dry-run` | size report | per-category sizes, then the largest directories regardless of category; `1.0 MiB could be freed` on a real results tree |
 
 **Test safety:** work in `output/scratch/` or with `HEKIT_RESULTS` pointing there; never write into `results/` or `configs/` during checks (legacy tools: run from `output/scratch/legacy/`). Commits and tags only with user approval.
@@ -103,7 +103,7 @@ Revert.
   zero. It was proved to discriminate by appending a `raw.get("rivpyth", …)` to an unrelated module
   and watching it fail, then restoring.
 
-  The other two clauses of the Goal hold outright: `sources/` does not exist, and `NtupleSink` and
+  The other two clauses of the Goal hold outright: `sources/` does not exist, and `NtupleAnalyzer` and
   `RNTuple` — the storage design D13 rejected — appear nowhere in code. The `.v2` names that remain
   are `plan/spec_v2.json` (the *current* spec schema, version 2, which `hep-run` reads) and test
   fixtures named `.v2.toml`; neither is transitional.

@@ -20,7 +20,7 @@ Date: 2026-09-17 · Status: Proposed · Decision D16 (house style)
 
 **Dependency layers.** A lower layer never includes a higher one.
 ```
-Core ─► Status ─► Events ─► { Store, Results, ML, Phys } ─► { Source, Module } ─► Sink ─► Run ─► apps/hep-run.cc
+Core ─► Status ─► Events ─► { Store, Results, ML, Phys } ─► { Source, Module } ─► Analyzer ─► Run ─► apps/hep-run.cc
 ```
 
 | Namespace | Facade | Submodules (planned) | Purpose | External libs | Replaces | Step |
@@ -34,10 +34,10 @@ Core ─► Status ─► Events ─► { Store, Results, ML, Phys } ─► { So
 | `Phys` | `Phys.hh` | `Types`, `Pdg`, `Kinematics`, `Select`, `Jets` | PDG traits, kinematics on `FourVector`, selectors on `GenEvent`, jet definitions | HepMC3, FastJet | `Physics` | P8-S02 |
 | `Source` | `Source.hh` | `Types`, `Pythia`, `StoreReplay`, `Stream` | Event sources: Pythia (cards, LHE), store replay, FIFO/file HepMC | Pythia8, HepMC3 | `generator.cc` loop | P2-S04, P5-S02, P7-S01 |
 | `Module` | `Module.hh` | `Types` (`Module`, `Context`), `Registry`, `Loader` | User analysis modules, `HEKIT_MODULE` registration, `dlopen` loader | — | `modules/Lambda` scaffolding | P8-S01 |
-| `Sink` | `Sink.hh` | `Types` (`Sink`, `Needs`, `Concurrency`), `Rivet`, `Store`, `Modules`, `Delphes` | Sink interface and implementations | Rivet, HepMC3, YODA, Delphes (optional) | — | P2-S05, P5-S01, P8-S01, P7-S08 |
-| `Run` | `Run.hh` | `Types` (`Context`, `Result`), `Loop`, `Concurrency`, `Checkpoint` | Wires source → sinks; serial/sharded; chunking; stop; merged σ; `RunResult` | Pythia8 | `Config::configure<Pipeline>` | P2-S04, P6-S01 |
+| `Analyzer` | `Analyzer.hh` | `Types` (`Analyzer`, `Needs`, `Concurrency`), `Rivet`, `Store`, `Modules`, `Delphes` | Analyzer interface and implementations | Rivet, HepMC3, YODA, Delphes (optional) | — | P2-S05, P5-S01, P8-S01, P7-S08 |
+| `Run` | `Run.hh` | `Types` (`Context`, `Result`), `Loop`, `Concurrency`, `Checkpoint` | Wires source → analyzers; serial/sharded; chunking; stop; merged σ; `RunResult` | Pythia8 | `Config::configure<Pipeline>` | P2-S04, P6-S01 |
 
-**Class naming inside namespaces.** Short nouns, because the namespace carries the context: `Sink::Rivet`, `Sink::Store`, `Source::Pythia`, `Source::StoreReplay`, `Store::Writer`, `Results::Booker`, `Events::View`, `Run::Result`.
+**Class naming inside namespaces.** Short nouns, because the namespace carries the context: `Analyzer::Rivet`, `Analyzer::Store`, `Source::Pythia`, `Source::StoreReplay`, `Store::Writer`, `Results::Booker`, `Events::View`, `Run::Result`.
 
 ## 3. Clash check (installed toolchain, 2026-09-17)
 
@@ -46,7 +46,7 @@ Core ─► Status ─► Events ─► { Store, Results, ML, Phys } ─► { So
 | `Event` | Delphes declares a global `class Event : public TObject` (`delphes/include/classes/DelphesClasses.h:46`). `Pythia8::Event` and `Rivet::Event` become ambiguous under `using namespace`. | Namespace is **`Events`** |
 | `Status` | `/usr/include/X11/Xlib.h:83` has `#define Status int`. No toolchain header pulls in Xlib. | Keep `Status`; `Status.hh` starts with `#ifdef Status` → `#error "X11 Status macro defined before Status.hh"` |
 | `Run` | `Rivet::Run` exists; it only clashes under `using namespace Rivet` | Keep; covered by the no-using rule |
-| `Core`, `Source`, `Store`, `Results`, `Sink`, `Module`, `ML`, `Phys` | No global or macro clashes found in the ROOT, Pythia, Rivet, YODA, HepMC3, FastJet, LHAPDF, ONNX or Delphes headers | Keep |
+| `Core`, `Source`, `Store`, `Results`, `Analyzer`, `Module`, `ML`, `Phys` | No global or macro clashes found in the ROOT, Pythia, Rivet, YODA, HepMC3, FastJet, LHAPDF, ONNX or Delphes headers | Keep |
 | Legacy `Config`, `Monitor`, `Probe`, `Record`, `Paint`, `Physics`, `Utility`, `Lambda` | Leave the include path when moved to `legacy/` (P0-S06) | No coexistence problems |
 
 ## 4. Python packages (`utils/python/hekit`, CLI `hep`)
@@ -56,7 +56,7 @@ Core ─► Status ─► Events ─► { Store, Results, ML, Phys } ─► { So
 | `hekit.cli` | click groups (no logic) | `apps/hep-run.cc` | P1-S01 |
 | `hekit.errors` | `HepError(msg, where, hint)` | `Core/Errors` | P1-S01 |
 | `hekit.config` | `schema`, `load`, `layer`, `validate`, `migrate`, `reference` | — | P1-S02, P1-S06 |
-| `hekit.sweep` | `quantity`, `select` (across, settle, study, pins), `expand`, `pages` | — | P1-S03 |
+| `hekit.sweep` | `quantity`, `select` (across, static, study, pins), `expand`, `pages` | — | P1-S03 |
 | `hekit.plan` | `model`, `build`, `naming`, `hashing`, `seeds`, `spec` (writer + `spec_v2.json`) | `Core/Spec` (reader) | P1-S04, P1-S05 |
 | `hekit.adapters` | `base`, `pythia`, `rivet`, `store`, `sherpa`, `whizard`, `madgraph`, `herwig`, `delphes` | `Source` | P1-S05, P5-S02, P7 |
 | `hekit.run` | `supervisor`, `transport` (FIFO), `status` (reader), `parsers`, `signals` | `Status` | P3-S02 |

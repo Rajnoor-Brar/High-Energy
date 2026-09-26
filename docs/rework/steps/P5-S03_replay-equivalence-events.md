@@ -82,7 +82,7 @@ Revert.
 
   | Row | Result |
   |---|---|
-  | Equivalence | `ctest -L slow -R store_replay`: a replayed store gives a YODA **identical** to the generation's — 39 objects, 1004 numbers, χ² = 0 — and σ equal to the index's to the precision YODA writes. The design note allowed "equality to rounding"; it is exact, because the same events go through the same sinks in the same order |
+  | Equivalence | `ctest -L slow -R store_replay`: a replayed store gives a YODA **identical** to the generation's — 39 objects, 1004 numbers, χ² = 0 — and σ equal to the index's to the precision YODA writes. The design note allowed "equality to rounding"; it is exact, because the same events go through the same analyzers in the same order |
   | Events | `hep events <store> -n 2 --final` prints the table of 06 §5; `--tree`, `--hard` and `--from FILE` all render; a config is inspected too |
 
   **Where events come from is uniform.** A store, any HepMC3 file, or a **config** — and a config is

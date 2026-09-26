@@ -125,16 +125,28 @@ versions, the git revision.
 Fits and derived histograms are written to `studies/<study>/proc/` as `fits.json` and `proc.yoda`;
 setting `[plot].show_fits = true` overlays the fitted curves on the histograms they came from.
 
+### A ROOT file of a point's histograms
+
+```toml
+[proc.export]
+enabled = true
+select  = ["/MyModule/*"]      # [] = every 1D object
+```
+
+`hep proc` then writes `analysis.root` beside each point's `analysis.yoda` — a TDirectory per
+namespace, a TH1D per histogram, bin errors included. YODA stays the record; the ROOT file is a
+derived view you can delete and regenerate. It is written with `uproot`, so it does not need PyROOT.
+
 ---
 
 ## 5. Threads, and when they are not used
 
-`[run].threads` is how many workers generate; `[run].mode` is how the *sinks* are fed.
+`[run].threads` is how many workers generate; `[run].mode` is how the *analyzers* are fed.
 
 - `serial` — one event at a time. Always correct.
-- `sharded` — each worker holds its own copy of a sink's state and they are merged at the end.
+- `sharded` — each worker holds its own copy of an analyzer's state and they are merged at the end.
 - `auto` (the default) — sharded when it is both possible and worth it, serial otherwise, and it
-  says which sink asked for serial.
+  says which analyzer asked for serial.
 
 **Jet clustering cannot be shared out.** FastJet keeps clustering state in process-wide statics, so
 any analysis or module that makes jets runs under a lock or serially. `auto` detects this before the
@@ -144,7 +156,7 @@ first event rather than producing quietly wrong jets. If you write a module that
 bool threadSafe() const override { return false; }
 ```
 
-`hep bench CONFIG` measures generation, sinks and replay separately and recommends a mode with
+`hep bench CONFIG` measures generation, analyzers and replay separately and recommends a mode with
 numbers attached.
 
 ---
@@ -176,7 +188,7 @@ hep events CONFIG --final          # look at what was generated
 hep store ls|info|verify PATH      # inspect or check a store
 ```
 
-A replay through the same sinks gives a **byte-identical** YODA, so an analysis can be changed and
+A replay through the same analyzers gives a **byte-identical** YODA, so an analysis can be changed and
 re-run without regenerating.
 
 ---
@@ -209,7 +221,17 @@ Both scaffolds compile as they stand. A module implements four verbs, and the or
 | `finalize` | σ and Σw, after the merge | **scale** |
 
 There is no `scale()` on a worker and no `fill()` on a final result, so "scaled during the run" and
-"scaled twice" are not mistakes you can make. `Phys` gives you PDG data, kinematics, selectors and
+"scaled twice" are not mistakes you can make.
+
+**One thing `normalise()` does not do is divide by the bin width.** Rivet's `finalize` writes a
+density (dσ/dx); a module writing per-bin integrals into the same `analysis.yoda` differs from it by
+exactly that factor, silently (`00/B42`). If your module's y-axis says dσ/dx, scale by
+`perEventCrossSection() / width` — `modules/Lambda/Lambda.cc` does, and says why.
+
+**An analysis and a module can share one physics header.** `rivet-build` is given `-I utils` and
+`-I modules/<project>`, so the reconstruction can live in one file that both call —
+`analyses/Lambda/Lamriv.cc` and `modules/Lambda/Lambda.cc` are the worked example, and
+`tests/integration/test_lambda_paths.py` holds them to exact agreement. `Phys` gives you PDG data, kinematics, selectors and
 jet definitions; `ML` runs an ONNX model with one session shared across workers.
 
 ---

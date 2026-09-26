@@ -251,7 +251,7 @@ def _generate_events(config_file: Path, count: int) -> Path:
         source["cards"] = cards
     document["source"] = source
     document["output"] = {**document.get("output", {}), "dir": str(directory)}
-    document["sink"] = [{"kind": "store", "dir": str(directory / "events"), "compression": "none"}]
+    document["analyzer"] = [{"kind": "store", "dir": str(directory / "events"), "compression": "none"}]
     spec_path = directory / "run.toml"
     spec_path.write_text(tomli_w.dumps(document), encoding="utf-8")
 

@@ -97,7 +97,7 @@ def source(tmp_path_factory):
                    "cards": [str(cards / "photo_ep.cmnd"), str(cards / "point.cmnd")]},
         "output": {"dir": str(directory), "yoda": "analysis.yoda",
                    "summary": "run.summary.json"},
-        "sink": [{"kind": "rivet", "analyses": ["photo_eic"], "paths": [str(PLUGIN)],
+        "analyzer": [{"kind": "rivet", "analyses": ["photo_eic"], "paths": [str(PLUGIN)],
                   "xsec": "generator", "weights": "nominal", "dump_every": 0, "check_beams": True},
                  {"kind": "store", "dir": str(directory / "events"), "compression": "zst"}],
         "status": {"fd": 3, "heartbeat_ms": 500},
@@ -137,7 +137,7 @@ paths = ["{PLUGIN}"]
 [output]
 tag_style = "tag"
 
-[settle.use]
+[static.use]
 energies = "27x920"
 
 [quantity.energies]

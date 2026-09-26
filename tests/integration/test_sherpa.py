@@ -91,7 +91,7 @@ mode = "{mode}"
 [output]
 tag_style = "tag"
 
-[settle.use]
+[static.use]
 energies = "18x275"
 
 [quantity.energies]
@@ -229,7 +229,7 @@ def test_native_mode_agrees_with_in_process(inprocess, tmp_path_factory):
     """Different code on both sides of the seam, the same events, so the same σ.
 
     `native` lets Sherpa run Rivet itself and write a gzipped YODA; `inprocess` sends the events
-    through a FIFO into `hep-run`'s own Rivet sink. At a fixed seed they must agree on the number the
+    through a FIFO into `hep-run`'s own Rivet analyzer. At a fixed seed they must agree on the number the
     whole analysis is normalised by.
     """
     root = tmp_path_factory.mktemp("sherpa_native")

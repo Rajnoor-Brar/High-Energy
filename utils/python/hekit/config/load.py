@@ -8,7 +8,7 @@ Order of work:
 3. every leaf is checked against its `Field`, and unknown keys are errors with a did-you-mean hint;
 4. the section dataclasses are built.
 
-Sweep semantics (settle, studies, pins, expansion) are not here: they act on the loaded config in P1-S03.
+Sweep semantics (static, studies, pins, expansion) are not here: they act on the loaded config in P1-S03.
 """
 
 from __future__ import annotations
@@ -87,7 +87,7 @@ def scan_origins(text: str, label: str) -> dict[Path_, str]:
 def is_single_value(path: Path_) -> bool:
     """True when the schema says this path holds one value, so an inline table must stay whole.
 
-    `[quantity.pdf].key = { pythia = "PDF:pSet" }` is one value; `[rivet].options` and `[settle.gen]`
+    `[quantity.pdf].key = { pythia = "PDF:pSet" }` is one value; `[rivet].options` and `[static.gen]`
     are free tables whose keys layer independently, so those are descended into.
     """
     section, inside = sch.section_of(path)

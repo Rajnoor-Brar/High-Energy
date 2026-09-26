@@ -44,7 +44,7 @@ MEANING = {
     EXIT_USAGE: "usage",
     EXIT_INIT: "generator init failed",
     EXIT_SOURCE: "source I/O",
-    EXIT_SINK: "sink error",
+    EXIT_SINK: "analyzer error",
     EXIT_STOPPED: "stopped by signal, partial outputs finalised",
     EXIT_STALLED: "stalled or timed out",
     EXIT_INTERNAL: "internal error",

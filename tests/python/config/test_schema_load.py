@@ -150,17 +150,17 @@ def test_a_table_where_a_value_belongs_is_rejected(write):
 
 def test_a_free_table_does_not_nest_twice(write):
     with pytest.raises(HepError, match="does not take nested keys"):
-        load(write(MINIMAL + '\n[settle.gen.deeper]\n"A:b" = 1\n'))
+        load(write(MINIMAL + '\n[static.gen.deeper]\n"A:b" = 1\n'))
 
 
 def test_free_table_accepts_invented_keys(write):
-    config = load(write(MINIMAL + '\n[settle.gen]\n"PhaseSpace:pTHatMin" = 4.0\n"PartonLevel:MPI" = false\n'))
-    assert config.settle.gen == {"PhaseSpace:pTHatMin": 4.0, "PartonLevel:MPI": False}
+    config = load(write(MINIMAL + '\n[static.gen]\n"PhaseSpace:pTHatMin" = 4.0\n"PartonLevel:MPI" = false\n'))
+    assert config.static.gen == {"PhaseSpace:pTHatMin": 4.0, "PartonLevel:MPI": False}
 
 
 def test_free_table_values_are_still_checked(write):
     with pytest.raises(HepError, match="must be a single value"):
-        load(write(MINIMAL + '\n[settle.gen]\n"A:b" = [1, 2]\n'))
+        load(write(MINIMAL + '\n[static.gen]\n"A:b" = [1, 2]\n'))
 
 
 # ── layering ─────────────────────────────────────────────────────────────────
@@ -451,13 +451,13 @@ def test_scalar_energy_with_equal_beams_is_quiet(write):
 
 # ── arrays of tables ─────────────────────────────────────────────────────────
 
-def test_module_sinks_are_checked(write):
-    config = load(write(MINIMAL + '\n[[sinks.module]]\nname = "mymodule"\noptions = { window = 0.01 }\n'))
-    assert config.module_sinks == [{"name": "mymodule", "options": {"window": 0.01}}]
+def test_module_analyzers_are_checked(write):
+    config = load(write(MINIMAL + '\n[[analyzers.module]]\nname = "mymodule"\noptions = { window = 0.01 }\n'))
+    assert config.module_analyzers == [{"name": "mymodule", "options": {"window": 0.01}}]
     with pytest.raises(HepError, match="needs 'name'"):
-        load(write(MINIMAL + '\n[[sinks.module]]\noptions = { window = 0.01 }\n'))
+        load(write(MINIMAL + '\n[[analyzers.module]]\noptions = { window = 0.01 }\n'))
     with pytest.raises(HepError, match="unknown key 'nmae'"):
-        load(write(MINIMAL + '\n[[sinks.module]]\nnmae = "mymodule"\n'))
+        load(write(MINIMAL + '\n[[analyzers.module]]\nnmae = "mymodule"\n'))
 
 
 def test_proc_fits_are_checked(write):
@@ -504,9 +504,9 @@ def test_study_pin_must_name_a_quantity(write):
         load(write(text))
 
 
-def test_settle_use_must_name_a_quantity(write):
+def test_static_use_must_name_a_quantity(write):
     with pytest.raises(HepError, match="undeclared quantity 'pdfs'"):
-        load(write(MINIMAL + '\n[settle.use]\npdfs = 1\n'))
+        load(write(MINIMAL + '\n[static.use]\npdfs = 1\n'))
 
 
 # ── pieces ───────────────────────────────────────────────────────────────────
@@ -524,13 +524,13 @@ def test_bad_durations(bad):
 
 
 def test_origin_scanner_finds_lines():
-    text = ('schema = 2\n\n[run]\nname = "a"\n\n[[sinks.module]]\nname = "m"\n'
-            '[[sinks.module]]\nname = "n"\n[quantity.pdf]\nvalues = [\n 1,\n 2,\n]\n')
+    text = ('schema = 2\n\n[run]\nname = "a"\n\n[[analyzers.module]]\nname = "m"\n'
+            '[[analyzers.module]]\nname = "n"\n[quantity.pdf]\nvalues = [\n 1,\n 2,\n]\n')
     origins = ld.scan_origins(text, "f.toml")
     assert origins[("schema",)] == "f.toml:1"
     assert origins[("run", "name")] == "f.toml:4"
-    assert origins[("sinks", "module", "1", "name")] == "f.toml:7"
-    assert origins[("sinks", "module", "2", "name")] == "f.toml:9"
+    assert origins[("analyzers", "module", "1", "name")] == "f.toml:7"
+    assert origins[("analyzers", "module", "2", "name")] == "f.toml:9"
     assert origins[("quantity", "pdf", "values")] == "f.toml:11"
 
 
@@ -558,7 +558,7 @@ def test_every_field_has_documentation():
 def test_every_documented_section_exists():
     # 03 §1 lists these tables; the loader must know them all
     for name in ("run", "generator", "beams", "rivet", "store", "delphes", "output", "plot",
-                 "terminal", "quantity", "sweep", "settle", "study"):
+                 "terminal", "quantity", "sweep", "static", "study"):
         assert name in sch.SECTIONS
-    assert sch.section_of(("sinks", "module", "1", "name"))[0] is sch.MODULE_SINK
+    assert sch.section_of(("analyzers", "module", "1", "name"))[0] is sch.MODULE_SINK
     assert sch.section_of(("plot", "data", "file"))[0] is sch.PLOT_DATA

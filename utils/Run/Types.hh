@@ -9,7 +9,7 @@
 
 #include "Core/Types.hh"
 #include "Core/Provenance.hh"
-#include "Sink/Types.hh"
+#include "Analyzer/Types.hh"
 
 namespace Run {
 
@@ -23,8 +23,8 @@ namespace Run {
         std::int64_t chunk = 0;               // the effective chunk size (D-Q2)
         int threads = 1;
         std::vector<std::int64_t> seeds;      // read back from the instances
-        std::vector<Sink::Output> outputs;
-        std::string summary_path;             // run.summary.json, written after the sinks finish
+        std::vector<Analyzer::Output> outputs;
+        std::string summary_path;             // run.summary.json, written after the analyzers finish
         Core::Exit exit = Core::Exit::Ok;
     };
 

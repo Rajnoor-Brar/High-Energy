@@ -27,10 +27,10 @@ plugin_dir   = "."
 threads      = 1
 path_literal = false
 
-[settle.rivet]
+[static.rivet]
 plugin = "photo_eic"
 
-[settle.use]
+[static.use]
 "cmnd.beams"  = "27x920"
 "cmnd.lepton" = "ep"
 

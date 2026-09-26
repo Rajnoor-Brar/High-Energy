@@ -83,7 +83,7 @@ def stage_chain(config: Any, group: Any) -> list[Stage]:
     name = group if isinstance(group, str) else group.name
     run_stage = Stage(name="hep-run", role="generate+analyse",
                       command=["hep-run", str(naming.point_dir(config, name) / "run.toml")],
-                      note="in-process source and sinks")
+                      note="in-process source and analyzers")
     detector = detector_stages(config, group)
     for stage in detector:
         # *After* the run, not beside it: `DelphesHepMC3` sizes its input and skips anything of
@@ -96,7 +96,7 @@ def stage_chain(config: Any, group: Any) -> list[Stage]:
     external = external_stages(config, group, adapter)
     if native_rivet(config, adapter):
         # The generator runs Rivet itself and writes the YODA, so there is nothing for `hep-run` to
-        # read. Faster for a Rivet-only run, and it gives up every other sink (04 §4).
+        # read. Faster for a Rivet-only run, and it gives up every other analyzer (04 §4).
         return external
     run_stage.role = "analyse"
     if getattr(adapter, "STREAMS", True):

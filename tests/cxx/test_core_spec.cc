@@ -35,7 +35,7 @@ dir = "/tmp/point"
 yoda = "analysis.yoda"
 summary = "run.summary.json"
 
-[[sink]]
+[[analyzer]]
 kind = "rivet"
 analyses = ["photo_eic:R=0.4"]
 paths = ["/tmp/analyses"]
@@ -44,7 +44,7 @@ weights = "nominal"
 dump_every = 0
 check_beams = true
 
-[[sink]]
+[[analyzer]]
 kind = "store"
 dir = "/tmp/point/events"
 compression = "gz"
@@ -77,10 +77,10 @@ int main() {
     CHECK_EQ(spec.source_kind, std::string("pythia"));
     CHECK_EQ(spec.cards.size(), std::size_t(2));
     CHECK_EQ(spec.output_dir, std::string("/tmp/point"));
-    CHECK_EQ(spec.sinks.size(), std::size_t(2));
-    CHECK_EQ(spec.sinks[0].analyses.at(0), std::string("photo_eic:R=0.4"));
-    CHECK(spec.sinks[0].check_beams);
-    CHECK_EQ(spec.sinks[1].compression, std::string("gz"));
+    CHECK_EQ(spec.analyzers.size(), std::size_t(2));
+    CHECK_EQ(spec.analyzers[0].analyses.at(0), std::string("photo_eic:R=0.4"));
+    CHECK(spec.analyzers[0].check_beams);
+    CHECK_EQ(spec.analyzers[1].compression, std::string("gz"));
     CHECK(spec.wants("rivet"));
     CHECK(spec.wants("store"));
     CHECK(!spec.wants("module"));
@@ -115,7 +115,7 @@ int main() {
     CHECK_THROWS(Core::parseSpec(replaced(kGood, "point = 4242\ninstances", "point = 9999\ninstances")),
                  Core::Error);
 
-    // Sinks must carry what they need.
+    // Analyzers must carry what they need.
     CHECK_THROWS(Core::parseSpec(replaced(kGood, "analyses = [\"photo_eic:R=0.4\"]", "analyses = []")),
                  Core::Error);
     CHECK_THROWS(Core::parseSpec(replaced(kGood, "kind = \"store\"\ndir = \"/tmp/point/events\"",

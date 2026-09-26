@@ -32,11 +32,11 @@ def event_groups(points: list[Point]) -> dict[tuple[tuple[str, int], ...], list[
 
 
 def constant_suffix(config: Any, selection: Selection) -> str:
-    """Tags of the quantities that are applied but not scanned, plus the settle tag."""
+    """Tags of the quantities that are applied but not scanned, plus the static tag."""
     parts = [qt.tag(config.quantities[name], index, config.output.tag_style)
              for name, index in selection.uses.items() if not selection.is_scanned(name)]
-    if config.settle.tag:
-        parts.append(config.settle.tag)
+    if config.static.tag:
+        parts.append(config.static.tag)
     return "_".join(part for part in parts if part)
 
 

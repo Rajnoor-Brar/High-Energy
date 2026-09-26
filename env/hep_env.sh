@@ -71,7 +71,7 @@ _hep_status_probe() {
         fi
     }
 
-    echo "HEP environment — $HEP (repo: $HEKIT_ROOT)"
+    # echo "HEP environment — $HEP (repo: $HEKIT_ROOT)"
     echo " "
     printf "  %-10s %s\n" LHAPDF   "$(_ver lhapdf-config --version)"
     printf "  %-10s %s\n" HepMC3   "$(_ver HepMC3-config --version)"
@@ -123,12 +123,19 @@ hep_refresh() {
 }
 # hep_status is now hep doctor --brief; the shell function stays as the familiar name (08 §3).
 hep_status() {
-    if command -v hep >/dev/null 2>&1; then
-        hep doctor --brief "$@"
+    if [[ "$1" == "--check" ]]; then
+        shift
+        if command -v hep >/dev/null 2>&1; then
+            hep doctor --brief "$@"
+        else
+            echo "hep: command not found" >&2
+            return 127
+        fi
     else
-        _hep_status_probe
+        _hep_status_probe "$@"
     fi
 }
+
 hep_src()     { cd "$HEP/src"; }
 hep_build()   { cd "$HEP/build"; }
 hep_install() { cd "$HEP/install"; }

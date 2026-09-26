@@ -1,6 +1,6 @@
-"""Choosing what varies: across groups, overlay, settle, studies and pins (03 §4).
+"""Choosing what varies: across groups, overlay, static, studies and pins (03 §4).
 
-Precedence follows 03 §2: the file's `[sweep]`, then `--study`, then `[settle.use]` and the study's
+Precedence follows 03 §2: the file's `[sweep]`, then `--study`, then `[static.use]` and the study's
 `pin`, then `--pin`, then the `--across` / `--style` / `--overlay` overrides. Validation runs **after**
 all of it (00/B7): the legacy tools validated the file and then let a study change the scan.
 """
@@ -147,7 +147,7 @@ def select(config: Any, *, study: str | None = None, pins: tuple[str, ...] = (),
         if index is not None:
             selection.uses[name] = index
             selection.origins[name] = f"[quantity.{name}].use"
-    _apply_pins(config, selection, config.settle.use, f"{where} [settle.use]")
+    _apply_pins(config, selection, config.static.use, f"{where} [static.use]")
     if study:
         _apply_pins(config, selection, config.studies[study].pin, f"{where} [study.{study}].pin")
 

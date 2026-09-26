@@ -1,4 +1,4 @@
-"""The Rivet sink and the results writer, against the real binary (P2-S05).
+"""The Rivet analyzer and the results writer, against the real binary (P2-S05).
 
 This is the step the rework exists for: the analysis now runs in the same process as the generator
 instead of behind a HepMC FIFO (D4). The things worth testing are therefore not "does Rivet work" but
@@ -90,7 +90,7 @@ def output_dir(spec: Path) -> Path:
 
 @pytest.fixture(scope="module")
 def analysed(project: Path, tmp_path_factory):
-    """One finished run with the Rivet sink: the spec, its output directory and the status stream."""
+    """One finished run with the Rivet analyzer: the spec, its output directory and the status stream."""
     spec = plan_spec(project, tmp_path_factory.mktemp("rivet"))
     stream = tmp_path_factory.mktemp("status") / "rivet.jsonl"
     done = run_spec(spec, stream=stream)
@@ -100,7 +100,7 @@ def analysed(project: Path, tmp_path_factory):
 
 # ── a finished run ───────────────────────────────────────────────────────────
 
-def test_a_run_with_a_rivet_sink_writes_a_yoda_and_a_summary(analysed):
+def test_a_run_with_a_rivet_analyzer_writes_a_yoda_and_a_summary(analysed):
     done, _, directory, _ = analysed
     assert done.returncode == 0, done.stderr
     assert sorted(path.name for path in directory.iterdir()) == [
@@ -162,7 +162,7 @@ def test_the_summary_carries_what_only_hep_run_knows(analysed):
 
 def test_the_status_stream_says_what_rivet_did(analysed):
     _, _, _, reader = analysed
-    assert reader.sinks == ["rivet"]
+    assert reader.analyzers == ["rivet"]
     loaded = [entry for entry in reader.logs if entry["source"] == "rivet"]
     assert any("loaded photo_eic" in entry["msg"] for entry in loaded), loaded
     assert any("events analysed" in entry["msg"] for entry in loaded), loaded
@@ -183,12 +183,12 @@ def test_an_unknown_analysis_fails_before_any_event(project, tmp_path, arguments
     assert not list(output_dir(spec).glob("*.yoda")), "it must not write an empty result"
 
 
-def test_an_unknown_sink_kind_is_refused(project, tmp_path):
-    """A silently skipped sink would look like a successful run that produced nothing."""
+def test_an_unknown_analyzer_kind_is_refused(project, tmp_path):
+    """A silently skipped analyzer would look like a successful run that produced nothing."""
     spec = plan_spec(project, tmp_path)
     broken = edited(spec, "weird", lambda text: text.replace('kind = "rivet"', 'kind = "quark"'))
     done = run_spec(broken, "--check", "--plain")
-    assert done.returncode == 1 and "unknown sink kind: quark" in done.stderr
+    assert done.returncode == 1 and "unknown analyzer kind: quark" in done.stderr
 
 
 # ── option variants stay in one generation (03 §4) ───────────────────────────

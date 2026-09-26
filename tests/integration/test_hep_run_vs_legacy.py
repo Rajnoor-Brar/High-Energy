@@ -78,7 +78,7 @@ def run_the_legacy_card(point: str, directory: Path) -> tuple[Path, dict]:
                 "seeds": {"point": seed, "instances": [seed]}},
         "source": {"kind": "pythia", "cards": [str(base), str(legacy_card)]},
         "output": {"dir": str(directory), "yoda": "analysis.yoda", "summary": "run.summary.json"},
-        "sink": [{"kind": "rivet", "analyses": ["photo_eic"], "paths": [str(PLUGIN_DIR)],
+        "analyzer": [{"kind": "rivet", "analyses": ["photo_eic"], "paths": [str(PLUGIN_DIR)],
                   "xsec": "generator", "weights": "nominal", "dump_every": 0, "check_beams": True}],
         "status": {"fd": 3, "heartbeat_ms": 500},
     }

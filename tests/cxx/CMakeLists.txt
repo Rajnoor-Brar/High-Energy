@@ -13,6 +13,7 @@ if(HEKIT_WITH_RIVET)
 endif()
 if(HEKIT_HEPMC AND HEKIT_RIVET)
   list(APPEND HEKIT_CXX_TESTS phys)              # four-vectors from HepMC3, jets from FastJet
+  list(APPEND HEKIT_CXX_TESTS lambda)            # the Lambda module's reconstruction, on Phys
 endif()
 list(APPEND HEKIT_CXX_TESTS ml)                  # the feature schema needs nothing; inference needs ONNX
 
@@ -48,7 +49,7 @@ foreach(name IN LISTS HEKIT_CXX_TESTS)
     target_link_libraries(test_${name} PRIVATE hekit_Results)      # YODA
   elseif(name STREQUAL "store_writer" OR name STREQUAL "store_queue")
     target_link_libraries(test_${name} PRIVATE hekit_Store)        # HepMC3 (+ compression)
-  elseif(name STREQUAL "phys")
+  elseif(name STREQUAL "phys" OR name STREQUAL "lambda")
     # `hekit_Phys` brings HepMC3 and FastJet; Pythia comes through it too, and the PDG row compares
     # the table against Pythia's own `ParticleData`.
     target_link_libraries(test_${name} PRIVATE hekit_Phys)

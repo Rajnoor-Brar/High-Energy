@@ -16,7 +16,7 @@ class Adapter(Protocol):
     def validate(self, point) -> None            # key syntax, beam support, capability checks
     def render(self, point, workdir) -> Cards    # write point card(s); return paths + sha256
     def prepare(self, point, cache) -> list[Stage]   # cached, seed-independent steps
-    def generate(self, point, sink_fifo) -> Stage    # argv, env, cwd, progress parser, expected outputs
+    def generate(self, point, analyzer_fifo) -> Stage    # argv, env, cwd, progress parser, expected outputs
 ```
 
 A `Stage` is data:
@@ -47,8 +47,8 @@ The supervisor (06) runs every stage the same way.
 |---|---|---|---|---|---|
 | Runs as | in `hep-run` | subprocess | subprocess | subprocess (`read` + `run`) | subprocess, then Pythia in `hep-run` |
 | Base card | `.cmnd` | `Sherpa.yaml` | `.sin` | `.in` | `proc_card.dat` + run-card overrides |
-| Events out | in-memory → sinks | HepMC3 ✓ | HepMC3 ✓ | **✗ — ThePEG built without it** (D-Q6: the flag was `--with-hepmc3`, which it ignores; a rebuild away) | LHE → Pythia |
-| Native Rivet | (our sink) | ✓ `libSherpaRivetAnalysis` | ✗ | **✗ — `--with-rivet` was never passed** (D-Q6) | via Pythia |
+| Events out | in-memory → analyzers | HepMC3 ✓ | HepMC3 ✓ | **✗ — ThePEG built without it** (D-Q6: the flag was `--with-hepmc3`, which it ignores; a rebuild away) | LHE → Pythia |
+| Native Rivet | (our analyzer) | ✓ `libSherpaRivetAnalysis` | ✗ | **✗ — `--with-rivet` was never passed** (D-Q6) | via Pythia |
 | Threads | `Parallelism:numThreads` | 1 per process (MPI for integration) | 1 (OpenMP for integration) | `-j N` forks N processes | `nb_core` for the ME |
 | Prepare stage | — | integration (`Results/`) | integration (grids) | `Herwig read` → `.run` | process build + `launch` |
 | Seed | `Parallelism:seeds` (identity block, 03 §5) | `RANDOM_SEED` | `seed` | `run -s` | `iseed` |
@@ -60,7 +60,7 @@ The supervisor (06) runs every stage the same way.
 **"Same physics" across generators (Q7) — decided in P7-S02 (D-Q7).**
 
 The reference is **resolved** photoproduction, and 00/B30 measured that its direct contribution is
-unreachable, which settles most of the question:
+unreachable, which stays static most of the question:
 
 | Knob | Pythia | Sherpa | Matched? |
 |---|---|---|---|
@@ -114,7 +114,7 @@ of the reference that is empty. `photo_ep.sin` targets direct photoproduction an
 - `Init:showChangedSettings = on` (goes to the log, not the terminal).
 - `Print:quiet` is **not** forced: the banner and `stat()` go to `logs/generate.log`, and the dashboard extracts σ from them.
 
-**`processAsync`:** set by the sink concurrency mode (05 §3), never by the user card. If the card sets it, that is a validation error.
+**`processAsync`:** set by the analyzer concurrency mode (05 §3), never by the user card. If the card sets it, that is a validation error.
 
 **Preflight:** `hep-run --check <spec>` runs `readFile` for every card, then `init()`, then exits without generating: 0 = OK, 1 = card error, 3 = init failure (06 §3.3). This catches, for example, `ProcessType = 2` init failures in `hep plan --check`.
 
@@ -155,8 +155,8 @@ of the reference that is empty. `photo_ep.sin` targets direct photoproduction an
 **Modes:**
 | `rivet.mode` | What happens |
 |---|---|
-| `inprocess` (default) | HepMC3 → FIFO → `hep-run` (`Source::Stream`). Same sinks, same σ and provenance policy. |
-| `native` | `ANALYSIS: Rivet` with `RIVET: {--analyses: [...]}` and `ANALYSIS_OUTPUT: analysis`; there is **no `hep-run` stage at all**. Faster for Rivet-only runs, but module, store and Delphes sinks are unavailable, and Sherpa writes `analysis.yoda.gz` rather than `analysis.yoda` (the skip rule and the plot pipeline accept both). The plugin path is passed to the stage as `RIVET_ANALYSIS_PATH`, which `Sink::Rivet` would otherwise have set. The progress parser still works. |
+| `inprocess` (default) | HepMC3 → FIFO → `hep-run` (`Source::Stream`). Same analyzers, same σ and provenance policy. |
+| `native` | `ANALYSIS: Rivet` with `RIVET: {--analyses: [...]}` and `ANALYSIS_OUTPUT: analysis`; there is **no `hep-run` stage at all**. Faster for Rivet-only runs, but module, store and Delphes analyzers are unavailable, and Sherpa writes `analysis.yoda.gz` rather than `analysis.yoda` (the skip rule and the plot pipeline accept both). The plugin path is passed to the stage as `RIVET_ANALYSIS_PATH`, which `Analyzer::Rivet` would otherwise have set. The progress parser still works. |
 
 Measured: at a fixed seed the two modes give the same σ to 1e-6 — different code on both sides of the
 seam, the same events.
@@ -197,7 +197,7 @@ half in a `# hep: beam_structure = pdf_builtin, epa` line and the adapter writes
 
 ## 6. Herwig
 
-**Prerequisite (decision P7-S06):** rebuild ThePEG with `--with-hepmc=$HEP_INSTALL/hepmc3 --with-rivet=$HEP_INSTALL/rivet`, then rebuild Herwig. The adapter (P7-S07) is written only after the rebuild. Until then `hep doctor` reports Herwig as "run-only (no event output)", and planning a Herwig point fails with that hint.
+**Prerequisite (decision P7-S06):** rebuild ThePEG with `--with-hepmc=$HEP_INSTALL/hepmc3 --with-hepmcversion=3 --with-rivet=$HEP_INSTALL/rivet`, then rebuild Herwig. `--with-hepmcversion` matters: it defaults to 2, and ThePEG then checks for a HepMC2 header inside the HepMC3 install and fails (confirmed 2026-09-24). The adapter (P7-S07) is written only after the rebuild. Until then `hep doctor` reports Herwig as "run-only (no event output)", and planning a Herwig point fails with that hint.
 
 **Cards:** `point.in` = the base `.in` + `set` lines + an output handler insertion + `saverun <name> /Herwig/Generators/EventGenerator`.
 
@@ -240,7 +240,7 @@ keyed on; the *rendered card* is a five-line Pythia shower card that mentions no
   - A raw setting that writes beam keys (`Beams:id*`, `Beams:e*`, `BEAMS`, `BEAM_ENERGIES`, `lpp*`, `ebeam*`) is a clash error. Use the dedicated quantities instead.
 
 - **Events:** external generators must emit exactly `run.events`. `hep-run` (`Source::Stream`) counts events and flags a mismatch.
-- **σ:** for FIFO sources (`Source::Stream`), `Sink::Rivet` takes σ from the **last** event's `GenCrossSection` (the generator's final estimate, since there is one producer). A missing attribute is an error unless `rivet.xsec` is a number.
+- **σ:** for FIFO sources (`Source::Stream`), `Analyzer::Rivet` takes σ from the **last** event's `GenCrossSection` (the generator's final estimate, since there is one producer). A missing attribute is an error unless `rivet.xsec` is a number.
   - *"Since there is one producer" is load-bearing*, and P7-S01 measured it: streaming a **one**-worker store reproduces the generation's YODA exactly (39 objects, 1004 numbers), while streaming a **two**-worker store scales every histogram by the ratio between one worker's running estimate and the merged σ — 1.8 % on a 300-event test. Every external generator here is a single process, so the rule holds; a future multi-process one would have to carry its merged σ some other way.
 - **Environment:** adapters locate executables through `tools.<name>.exe` (machine file), then `PATH`. They never use absolute paths from the repo.
 - **Version:** `probe()` result goes into provenance. A version change invalidates the prepare cache.

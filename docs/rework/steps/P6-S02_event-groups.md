@@ -13,7 +13,7 @@
 
 ## Goal
 
-Points differing only in analysis-side quantities run as one generation with all variants in one Rivet sink; plotting selects variants.
+Points differing only in analysis-side quantities run as one generation with all variants in one Rivet analyzer; plotting selects variants.
 
 ## Context
 
@@ -92,7 +92,7 @@ Revert (one generation per point).
   *every* variant it found in a point's file, which is right when one point holds several radii (a
   single point, several curves) and wrong the moment several points **share** one generation — then
   the shared file holds every variant and each point claimed all of them. The planner had grouped the
-  points correctly since P1-S05 and the sink had booked both variants since P2-S05; nothing had ever
+  points correctly since P1-S05 and the analyzer had booked both variants since P2-S05; nothing had ever
   asked what came out of the far end.
 
   The fix is small and is the step's "plot variant selection" scope item: `PointFile` now carries the

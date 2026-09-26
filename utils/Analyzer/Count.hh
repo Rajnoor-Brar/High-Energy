@@ -1,23 +1,23 @@
 #pragma once
 
-// ── Sink/Count.hh ────────────────────────────────────────────────────────────
-// The sink that consumes nothing. It exists for three real uses, not as a placeholder:
+// ── Analyzer/Count.hh ────────────────────────────────────────────────────────────
+// The analyzer that consumes nothing. It exists for three real uses, not as a placeholder:
 //
-//   * `hep-run` with no sinks at all (a generation-only benchmark, P6-S03);
+//   * `hep-run` with no analyzers at all (a generation-only benchmark, P6-S03);
 //   * `--list N`, where the events are inspected rather than analysed (06 §5);
 //   * the equivalence gate's generation-only leg (P2-S06).
 //
-// It also documents the interface by implementing the smallest possible sink.
+// It also documents the interface by implementing the smallest possible analyzer.
 
 #include <cstdint>
 #include <string>
 #include <vector>
 
-#include "Sink/Types.hh"
+#include "Analyzer/Types.hh"
 
-namespace Sink {
+namespace Analyzer {
 
-    class Count : public Sink {
+    class Count : public Analyzer {
       public:
         std::string name() const override { return "count"; }
 
@@ -37,4 +37,4 @@ namespace Sink {
         double weight_ = 0.0;
     };
 
-}  // namespace Sink
+}  // namespace Analyzer

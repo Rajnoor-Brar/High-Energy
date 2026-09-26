@@ -136,7 +136,7 @@ namespace Source {
             const std::int64_t step = chunkSize(chunk);
             // The callback runs on a Pythia worker thread whether or not `processAsync` is on, so an
             // exception escaping it would unwind through `std::thread` and call `std::terminate` —
-            // a sink error would kill the process instead of producing an exit code and a message.
+            // an analyzer error would kill the process instead of producing an exit code and a message.
             // It is caught here, at the boundary where our code enters a foreign thread, and rethrown
             // on the main thread once the chunk has joined.
             std::exception_ptr failure;

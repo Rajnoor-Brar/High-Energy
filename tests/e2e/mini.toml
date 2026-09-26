@@ -30,7 +30,7 @@ paths = ["../../build/analyses/PhotoProduction"]
 [output]
 tag_style = "tag"
 
-[settle.use]
+[static.use]
 energies = "27x920"
 
 [quantity.energies]

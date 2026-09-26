@@ -1,4 +1,4 @@
-// hep-run — one resolved spec in, events through sinks, status out (02 §2, 06 §3).
+// hep-run — one resolved spec in, events through analyzers, status out (02 §2, 06 §3).
 //
 // Everything that needs judgement happened in `hep` (Python): studies, sweeps, defaults, seeds, paths.
 // This reads a resolved spec, checks its structure, runs the loop and reports. It knows nothing about
@@ -10,7 +10,7 @@
 //   hep-run SPEC.toml --plain      force plain progress on stderr, even with fd 3 open
 //   hep-run --capabilities         what this build can do, as JSON (read by hep doctor and hep plan)
 //
-// Exit codes are the contract of 06 §3.3: 0 ok, 1 spec/card, 2 usage, 3 init, 4 source, 5 sink,
+// Exit codes are the contract of 06 §3.3: 0 ok, 1 spec/card, 2 usage, 3 init, 4 source, 5 analyzer,
 // 6 stopped by a signal (with partial outputs), 7 stalled (the supervisor's), 70 internal.
 
 #include <cstdlib>
@@ -21,7 +21,7 @@
 
 #include "Core.hh"
 #include "Run.hh"
-#include "Sink.hh"
+#include "Analyzer.hh"
 #include "Status.hh"
 
 namespace {
@@ -111,42 +111,42 @@ std::unique_ptr<Source::Base> makeSource(const Core::Spec& spec, Status::Writer&
                       "this hep-run knows: pythia, store, stream (external generators arrive in P7)"};
 }
 
-// The sinks a spec asks for. A spec with no sink at all is legal and useful: it is the
+// The analyzers a spec asks for. A spec with no analyzer at all is legal and useful: it is the
 // generation-only leg of the benchmark (P6-S03) and of the equivalence gate (P2-S06), and it counts
 // its events so the run still reports something.
-void addSinks(Run::Loop& loop, const Core::Spec& spec, Status::Writer& status) {
+void addAnalyzers(Run::Loop& loop, const Core::Spec& spec, Status::Writer& status) {
     bool added = false;
 #if defined(HEKIT_WITH_RIVET)
-    // The modules go in first, so they are merged and finalized before the Rivet sink writes the
+    // The modules go in first, so they are merged and finalized before the Rivet analyzer writes the
     // file they share (05 §5, 07 §1).
-    std::vector<Core::SinkSpec> module_specs;
+    std::vector<Core::AnalyzerSpec> module_specs;
     std::vector<std::string> module_paths;
-    for (const Core::SinkSpec& sink : spec.sinks) {
-        if (sink.kind == "module") module_specs.push_back(sink);
-        for (const std::string& path : sink.paths) module_paths.push_back(path);
+    for (const Core::AnalyzerSpec& analyzer : spec.analyzers) {
+        if (analyzer.kind == "module") module_specs.push_back(analyzer);
+        for (const std::string& path : analyzer.paths) module_paths.push_back(path);
     }
-    Sink::Modules* modules = nullptr;
-    Sink::Rivet* rivet = nullptr;
+    Analyzer::Modules* modules = nullptr;
+    Analyzer::Rivet* rivet = nullptr;
     if (!module_specs.empty()) {
-        auto owned = std::make_unique<Sink::Modules>(module_specs, module_paths, status);
+        auto owned = std::make_unique<Analyzer::Modules>(module_specs, module_paths, status);
         modules = owned.get();
         loop.add(std::move(owned));
         added = true;
     }
 #endif
-    for (const Core::SinkSpec& sink : spec.sinks) {
-        if (sink.kind == "module") {
+    for (const Core::AnalyzerSpec& analyzer : spec.analyzers) {
+        if (analyzer.kind == "module") {
 #if defined(HEKIT_WITH_RIVET)
-            continue;                              // already added above, as one sink for all of them
+            continue;                              // already added above, as one analyzer for all of them
 #else
             throw Core::Error{Core::Exit::Config,
-                              "this build has no YODA, but the spec asks for a module sink",
+                              "this build has no YODA, but the spec asks for a module analyzer",
                               "rebuild with Rivet (and so YODA) available"};
 #endif
         }
-        if (sink.kind == "rivet") {
+        if (analyzer.kind == "rivet") {
 #if defined(HEKIT_WITH_RIVET)
-            auto owned = std::make_unique<Sink::Rivet>(sink, spec.output_dir, spec.yoda_name,
+            auto owned = std::make_unique<Analyzer::Rivet>(analyzer, spec.output_dir, spec.yoda_name,
                                                        status);
             rivet = owned.get();
             loop.add(std::move(owned));
@@ -155,27 +155,27 @@ void addSinks(Run::Loop& loop, const Core::Spec& spec, Status::Writer& status) {
             throw Core::Error{Core::Exit::Config, "this build has no Rivet, but the spec asks for it",
                               "rebuild with -DHEKIT_RIVET=ON, or check `hep-run --capabilities`"};
 #endif
-        } else if (sink.kind == "store") {
+        } else if (analyzer.kind == "store") {
 #if defined(HEKIT_WITH_HEPMC)
-            loop.add(std::make_unique<Sink::Store>(sink, sink.dir, status));
+            loop.add(std::make_unique<Analyzer::Store>(analyzer, analyzer.dir, status));
             added = true;
 #else
             throw Core::Error{Core::Exit::Config, "this build has no HepMC3, but the spec asks for "
                               "an event store", "rebuild with HepMC3 available"};
 #endif
-        } else if (sink.kind == "delphes") {
+        } else if (analyzer.kind == "delphes") {
 #if defined(HEKIT_WITH_HEPMC)
             // The tee: events go down a FIFO to a `DelphesHepMC3` running beside us (05 §5).
-            loop.add(std::make_unique<Sink::Delphes>(sink, status));
+            loop.add(std::make_unique<Analyzer::Delphes>(analyzer, status));
             added = true;
 #else
             throw Core::Error{Core::Exit::Config, "this build has no HepMC3, but the spec asks for "
                               "the Delphes tee", "rebuild with HepMC3 available"};
 #endif
         } else {
-            // A sink this build does not know is refused rather than skipped: a run that silently
+            // An analyzer this build does not know is refused rather than skipped: a run that silently
             // dropped its store or its module would look like a success and produce nothing.
-            throw Core::Error{Core::Exit::Config, "unknown sink kind: " + sink.kind,
+            throw Core::Error{Core::Exit::Config, "unknown analyzer kind: " + analyzer.kind,
                               "this hep-run knows: rivet, store, delphes (module arrives in P8-S01)"};
         }
     }
@@ -188,12 +188,12 @@ void addSinks(Run::Loop& loop, const Core::Spec& spec, Status::Writer& status) {
             modules->writesOwnFile(spec.output_dir, spec.yoda_name);
     }
 #endif
-    if (!added) loop.add(std::make_unique<Sink::Count>());
+    if (!added) loop.add(std::make_unique<Analyzer::Count>());
 }
 
 std::string summaryFields(const Core::Spec& spec, const Run::Result& result) {
     std::string outputs;
-    for (const Sink::Output& output : result.outputs)
+    for (const Analyzer::Output& output : result.outputs)
         outputs += (outputs.empty() ? "" : ",") + std::string("\"") + Status::escape(output.kind) +
                    "\":\"" + Status::escape(output.path) + "\"";
     std::string fields =
@@ -259,7 +259,7 @@ int main(int argc, char* argv[]) {
 
         Run::Loop loop(spec, status, heartbeat);
         loop.source(makeSource(spec, status));
-        addSinks(loop, spec, status);
+        addAnalyzers(loop, spec, status);
         if (options.list > 0)
             loop.onEvent([&](Events::View& view) { listEvent(status, view, options.list); });
 

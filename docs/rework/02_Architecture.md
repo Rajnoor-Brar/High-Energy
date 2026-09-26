@@ -7,7 +7,7 @@
 | Option | Shape | Verdict |
 |---|---|---|
 | **a. All C++** | C++ CLI, C++ sweep expansion, C++ plotting (ROOT/Paint) | ✗ Re-implements what Python does in a tenth of the code: TOML strictness, subprocess supervision, YODA plotting. It also has to link every optional tool. This is the current Lambda direction, and it is why `utils/` is 10k lines. |
-| **b. Python orchestrator + C++ runner** | Python validates, expands, supervises, renders and plots. One C++ executable runs the event loop and its sinks. | ✓ **Chosen** |
+| **b. Python orchestrator + C++ runner** | Python validates, expands, supervises, renders and plots. One C++ executable runs the event loop and its analyzers. | ✓ **Chosen** |
 | **c. All Python** | `pythia8` + `rivet` bindings in one Python process | ✗ Per-event Python overhead and the GIL. Loses `PythiaParallel`. Bindings are not even importable here yet. Custom modules and ONNX-in-the-loop become awkward. |
 | **d. Shell + C++** | Bash wrappers around the executables | ✗ No real validation, weak error handling. Sweeps in bash are unmaintainable. |
 
@@ -27,7 +27,7 @@
 ### Rule of thumb that follows
 
 **Rule:**
-- **C++** is used where an *event* is touched: generation, sinks, Rivet plugins, custom modules, inference.
+- **C++** is used where an *event* is touched: generation, analyzers, Rivet plugins, custom modules, inference.
 - **Python** is used where a *file, process or person* is touched: configs, native cards, subprocesses, terminal, plots, provenance.
 - **Shell** is used only where the *calling shell* must change: environment and `cd` helpers.
 
@@ -58,7 +58,7 @@ This answers guideline 3 ("in code, or custom terminal command"):
 │  Source: Pythia (cards, LHE) │ StoreReplay (HepMC3 shards) │ Stream (FIFO/file HepMC3)         │
 │        │ Events::View (live Pythia event + lazily converted HepMC3::GenEvent)                  │
 │        ▼                                                                                       │
-│  Sink:  Rivet │ Store (HepMC3 shards / FIFO tee) │ Modules (user C++ → YODA) │ Delphes*        │
+│  Analyzer:  Rivet │ Store (HepMC3 shards / FIFO tee) │ Modules (user C++ → YODA) │ Delphes*        │
 │  Results: YODA per-worker booking, merge, atomic write      Run: loop · concurrency · σ merge  │
 │  ML: OnnxModel (modules)      Phys: PDG · kinematics · selectors · jets      * optional        │
 └────────────────────────────────────────────────────────────────────────────────────────────────┘
@@ -79,17 +79,17 @@ The planner turns each group into a short, linear **stage chain**. Only these ch
 
 | Generator | Chain | Transport |
 |---|---|---|
-| Pythia | `hep-run` (`Source::Pythia`) → sinks | in-process |
-| MadGraph | `mg5_aMC` (LHE file) → `hep-run` (`Source::Pythia`, LHE shower) → sinks | file |
-| Sherpa | `Sherpa` → FIFO → `hep-run` (`Source::Stream`) → sinks | HepMC3 ASCII FIFO |
-| Whizard | `whizard` → FIFO → `hep-run` (`Source::Stream`) → sinks | HepMC3 ASCII FIFO |
-| Herwig | `Herwig run` → FIFO(s) → `hep-run` (`Source::Stream`) → sinks | requires ThePEG with HepMC (P7-S06) |
-| store (`tool = "store"`) | `hep-run` (`Source::StoreReplay`, one reader per shard) → sinks | files ([11](11_EventStore.md)) |
-| any + Delphes | `hep-run` (`Sink::Store` as FIFO tee) → `DelphesHepMC3` | FIFO; in-process Delphes deferred |
+| Pythia | `hep-run` (`Source::Pythia`) → analyzers | in-process |
+| MadGraph | `mg5_aMC` (LHE file) → `hep-run` (`Source::Pythia`, LHE shower) → analyzers | file |
+| Sherpa | `Sherpa` → FIFO → `hep-run` (`Source::Stream`) → analyzers | HepMC3 ASCII FIFO |
+| Whizard | `whizard` → FIFO → `hep-run` (`Source::Stream`) → analyzers | HepMC3 ASCII FIFO |
+| Herwig | `Herwig run` → FIFO(s) → `hep-run` (`Source::Stream`) → analyzers | requires ThePEG with HepMC (P7-S06) |
+| store (`tool = "store"`) | `hep-run` (`Source::StoreReplay`, one reader per shard) → analyzers | files ([11](11_EventStore.md)) |
+| any + Delphes | `hep-run` (`Analyzer::Store` as FIFO tee) → `DelphesHepMC3` | FIFO; in-process Delphes deferred |
 
 **Why the external chains still end in `hep-run`, instead of each tool's native Rivet interface:**
 - **One Rivet driver:** one σ policy, one provenance writer, one status protocol.
-- **The same sinks everywhere:** store, modules, Delphes tee.
+- **The same analyzers everywhere:** store, modules, Delphes tee.
 - **Escape hatch:** Sherpa's native `ANALYSIS: Rivet` stays available as `rivet.mode = "native"` (04 §4).
 
 ## 4. Data flow and contracts
@@ -121,7 +121,7 @@ utils/                       C++ facades + submodules (house style, 13)
   Phys.hh     Phys/          Types Pdg Kinematics Select Jets
   Source.hh   Source/        Types Pythia StoreReplay Stream
   Module.hh   Module/        Types Registry Loader
-  Sink.hh     Sink/          Types Rivet Store Modules Delphes
+  Analyzer.hh     Analyzer/          Types Rivet Store Modules Delphes
   Run.hh      Run/           Types Loop Concurrency Checkpoint
   apps/hep-run.cc            the one executable
   python/                    pyproject.toml + hekit/ (CLI "hep"; packages listed in 13 §4)
@@ -152,7 +152,7 @@ CMakeLists.txt, cmake/       (+ thin Makefile wrapper)
 ## 6. Namespaces and names
 
 See [13_Namespaces.md](13_Namespaces.md). In short:
-- **C++ namespaces:** PascalCase top-level namespaces with facades (`Core`, `Status`, `Events`, `Store`, `Results`, `ML`, `Phys`, `Source`, `Module`, `Sink`, `Run`).
+- **C++ namespaces:** PascalCase top-level namespaces with facades (`Core`, `Status`, `Events`, `Store`, `Results`, `ML`, `Phys`, `Source`, `Module`, `Analyzer`, `Run`).
 - **No namespace-scope `using namespace`** of the toolchain namespaces.
 - **Python:** package `hekit`, console script `hep`.
 - **Executable:** `hep-run`.
@@ -163,7 +163,7 @@ See [13_Namespaces.md](13_Namespaces.md). In short:
 | Policy | Rule |
 |---|---|
 | **Errors** | Python: one `HepError(msg, where, hint)` type, printed as `file:key — msg (hint)`. C++: exceptions inside, a mapped exit code at `main` (06 §3.3). |
-| **Units** | GeV, mm (HepMC3 / Pythia), pb for YODA σ. All conversions happen in one place (`Run` → `Sink::Rivet` / `Results`). |
+| **Units** | GeV, mm (HepMC3 / Pythia), pb for YODA σ. All conversions happen in one place (`Run` → `Analyzer::Rivet` / `Results`). |
 | **Seeds** | Derived from the point's identity (hash), never from its position in a sweep. Always explicit in the resolved spec. Pythia gets disjoint per-instance blocks via `Parallelism:seeds`; external generators get the seed through their card (00/B1, 00/B2). |
 | **Threads** | Resolved to integers by hep. `0` means hardware concurrency, resolved in Python and never passed on. |
 | **Paths** | The repo root comes from the location of `hekit` (Python) or `HEKIT_ROOT` (set by hep for children). The CWD never matters. |

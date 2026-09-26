@@ -1,6 +1,6 @@
 """A real detector stage through `hep run` (P7-S08, 05 §5).
 
-Delphes 3.5.1 is installed here, so this runs it: Pythia generates, `Sink::Delphes` tees the events
+Delphes 3.5.1 is installed here, so this runs it: Pythia generates, `Analyzer::Delphes` tees the events
 to a file, and `DelphesHepMC3` turns them into `delphes.root` — which `hep proc` (12) will read with
 uproot, so the test reads it that way too.
 
@@ -93,7 +93,7 @@ keep_events = {str(keep).lower()}
 [output]
 tag_style = "tag"
 
-[settle.use]
+[static.use]
 energies = "27x920"
 
 [quantity.energies]
@@ -131,7 +131,7 @@ def test_the_detector_stage_runs_after_the_generator(tmp_path):
     plan = json.loads(done.stdout.decode("utf-8", errors="replace"))
     group = plan["groups"][0]
     assert group["stages"] == ["hep-run", "delphes"]
-    assert "delphes" in [sink["kind"] for sink in group["spec"]["sink"]]
+    assert "delphes" in [analyzer["kind"] for analyzer in group["spec"]["analyzer"]]
 
 
 def test_delphes_root_is_readable_by_uproot(ran):
@@ -146,7 +146,7 @@ def test_delphes_root_is_readable_by_uproot(ran):
 
 
 def test_the_rivet_analysis_still_ran(ran):
-    """The tee is a *tee*: the detector does not take the events away from the other sinks."""
+    """The tee is a *tee*: the detector does not take the events away from the other analyzers."""
     import yoda
 
     _, results = ran
