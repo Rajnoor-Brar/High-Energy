@@ -1,0 +1,12 @@
+# utils/Env/custom/tool.toml — any executable (05_Tools.md §8). Its table gives executable and
+# arguments; its [tools.<tag>.config], consumed quantities and standard-configuration requests are
+# written to config/<tag>.toml and passed as the first argument.
+[tool]
+category = "custom"
+status   = "none"
+
+[card]
+style = "none"
+
+[command]
+argv = ["{exe}", "{config}", "{arguments}"]

@@ -1,0 +1,715 @@
+"""Tool folders, point cards, argv, and the connection rules (rank 2).
+
+docs/rework_v2/05_Tools.md §1 (the tool-folder contract), 02_Architecture.md §5 (connections) and
+04_Config.md §7 (tool tables, custom tools, standard configurations). Everything the runner knows
+about a tool comes from its folder utils/Env/<tool>/. This module never names one.
+
+`plan_point` turns (run, configuration, point) into groups of Steps: argv, environment, files to
+write, inputs and outputs, and what to check afterwards. Nothing is spawned or written here; that is
+`execute`. Seeds are added last (`finalise`), because they derive from the identity of everything
+else (02 §7).
+"""
+
+from __future__ import annotations
+
+import hashlib
+import re
+import shutil
+import subprocess
+import tomllib
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+import tomli_w
+
+from . import quantities as qmod
+from .errors import HepError, did_you_mean
+from .paths import output_root, repo_root, resolve, results_root
+from .sweep import label_of, tag_of
+
+ENV = Path(__file__).resolve().parents[1]                 # utils/Env
+
+FOLDER_SECTIONS = {
+    "tool": {"category", "executable", "streamable", "status", "consumes_events", "produces_events"},
+    "card": {"style", "ext", "comment", "bools", "seed", "seed_parallel"},
+    "command": {"argv", "env"},
+    "options": None,                                      # free: the schema of tool-specific keys
+    "outputs": {"products", "event_count", "sidecar"},
+    "exports": None,
+    "identity": {"files", "version"},
+    "prepare": None,
+}
+CARD_STYLES = ("append", "prepend", "merge", "none", "render")
+EXPORT = re.compile(r"^(?P<tool>[a-z0-9]+)_(?P<export>[a-z0-9_]+)$")
+
+
+# ── tool folders ───────────────────────────────────────────────────────────────────────────────
+
+@dataclass
+class Folder:
+    name: str
+    dir: Path
+    spec: dict
+
+    def get(self, section: str, key: str, default: Any = None) -> Any:
+        return self.spec.get(section, {}).get(key, default)
+
+    @property
+    def card_style(self) -> str:
+        return self.get("card", "style", "none")
+
+    @property
+    def filters(self) -> list[dict]:
+        path = self.dir / "filters.toml"
+        return tomllib.loads(path.read_text(encoding="utf-8")).get("rule", []) if path.exists() else []
+
+
+_FOLDERS: dict[str, Folder] | None = None
+
+
+def folders() -> dict[str, Folder]:
+    """Every utils/Env/<tool>/tool.toml, checked. The set of folders is the dict of standard tools."""
+    global _FOLDERS
+    if _FOLDERS is None:
+        found = {}
+        for path in sorted(ENV.glob("*/tool.toml")):
+            where = str(path.relative_to(repo_root()))
+            try:
+                spec = tomllib.loads(path.read_text(encoding="utf-8"))
+            except tomllib.TOMLDecodeError as error:
+                raise HepError(f"not valid TOML: {error}", where=where)
+            for section, table in spec.items():
+                if section not in FOLDER_SECTIONS:
+                    raise HepError(f"unknown section [{section}] in a tool folder", where=where,
+                                   hint=did_you_mean(section, FOLDER_SECTIONS))
+                allowed = FOLDER_SECTIONS[section]
+                if allowed is not None:
+                    for key in table:
+                        if key not in allowed:
+                            raise HepError(f"unknown key [{section}].{key}", where=where,
+                                           hint=did_you_mean(key, allowed))
+            style = spec.get("card", {}).get("style", "none")
+            if style not in CARD_STYLES:
+                raise HepError(f"[card].style must be one of {', '.join(CARD_STYLES)}", where=where)
+            found[path.parent.name] = Folder(path.parent.name, path.parent, spec)
+        _FOLDERS = found
+    return _FOLDERS
+
+
+def folder_of(tool) -> Folder:
+    known = folders()
+    if tool.tool not in known:
+        raise HepError(f"tool = \"{tool.tool}\" is not a standard tool", where=f"[tools.{tool.tag}]",
+                       hint=did_you_mean(tool.tool, known) or f"tool folders: {', '.join(known)}")
+    return known[tool.tool]
+
+
+# ── placeholders ───────────────────────────────────────────────────────────────────────────────
+
+def expand(template: str, context: dict[str, Any], where: str) -> str | list[str]:
+    """`{name}` and `{name:arg}` replaced from `context`; `{{`/`}}` are literal braces. A template
+    that is exactly one placeholder whose value is a list becomes that list (spliced into argv)."""
+    whole = re.fullmatch(r"\{([a-z_]+(?::[^{}]*)?)\}", template)
+    if whole and isinstance(_lookup(whole.group(1), context, where), list):
+        return [str(v) for v in _lookup(whole.group(1), context, where)]
+    out, i = [], 0
+    while i < len(template):
+        if template.startswith("{{", i):
+            out.append("{"); i += 2
+        elif template.startswith("}}", i):
+            out.append("}"); i += 2
+        elif template[i] == "{":
+            end = template.index("}", i)
+            value = _lookup(template[i + 1:end], context, where)
+            out.append(",".join(map(str, value)) if isinstance(value, list) else str(value))
+            i = end + 1
+        else:
+            out.append(template[i]); i += 1
+    return "".join(out)
+
+
+def _lookup(name: str, context: dict, where: str):
+    if name in context:
+        return context[name]
+    head, _, arg = name.partition(":")
+    table = context.get(f"{head}:")
+    if isinstance(table, dict) and arg in table:
+        return table[arg]
+    raise HepError(f"unknown placeholder {{{name}}}", where=where,
+                   hint=did_you_mean(name, [k for k in context if not k.endswith(":")]))
+
+
+# ── values in native cards ─────────────────────────────────────────────────────────────────────
+
+def native(value: Any, bools: list[str], fmt: str = "") -> str:
+    if fmt:
+        return fmt.format(value)
+    if isinstance(value, bool):
+        return bools[0] if value else bools[1]
+    if isinstance(value, float):
+        return repr(value)
+    return str(value)
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def executable_of(tool, folder: Folder, project: str) -> Path:
+    """A folder's executable (`{repo}` expanded, else PATH), or a custom table's (03 §2: bare →
+    build/<project>/<name>; when that does not exist, a command on PATH, shown by --plan)."""
+    if tool.executable:
+        candidate = resolve(tool.executable, "executable", project=project, where=f"[tools.{tool.tag}].executable")
+        if candidate.exists() or "/" in tool.executable:
+            return candidate
+        found = shutil.which(tool.executable)
+        if found:
+            return Path(found)
+        raise HepError(f"executable '{tool.executable}' is neither {candidate} nor a command on PATH",
+                       where=f"[tools.{tool.tag}].executable",
+                       hint=f"build it (make modules/{project}/{Path(tool.executable).stem}.cc → .exe)")
+    template = folder.get("tool", "executable")
+    if not template:
+        raise HepError(f"[tools.{tool.tag}] needs executable = \"...\"", where=f"[tools.{tool.tag}]")
+    text = expand(template, {"repo": str(repo_root())}, f"{folder.name}/tool.toml")
+    if "/" in text:
+        path = Path(text)
+        if not path.exists():
+            rel = path.relative_to(repo_root()) if path.is_relative_to(repo_root()) else path
+            raise HepError(f"{rel} is not built", where=f"tool '{folder.name}'",
+                           hint="run `hep build` (or make utils/App_*.exe)")
+        return path
+    found = shutil.which(text)
+    if not found:
+        raise HepError(f"'{text}' is not on PATH", where=f"tool '{folder.name}'", hint="load_hep first")
+    return Path(found)
+
+
+_VERSIONS: dict[str, str] = {}
+
+
+def version_of(folder: Folder) -> str:
+    command = folder.get("identity", "version")
+    if not command:
+        return ""
+    key = " ".join(command)
+    if key not in _VERSIONS:
+        try:
+            out = subprocess.run(command, capture_output=True, text=True, timeout=30)
+            _VERSIONS[key] = (out.stdout or out.stderr).strip().splitlines()[0] if (out.stdout or out.stderr) else ""
+        except (OSError, subprocess.SubprocessError):
+            _VERSIONS[key] = "?"
+    return _VERSIONS[key]
+
+
+# ── the plan of one point ──────────────────────────────────────────────────────────────────────
+
+@dataclass
+class Interface:
+    name: str
+    path: Path
+    kind: str                          # fifo | file | product
+    producer: str = ""                 # tag
+    readers: list[str] = field(default_factory=list)
+    group: int = -1
+
+
+@dataclass
+class Step:
+    tag: str
+    tool: Any                          # config.Tool
+    folder: Folder
+    group: int
+    exe: Path
+    argv: list[str] = field(default_factory=list)
+    env: dict[str, str] = field(default_factory=dict)
+    log: Path | None = None
+    status: str = "none"               # standard | filters | none
+    filters: list[dict] = field(default_factory=list)
+    inputs: list[Interface] = field(default_factory=list)
+    outputs: list[Interface] = field(default_factory=list)
+    products: list[tuple[Path, Path]] = field(default_factory=list)   # (final, partial)
+    sidecar: Path | None = None        # what it writes, as a producer of events
+    count_check: tuple[Path, Path, str] | None = None                 # (product partial, sidecar, reader)
+    stall_after: float = 300.0
+    timeout: float = 0.0
+    card_base: list[Path] = field(default_factory=list)
+    card_lines: list[str] = field(default_factory=list)                # the point card, before seeds
+    card_point: Path | None = None
+    card_combined: Path | None = None
+    config_path: Path | None = None
+    config_data: dict | None = None
+    identity_parts: dict = field(default_factory=dict)
+
+
+@dataclass
+class PointPlan:
+    point: Any
+    values: dict[str, int]             # active quantity → value index
+    out: Path
+    res: Path
+    prelim: dict
+    groups: list[list[Step]]
+    rendered: dict[str, Step]          # every rendered tag, including export-only ones
+    interfaces: dict[str, Interface]
+    consumers: dict[str, list]
+    identity: str = ""
+    seed: int = 0
+    threads: int = 1
+    events: int = 0
+    writes: dict[Path, str] = field(default_factory=dict)
+
+
+def location(serial: int | None, name: str) -> str:
+    return f"{serial:02d}_{name}" if serial is not None else name
+
+
+def point_dirs(run, configuration, point) -> tuple[Path, Path]:
+    tail = Path(run.project) / location(run.serial, run.name) / location(configuration.serial, configuration.name) / point.name
+    return output_root() / tail, results_root() / tail
+
+
+def _check_options(tool, folder: Folder, where: str) -> None:
+    schema = folder.spec.get("options", {})
+    for key, value in tool.extra.items():
+        if EXPORT.match(key) and tool.tool in ("custom", "module") and EXPORT.match(key).group("tool") in folders():
+            continue
+        if key not in schema:
+            raise HepError(f"unknown key '{key}' for a {folder.name} tool", where=where,
+                           hint=did_you_mean(key, schema) or (f"{folder.name} takes: {', '.join(schema)}"
+                                                              if schema else f"{folder.name} takes no extra keys"))
+        kind = schema[key].get("kind")
+        types = {"list": list, "table": dict, "str": str, "int": int, "float": (int, float), "bool": bool}
+        if kind in types and not isinstance(value, types[kind]):
+            raise HepError(f"'{key}' must be a {kind}", where=f"{where}.{key}")
+    for key, rule in schema.items():
+        if rule.get("required") and key not in tool.extra:
+            raise HepError(f"a {folder.name} tool needs '{key}'", where=where)
+
+
+def _export_requests(run, tool) -> dict[str, str]:
+    """custom/module: `<tool>_<export> = true | "<tag>"` → {request key: referenced tag} (C13)."""
+    if tool.tool not in ("custom", "module"):
+        return {}
+    out = {}
+    for key, value in tool.extra.items():
+        m = EXPORT.match(key)
+        if not m or m.group("tool") not in folders() or value is False:
+            continue
+        kind = m.group("tool")
+        if isinstance(value, str):
+            tag = value
+            if tag not in run.tools or run.tools[tag].tool != kind:
+                raise HepError(f"{key} = \"{value}\" names no {kind} tool table", where=f"[tools.{tool.tag}].{key}")
+        elif value is True:
+            candidates = [t for t, other in run.tools.items() if other.tool == kind]
+            if kind in run.tools and run.tools[kind].tool == kind:
+                tag = kind
+            elif len(candidates) == 1:
+                tag = candidates[0]
+            elif not candidates:
+                raise HepError(f"{key}: there is no {kind} tool table to take the configuration from",
+                               where=f"[tools.{tool.tag}].{key}", hint=f"add [tools.{kind}] with tool = \"{kind}\"")
+            else:
+                raise HepError(f"{key} = true matches several {kind} tables: {', '.join(candidates)}",
+                               where=f"[tools.{tool.tag}].{key}", hint=f"name one: {key} = \"<tag>\" (C13)")
+        else:
+            raise HepError(f"{key} must be true, false or a tool tag", where=f"[tools.{tool.tag}].{key}")
+        export = m.group("export")
+        folder = folders()[kind]
+        declared = folder.spec.get("exports", {})
+        if not (export == "card" and folder.card_style != "none") and export not in declared:
+            offers = (["card"] if folder.card_style != "none" else []) + list(declared)
+            raise HepError(f"{kind} does not export '{export}'", where=f"[tools.{tool.tag}].{key}",
+                           hint=did_you_mean(export, offers) or f"{kind} exports: {', '.join(offers) or 'nothing'}")
+        out[key] = tag
+    return out
+
+
+def _resolve_chain(run, configuration, point) -> list[list[str]]:
+    """Groups with `@quantity` entries replaced by the tool tag the point's value names (V19)."""
+    groups = []
+    for group in configuration.tools:
+        resolved = []
+        for member in group:
+            if member.startswith("@"):
+                name = member[1:]
+                if name not in point.choice and name not in configuration.static:
+                    raise HepError(f"'{member}' needs {name} swept or static", where=f"[run.{configuration.key}].tools")
+                quantity = run.quantities[name]
+                index = point.choice.get(name)
+                if index is None:
+                    index = qmod.select(quantity, configuration.static[name], f"static.{name}")
+                member = quantity.values[index]
+                if member not in run.tools:
+                    raise HepError(f"'@{name}' took the value '{member}', which is not a tool tag",
+                                   where=f"[quantities.{name}]", hint="its values must be [tools.<tag>] names (C5)")
+            resolved.append(member)
+        groups.append(resolved)
+    return groups
+
+
+def plan_point(run, configuration, point, master: dict) -> PointPlan:
+    out, res = point_dirs(run, configuration, point)
+    groups_tags = _resolve_chain(run, configuration, point)
+    chain = [tag for group in groups_tags for tag in group]
+    for tag in chain:
+        if run.tools[tag].tool not in folders():
+            folder_of(run.tools[tag])
+
+    # standard-configuration requests pull in tables that are configured but not run (V21)
+    requests = {tag: _export_requests(run, run.tools[tag]) for tag in chain}
+    exported = [t for reqs in requests.values() for t in reqs.values() if t not in chain]
+    rendered_tags = chain + list(dict.fromkeys(exported))
+
+    # quantities: swept, then static where not swept; who consumes each (C7)
+    values = dict(point.choice)
+    for name, index in qmod.static_values(run, configuration).items():
+        values.setdefault(name, index)
+    consumers = qmod.consumer_table(run, master, list(values), rendered_tags)
+
+    plan = PointPlan(point=point, values=values, out=out, res=res, prelim=configuration.prelim,
+                     groups=[], rendered={}, interfaces={}, consumers=consumers,
+                     threads=configuration.threads, events=configuration.event_count)
+
+    # interfaces declared in [prelim] live in the point's output directory
+    for kind in ("fifo", "files"):
+        for name in configuration.prelim.get(kind, []):
+            if name in plan.interfaces:
+                raise HepError(f"'{name}' is declared twice in [prelim]", where="[prelim]")
+            plan.interfaces[name] = Interface(name, resolve(name, "prelim", root=out, where="[prelim]"),
+                                              "fifo" if kind == "fifo" else "file")
+
+    group_of = {tag: g for g, group in enumerate(groups_tags) for tag in group}
+    for tag in rendered_tags:
+        tool = run.tools[tag]
+        folder = folder_of(tool)
+        where = f"{run.path}: [tools.{tag}]"
+        _check_options(tool, folder, where)
+        step = Step(tag=tag, tool=tool, folder=folder, group=group_of.get(tag, -1),
+                    exe=executable_of(tool, folder, run.project))
+        step.status = tool.status or folder.get("tool", "status", "none")
+        if step.status.startswith("filters:"):
+            rules = resolve(step.status.split(":", 1)[1], "filters", project=run.project, where=f"{where}.status")
+            step.filters = tomllib.loads(rules.read_text(encoding="utf-8")).get("rule", [])
+            step.status = "filters"
+        elif step.status == "filters":
+            step.filters = folder.filters
+        step.stall_after = tool.stall_after or 300.0
+        step.timeout = tool.timeout
+        step.log = out / "logs" / f"{tag}.log"
+        plan.rendered[tag] = step
+        if step.group >= 0:
+            _outputs(plan, step, run)
+    for tag in chain:
+        _inputs(plan, plan.rendered[tag], run)
+    _check_connections(plan, run)
+
+    for tag in rendered_tags:
+        _render(plan, plan.rendered[tag], run, master)
+    for tag in chain:
+        _argv(plan, plan.rendered[tag], run, requests.get(tag, {}))
+
+    plan.groups = [[plan.rendered[tag] for tag in group] for group in groups_tags]
+    return plan
+
+
+def _outputs(plan: PointPlan, step: Step, run) -> None:
+    for name in step.tool.output_file:
+        if name in plan.interfaces and plan.interfaces[name].producer:
+            raise HepError(f"'{name}' is written by both {plan.interfaces[name].producer} and {step.tag}",
+                           where=f"[tools.{step.tag}].output_file", hint="every output has exactly one writer (C6)")
+        if name in plan.interfaces:
+            interface = plan.interfaces[name]
+        else:                                          # not an agreed interface: a product (03 §2)
+            final = resolve(name, "output", root=plan.res, where=f"[tools.{step.tag}].output_file")
+            interface = Interface(name, final, "product")
+            plan.interfaces[name] = interface
+            step.products.append((final, final.with_name(final.stem + ".partial" + final.suffix)))
+        interface.producer, interface.group = step.tag, step.group
+        step.outputs.append(interface)
+    if step.folder.get("tool", "produces_events") and step.outputs and step.folder.get("outputs", "sidecar"):
+        step.sidecar = Path(expand(step.folder.get("outputs", "sidecar"),
+                                   {"output": str(step.outputs[0].path)}, step.folder.name))
+
+
+def _inputs(plan: PointPlan, step: Step, run) -> None:
+    for name in step.tool.input:
+        interface = plan.interfaces.get(name)
+        if interface is None:                          # a path: bare names under the point's output dir
+            path = resolve(name, "input", root=plan.out, where=f"[tools.{step.tag}].input")
+            interface = Interface(name, path, "file")
+            plan.interfaces[name] = interface
+        interface.readers.append(step.tag)
+        step.inputs.append(interface)
+
+
+def _check_connections(plan: PointPlan, run) -> None:
+    """C6 (02 §5): FIFOs inside one group, one reader each, never into a non-streamable tool; files
+    between groups; every input made by someone earlier or already on disk."""
+    for interface in plan.interfaces.values():
+        where = f"[prelim] / [tools.*]: '{interface.name}'"
+        readers = [plan.rendered[r] for r in interface.readers if r in plan.rendered]
+        if interface.kind == "fifo":
+            if not interface.producer:
+                raise HepError(f"FIFO '{interface.name}' has no writer", where=where,
+                               hint="name it in a tool's output_file; a FIFO nobody writes blocks its reader for ever")
+            if len(readers) != 1:
+                raise HepError(f"FIFO '{interface.name}' has {len(readers)} readers; a FIFO has exactly one",
+                               where=where, hint="fan out with a list output_file on the producer, one FIFO per reader (V16)")
+            reader = readers[0]
+            if reader.group != interface.group:
+                raise HepError(f"FIFO '{interface.name}' connects {interface.producer} and {reader.tag} across groups",
+                               where=where, hint=f"put them in one group, [\"{interface.producer}\", \"{reader.tag}\"], "
+                                                  "or use a [prelim] file: a later reader leaves the writer blocked (L8)")
+            streamable = reader.tool.streamable if reader.tool.streamable is not None else reader.folder.get("tool", "streamable", False)
+            if not streamable:
+                raise HepError(f"'{reader.tag}' cannot read a FIFO", where=where,
+                               hint="its tool folder says streamable = false (Delphes skips a zero-length input, L11); "
+                                    "use a [prelim] file and put it in a later group")
+        else:
+            for reader in readers:
+                if interface.producer:
+                    if interface.group > reader.group:
+                        raise HepError(f"'{reader.tag}' reads '{interface.name}' before {interface.producer} writes it",
+                                       where=where, hint="the writer must be in an earlier group")
+                    if interface.group == reader.group:
+                        raise HepError(f"'{reader.tag}' and {interface.producer} share file '{interface.name}' in one group",
+                                       where=where, hint="within a group the interface is a FIFO; between groups a file")
+                elif interface.kind == "file" and interface.name not in plan.prelim.get("files", []) \
+                        and not interface.path.exists():
+                    raise HepError(f"'{reader.tag}' reads '{interface.name}', which nothing writes and does not exist",
+                                   where=f"[tools.{reader.tag}].input", hint=f"expected at {interface.path}")
+
+
+def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
+    """The point card (before seeds), extracted config values, flags and Rivet-style options."""
+    folder, tool = step.folder, step.tool
+    step.identity_parts = {"tag": step.tag, "tool": tool.tool, "exe": str(step.exe)}
+    if step.exe.is_file():
+        step.identity_parts["exe_sha256"] = sha256_file(step.exe)
+    style = folder.card_style
+    bools = folder.get("card", "bools", ["true", "false"])
+    lines: list[str] = []
+    owners: dict[str, str] = {}
+    flags: list[str] = []
+    options: dict[str, dict[str, str]] = {}
+    config_values: dict[str, Any] = {}
+
+    def claim(key: str, value: Any, origin: str, fmt: str = "") -> None:
+        normal = "".join(key.split()).lower()
+        if normal in owners and owners[normal] != origin:
+            raise HepError(f"'{key}' is set by both {owners[normal]} and {origin}", where=f"[tools.{step.tag}]",
+                           hint="one source per native key (C8): pin it in one place")
+        owners[normal] = origin
+        lines.append(f"{key} = {native(value, bools, fmt)}")
+
+    def apply(mapping, value: Any, origin: str) -> None:
+        if mapping.form == "key":
+            claim(mapping.key, value, origin, mapping.format)
+        elif mapping.form == "keys":
+            if not isinstance(value, list) or len(value) != len(mapping.key):
+                raise HepError(f"{origin}: expected {len(mapping.key)} values for {', '.join(mapping.key)}",
+                               where=f"[tools.{step.tag}]")
+            for key, item in zip(mapping.key, value):
+                claim(key, item, origin, mapping.format)
+        elif mapping.form == "flag":
+            flags.extend([mapping.key, native(value, bools, mapping.format)])
+        elif mapping.form == "option":
+            options.setdefault(mapping.analysis, {})[mapping.key] = native(value, ["1", "0"], mapping.format)
+        elif mapping.form == "config":
+            config_values[mapping.key] = value
+        elif mapping.form == "seed":
+            step.identity_parts.setdefault("replica", []).append(value)
+        elif mapping.form == "render":
+            raise HepError(f"{origin}: render mappings arrive with their tool (render.py)", where=f"[tools.{step.tag}]")
+
+    for name in ("events", "threads"):
+        value = plan.events if name == "events" else plan.threads
+        for mapping in qmod.builtin_mappings(master, run, [step.tag], name):
+            apply(mapping, value, f"built-in {name}")
+    for name, found in plan.consumers.items():
+        quantity = run.quantities[name]
+        index = plan.values[name]
+        origin = f"[quantities.{name}] = {tag_of(quantity, index)}"
+        for mapping in found:
+            if mapping.tag == step.tag:
+                apply(mapping, quantity.values[index], origin)
+
+    step.identity_parts.update({"flags": flags, "options": options, "config_values": config_values})
+    if style == "append":
+        ext = folder.get("card", "ext", "txt")
+        comment = folder.get("card", "comment", "#")
+        step.card_base = [resolve(b, "baseconfig", project=run.project, where=f"[tools.{step.tag}].baseconfig")
+                          for b in tool.baseconfig]
+        for base in step.card_base:
+            if not base.is_file():
+                raise HepError("base config not found", where=f"[tools.{step.tag}].baseconfig: {base}")
+        step.card_lines = [f"{comment} point card for [tools.{step.tag}], point {plan.point.name}, written by hep run",
+                           *lines]
+        step.card_point = plan.out / "cards" / f"{step.tag}.point.{ext}"
+        step.card_combined = plan.out / "cards" / f"{step.tag}.{ext}"
+        step.identity_parts["base_sha256"] = [sha256_file(b) for b in step.card_base]
+        step.identity_parts["card"] = step.card_lines
+    elif style in ("prepend", "merge", "render"):
+        raise HepError(f"card style '{style}' arrives with the {folder.name} tool folder (P4)", where=folder.name)
+    elif lines:
+        raise HepError(f"{folder.name} has no card, but quantities set native keys on it: {', '.join(lines)}",
+                       where=f"[tools.{step.tag}]", hint="target an option or a config key instead")
+
+    # analysis-style tools (rivet): analyses with their options
+    if "analyses" in tool.extra:
+        common = {k: native(v, ["1", "0"]) for k, v in tool.extra.get("options", {}).items()}
+        rendered = []
+        for analysis in tool.extra["analyses"]:
+            base, *inline = analysis.split(":")
+            merged = dict(item.partition("=")[::2] for item in inline)
+            merged.update(common)
+            merged.update(options.get(base, {}))
+            rendered.append(":".join([base, *(f"{k}={v}" for k, v in sorted(merged.items()))]))
+        unknown = set(options) - {a.split(":")[0] for a in tool.extra["analyses"]}
+        if unknown:
+            raise HepError(f"options target analyses not run by {step.tag}: {', '.join(sorted(unknown))}",
+                           where=f"[tools.{step.tag}]")
+        step.identity_parts["analyses"] = rendered
+        step.config_data = {"analyses": rendered}
+        for pattern in folder.get("identity", "files", []):
+            for analysis in rendered:
+                path = Path(expand(pattern, {"repo": str(repo_root()), "exe": str(step.exe),
+                                             "analysis": analysis.split(":")[0]}, folder.name))
+                if path.is_file():
+                    step.identity_parts.setdefault("files_sha256", {})[str(path)] = sha256_file(path)
+    step.identity_parts["_flags"] = flags
+
+
+def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
+    folder, tool = step.folder, step.tool
+    context: dict[str, Any] = {
+        "repo": str(repo_root()), "out": str(plan.out), "res": str(plan.res), "exe": str(step.exe),
+        "threads": plan.threads, "events": plan.events,
+        "input": str(step.inputs[0].path) if step.inputs else "",
+        "output": str(step.outputs[0].path) if step.outputs else "",
+        "outputs": ",".join(str(o.path) for o in step.outputs),
+        "partial:": {"output": str(step.products[0][1]) if step.products else ""},
+        "in:": {i.name: str(i.path) for i in step.inputs},
+        "file:": {name: str(i.path) for name, i in plan.interfaces.items() if i.kind in ("fifo", "file")},
+        "q:": {name: str(run.quantities[name].values[i]) for name, i in plan.values.items()},
+        "cards": [str(p) for p in step.card_base] + ([str(step.card_point)] if step.card_point else []),
+        "card": str(step.card_combined or ""),
+        "analyses": [x for a in step.identity_parts.get("analyses", []) for x in ("-a", a)],
+    }
+    # standard configurations handed to a custom/module tool (V21, 04 §7.3)
+    standard: dict[str, dict] = {}
+    for key, tag in requests.items():
+        source = plan.rendered[tag]
+        export = EXPORT.match(key).group("export")
+        declared = source.folder.spec.get("exports", {}).get(export, {})
+        if export == "card" or declared.get("alias") == "card":
+            standard[key] = {"tool": source.tool.tool, "tag": tag, "path": str(source.card_combined),
+                             "parts": [str(p) for p in source.card_base] + [str(source.card_point)]}
+        else:
+            values = {"tool": source.tool.tool, "tag": tag}
+            for give in declared.get("gives", []):
+                if give == "analyses":
+                    values["analyses"] = source.identity_parts.get("analyses", [])
+                elif give == "plugin_path":
+                    values["plugin_path"] = str(repo_root() / "build" / "Rivet")
+                else:
+                    raise HepError(f"{source.folder.name} export '{export}' gives unknown '{give}'",
+                                   where=f"{source.folder.name}/tool.toml")
+            standard[key] = values
+        step.identity_parts.setdefault("exports", {})[key] = plan.rendered[tag].identity_parts
+    context["std:"] = {k: v.get("path", "") for k, v in standard.items()}
+
+    if tool.tool in ("custom", "module"):
+        data = dict(tool.config or {})
+        consumed = {k: v for k, v in step.identity_parts.get("config_values", {}).items()}
+        quantities_table = {k: v for k, v in consumed.items() if k in run.quantities}
+        for key, value in consumed.items():
+            if key not in run.quantities:
+                target = data
+                *head, last = key.split(".")
+                for part in head:
+                    target = target.setdefault(part, {})
+                target[last] = value
+        if quantities_table:
+            data["quantities"] = quantities_table
+        if standard:
+            data["standard"] = standard
+        if data or tool.config is not None:
+            step.config_path = plan.out / "config" / f"{step.tag}.toml"
+            step.config_data = data
+            step.identity_parts["config"] = tomli_w.dumps(data)
+        context["config"] = str(step.config_path) if step.config_path else ""
+        context["arguments"] = [expand(str(a), context, f"[tools.{step.tag}].arguments") for a in tool.arguments]
+        context["arguments"] = [x for a in context["arguments"] for x in (a if isinstance(a, list) else [a])]
+
+    argv: list[str] = []
+    for template in folder.get("command", "argv", ["{exe}"]):
+        piece = expand(template, context, f"{folder.name}/tool.toml [command].argv")
+        if isinstance(piece, list):
+            argv.extend(piece)
+        elif piece != "":
+            argv.append(piece)
+    argv.extend(step.identity_parts.pop("_flags", []))
+    step.argv = argv
+    step.env = {k: expand(v, context, f"{folder.name}/tool.toml [command].env")
+                for k, v in folder.get("command", "env", {}).items()}
+    step.identity_parts["argv"] = [a.replace(str(plan.out), "{out}").replace(str(plan.res), "{res}") for a in argv]
+
+    # the count check: a consumer of events reads its count back and compares it with the producer's sidecar
+    consumes = tool.consumes_events if tool.consumes_events is not None else folder.get("tool", "consumes_events", False)
+    reader = folder.get("outputs", "event_count")
+    if consumes and reader and step.products and step.inputs:
+        producer = plan.rendered.get(step.inputs[0].producer)
+        if producer is not None and producer.sidecar is not None:
+            step.count_check = (step.products[0][1], producer.sidecar, reader)
+
+
+def finalise(plan: PointPlan, seed: int) -> None:
+    """Write the seed lines into every generator card, and collect the files to write."""
+    plan.seed = seed
+    seeds = [seed + i for i in range(plan.threads)]
+    for step in plan.rendered.values():
+        if step.card_point is None:
+            continue
+        lines = list(step.card_lines)
+        seed_lines = step.folder.get("card", "seed", [])
+        if seed_lines:
+            context = {"seed": seed, "seeds": seeds}
+            lines += [expand(line, context, step.folder.name) for line in seed_lines]
+            if plan.threads > 1:
+                lines += [expand(line, context, step.folder.name) for line in step.folder.get("card", "seed_parallel", [])]
+        point_text = "\n".join(lines) + "\n"
+        combined = "".join(b.read_text(encoding="utf-8") for b in step.card_base) + "\n" + point_text
+        plan.writes[step.card_point] = point_text
+        plan.writes[step.card_combined] = combined
+    for step in plan.rendered.values():
+        if step.config_path is not None:
+            plan.writes[step.config_path] = tomli_w.dumps(step.config_data or {})
+
+
+def describe(plan: PointPlan, run) -> list[str]:
+    """--plan: the groups, argv, connections and files of one point."""
+    lines = [f"point {plan.point.index} {plan.point.name}   identity {plan.identity[:12]}   seed {plan.seed}"]
+    for name, index in plan.values.items():
+        quantity = run.quantities[name]
+        where = ", ".join(f"{m.tag}:{m.key if m.form != 'seed' else 'seed'}" for m in plan.consumers.get(name, []))
+        lines.append(f"  {name:12s} = {tag_of(quantity, index):14s} → {where}")
+    for g, group in enumerate(plan.groups, start=1):
+        lines.append(f"  group {g}: {', '.join(s.tag for s in group)}")
+        for step in group:
+            lines.append(f"    {step.tag}: {' '.join(step.argv)}")
+            for interface in step.inputs:
+                lines.append(f"      reads  {interface.kind:7s} {interface.path}")
+            for interface in step.outputs:
+                lines.append(f"      writes {interface.kind:7s} {interface.path}")
+    export_only = [t for t, s in plan.rendered.items() if s.group < 0]
+    if export_only:
+        lines.append(f"  configured, not run (exported): {', '.join(export_only)}")
+    return lines

@@ -131,11 +131,11 @@ TESTS := $(foreach s,$(TEST_SRCS),$(call out_of,$(s)))
 .PHONY: all tests test test-slow clean configure list
 all: $(ALL)
 tests: $(TESTS)
-test: tests
+test: all tests
 	@set -e; for t in $(TESTS); do echo "── $$t"; $$t; done
-	@if [ -d tests/runner ]; then python3 -m pytest -q tests/runner; fi
+	python3 -m pytest -q -m "not slow"
 test-slow: all
-	@if [ -d tests/integration ]; then python3 -m pytest -q -m slow tests/integration; fi
+	python3 -m pytest -q -m slow
 configure:
 	utils/Env/flags.sh $(FLAGS_MK)
 list:

@@ -2,7 +2,7 @@
 
 | Status | Steps | Depends on | Ends with | Updated |
 |---|---|---|---|---|
-| not started | 2 | P1 | every eic and zeus configuration plans and runs; quantities are checked for consumers; reruns are free | 2026-09-26 |
+| **in progress** | 2 | P1 | every eic and zeus configuration plans and runs; quantities are checked for consumers; reruns are free | 2026-09-26 |
 
 ## Goal
 

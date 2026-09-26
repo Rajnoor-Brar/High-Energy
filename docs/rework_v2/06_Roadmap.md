@@ -15,8 +15,8 @@ builds the brief directly.
 | Phase | Name | Steps | Ends with | Gate (a number) | Status |
 |---|---|---|---|---|---|
 | [P0](phases/P0_clean-slate.md) | Clean slate | 2 | v1 deleted; the v2 tree and Makefile in place; Rivet plugins build | `make` builds both plugins; 0 files left under `utils/` from v1 | **done** |
-| [P1](phases/P1_one-chain.md) | One chain, end to end | 3 | `hep run PhotoProduction/eic single` generates, analyses, watches and records one point | legacy reference YODA reproduced bin for bin; σ at threads = 4 within 1e-6; failure injection never hangs | **in progress** |
-| [P2](phases/P2_sweeps.md) | Sweeps | 2 | every eic and zeus configuration plans and runs, with skip-unchanged | point and page counts equal `point_counts.toml`; a rerun spawns 0 processes | not started |
+| [P1](phases/P1_one-chain.md) | One chain, end to end | 3 | `hep run PhotoProduction/eic single` generates, analyses, watches and records one point | legacy reference YODA reproduced bin for bin; σ at threads = 4 within 1e-6; failure injection never hangs | **done** |
+| [P2](phases/P2_sweeps.md) | Sweeps | 2 | every eic and zeus configuration plans and runs, with skip-unchanged | point and page counts equal `point_counts.toml`; a rerun spawns 0 processes | **in progress** |
 | [P3](phases/P3_results-and-plots.md) | Results and plots | 3 | YODA → ROOT, Paint pages, `rivet-mkhtml` when asked, `post`, and a new GUIDE | `energy_pdf` draws 4 pages per histogram; the gutter arithmetic is exact | not started |
 | [P4](phases/P4_modules-and-tools.md) | Modules and the other tools | 3 | Lambda as a program; Delphes, Herwig, Sherpa, Whizard, MadGraph; the generator comparison; budget measured | each tool produces a point and passes the count check; line counts within budget | not started |
 

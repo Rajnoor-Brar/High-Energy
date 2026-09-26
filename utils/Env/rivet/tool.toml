@@ -1,0 +1,29 @@
+# utils/Env/rivet/tool.toml — Rivet as a process, reading HepMC (05_Tools.md §2).
+[tool]
+category        = "analysis-application"
+executable      = "rivet"
+streamable      = true
+status          = "filters"
+consumes_events = true
+
+[card]
+style = "none"                      # everything is a flag
+
+[command]
+argv = ["{exe}", "-o", "{partial:output}", "{analyses}", "{input}"]
+env  = { RIVET_ANALYSIS_PATH = "{repo}/build/Rivet" }
+
+[options]
+analyses = { kind = "list", required = true }
+options  = { kind = "table" }       # analysis options applied to every analysis
+
+[outputs]
+products    = ["yoda"]
+event_count = "yoda:/RAW/_EVTCOUNT"  # the count check against the producer's sidecar (L7)
+
+[exports.analyses]
+gives = ["analyses", "plugin_path"]
+
+[identity]
+files   = ["{repo}/build/Rivet/Rivet_{analysis}.so"]
+version = ["rivet", "--version"]

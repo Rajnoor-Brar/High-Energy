@@ -1,0 +1,24 @@
+# utils/Env/rivet/filters.toml — Rivet only prints (05_Tools.md §3.2). A rule never fails a run.
+[[rule]]
+match = '^Event (?P<done>\d+) \('
+emit  = "progress"
+
+[[rule]]
+match = '^Reading events from'
+emit  = "phase"
+phase = "analysing"
+
+[[rule]]
+match = '(?:ERROR|Error in|Exception)'
+emit  = "error"
+
+[[rule]]
+match = 'WARN .*unvalidated'
+emit  = "ignore"
+
+[[rule]]
+match = '\bWARN\b'
+emit  = "warn"
+
+[defaults]
+last_line = true

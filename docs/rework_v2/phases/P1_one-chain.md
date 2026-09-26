@@ -2,7 +2,7 @@
 
 | Status | Steps | Depends on | Ends with | Updated |
 |---|---|---|---|---|
-| **in progress** | 3 | P0 | `hep run PhotoProduction/eic single` runs App_Pythia ══FIFO══► rivet, watched, checked and recorded | 2026-09-26 |
+| **done** (2026-09-26) | 3 | P0 | `hep run PhotoProduction/eic single` runs App_Pythia ══FIFO══► rivet, watched, checked and recorded | 2026-09-26 |
 
 ## Goal
 
@@ -145,4 +145,70 @@ Revert the step commits. The work is additive on the P0 skeleton.
 
 ## Log
 
-*(filled during execution)*
+### S1 — 2026-09-26 — done
+
+| Row | Result |
+|---|---|
+| 1 | `tests/cxx/test_status.cc` passes: the envelope, escaping, drop-on-full (4 MB into a 64 kB pipe never blocks), heartbeat, plain fallback. The App_Pythia checks are process-level, so they are pytest in `tests/integration/test_app_pythia.py` (8 tests: sidecar schema, seed refusal ×2, a rejected card, usage exit codes, gz/zst magic, fan-out byte-identity). Rows 2 and 4 are kept as the slow tests `tests/integration/test_gates_p1.py` (3 tests, 36 s). |
+| 2 | **Reference gate: byte-identical** (0 differing lines of 1,530) for MSTW, *with the capture-time analysis*. The current `photo_eic.cc` defaults to `ETMIN = 17` and `ETMIN2 = 21` (changed in `37d4170`/`37d4170`; its `.info` still says 5/10), so the gate used `sources/PhotoProduction/photo_eic.cc` at `18db967`. σ = 71,422.158 pb (reference 71,422.16). |
+| 3 | NNLO byte-identical; written = 4,999 of 5,000 (L5) |
+| 4 | **σ gate: Rivet `/_XSEC` = 75,215.52 pb, sidecar 75,215.52097 pb, a relative difference of 1.3e-8** (threads = 4, 100k). The count check agrees: `/RAW/_EVTCOUNT` numEntries 99,987 = sidecar written. The stamping approach is kept; `rivet -x` is not needed. |
+| 5 | A rejected setting gives exit 1 and no output; a missing PDF set (init fails) gives exit 3 and no output |
+| 6 | A FIFO with no reader, then SIGINT: exit 6 ("stopped while waiting to open …") |
+| 7 | 50k events, 20 threads, end to end: **1,312 events/s, 0.90×** v1's 1,455 inside `hep-run`, and 38.1 s against v1's whole command at 44.7 s. Rivet, single-threaded, sets the pace (R4). |
+
+- **Not done: warning aggregation.** It is not implemented in App_Pythia. `pythia.stat()` goes to the
+  log, and the runner's filters surface errors from there.
+- **Card hashes left to the runner.** The sidecar lists the cards but not their sha256s (05 §4 said
+  it would); the runner's provenance hashes the cards instead.
+
+### S2 — 2026-09-26 — done
+
+| Row | Result |
+|---|---|
+| 1 | `hep run PhotoProduction/eic single --plan` shows 1 group (pythia, rivet), the FIFO connection, the five static quantities with their consumers, and paths under `output/…/03_eic/single/point/` and `results/…` |
+| 2 | 100k events, 1 thread: the runner's `photo.yoda` is **byte-identical** to App_Pythia → rivet run by hand on the runner's own cards. Count check ok (99,991 events). A second run skips the point: "complete, skipped". |
+| 3 | App_Pythia killed mid-stream: exit 1, *FAILED [pythia]: … SIGKILL*; no `.complete`, no `photo.yoda`; the runner exited within 30 s of the kill |
+| 4 | Init failure (missing PDF set) while rivet is blocked at open: exit 1, pythia blamed ("exit code 3"), no hang |
+| 5 | rivet killed: pythia dies of SIGPIPE and **rivet** is blamed. Ctrl-C: exit 6, point partial. |
+| 6 | Refused at plan time: a FIFO into a non-streamable tool, a FIFO across groups, two readers on one FIFO, a FIFO with no writer, two writers of one output |
+| 7 | One bad config per rule C1 (unknown key or section, wrong type), C2, C3, C4, C5, C12, C13: each fails with `where` and `hint` |
+| 8 | An export's `[standard.pythia_cmnd]` has `path` = the combined card and `parts` = exactly App_Pythia's argv cards. The combined card ends with the point card, seeds included. |
+| 9 | A custom tool with `pythia_card = true` and no pythia in `tools`: the card is rendered, C7 passes through the export, pythia is not run |
+| 10 | Two pythia tables and `pythia_cmnd = true`: C13 error with the hint `pythia_cmnd = "<tag>"` |
+
+Tests: `tests/runner` 47 (config 15, plan 18, paths 10, imports 4); `tests/integration`: app_pythia
+8, failures 4 (slow), gates 3 (slow). `make test`: 55 passed. `make test-slow`: 7 passed, 46 s.
+
+**Deviations:**
+- **One finding from failure injection.** When the consumer is killed, both exits can be seen in one
+  poll, and the producer's SIGPIPE was blamed. The rule is now: a SIGPIPE death is never the cause.
+- **Pulled forward from P2.** `quantities.py` and `sweep.py` were written here, since the eic
+  `single` configuration already has five static quantities. P2 keeps its gates (the counts, the
+  translated configs) and adds what is left.
+- **eic.toml translated in full now.** All eleven configurations are in the v2 schema, but without
+  `yd2rt` in their chains until P3.
+- **`executable` falls back to `PATH`** when nothing is built under `build/<project>/`. That lets a
+  custom tool run `python3 …`, and 03 §2 now says so. It is shown by `--plan`.
+- **A custom tool gets its config argument only if it has one:** a `[tools.<tag>.config]`,
+  consumed quantities or export requests. A bare `executable` + `arguments` tool gets exactly its
+  arguments.
+- **Provenance** records each tool's version (`[identity].version`), binary sha256, argv, card
+  sha256 and result, plus git revision/dirty, host and times.
+
+### S3 — 2026-09-26 — done
+
+| Row | Result |
+|---|---|
+| 1 | Live view on a real terminal (`script -qfc`): rich bars, rate, ETA, and the `point 1/1 · m:ss` line. **Row replaced with the question it meant:** the displayed rate (1,494/s) is 17% above `written / wall`, because App_Pythia counts from the start of generation and the wall time includes ~2.5 s of init. Against the generation window taken from `status.jsonl`, the displayed rate is exact (0.00%). |
+| 2 | `hep watch PhotoProduction/eic single --plain` from a second shell follows the running point (progress, both exits, the verdict) and exits by itself when the run finishes |
+| 3 | `hep run … > log` (not a TTY): plain lines, **0** control codes |
+| 4 | A custom `python3 -c` tool that only prints: spinner plus `working on step 9` (its last line), exit 0 |
+
+- **The journal marks runs and points.** `status.jsonl` now carries `run` started/finished, `point`
+  started/verdict and `exit` records, so `hep watch` knows where the latest run begins in an
+  appended journal and when it ends. Its unit tests are `tests/runner/test_status.py` (3).
+- `make test`: 58 passed.
+
+**P1 is done.** `hep run PhotoProduction/eic single` is the working tool again, so R3 is closed.
+
