@@ -248,7 +248,7 @@ Each tool folder is independent: remove it and its master entries.
 | 2 | `whizard`: direct photoproduction at 18×275 e+p, 2,000 events, 17 s. **σ from its integration: q γ 1,288 ± 13 pb, g γ 1,195 ± 16 pb** (Whizard writes none into its events, so Rivet has none, as v1 found). |
 | 3 | `hep run Comparison/generators` (5k events each): **3 points (py8, hw7, sh3), 4 pages (pT, E, η, N_ch), 3 curves each**. σ for the three set-ups: 722, 576 and 533 μb; ⟨N_ch⟩ 79, 81, 76. Pythia 17 s, Herwig 52 s, Sherpa 49 s integration + 102 s. |
 | 4 | The budget, measured (06 §3): code 6,470 lines against 5,200 (1.24×, and 0.26× of v1). **Three rows over 1.5×**, each with its cause in 06 §3: the runner (1.67×), the C++ headers (1.67×), the tests (1.66×). |
-| 5 | A fresh clone, `load_hep && hep build && hep run PhotoProduction/eic single` (see below) |
+| 5 | **A fresh clone** of `e8a0974` (no `datasets/`, no `build/`), `HEKIT_ROOT=<clone> load_hep && hep build && hep run PhotoProduction/eic single --set run.event_count=50000`: the build takes 10 s (apps, three Rivet plugins, Lambda, InprocJets, Herwig's repository), the point 42 s, and all 17 pages are drawn with the ZEUS data (`rivet:`). 50k events instead of the configured 1M, which is the same path for 12 minutes. |
 
 **The runner, by folder keys again:** `{seed}`/`{prepared}` in card lines (Whizard's `seed`
 precedes its `include`; MadGraph's launch names the cache); a `render.py` `prepare_card()` hook
