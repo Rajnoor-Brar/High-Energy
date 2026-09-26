@@ -196,6 +196,16 @@ Written as an array of tables: repeat `[[proc.hist]]` once per entry.
 | `bins` | list of number ≥ 3 ≤ 3 | — | [n, low, high] |
 | `engine` | str one of 'auto', 'rdf', 'uproot' | `'auto'` | which engine fills it |
 
+### `[proc.export]`
+
+A ROOT view of a point's histograms (12 §2.3).
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `enabled` | bool | `False` | write <point>/analysis.root beside analysis.yoda |
+| `file` | str | `'analysis.root'` | filename, inside the point's own directory |
+| `select` | list of str | — | YODA path globs to export; [] = every 1D object |
+
 ### `[quantity]`
 
 The sweep catalogue (03 §3).

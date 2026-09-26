@@ -33,9 +33,11 @@ from ..sweep import select as select_points
 @click.option("--out", type=click.Path(file_okay=False, path_type=Path),
               help="write into this directory instead of the study's proc/")
 @click.option("--keep-root", is_flag=True, help="also write proc.root for inspection")
+@click.option("--export-root", is_flag=True,
+              help="write each point's analysis.root, as [proc.export] would")
 @click.pass_context
 def proc(context: click.Context, config_file: Path, study, pins, across, style, overlay, sets,
-         only, backend, engine, out, keep_root) -> None:
+         only, backend, engine, out, keep_root, export_root) -> None:
     """Fits and derived histograms (ROOT processing)."""
     from ..plan import build as builder
     from . import backends as backends_module
@@ -45,6 +47,7 @@ def proc(context: click.Context, config_file: Path, study, pins, across, style, 
     config = load_config(config_file, sets=tuple(sets))
     entries = _fits_of(config)
     histograms = [dict(item) for item in (getattr(config, "proc_hists", None) or [])]
+    exporting = export_root or bool(getattr(getattr(config, "proc_export", None), "enabled", False))
     if only:
         every = [str(item.get("name")) for item in entries + histograms]
         entries = [entry for entry in entries if str(entry.get("name")) == only]
@@ -52,8 +55,8 @@ def proc(context: click.Context, config_file: Path, study, pins, across, style, 
         if not entries and not histograms:
             raise HepError(f"no [[proc.fit]] or [[proc.hist]] called {only!r}",
                            hint="names in this config: " + (", ".join(every) or "none"))
-    if not entries and not histograms:
-        raise HepError("this config declares no [[proc.fit]] or [[proc.hist]]",
+    if not entries and not histograms and not exporting:
+        raise HepError("this config declares no [[proc.fit]], [[proc.hist]] or [proc.export]",
                        hint="12 §2 has the blocks; `hep config reference proc.fit` prints the keys")
 
     selection = select_points(config, study=study, pins=tuple(pins), across=across, style=style,
@@ -91,12 +94,15 @@ def proc(context: click.Context, config_file: Path, study, pins, across, style, 
         # than the reader assumes is exactly how two runs come to disagree for no visible reason.
         click.echo("hep proc: PyROOT is not available, so the scipy backend was used", err=True)
 
-    written = outputs_module.write_json(
-        fitted, destination, inputs=inputs,
-        config_hash=str(getattr(plan, "hash", "") or ""),
-        pyroot=backends_module.available("minuit2"),
-        backend=", ".join(used), merge=bool(only))
-    click.echo(f"hep proc: {len(fitted)} fits → {written}")
+    if not fitted and not entries:
+        written = None
+    else:
+        written = outputs_module.write_json(
+            fitted, destination, inputs=inputs,
+            config_hash=str(getattr(plan, "hash", "") or ""),
+            pyroot=backends_module.available("minuit2"),
+            backend=", ".join(used), merge=bool(only))
+        click.echo(f"hep proc: {len(fitted)} fits → {written}")
 
     # ── derived histograms (12 §2.2) ─────────────────────────────────────────
     filled: list[Any] = []
@@ -119,6 +125,26 @@ def proc(context: click.Context, config_file: Path, study, pins, across, style, 
         root_file = outputs_module.write_root(fitted, destination, models)
         click.echo(f"hep proc: {root_file}" if root_file
                    else "hep proc: no PyROOT, so proc.root was not written")
+
+    # ── the ROOT view (12 §2.3) ──────────────────────────────────────────────
+    # Per point, beside its own `analysis.yoda`, because it is one-to-one with it. The YODA file
+    # stays the record; this is a derived view and `hep clean` may remove it.
+    if exporting:
+        from . import export as export_module
+
+        settings = getattr(config, "proc_export", None)
+        filename = str(getattr(settings, "file", "") or "analysis.root")
+        select = [str(pattern) for pattern in (getattr(settings, "select", None) or [])]
+        for name, path in points:
+            target = (Path(out) / f"{name}.root") if out else (path.parent / filename)
+            written_root = export_module.export(path, target, select=select, title=name)
+            for obj_path, reason in written_root.skipped.items():
+                click.echo(f"hep proc: {obj_path or '(nothing)'} not exported: {reason}", err=True)
+            if written_root.ok:
+                click.echo(f"hep proc: {len(written_root.objects)} histograms → {target}")
+            else:
+                raise HepError(f"nothing in {path.name} could be exported to ROOT",
+                               hint="[proc.export].select decides what is taken; [] means all")
 
     if any(not one.result.valid for one in fitted):
         bad = ", ".join(one.name for one in fitted if not one.result.valid)
@@ -145,6 +171,21 @@ def _points_of(plan: Any, layout: Any) -> list[tuple[str, Path]]:
                 continue
             seen.add(point.name)
             found.append((point.name, point.yoda))
+    if found:
+        return found
+
+    # No pages. A config whose only sink is a C++ module declares no Rivet analysis, so the planner
+    # builds no page — but it still produces one `analysis.yoda` per point, and `hep proc` works on
+    # points, not on pages. Falling back to the plan's own points is what makes a module-only
+    # config processable at all.
+    for point in getattr(plan, "points", []) or []:
+        directory = layout.point(plan.group_of(point.name).name)
+        for candidate in ("analysis.yoda", "analysis.yoda.gz", "analysis.partial.yoda"):
+            path = directory / candidate
+            if path.is_file() and point.name not in seen:
+                seen.add(point.name)
+                found.append((point.name, path))
+                break
     return found
 
 

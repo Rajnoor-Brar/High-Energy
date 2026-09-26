@@ -44,6 +44,45 @@ auto_range = true
 range_pad = 1
 legends = "label"
 
+[plot.data]
+file = "../../datasets/zeus_eic.yoda"
+legend = "ZEUS 2012"
+show = true
+reference = true
+rivet_refs = false
+
+# Explicit, never matched by name (00/B5). This is a physics match, not a numbering coincidence:
+# photo_eic books the same d-numbers as ZEUS_2012_I1116258 because it was written against that
+# measurement. d04 corroborates it — the only ZEUS table with a truncated ET range (17–41 GeV),
+# landing on the only histogram booked with `etEdgesBackward`.
+#
+# Meaningful at the pinned 27x920 point, which IS HERA kinematics. At the EIC energies the data
+# still draws and the ratio panel becomes a statement about beam energy, not about the generator.
+#
+# d13–d17 (2<eta<2.5, 2.5<eta<3, charged pT, Nch, charged eta) have no ZEUS counterpart.
+# The ET binnings differ; the reference is trimmed to the MC edges and `hep plot` says so.
+[plot.data.map]
+"d01-x01-y01" = "/REF/ZEUS_2012_I1116258/d01-x01-y01"   # ET, kT, all eta
+"d02-x01-y01" = "/REF/ZEUS_2012_I1116258/d02-x01-y01"   # eta, kT, ET > ETMIN
+"d03-x01-y01" = "/REF/ZEUS_2012_I1116258/d03-x01-y01"   # eta, kT, ET > ETMIN2
+"d04-x01-y01" = "/REF/ZEUS_2012_I1116258/d04-x01-y01"   # ET, kT, eta < 0
+"d05-x01-y01" = "/REF/ZEUS_2012_I1116258/d05-x01-y01"   # ET, kT, 0 < eta < 1
+"d06-x01-y01" = "/REF/ZEUS_2012_I1116258/d06-x01-y01"   # ET, kT, 1 < eta < 1.5
+"d07-x01-y01" = "/REF/ZEUS_2012_I1116258/d07-x01-y01"   # ET, kT, 1.5 < eta < 2
+"d08-x01-y01" = "/REF/ZEUS_2012_I1116258/d08-x01-y01"   # ET, kT, eta > 3
+"d09-x01-y01" = "/REF/ZEUS_2012_I1116258/d09-x01-y01"   # ET, anti-kT, all eta
+"d10-x01-y01" = "/REF/ZEUS_2012_I1116258/d10-x01-y01"   # ET, SISCone, all eta
+"d11-x01-y01" = "/REF/ZEUS_2012_I1116258/d11-x01-y01"   # eta, anti-kT
+"d12-x01-y01" = "/REF/ZEUS_2012_I1116258/d12-x01-y01"   # eta, SISCone
+
+[plot.style]
+name = "hekit"          # or ATLAS, CMS, ALICE, LHCb2, ROOT, none
+# figure = [9, 6]         # inches
+font_size = 13
+dpi = 300
+formats = ["pdf", "png"]
+ratio = true
+
 [output]
 tag_style = "tag"
 
@@ -60,7 +99,7 @@ labels = [
     "18x275 GeV ($\\sqrt{s}$ = 140.7 GeV)",
     "27x920 GeV ($\\sqrt{s}$ = 318.1 GeV)",
 ]
-use = 1
+use = 4
 tags = ["5x41", "10x100", "18x275", "27x920"]
 
 [quantity.beams]
@@ -68,7 +107,7 @@ type = "beams"
 side = "b"
 values = [11, -11]
 labels = ["$e^-$", "$e^+$"]
-use = 1
+use = 2
 tags = ["em", "ep"]
 
 [quantity.pdf]

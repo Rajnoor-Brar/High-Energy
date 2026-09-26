@@ -1,0 +1,104 @@
+! lambda.cmnd — soft-QCD pp, the source of Λ → p π⁻ candidates.
+!
+! Physics lives here, not in the TOML (D3): this is an ordinary Pythia card and the toolkit only
+! appends the per-point settings a sweep decided. Ported from
+! legacy/lambda/configs/Lambda_Reconstruction.cmnd.
+
+! Beams are NOT set here: [beams] in the TOML owns them, and hep appends them per point.
+! A card that sets them too is rejected rather than silently overridden.
+
+! Inelastic, non-diffractive minimum bias — where the strangeness comes from.
+SoftQCD:nonDiffractive = on
+
+! Let Λ decay so p π⁻ pairs actually appear in the final state. This is the whole measurement:
+! with it off there is nothing to reconstruct.
+1000100200:all = Ne20 Ne 10 20 0 0.0 0.0 0 0 0
+3122:mayDecay = on
+3122:onMode  = off
+3122:onIfMatch = 2212 -211
+
+! Keep the record small: everything else that is long-lived stays stable.
+310:mayDecay  = off
+3312:mayDecay = off
+3322:mayDecay = off
+3334:mayDecay = off
+
+Tune:pp = 14
+Print:quiet = on
+Next:numberCount = 0
+
+
+! -----------------------------------------------------------
+! Heavy Ion (Angantyr)
+! -----------------------------------------------------------
+HeavyIon:mode       = 1
+HeavyIon:SigFitNGen = 200        
+ ! let Glauber fit Ne-20 geometry
+                                  ! remove SigFitDefPar — those were Pb params
+HeavyIon:SigFitNGen     = 0
+HeavyIon:SigFitDefAvNDb = 1.13
+HeavyIon:SigFitDefPar   = 1.67,20.13,0.14
+! -----------------------------------------------------------
+! Physics processes — inelastic only, no double-counting
+! -----------------------------------------------------------
+SoftQCD:inelastic = off
+HardQCD:all       = off           
+! already included via MPI inside inelastic
+HadronLevel:all   = on
+
+! -----------------------------------------------------------
+! MPI / beam remnants
+! -----------------------------------------------------------
+MultiPartonInteractions:pT0Ref = 2.5
+BeamRemnants:remnantMode        = 1   
+! required with CR mode=1
+BeamRemnants:saturation         = 3
+
+! -----------------------------------------------------------
+! Colour Reconnection — QCD-based (mode=1), junctions OFF
+!
+! Literature basis: mode=1 + Ropewalk is the validated
+! combination for strangeness enhancement (ScienceDirect 2024,
+! EPJC 2021). Junctions DISABLED to prevent the unsplittable
+! parallel-junction topologies that cause pT2nearThreshold
+! stalls (~380k warnings in your log).
+! -----------------------------------------------------------
+ColourReconnection:mode              = 1
+ColourReconnection:reconnect         = on
+ColourReconnection:allowJunctions    = off   
+! key stall fix
+ColourReconnection:allowDoubleJunRem = off
+ColourReconnection:m0                = 0.3
+ColourReconnection:timeDilationMode  = 2
+ColourReconnection:timeDilationPar   = 0.18
+
+! -----------------------------------------------------------
+! Ropewalk — string rope model for collective effects
+!
+! doFlavour: enhanced strange/baryon production via kappa
+! doShoving: radial flow-like transverse push between strings
+! PartonVertex required for spatial overlap calculation
+! gAmplitude lowered from 5.0: reduces out-of-range parm errors
+! -----------------------------------------------------------
+Ropewalk:RopeHadronization = on
+Ropewalk:doFlavour         = on
+Ropewalk:doShoving         = on
+Ropewalk:deltat            = 0.1
+Ropewalk:gAmplitude        = 3.0   
+! was 5.0; reduces Settings::parm OOB errors
+Ropewalk:tInit             = 1.5
+Ropewalk:tShove            = 0.2
+Ropewalk:r0                = 0.5
+Ropewalk:m0                = 0.2
+
+! -----------------------------------------------------------
+! Vertex info — mandatory for Ropewalk spatial overlap
+! -----------------------------------------------------------
+PartonVertex:setVertex     = on
+PartonVertex:protonRadius  = 0.7
+PartonVertex:emissionWidth = 0.1
+
+! -----------------------------------------------------------
+! Fragmentation
+! -----------------------------------------------------------
+StringPT:sigma = 0.335

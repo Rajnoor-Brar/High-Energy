@@ -57,6 +57,7 @@ class Config:
     module_sinks: list[dict[str, Any]] = dataclass_field(default_factory=list)
     proc_fits: list[dict[str, Any]] = dataclass_field(default_factory=list)
     proc_hists: list[dict[str, Any]] = dataclass_field(default_factory=list)
+    proc_export: Any = None
     quantities: dict[str, Any] = dataclass_field(default_factory=dict)
     studies: dict[str, Study] = dataclass_field(default_factory=dict)
     warnings: list[str] = dataclass_field(default_factory=list)
@@ -184,6 +185,7 @@ def load_config(path: str | Path, *, sets: tuple[str, ...] = (), machine_file: P
         module_sinks=resolved.values.get(("sinks", "module"), []),
         proc_fits=resolved.values.get(("proc", "fit"), []),
         proc_hists=resolved.values.get(("proc", "hist"), []),
+        proc_export=_build_section(sch.PROC_EXPORT, ("proc", "export"), resolved),
         quantities=quantities,
         studies=studies,
         resolved=resolved,

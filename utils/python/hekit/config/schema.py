@@ -181,6 +181,12 @@ PROC_HIST = Section("proc.hist", shape="array",
     "engine": Field("str", "auto", "which engine fills it", choices=("auto", "rdf", "uproot")),
 })
 
+PROC_EXPORT = Section("proc.export", doc="A ROOT view of a point's histograms (12 §2.3).", fields={
+    "enabled": Field("bool", False, "write <point>/analysis.root beside analysis.yoda"),
+    "file": Field("str", "analysis.root", "filename, inside the point's own directory"),
+    "select": Field("list", [], "YODA path globs to export; [] = every 1D object", item="str"),
+})
+
 # ── sweeps (semantics in P1-S03) ─────────────────────────────────────────────
 
 QUANTITY = Section("quantity", shape="named", doc="The sweep catalogue (03 §3).", fields={
@@ -246,7 +252,7 @@ TOP_LEVEL = {
 SECTIONS: dict[str, Section] = {
     section.name: section for section in (
         RUN, GENERATOR, BEAMS, RIVET, STORE, MODULE_SINK, DELPHES, OUTPUT, PLOT, TERMINAL,
-        PROC_FIT, PROC_HIST, QUANTITY, SWEEP, SETTLE, STUDY, PATHS, TOOLS,
+        PROC_FIT, PROC_HIST, PROC_EXPORT, QUANTITY, SWEEP, SETTLE, STUDY, PATHS, TOOLS,
     )
 }
 
@@ -296,8 +302,8 @@ def section_of(path: tuple[str, ...]) -> tuple[Section | None, tuple[str, ...]]:
         return None, ()
     if path[0] == "sinks" and len(path) >= 2 and path[1] == "module":
         return MODULE_SINK, path[2:]
-    if path[0] == "proc" and len(path) >= 2 and path[1] in {"fit", "hist"}:
-        return (PROC_FIT if path[1] == "fit" else PROC_HIST), path[2:]
+    if path[0] == "proc" and len(path) >= 2 and path[1] in {"fit", "hist", "export"}:
+        return {"fit": PROC_FIT, "hist": PROC_HIST, "export": PROC_EXPORT}[path[1]], path[2:]
     section = SECTIONS.get(path[0])
     if section is None:
         return None, path
