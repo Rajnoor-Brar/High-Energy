@@ -2,7 +2,7 @@
 
 | Status | Steps | Depends on | Ends with | Updated |
 |---|---|---|---|---|
-| **in progress** | 2 | — | v1 deleted; the v2 tree, Makefile and shell in place; Rivet plugins build; nothing runs yet | 2026-09-26 |
+| **done** (2026-09-26) | 2 | — | v1 deleted; the v2 tree, Makefile and shell in place; Rivet plugins build; nothing runs yet | 2026-09-26 |
 
 ## Goal
 
@@ -127,4 +127,67 @@ ledger as L15.
 
 ## Log
 
-*(filled during execution)*
+### S1 — 2026-09-26 — done
+
+- The user's uncommitted edits are in `stash@{0}`; `docs/Untitled-1.md` is in `output/_v1/`.
+- The plan was committed as `61e23a0`, and tagged **`rework/v1-final`** there.
+- **Baseline (R4)**, v1 at `rework/v1-final`:
+
+  | Setting | Value |
+  |---|---|
+  | command | `hep run configs/PhotoProduction/eic.toml --study single --set run.events=50000` |
+  | results | `HEKIT_RESULTS=output/_v1/baseline` |
+  | threads | 20 |
+  | mode | `serial` (photo_eic cannot shard, L16) |
+  | events accepted / attempted | 49,995 / 50,000 |
+  | wall inside `hep-run` | **34.36 s**, i.e. **1,455 events/s** |
+  | whole command | 44.7 s wall, 253 MB RSS |
+  | σ | 73,078.39 ± 136.50 pb |
+  | seeds | 680145921 … 680145940 |
+
+- Row 4: 23 moves, all **R100**. One file added (`tests/reference/point_counts.toml`, with a
+  `pages_v2` column: v2 draws a page even for a one-point configuration). 520 files deleted.
+- Row 5: the tracked tree, excluding `aux/`, `literature/` and `docs/rework_v*`, went from
+  **226,337 → 137,197 lines**. The rest is mostly `configs/`, `aux`-adjacent assets and data.
+- Deviations:
+  - **Lamriv parked with Lambda.** `Lamriv` went to `modules/Lambda/_v1/Rivet/`, not
+    `modules/Lambda/Rivet/`, because it includes the parked `Reconstruction.hh`, which needs the
+    deleted `Phys`.
+  - **Legacy plot intermediates kept.** `tests/reference/legacy_run/{ydmrg,ydplt_p1}/` came along
+    (the voided curves and `auto_range.plot`). They are the P3 test vectors.
+  - **Untracked leftovers moved, not deleted.** The old `build/`, `output/scratch/`,
+    `output/PhotoProduction/`, `.pytest_cache/` and the `__pycache__` trees are in `output/_v1/`.
+  - **Old stub backed up.** `~/HEP/setup.sh` was repointed to `utils/Env/hep_env.sh`; the old one is
+    `~/HEP/setup.sh.pre-v2`.
+  - **`rework_v1/README.md` banner.** It now opens with a banner pointing at the tag, for its 14
+    links into the deleted docs.
+  - **`hekit` is still installed in the venv.** It is an editable install in `~/HEP/.venv`, which was
+    not touched. Its `hep` entry point is now dead, and S2 makes `utils/Env` come first on `PATH`.
+
+### S2 — 2026-09-26 — done
+
+| Row | Result |
+|---|---|
+| 1 | A fresh shell (`env -i`, then `source ~/HEP/setup.sh`) finds `hep` in `utils/Env/`, ahead of the venv's dead v1 entry point. `hep --help` lists run, watch and build. `hep run` says it arrives in P1 (exit 2). |
+| 2 | `make` from an empty `build/`: `Rivet_photo_eic.so` plus `photo_eic.info`/`.plot`, in 9.4 s |
+| 3 | A second `make`: *Nothing to be done*, and **0** probes (`build/flags.log` unchanged) |
+| 4 | After touching `photo_eic.plot`, only the `cp` runs; `rivet-build` is not called |
+| 5 | `// requires: nosuchlib`: *requires 'nosuchlib', which is not a known library (known: …)*. `// requires: none` builds with no library flags. |
+| 6 | `rivet --list-analyses photo_eic` with `RIVET_ANALYSIS_PATH=build/Rivet`: found |
+| 7 | `make test`: **15 passed** (paths 10, import ranks 4, plus the guard on results/ and configs/) |
+
+**Deviations:**
+- **Version probes kept.** `hep_env.sh` keeps its version probe as `hep_status`. The plan said to
+  drop it as a duplicate of `hep doctor`, but `doctor` is gone, so it is now the only version view.
+  The stub calls it on every load. Dropped instead: the doctor hook, click completion, and the
+  `sources/` references.
+- **`yoda-config` needs `--cppflags`** for its `-I`; `--cxxflags` gives only compiler flags.
+- **`rivet-build` drops the path after `-MF`**, taking it for a file, so it gets the joined form
+  `-MF<path>`. It also compiles a temporary copy of the source, so the recipe rewrites the `.d`
+  file's first line to name the plugin. Header dependencies now reach Rivet plugins.
+- **The import rule is "own rank or lower, and no cycles"**, not "strictly lower". Otherwise
+  `paths → errors`, both rank 0, would already fail. 02 §3 is updated, and a cycle test is added.
+- **One translation unit per app.** `utils/Apps/<X>/main.cc` is the only file compiled; the rest of
+  the folder is headers it includes, as in the house header-only style.
+- **pytest scratch in `output/tests/`.** pytest's temporary directories go to
+  `output/tests/pytest` (`--basetemp`), so tests write only under `output/tests/`.

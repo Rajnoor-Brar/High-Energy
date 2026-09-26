@@ -89,8 +89,8 @@ module is the right unit.
 | 4 | `plot.py` | page configs → Paint, or `rivet-mkhtml` for `backend = "yoda"` | 150 |
 | 5 | `cli.py` | `argparse`: `run`, `watch`; `--plan`, `--points`, `--set`, `--rerun`, `--only` | 100 |
 
-A module may import only from a lower rank. `tests/runner/test_imports.py` checks that in about 20
-lines. It is the one piece of v1's layering lesson worth its cost at this size.
+A module may import only from its own rank or a lower one, and the import graph has no cycles.
+`tests/runner/test_imports.py` checks both in about 40 lines. It is the one piece of v1's layering lesson worth its cost at this size.
 
 **A tool plugin** (`utils/Env/<tool>/render.py`) may import `errors`, `paths` and `quantities`
 only, and never another plugin.

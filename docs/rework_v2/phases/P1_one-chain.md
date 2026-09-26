@@ -2,7 +2,7 @@
 
 | Status | Steps | Depends on | Ends with | Updated |
 |---|---|---|---|---|
-| not started | 3 | P0 | `hep run PhotoProduction/eic single` runs App_Pythia ══FIFO══► rivet, watched, checked and recorded | 2026-09-26 |
+| **in progress** | 3 | P0 | `hep run PhotoProduction/eic single` runs App_Pythia ══FIFO══► rivet, watched, checked and recorded | 2026-09-26 |
 
 ## Goal
 

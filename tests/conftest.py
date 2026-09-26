@@ -1,38 +1,46 @@
-"""Test-safety: nothing under tests/ may write into results/ or configs/ (00/B18).
+"""Test setup shared by every suite.
 
-Applies to every test directory, not just tests/python, because the legacy golden fixtures drive the old
-tools and those resolve paths against the current directory. Each test is checked, so a failure names the
-test that wrote. A test that needs a results tree sets `HEKIT_RESULTS` (tests/python/conftest.py does).
+* The runner package is importable as `runner` (utils/Env on sys.path).
+* Tests never write into results/ or configs/. HEKIT_RESULTS and HEKIT_OUTPUT point into
+  output/tests/, and a session guard fails the run if anything under results/ or configs/ changed.
 """
 
 from __future__ import annotations
 
+import os
+import sys
 from pathlib import Path
 
 import pytest
 
-import guard
+REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "utils" / "Env"))
 
-@pytest.fixture(autouse=True)
-def _no_writes_to_protected_trees() -> object:
-    """Fail the test that changed anything under results/ or configs/."""
-    roots = tuple(guard.REPO / name for name in guard.PROTECTED)
-    before = guard.snapshot(roots)
+SCRATCH = REPO / "output" / "tests"
+os.environ.setdefault("HEKIT_RESULTS", str(SCRATCH / "results"))
+os.environ.setdefault("HEKIT_OUTPUT", str(SCRATCH / "output"))
+
+
+def _snapshot() -> dict[str, float]:
+    seen: dict[str, float] = {}
+    for top in (REPO / "results", REPO / "configs"):
+        if top.is_dir():
+            for path in top.rglob("*"):
+                seen[str(path)] = path.stat().st_mtime if path.exists() else 0.0
+    return seen
+
+
+@pytest.fixture(scope="session", autouse=True)
+def results_and_configs_untouched():
+    before = _snapshot()
     yield
-    found = guard.changes(before, guard.snapshot(roots))
-    if found:
-        raise AssertionError(
-            "this test wrote into a protected tree (use output/scratch/ or HEKIT_RESULTS):\n  "
-            + "\n  ".join(found))
-
-
-@pytest.fixture(scope="session")
-def repo_root() -> Path:
-    return guard.REPO
+    after = _snapshot()
+    changed = sorted(p for p in set(before) | set(after) if before.get(p) != after.get(p))
+    assert not changed, "tests wrote into results/ or configs/:\n  " + "\n  ".join(changed[:20])
 
 
 @pytest.fixture
-def scratch_dir(tmp_path: Path) -> Path:
-    """A writable directory that is never inside the repository."""
-    assert guard.REPO not in tmp_path.parents
-    return tmp_path
+def scratch(tmp_path_factory) -> Path:
+    """A fresh directory under output/tests/ for one test."""
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    return Path(tmp_path_factory.mktemp("t", numbered=True))

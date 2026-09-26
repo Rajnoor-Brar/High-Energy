@@ -1,0 +1,69 @@
+# Point and page counts of the v1-era PhotoProduction studies: the P2 S2 gate.
+#
+# From tests/golden/test_legacy_counts.py (EXPECTED_COUNTS) at rework/v1-final, captured from
+# the legacy planner on the frozen configs. `pages` is the legacy count. v1 and legacy drew no
+# page for a study with nothing scanned. v2 draws one page for any configuration with at least one
+# point (04_Config.md §4.2), so `pages_v2` is the value to compare against.
+#
+# Keys are <run>.<configuration> in v2 terms. "default" was the study-less [sweep] of the v1 file,
+# which v2 has as the configuration named by [run].configuration (`pdf` for eic).
+
+[eic.default]
+points = 4
+pages = 1
+pages_v2 = 1
+
+[eic.single]
+points = 1
+pages = 0
+pages_v2 = 1
+
+[eic.pdf]
+points = 4
+pages = 1
+pages_v2 = 1
+
+[eic.energies]
+points = 4
+pages = 1
+pages_v2 = 1
+
+[eic.energy_pdf]
+points = 16
+pages = 4
+pages_v2 = 4
+
+[eic.mpi]
+points = 3
+pages = 1
+pages_v2 = 1
+
+[eic.mpi_onoff]
+points = 2
+pages = 1
+pages_v2 = 1
+
+[eic.mpi_grid]
+points = 6
+pages = 2
+pages_v2 = 2
+
+[eic.pthatmin]
+points = 4
+pages = 1
+pages_v2 = 1
+
+[eic.process]
+points = 2
+pages = 1
+pages_v2 = 1
+
+[eic.radius]
+points = 3
+pages = 1
+pages_v2 = 1
+
+[zeus_validation.default]
+points = 4
+pages = 1
+pages_v2 = 1
