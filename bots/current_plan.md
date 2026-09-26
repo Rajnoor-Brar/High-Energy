@@ -1,6 +1,6 @@
 # Current plan
 
-## rework v2 — EXECUTING (ordered by the user 2026-09-26). Active: **P4 — Modules and the other tools**
+## rework v2 — **EXECUTED** (ordered by the user 2026-09-26; P0–P4 done 2026-09-27)
 
 The plan is `docs/rework_v2/`:
 read `README.md` (decisions V1–V20, traceability) → `00_Brief.md` (the user's design, verbatim) →
@@ -30,11 +30,13 @@ read `README.md` (decisions V1–V20, traceability) → `00_Brief.md` (the user'
   `--only plot`, the yoda backend (mkhtml, same pages), `post` (replicas merged: 3 × the entries),
   `docs/GUIDE.md`. Open: the user's style review of the first Paint pages (S2 task 3). Runner size
   3,073 vs 2,000 budget (1.54×): a finding for P4 S3.
-- **P4 — Modules and the other tools** (`docs/rework_v2/phases/P4_modules-and-tools.md`), next:
-  S1 done (Module.hh, the module folder, Lambda = Lamriv to YODA precision, InprocJets = the chain
-  bin for bin; seeds now follow the generator). S2 done (Delphes file chain, Sherpa σ = v1's,
-  Herwig with its repository in build/; [prepare] caches). Next: S3 Whizard/MadGraph, the
-  generator comparison, the budget.
+- **P4 — Modules and the other tools: done.** S1 module kit + Lambda + InprocJets (seeds follow
+  the generator); S2 Delphes/Sherpa/Herwig with cached [prepare] steps; S3 Whizard, MadGraph, the
+  @generator comparison (configs/Comparison), the budget (code 6,470 lines = 1.24× budget, 0.26×
+  v1; runner, headers and tests over 1.5×, causes in 06 §3), Geant4 made buildable
+  (`// requires: geant4`) after the user asked to check ~/HEP/install.
+- **Rework v2 is executed.** Open with the user: the Paint style review (P3 S2), and whether to
+  write a Geant4 simulation module.
 ---
 
 # v1 (finished) — the working plan as it stood at `rework/v1`

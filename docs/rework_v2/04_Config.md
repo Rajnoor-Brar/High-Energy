@@ -573,7 +573,7 @@ void_empty  = false
 min_entries = 1
 
 [plot.data]
-file   = "zeus_eic.yoda"
+file   = "rivet:ZEUS_2012_I1116258"
 legend = "ZEUS 2012"
 
 [plot.data.map]      # explicit, never matched by name (00/B5)
@@ -808,7 +808,7 @@ range_pad   = 0                  # auto_range keeps this many whole bins either 
 legend      = "top-right"
 
 [plot.data]                      # reference data, optional
-file   = "zeus_eic.yoda"         # → datasets/
+file   = "rivet:ZEUS_2012_I1116258"   # Rivet's own reference data; a bare name is under datasets/
 legend = "ZEUS 2012"
 [plot.data.map]                  # MC object → reference object; explicit only (00/B5)
 "d01-x01-y01" = "/REF/ZEUS_2012_I1116258/d01-x01-y01"
@@ -857,7 +857,7 @@ All checked at plan time, before any process starts. Every error names the key o
 | C4 | `plot_points` must be a subset of `sweeps`, where an entangled group counts once. |
 | C5 | Every `tools`/`post` entry must be a `[tools.<tag>]` or an options-free standard tool. Nesting is at most one level. An `@q` entry's values must all be tool tags. |
 | C6 | The connection rules ([02 §5](02_Architecture.md#5-connections-how-data-moves-between-tools)): FIFOs within a group only, one reader per FIFO, no FIFO into a `streamable = false` tool, every input produced, one writer per output. |
-| C7 | Every active quantity (swept, or given a static value) must have at least one consumer (§6.1). |
+| C7 | Every active quantity (swept, or given a static value) must have at least one consumer (§6.1). In a chain that picks a tool by a quantity (`@generator`), a consumer among the configuration's alternatives is enough, and each point applies the value only to the tools it has; the selector quantity itself is consumed by the choice (P4 S3). |
 | C8 | Two sources setting one native key in one card is an error (v1's `_claim`). |
 | C9 | A Rivet option quantity's key must be declared in the analysis `.info` (`00/B14`). |
 | C10 | Provider checks: PDF sets named by values are installed (LHAPDF); base configs exist; executables are built (with a hint of the `make` target). |

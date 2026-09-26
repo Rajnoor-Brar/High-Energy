@@ -1,0 +1,7 @@
+# qcd_pp.herwig.in — Herwig 7: pp → QCD 2→2 with jets above 20 GeV (the comparison's region).
+# snippets/PPCollider.in fixes the beams to p+ p+; √s comes from the plan (sqrts). The runner adds
+# the HepMC3 output and saverun.
+read snippets/PPCollider.in
+cd /Herwig/MatrixElements/
+insert SubProcess:MatrixElements[0] MEQCD2to2
+set /Herwig/Cuts/JetKtCut:MinKT 20.0*GeV

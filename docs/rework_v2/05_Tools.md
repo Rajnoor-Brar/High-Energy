@@ -65,11 +65,11 @@ be declared for it (V21). `[exports.<name>]` is for everything else:
 | Section | Holds |
 |---|---|
 | `[tool]` | category, executable, `streamable`, status mode, `consumes_events` / `produces_events` |
-| `[card]` | how a point card is made. `style` is one of: `"append"` (last wins: Pythia, Herwig, Delphes), `"prepend"` (the point card first, then include the base: Whizard, L13), `"none"`, or `"render"` (`render.py` writes the whole card: Sherpa's YAML merge, L12). `line` is the native form of one value (`"{key} = {value}"` by default, `"set {key} {value}"` for ThePEG and Tcl); `footer` lines end the card (Herwig's `saverun`); `seed` lines come after both |
-| `[command]` | the argv template and environment |
+| `[card]` | how a point card is made. `style` is one of: `"append"` (last wins: Pythia, Herwig, Delphes), `"prepend"` (the point card first, then include the base: Whizard, L13), `"none"`, or `"render"` (`render.py` writes the whole card: Sherpa's YAML merge, L12). `line` is the native form of one value (`"{key} = {value}"` by default, `"set {key} {value}"` for ThePEG and Tcl); `footer` lines end the card (Herwig's `saverun`, Pythia's `Beams:LHEF = {input}`), and a footer line whose placeholders are all empty is left out; `seed` lines come after both |
+| `[command]` | the argv template, environment and, optionally, `cwd` (Whizard generates in its cache entry). `{seed}` in argv, and `{seed}`/`{prepared}` in card lines, are filled in last, so identities stay seed- and path-free |
 | `[options]` | a schema for the tool-specific keys, in the runner's field vocabulary: `kind`, `item`, `required`, `choices`. Every option is also an argv placeholder; `kind = "flag"` (with `flag = "-e"`, `default`) expands to the flag or to nothing |
 | `[outputs]` | which outputs are products, and how an event count is read back: `yoda:/RAW/_EVTCOUNT`, `json:events` (the module kit's report) or `root:<tree>` (Delphes). `written = "requested"`: a generator that always makes what it is asked for or fails (Herwig, Sherpa) gets its sidecar written by the runner |
-| `[prepare]` | optional: a step run before the point, in a cache entry `output/<P>/.cache/<tool>/<key>/` (`argv`, a `marker` it must leave, and card keys to `ignore` in the key, like the event count). A hit, stamped `.prepared`, runs nothing; `{prepared}` names the entry |
+| `[prepare]` | optional: a step run before the point, in a cache entry `output/<P>/.cache/<tool>/<key>/` (`argv`, a `marker` it must leave, card keys to `ignore` in the key, like the event count, and `key = "base"` to key on the base card only). A hit, stamped `.prepared`, runs nothing; `{prepared}` names the entry. A `render.py` may define `prepare_card(lines, bases, context)`, the card the step reads (`{prepare_card}`) |
 | `[checks]` | optional: Rivet's `.info` directories, and `files` that must exist before a plan (Herwig's repository) |
 | `[exports.<name>]` | optional: configuration a custom tool may request as `<tool>_<name> = true` ([04 §7.3](04_Config.md#73-standard-configurations-for-custom-tools)): what it gives (`path`, `parts`, or named values), and `needs_prepare` |
 
@@ -110,8 +110,9 @@ look-alike (L26, the F1 lesson). A plugin imports only `errors`, `paths` and `qu
 | `delphes` | detector simulator | `DelphesHepMC3` | **no** (L11) | filters | P4 S2: `set` card with `RandomSeed`, count from the `Delphes` tree |
 | `herwig` | event generator | `Herwig` (read as a cached prepare, then run) | — (writes) | filters | P4 S2: needs `build/Herwig/HerwigDefaults.rpo` (`hep build`); seed and events are flags |
 | `sherpa` | event generator | `Sherpa` | — (writes) | filters | P4 S2: `render.py`; integration as a cached prepare |
-| `whizard` | process generator | `whizard` | — (writes) | filters | P4 |
-| `madgraph` | process generator | `mg5_aMC` | — (writes a file) | filters | P4 |
+| `whizard` | process generator | `whizard` | — (writes) | filters | P4 S3: `render.py` writes the point card first and includes the base; integration from `prepare_card` (no generation lines); generation in the cache entry (`[command] cwd`) |
+| `geant4` | detector simulator | a module program: `build/<P>/<X>.exe` | as the module | standard | P4 S3: no folder of its own; `// requires: geant4` links it, `GEANT4_DATA_DIR` comes from `hep_env.sh` |
+| `madgraph` | process generator | `mg5_aMC` | — (writes a file) | filters | P4 S3: the proc card built once (`[prepare] key = "base"`); a launch script per point, its run named `r<seed>`, unpacked to a file; Pythia showers it (`Beams:LHEF` footer) |
 
 **Exports.** These are what a custom or module tool can request with a `<tool>_<export> = true`
 key ([04 §7.3](04_Config.md#73-standard-configurations-for-custom-tools)). **Every tool with a card

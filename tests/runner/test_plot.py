@@ -101,8 +101,12 @@ def test_the_yoda_backend_refuses_what_mkhtml_cannot_do(scratch):
 def test_references_are_cut_to_the_aligned_run_and_renamed(yoda_backend):
     yoda = pytest.importorskip("yoda")
     from types import SimpleNamespace
+    try:
+        source = plot.data_source("rivet:ZEUS_2012_I1116258", SimpleNamespace(path="test", project="PhotoProduction"))
+    except HepError:
+        pytest.skip("no Rivet reference data")
     page = SimpleNamespace(object="/photo_eic:R=0.7/d01-x01-y01", ranges={"data_x": [17, 47]},
-                           data=(REPO / "datasets" / "zeus_eic.yoda", "/REF/ZEUS_2012_I1116258/d01-x01-y01"))
+                           data=(source, "/REF/ZEUS_2012_I1116258/d01-x01-y01"))
     ref = yoda_backend._reference(yoda, page)
     whole = yoda.read(str(page.data[0]))[page.data[1]]
     assert ref.path() == "/REF/photo_eic/d01-x01-y01"

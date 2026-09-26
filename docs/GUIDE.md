@@ -23,7 +23,8 @@ To compile a single source, `make` it by its path. The output lands where the co
 | `modules/<P>/Rivet/<x>.cc` or `modules/<P>/Rivet_<x>.cc` (`make ….so`) | `build/Rivet/Rivet_<x>.so`, with its `.info`/`.plot`/`.yoda` copied beside it |
 
 A source names its libraries in one line near the top, for example
-`// requires: pythia8 hepmc3 fastjet`. A folder or file whose name starts with `_` is parked, and
+`// requires: pythia8 hepmc3 fastjet` (known: pythia8 hepmc3 yoda root fastjet lhapdf rivet geant4 toml zstd
+zlib onnx delphes). A Geant4 simulation is such a program: `// requires: geant4`, run as `tool = "module"`. A folder or file whose name starts with `_` is parked, and
 `make all` never builds it.
 
 ## 2. Where things are
@@ -32,7 +33,7 @@ A source names its libraries in one line near the top, for example
 |---|---|
 | `configs/<P>/` | run TOMLs and native base cards (`photo_ep.cmnd`, …) |
 | `modules/<P>/` | your C++: programs, and Rivet analyses under `Rivet/` or as `Rivet_*.cc` |
-| `datasets/` | reference data (`zeus_eic.yoda`) |
+| `datasets/` | your own reference data (not in git); Rivet's are named `rivet:<Analysis>` |
 | `output/<P>/<run>/<cfg>/<point>/` | technical files: `cards/`, `config/`, `logs/<tool>.log`, FIFOs |
 | `results/<P>/<run>/<cfg>/<point>/` | products (`photo.yoda`, `photo.root`), `provenance.json`, `.complete` |
 | `results/<P>/<run>/<cfg>/plots/`, `…/post/` | pages, and the products of the post tools |
@@ -139,6 +140,8 @@ The complete schema, the validation rules, and translated examples are in
 | `delphes` | `DelphesHepMC3` with a Tcl card | reads a **file** from an earlier group (never a FIFO); counted from the `Delphes` tree |
 | `sherpa` | Sherpa 3 with a YAML card | the integration is cached per card (`output/<P>/.cache/sherpa/`) |
 | `herwig` | Herwig 7 | `Herwig read` is cached per card; needs `hep build` for its repository |
+| `whizard` | Whizard 3 with a SINDARIN card | the integration is cached; direct photoproduction only (no resolved photon) |
+| `madgraph` | MadGraph5_aMC@NLO | the process directory is built once per proc card; shower the LHE with a `pythia` table (`Beams:frameType = 4`) |
 | `custom` | any executable | `executable`, `arguments`, `[tools.<tag>.config]` |
 
 A **custom tool** gets `output/…/config/<tag>.toml` as its first argument. It holds its
@@ -175,7 +178,7 @@ min_entries = 1                   # void bins fewer raw entries went into, acros
 objects     = ["/photo_eic/d0*"]  # which histograms get pages (default: every 1D object)
 
 [plot.data]                       # reference data: drawn only where the map says
-file = "zeus_eic.yoda"
+file = "rivet:ZEUS_2012_I1116258"   # Rivet's own reference data; a bare name is under datasets/
 map  = { "d01-x01-y01" = "/REF/ZEUS_2012_I1116258/d01-x01-y01" }
 
 [plot.object."d04-*"]             # per-object overrides: title, x_label, y_label, logx, logy, …

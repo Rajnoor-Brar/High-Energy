@@ -33,12 +33,12 @@ ENV = Path(__file__).resolve().parents[1]                 # utils/Env
 FOLDER_SECTIONS = {
     "tool": {"category", "executable", "streamable", "status", "consumes_events", "produces_events"},
     "card": {"style", "ext", "comment", "bools", "seed", "seed_parallel", "line", "footer"},
-    "command": {"argv", "env"},
+    "command": {"argv", "env", "cwd"},
     "options": None,                                      # free: the schema of tool-specific keys
     "outputs": {"products", "event_count", "sidecar", "written"},
     "exports": None,
     "identity": {"files", "version"},
-    "prepare": {"argv", "marker", "ignore"},
+    "prepare": {"argv", "marker", "ignore", "key"},
     "checks": {"info_dirs", "info_dirs_command", "files"},
 }
 CARD_STYLES = ("append", "prepend", "none", "render")
@@ -259,9 +259,11 @@ class Step:
     config_path: Path | None = None
     config_data: dict | None = None
     identity_parts: dict = field(default_factory=dict)
+    card_lines_for_key: list[str] = field(default_factory=list)
     cwd: Path | None = None            # where it runs (default: the point's output directory)
     prepare_dir: Path | None = None    # the prepare cache entry ([prepare]), keyed by the card
     prepare_argv: list[str] = field(default_factory=list)
+    prepare_card: Path | None = None   # render.py's prepare_card(): the card the prepare step reads
     prepare_needed: bool = False       # in the chain, or asked for by an export with needs_prepare
     sidecar_written: int | None = None # [outputs] written = "requested": the runner writes the sidecar
 
@@ -394,7 +396,11 @@ def plan_point(run, configuration, point, master: dict, *, post: dict | None = N
     values = dict(point.choice)
     for name, index in ({} if post else qmod.static_values(run, configuration)).items():
         values.setdefault(name, index)
-    consumers = qmod.consumer_table(run, master, list(values), rendered_tags)
+    selectors = [m[1:] for group in configuration.tools for m in group if m.startswith("@")]
+    alternatives = [v for name in selectors if name in run.quantities for v in run.quantities[name].values
+                    if isinstance(v, str) and v in run.tools]
+    consumers = qmod.consumer_table(run, master, [n for n in values if n not in selectors], rendered_tags, alternatives)
+    consumers.update({name: [] for name in selectors if name in values})   # it chooses the tool itself
 
     plan = PointPlan(point=point, values=values, out=out, res=res, prelim=configuration.prelim,
                      groups=[], rendered={}, interfaces={}, consumers=consumers,
@@ -602,15 +608,20 @@ def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
                 raise HepError("base config not found", where=f"[tools.{step.tag}].baseconfig: {base}")
         output_name = (step.outputs[0].path.name if step.outputs          # an export-only step: its table's
                        else Path(tool.output_file[0]).name if tool.output_file else "")
-        footer = [expand(line, {"output_name": output_name, "tag": step.tag}, f"{folder.name}/tool.toml [card].footer")
-                  for line in folder.get("card", "footer", [])]
+        where_footer = f"{folder.name}/tool.toml [card].footer"
+        footer_context = {"output_name": output_name, "tag": step.tag,
+                          "input": str(step.inputs[0].path) if step.inputs else ""}
+        footer = [expand(line, footer_context, where_footer) for line in folder.get("card", "footer", [])
+                  if not all(footer_context.get(n, "x") == "" for n in re.findall(r"\{([a-z_]+)\}", line) or ["-"])]
         header = f"{comment} point card for [tools.{step.tag}], point {plan.point.name}, written by hep run"
         if style == "append":
             step.card_lines = [header, *lines, *footer]
             step.card_point = plan.out / "cards" / f"{step.tag}.point.{ext}"
         else:                                   # render.py writes the whole card: base and values merged
             text = folder.plugin.card([b.read_text(encoding="utf-8") for b in step.card_base], overrides,
-                                      {"point": plan.point.name, "tag": step.tag, "output_name": output_name})
+                                      {"point": plan.point.name, "tag": step.tag, "output_name": output_name,
+                                       "output": str(step.outputs[0].path) if step.outputs else "",
+                                       "base_paths": [str(b) for b in step.card_base]})
             step.card_lines = [header, *text.rstrip("\n").splitlines(), *footer]
         step.card_combined = plan.out / "cards" / f"{step.tag}.{ext}"
         step.identity_parts["base_sha256"] = [sha256_file(b) for b in step.card_base]
@@ -657,13 +668,20 @@ def _prepare_key(plan: PointPlan, step: Step, run) -> None:
         return
     comment = step.folder.get("card", "comment", "#")
     ignore = spec.get("ignore", [])
+    if spec.get("key", "card") == "base":        # what is built depends on the base card only (MadGraph)
+        step.card_lines_for_key = []
+    else:
+        step.card_lines_for_key = step.card_lines
     pattern = re.compile(r"\s*(?:set\s+)?(" + "|".join(map(re.escape, ignore)) + r")\s*[:=\s]") if ignore else None
-    keyed = [line for line in step.card_lines
+    keyed = [line for line in step.card_lines_for_key
              if not line.startswith(comment) and not (pattern and pattern.match(line))]
     text = "\n".join([step.folder.name, step.identity_parts.get("exe_sha256", str(step.exe)),
                       *step.identity_parts["base_sha256"], *keyed])
     step.prepare_dir = output_root() / run.project / ".cache" / step.folder.name / hashlib.sha256(text.encode()).hexdigest()[:16]
     step.identity_parts["prepare"] = step.prepare_dir.name
+    if step.folder.card_style == "render" and hasattr(step.folder.plugin, "prepare_card"):
+        ext = step.folder.get("card", "ext", "txt")
+        step.prepare_card = plan.out / "cards" / f"{step.tag}.prepare.{ext}"
 
 
 def _prepare_argv(plan: PointPlan, step: Step) -> None:
@@ -671,7 +689,8 @@ def _prepare_argv(plan: PointPlan, step: Step) -> None:
     if step.prepare_dir is None:
         return
     context = {"repo": str(repo_root()), "exe": str(step.exe), "card": str(step.card_combined or ""),
-               "prepared": str(step.prepare_dir), "out": str(plan.out)}
+               "prepared": str(step.prepare_dir), "out": str(plan.out),
+               "prepare_card": str(step.prepare_card or step.card_combined or "")}
     argv = []
     for template in step.folder.spec["prepare"].get("argv", []):
         piece = expand(template, context, f"{step.folder.name}/tool.toml [prepare].argv")
@@ -845,6 +864,8 @@ def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
     step.argv = argv
     step.env = {k: expand(v, context, f"{folder.name}/tool.toml [command].env")
                 for k, v in folder.get("command", "env", {}).items()}
+    if folder.get("command", "cwd"):                  # Whizard generates where its library and grids are
+        step.cwd = Path(expand(folder.get("command", "cwd"), context, f"{folder.name}/tool.toml [command].cwd"))
     if folder.get("outputs", "written") == "requested":
         step.sidecar_written = plan.events          # it always makes what it is asked for, or fails
     step.identity_parts["argv"] = [a.replace(str(plan.out), "{out}").replace(str(plan.res), "{res}") for a in argv]
@@ -877,7 +898,8 @@ def finalise(plan: PointPlan, seed: int) -> None:
         step.argv = [a.replace("{seed}", str(seed)) for a in step.argv]
         if step.card_combined is None:
             continue
-        lines = list(step.card_lines)
+        prepared = str(step.prepare_dir or "")
+        lines = [line.replace("{seed}", str(seed)).replace("{prepared}", prepared) for line in step.card_lines]
         seed_lines = step.folder.get("card", "seed", [])
         if seed_lines:
             context = {"seed": seed, "seeds": seeds}
@@ -887,6 +909,10 @@ def finalise(plan: PointPlan, seed: int) -> None:
         point_text = "\n".join(lines) + "\n"
         if step.card_point is None:                # style "render": the card is whole already
             plan.writes[step.card_combined] = point_text
+            if step.prepare_card is not None:
+                plan.writes[step.prepare_card] = step.folder.plugin.prepare_card(
+                    lines, [b.read_text(encoding="utf-8") for b in step.card_base],
+                    {"prepared": prepared, "base_paths": [str(b) for b in step.card_base], "tag": step.tag})
             continue
         combined = "".join(b.read_text(encoding="utf-8") for b in step.card_base) + "\n" + point_text
         plan.writes[step.card_point] = point_text

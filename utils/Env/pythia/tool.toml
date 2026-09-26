@@ -14,6 +14,9 @@ bools   = ["on", "off"]
 # integrated program is seeded too; PythiaParallel reads Parallelism:seeds (L4).
 seed          = ["Random:setSeed = on", "Random:seed = {seed}"]
 seed_parallel = ["Parallelism:seeds = {{{seeds}}}"]
+# A shower of an LHE file from an earlier group (MadGraph): the base card sets Beams:frameType = 4.
+# Without an input the line is left out, so a generation card is unchanged.
+footer        = ["Beams:LHEF = {input}"]
 
 [command]
 argv = ["{exe}", "{outputs}", "{cards}"]

@@ -181,6 +181,13 @@ def objects_of(yoda: Path) -> list[str]:
             and not p.endswith("]")]            # /x[EXTRA__NTrials]: a weight variation, not a page
 
 
+def raws_of(yoda: Path) -> set[str]:
+    """The /RAW Histo1D twins a YODA file has, whose entries App_yd2rt keeps. A ratio made in
+    finalize has none (or an Estimate1D one), and gets no min_entries."""
+    text = yoda.read_text(encoding="utf-8", errors="replace")
+    return set(re.findall(r"^BEGIN YODA_HISTO1D_V\d+ (/RAW/\S+)$", text, re.M))    # entries: Histo1D only
+
+
 def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -200,6 +207,30 @@ def convert(yoda: Path, target: Path) -> Path:
         raise HepError(f"converting {yoda.name} failed: {done.stderr.strip()[-300:]}", where=str(yoda))
     stamp.write_text(digest + "\n")
     return target
+
+
+def data_source(name: str, run) -> Path:
+    """[plot.data].file: `rivet:<Analysis>` is Rivet's own reference file (its data directory, or
+    build/Rivet for ours), which every installation has; anything else is under datasets/."""
+    if name.startswith("rivet:"):
+        analysis = name.split(":", 1)[1]
+        places = [build_root() / "Rivet"]
+        try:
+            found = subprocess.run(["rivet-config", "--datadir"], capture_output=True, text=True, timeout=30)
+            places += [Path(p) for p in found.stdout.strip().split(":") if p]
+        except (OSError, subprocess.SubprocessError):
+            pass
+        for place in places:
+            for candidate in (place / f"{analysis}.yoda", place / f"{analysis}.yoda.gz"):
+                if candidate.is_file():
+                    return candidate
+        raise HepError(f"Rivet has no reference data for {analysis}", where=f"{run.path}: [plot.data].file",
+                       hint=f"looked for {analysis}.yoda[.gz] in {', '.join(map(str, places))}")
+    source = resolve(name, "data", project=run.project, where=f"{run.path}: [plot.data].file")
+    if not source.is_file():
+        raise HepError("the reference data file does not exist", where=str(source),
+                       hint="datasets/ is not in git; `rivet:<Analysis>` names Rivet's own reference data")
+    return source
 
 
 def yoda_of(plan) -> Path | None:
@@ -222,6 +253,7 @@ def pages(run, configuration, plans) -> list[Page]:
     curve_groups = [g for g in groups if g not in page_groups]
 
     variants: dict[str, dict[str, list[str]]] = {}      # point → base path → its full paths
+    raws = {plan.point.name: raws_of(yoda_of(plan)) for plan in complete}
     for plan in complete:
         for full in objects_of(yoda_of(plan)):
             variants.setdefault(plan.point.name, {}).setdefault(base_of(full), []).append(full)
@@ -240,9 +272,7 @@ def pages(run, configuration, plans) -> list[Page]:
     data = settings.get("data", {})
     data_file = source = None
     if data:
-        source = resolve(data["file"], "data", project=run.project, where=f"{run.path}: [plot.data].file")
-        if not source.is_file():
-            raise HepError("the reference data file does not exist", where=str(source))
+        source = data_source(data["file"], run)
         data_file = convert(source, output_root() / run.project / ".cache" / "datasets" / f"{source.stem}.root")
 
     by_page: dict[str, list] = {}
@@ -284,7 +314,8 @@ def pages(run, configuration, plans) -> list[Page]:
             curves = [(plan, full) for plan in members for full in variants.get(plan.point.name, {}).get(path, [])]
             several = {plan.point.name for plan, _ in curves if len(variants[plan.point.name][path]) > 1}
             document = {"page": page, "style": dict(style), "curve": [
-                {"file": str(inputs[plan.point.name]), "object": root_name(full), "raw": "RAW/" + root_name(full),
+                {"file": str(inputs[plan.point.name]), "object": root_name(full),
+                 **({"raw": "RAW/" + root_name(full)} if "/RAW" + full in raws[plan.point.name] else {}),
                  "label": _curve_label(run, plan, curve_groups)
                           + (f" [{full.strip('/').split('/')[0].partition(':')[2]}]" if plan.point.name in several else "")}
                 for plan, full in curves]}

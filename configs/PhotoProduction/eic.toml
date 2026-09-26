@@ -239,7 +239,7 @@ min_entries = 1
 legend      = "top-right"
 
 [plot.data]
-file   = "zeus_eic.yoda"
+file   = "rivet:ZEUS_2012_I1116258"     # Rivet's own ZEUS 2012 tables (the same numbers as datasets/zeus_eic.yoda)
 legend = "ZEUS 2012"
 
 # Explicit, never matched by name (00/B5, L18). A physics match, not a numbering coincidence:

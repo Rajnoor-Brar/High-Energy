@@ -36,9 +36,9 @@ def hep_run(scratch: Path, *args: str) -> tuple[Path, Path]:
 def test_lambda_module_and_rivet_agree_on_the_same_events(scratch):
     _, results = hep_run(scratch, "Lambda/lambda", "single", "--set", "run.event_count=200", "--set", "run.threads=2")
     point = results / "Lambda" / "lambda" / "single" / "point"
-    report = json.loads((point / "lambda.root.json").read_text())
+    report = json.loads((point / "lambda.root.json").read_text(encoding="utf-8", errors="replace"))
     assert report["events"] == json.loads((scratch / "output" / "Lambda" / "lambda" / "single" / "point" /
-                                           "to_rivet.hepmc.json").read_text())["written"]   # named after its first output
+                                           "to_rivet.hepmc.json").read_text(encoding="utf-8", errors="replace"))["written"]   # named after its first output
     module, rivet = uproot.open(point / "lambda.root"), uproot.open(point / "lamriv.root")
     compared = 0
     for key in module.keys():
@@ -59,7 +59,7 @@ def test_inproc_equals_the_chain_at_one_thread(scratch):
         hep_run(scratch, "PhotoProduction/eic", configuration, "--set", "run.event_count=2000", "--set", "run.threads=1")
     base = scratch / "results" / "PhotoProduction" / "03_eic"
     chain, inproc = base / "single" / "point", base / "11_inproc" / "point"
-    assert json.loads((chain / "provenance.json").read_text())["seed"] == json.loads((inproc / "provenance.json").read_text())["seed"]
+    assert json.loads((chain / "provenance.json").read_text(encoding="utf-8", errors="replace"))["seed"] == json.loads((inproc / "provenance.json").read_text(encoding="utf-8", errors="replace"))["seed"]
     a, b = yoda.read(str(chain / "photo.yoda")), yoda.read(str(inproc / "photo.yoda"))
     finals = [p for p in a if not p.startswith("/RAW") and "Estimate1D" in a[p].type()]
     assert len(finals) == 17
@@ -71,8 +71,8 @@ def test_inproc_sigma_equals_the_sidecar_at_four_threads(scratch):
     for configuration in ("single", "inproc"):
         output, results = hep_run(scratch, "PhotoProduction/eic", configuration, "--set", "run.event_count=4000",
                                   "--set", "run.threads=4")
-    sidecar = json.loads((output / "PhotoProduction" / "03_eic" / "single" / "point" / "events.hepmc.json").read_text())
-    report = json.loads((results / "PhotoProduction" / "03_eic" / "11_inproc" / "point" / "photo.yoda.json").read_text())
+    sidecar = json.loads((output / "PhotoProduction" / "03_eic" / "single" / "point" / "events.hepmc.json").read_text(encoding="utf-8", errors="replace"))
+    report = json.loads((results / "PhotoProduction" / "03_eic" / "11_inproc" / "point" / "photo.yoda.json").read_text(encoding="utf-8", errors="replace"))
     assert report["events"] == sidecar["written"]
     assert report["sigma_pb"] == pytest.approx(sidecar["sigma_pb"], rel=1e-6)
 

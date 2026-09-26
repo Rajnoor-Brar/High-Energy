@@ -69,7 +69,7 @@ because a lookup that tries several places is how v1's `00/B18` happened.
 | `[prelim].fifo`, `[prelim].files` | the **point's output directory** (§3) | `events.hepmc` |
 | `[tools.*].input` | the name of a `[prelim]` entry or an earlier `output_file`; otherwise a path under the point's output directory | `events.hepmc` |
 | `[tools.*].output_file` | a `[prelim]` name → the point's **output** directory; any other name → the point's **results** directory | `photo.yoda` → `results/…/<point>/photo.yoda` |
-| `[plot.*].data` | `datasets/` | `zeus_eic.yoda` |
+| `[plot.*].data` | `datasets/` (not in git), or `rivet:<Analysis>` for Rivet's own reference data | `rivet:ZEUS_2012_I1116258` |
 
 **The output/results rule is the only judgement here, so it is stated once:** *an interface file*
 (named in `[prelim]`) is technical and lives in `output/`. *Anything else a tool writes* is a

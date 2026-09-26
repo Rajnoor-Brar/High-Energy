@@ -70,10 +70,10 @@ min_entries = 10
 auto_range  = true
 ratio       = true
 
-# v1 drew Rivet's own reference data (rivet_refs = true). datasets/zeus_eic.yoda holds the same
-# numbers (Rivet's ZEUS_2012_I1116258.yoda.gz, HEPData titles), and the map is the identity.
+# v1 drew Rivet's own reference data (rivet_refs = true): `rivet:` names that file, which every
+# Rivet installation ships (datasets/ is not in git). The map is the identity.
 [plot.data]
-file   = "zeus_eic.yoda"
+file   = "rivet:ZEUS_2012_I1116258"     # Rivet's own ZEUS 2012 tables (the same numbers as datasets/zeus_eic.yoda)
 legend = "ZEUS 2012"
 
 [plot.data.map]

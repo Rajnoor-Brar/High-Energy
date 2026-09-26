@@ -43,9 +43,9 @@ def xsec(path: Path) -> tuple[float, float]:
 def test_delphes_file_chain_counts_every_event(scratch):
     hep_run(scratch, "PhotoProduction/eic", "delphes", "--set", "run.event_count=1000", "--set", "run.threads=2")
     point = "PhotoProduction/03_eic/12_delphes/point"
-    written = json.loads((scratch / "output" / point / "showered.hepmc.json").read_text())["written"]
+    written = json.loads((scratch / "output" / point / "showered.hepmc.json").read_text(encoding="utf-8", errors="replace"))["written"]
     assert uproot.open(scratch / "results" / point / "delphes.root")["Delphes"].num_entries == written
-    assert json.loads((scratch / "results" / point / "jets_reco.json").read_text())["events"] == written
+    assert json.loads((scratch / "results" / point / "jets_reco.json").read_text(encoding="utf-8", errors="replace"))["events"] == written
 
 
 @pytest.mark.skipif(not shutil.which("Sherpa"), reason="load_hep: Sherpa")
@@ -63,7 +63,7 @@ def test_sherpa_sigma_matches_v1_and_the_integration_is_cached(scratch):
 def test_herwig_sigma_is_its_own_and_the_run_file_is_shared(scratch):
     hep_run(scratch, "PhotoProduction/herwig", "--set", "run.event_count=500")
     point = scratch / "output" / "PhotoProduction/05_herwig/single/point"
-    report = next(point.glob("point-S*.out")).read_text()
+    report = next(point.glob("point-S*.out")).read_text(encoding="utf-8", errors="replace")
     stated = re.search(r"Total \(from generated events\):\s+(\d+)\s+\d+\s+([\d.]+)\((\d+)\)e([+-]\d+)", report)
     assert int(stated[1]) == 500
     nb = float(stated[2]) * 10 ** int(stated[4])
@@ -72,5 +72,5 @@ def test_herwig_sigma_is_its_own_and_the_run_file_is_shared(scratch):
     assert abs(value / 1000 - nb) <= 0.5 * 10 ** (int(stated[4]) - digits) * 1.0001   # to the digits Herwig prints
     out = hep_run(scratch, "PhotoProduction/herwig", "export")
     assert "herwig:prepare: cached" in out                               # the same card: one read
-    probe = (scratch / "output" / "PhotoProduction/05_herwig/export/point/logs/probe.log").read_text()
+    probe = (scratch / "output" / "PhotoProduction/05_herwig/export/point/logs/probe.log").read_text(encoding="utf-8", errors="replace")
     assert "point.run" in probe

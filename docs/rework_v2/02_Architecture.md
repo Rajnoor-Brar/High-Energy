@@ -126,7 +126,7 @@ and what it reads and writes**, which its `tool.toml` declares
 | 2 | Bridges | HepMC3, LHE | **formats at tool boundaries**: the `[prelim]` FIFOs and files. They are also libraries the apps link. |
 | 3 | Process generators | MadGraph, Whizard | per-point tool, file output, with a **prepare cache** keyed by the card |
 | 4 | Event generators | App_Pythia, Herwig, Sherpa | per-point tool → HepMC; the usual head of a chain |
-| 5 | Detector simulators | Delphes, Geant4 | per-point tool with `streamable = false`: it reads a **file** |
+| 5 | Detector simulators | Delphes, Geant4 | Delphes: the `delphes` folder, reading a **file** (`streamable = false`). Geant4 has no command-line application: a simulation is a program (geometry, physics list) built as a module with `// requires: geant4` and run as `tool = "module"` (P4 S3) |
 | 6 | Analysis algorithms | FastJet, ROOT libraries | **build flags only** (`// requires: fastjet`); never a runner tool |
 | 7 | Analysis applications | Rivet, CMSSW; our module programs | per-point tool → YODA/ROOT |
 | 8 | Visualisation | YODA, ROOT | the `yd2rt` tool, and the `[plot]` stage driving Paint |

@@ -2,7 +2,7 @@
 
 | Status | Steps | Depends on | Ends with | Updated |
 |---|---|---|---|---|
-| **in progress** | 3 | P1 (S1), P3 (S2–S3) | Lambda as a plain program next to its Rivet twin; Delphes, Herwig, Sherpa, Whizard and MadGraph as tool folders; the generator comparison; the budget measured | 2026-09-26 |
+| **done** | 3 | P1 (S1), P3 (S2–S3) | Lambda as a plain program next to its Rivet twin; Delphes, Herwig, Sherpa, Whizard and MadGraph as tool folders; the generator comparison; the budget measured | 2026-09-27 |
 
 ## Goal
 
@@ -239,3 +239,43 @@ Each tool folder is independent: remove it and its master entries.
 - Size: the runner is 3,279 lines (`tools.py` 924); the tool folders, plugins and master are 583
   against 1,000.
 - Tests: `test_generators.py` 10; the slow `test_generators_p4.py` 3 (rows 1, 3, 5–7). `make test` 152.
+
+### S3 — 2026-09-27 — done
+
+| Row | Result |
+|---|---|
+| 1 | `madgraph` (its own run TOML): ep NC DIS at 18×275, 1,000 events. The process directory is built once (4 s), the launch writes run `r<seed>` (lpp1 = 1 at 275 GeV, lpp2 = 0 at 18 GeV, iseed = the point's seed), the LHE is unpacked to a file, Pythia showers it (frameType 4, `Beams:LHEF`), and **Rivet's count check passes (1,000)**. Rivet's σ is MadGraph's own: 186.6 ± 1.15 pb. 13 s. |
+| 2 | `whizard`: direct photoproduction at 18×275 e+p, 2,000 events, 17 s. **σ from its integration: q γ 1,288 ± 13 pb, g γ 1,195 ± 16 pb** (Whizard writes none into its events, so Rivet has none, as v1 found). |
+| 3 | `hep run Comparison/generators` (5k events each): **3 points (py8, hw7, sh3), 4 pages (pT, E, η, N_ch), 3 curves each**. σ for the three set-ups: 722, 576 and 533 μb; ⟨N_ch⟩ 79, 81, 76. Pythia 17 s, Herwig 52 s, Sherpa 49 s integration + 102 s. |
+| 4 | The budget, measured (06 §3): code 6,470 lines against 5,200 (1.24×, and 0.26× of v1). **Three rows over 1.5×**, each with its cause in 06 §3: the runner (1.67×), the C++ headers (1.67×), the tests (1.66×). |
+| 5 | A fresh clone, `load_hep && hep build && hep run PhotoProduction/eic single` (see below) |
+
+**The runner, by folder keys again:** `{seed}`/`{prepared}` in card lines (Whizard's `seed`
+precedes its `include`; MadGraph's launch names the cache); a `render.py` `prepare_card()` hook
+for the card a prepare step reads (Whizard's integration without generation lines, MadGraph's proc
+card with `output`); `[prepare] key = "base"`; `[command] cwd`; footer lines dropped when their
+placeholders are empty (Pythia's `Beams:LHEF = {input}` only when it has an input).
+
+**Findings and decisions:**
+- **C7 in an `@generator` chain.** A value only one alternative consumes (Sherpa's `BEAMS`, which
+  its card may not set) was refused on the other points. Now a consumer among the configuration's
+  alternatives is enough, and the selector itself counts as consumed. A value nobody consumes is
+  still refused. `sqrts` reaches all three generators (Pythia's `Beams:eCM`, Herwig's
+  `Luminosity:Energy`, Sherpa's `BEAM_ENERGIES` halved by render.py).
+- **`datasets/` is not in git**, so a fresh clone could not draw eic's ZEUS data. `[plot.data].file`
+  takes `rivet:<Analysis>`, Rivet's own reference file (the same numbers, P3 S2), and eic and
+  zeus_validation use it.
+- **The plot stage met new object shapes.** Ratios booked in `finalize` (MC_JETS) have no `/RAW`
+  Histo1D twin, so `min_entries` is not asked of them.
+- **Geant4 was unaccounted for** (found on the user's prompt to check `~/HEP/install`): installed
+  (11.4.2, with its data) but on no path and not probed. `hep_env.sh` now loads it and exports
+  `GEANT4_DATA_DIR`, and `flags.sh` probes `geant4-config`, so `// requires: geant4` builds a
+  program (checked: a G4 kernel program runs and finds its data). Geant4 has no command-line
+  application, so a simulation is a module program; none is written yet. Everything else in
+  `~/HEP/install` maps to a folder, a probe or a provider check; ROOT's RooFit/TMVA and the venv's
+  pyhf, xgboost, scikit-learn and uproot are the Statistics category, used through custom tools (V4).
+- `docs/GUIDE.md`, 02–06, `docs/README.md` and `bots/BOT.md` describe the result; the rework_v2
+  README says *executed*.
+- Tests: `test_process_generators.py` 8; the slow `test_process_generators_p4.py` 3 (rows 1–3). `make test`
+  160; `make test-slow` 18. A slow test read MadGraph's log in the locale's encoding and failed under an
+  ASCII locale: the P4 gates now read logs as UTF-8.

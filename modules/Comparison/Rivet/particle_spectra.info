@@ -1,0 +1,18 @@
+Name: particle_spectra
+Year: 2026
+Summary: Stable-particle pT, E, eta and the charged multiplicity, for comparing generators
+Experiment: MC
+Collider: any
+Status: UNVALIDATED NOHEPDATA SINGLEWEIGHT
+Reentrant: true
+Authors:
+ - Rajnoor S. Brar
+References:
+ - 'The spectra of the scratch generator_comparison.cc, as an analysis'
+RunInfo: 'Any events.'
+Description:
+  'Every stable final-state particle fills pT, E and eta, per event; the charged multiplicity is
+   normalised to one. The binning follows the scratch file generator_comparison.cc.'
+Keywords: [generators, validation]
+BibKey: ''
+BibTeX: ''

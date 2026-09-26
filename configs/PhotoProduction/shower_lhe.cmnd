@@ -1,0 +1,10 @@
+! shower_lhe.cmnd — Pythia showers and hadronises an LHE file (MadGraph's), for DIS e p.
+!
+! The beams and energies are the LHE header's: frameType 4 reads them from it, and the runner adds
+! Beams:LHEF (utils/Env/pythia/tool.toml). The DIS shower settings follow Pythia's main36.
+Beams:frameType = 4
+PDF:lepton = off                   ! the incoming lepton is pointlike in the matrix element
+SpaceShower:dipoleRecoil = on      ! the DIS recoil prescription
+PartonLevel:MPI = off              ! no multiparton interactions in DIS
+TimeShower:QEDshowerByL = off      ! no QED radiation off the scattered lepton
+Next:numberCount = 0

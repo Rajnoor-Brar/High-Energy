@@ -154,11 +154,19 @@ def builtin_mappings(master: dict, run, tags: list[str], name: str) -> list[Mapp
             for tag in tags if name in compatible(master, run.tools[tag].tool)]
 
 
-def consumer_table(run, master: dict, active: list[str], tags: list[str]) -> dict[str, list[Mapping]]:
-    """quantity → mappings, and rule C7: an active quantity must reach at least one tool."""
+def consumer_table(run, master: dict, active: list[str], tags: list[str],
+                   alternatives: list[str] = ()) -> dict[str, list[Mapping]]:
+    """quantity → mappings, and rule C7: an active quantity must reach at least one tool.
+
+    In a chain that chooses a tool by a quantity (`"@generator"`, V19), a value that only another
+    alternative consumes (Sherpa's BEAMS, say, on a Herwig point) is accepted with no mapping here:
+    it reaches a tool in this configuration, just not in this point's chain."""
     table = {}
     for name in active:
         found = mappings(run, master, name, tags)
+        if not found and alternatives and mappings(run, master, name, list(alternatives)):
+            table[name] = []
+            continue
         if not found:
             raise HepError(f"[quantities.{name}] is set but no tool in this chain consumes it",
                            where=f"{run.path}: [quantities.{name}]",

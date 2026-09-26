@@ -75,6 +75,8 @@ def card(bases: list[str], overrides: list, context: dict) -> str:
                            hint="beams, energies, seed, events and outputs come from quantities and the runner (L12)")
         document = merge(document, loaded)
     for key, value, origin in overrides:               # the runner's Override, unpacked (L26)
+        if key == "sqrts":                               # symmetric beams: Sherpa wants each beam's energy
+            key, value = "BEAM_ENERGIES", [float(value) / 2, float(value) / 2]
         before = copy.deepcopy(document.get("PDF_SET"))
         assign(document, key, value, origin)
         if key.startswith("PDF_SET"):
