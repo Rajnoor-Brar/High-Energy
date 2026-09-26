@@ -31,7 +31,9 @@ read `README.md` (decisions V1–V20, traceability) → `00_Brief.md` (the user'
   `docs/GUIDE.md`. Open: the user's style review of the first Paint pages (S2 task 3). Runner size
   3,073 vs 2,000 budget (1.54×): a finding for P4 S3.
 - **P4 — Modules and the other tools** (`docs/rework_v2/phases/P4_modules-and-tools.md`), next:
-  S1 module kit + Lambda + InprocJets; S2 Delphes/Herwig/Sherpa; S3 Whizard/MadGraph, comparison, budget.
+  S1 done (Module.hh, the module folder, Lambda = Lamriv to YODA precision, InprocJets = the chain
+  bin for bin; seeds now follow the generator). Next: S2 Delphes/Herwig/Sherpa; S3 Whizard/MadGraph,
+  comparison, budget.
 ---
 
 # v1 (finished) — the working plan as it stood at `rework/v1`

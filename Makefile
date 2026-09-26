@@ -17,8 +17,8 @@
 # A path with a component starting with `_` is parked: never built by `make all`.
 #
 # Linking (§5.2): a source names its libraries in a `// requires: pythia8 hepmc3 …` line near the
-# top (`none` for none). Without the line it gets every library that was found. Including
-# "Module.hh" adds hepmc3 and toml. Flags come from build/flags.mk (§5.3).
+# top (`none` for none; a trailing `(…)` is a note). Without the line it gets every library that
+# was found. Including "Module.hh" adds hepmc3 and toml. Flags come from build/flags.mk (§5.3).
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := all
@@ -42,7 +42,8 @@ ifneq ($(FLAGS_KEY),$(FLAGS_KEY_NOW))
 endif
 KNOWN := pythia8 hepmc3 yoda root fastjet lhapdf rivet toml zstd zlib onnx delphes
 
-req_line  = $(shell sed -n 's#^[[:space:]]*//[[:space:]]*requires:[[:space:]]*##p' $(1) | head -n1)
+open     := (
+req_line  = $(shell sed -n 's#^[[:space:]]*//[[:space:]]*requires:[[:space:]]*##p' $(1) | head -n1 | sed 's#[[:space:]]*$(open).*##')
 uses_kit  = $(if $(shell grep -ls 'include[[:space:]]*"Module.hh"' $(1)),hepmc3 toml)
 libs_of   = $(sort $(call uses_kit,$(1)) $(filter-out none,$(or $(call req_line,$(1)),$(FOUND))))
 lib_flags = $(if $(filter $(2),$(FOUND)),$(FLAGS_$(2)),$(error $(1): requires '$(2)', $(if \

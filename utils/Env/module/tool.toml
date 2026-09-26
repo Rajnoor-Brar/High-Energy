@@ -1,0 +1,18 @@
+# utils/Env/module/tool.toml — a module program built with utils/Module.hh (05_Tools.md §5).
+# The table names it: executable = "Lambda.exe" → build/<project>/Lambda.exe. It always gets its
+# extracted config as the first argument; an empty --input means an integrated program.
+[tool]
+category        = "analysis-application"
+streamable      = true
+status          = "standard"
+consumes_events = true
+
+[card]
+style = "none"
+
+[command]
+argv = ["{exe}", "{config}", "--input={input}", "--output={partial:output}", "--events={events}",
+        "--sidecar={input_sidecar}", "{arguments}"]
+
+[outputs]
+event_count = "json:events"         # the kit's report, <output>.json, against the producer's sidecar

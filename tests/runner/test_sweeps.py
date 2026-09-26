@@ -40,15 +40,26 @@ def test_point_and_page_counts_equal_the_legacy_table(name, cfg, counts):
     assert (len(points), len(sweep.pages(conf, points))) == (counts["points"], counts["pages_v2"])
 
 
-def test_every_eic_configuration_plans_and_the_seed_blocks_are_disjoint():
+def test_every_eic_configuration_plans_and_its_seed_blocks_are_disjoint():
+    """Within a plan no two points share events (V9, L4). Across configurations the seeds follow the
+    generator: the same generator setup (single, pdf's NNPDF23lo point, inproc) gives the same
+    seeds, and different setups never overlap."""
+    by_basis: dict[str, int] = {}
     blocks = []
     run = config.load("PhotoProduction/eic")
     for key in run.configurations:
         _, _, _, plans = plans_of("PhotoProduction/eic", key)
-        blocks += [(p.seed, p.seed + p.threads, p.identity) for p in plans]
-    unique = {identity: (start, end) for start, end, identity in blocks}
-    spans = sorted(unique.values())
-    assert all(a_end <= b_start for (_, a_end), (b_start, _) in zip(spans, spans[1:]))
+        spans = sorted((p.seed, p.seed + p.threads) for p in plans)
+        assert all(a_end <= b_start for (_, a_end), (b_start, _) in zip(spans, spans[1:])), key
+        for p in plans:
+            basis = record.seed_basis(p)
+            if len(plans) == len({record.seed_basis(q) for q in plans}):   # no clash moved it
+                assert by_basis.setdefault(basis, p.seed) == p.seed, key
+            blocks.append((p.seed, p.seed + p.threads, basis))
+    shared = {k: v for k, v in by_basis.items() if sum(1 for *_, b in blocks if b == k) > 1}
+    assert shared, "single, pdf and inproc share a generator setup"
+    unique = sorted({(start, end, basis) for start, end, basis in blocks})
+    assert all(a[1] <= b[0] or a[2] == b[2] for a, b in zip(unique, unique[1:]))
 
 
 def test_entangled_quantities_move_together_and_axes_form_a_grid(scratch):

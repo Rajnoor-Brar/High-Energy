@@ -1,26 +1,16 @@
 #pragma once
 
-// ── modules/Lambda/Reconstruction.hh ─────────────────────────────────────────
-// The Λ → p π⁻ reconstruction, as a pure function of four-vectors.
+// modules/Lambda/Reconstruction.hh — the Λ → p π⁻ reconstruction, as a pure function of
+// four-vectors. Shared by the module program (Lambda.cc) and the Rivet analysis (Rivet/Lamriv.cc),
+// so a disagreement between the two is in the frameworks, never in the physics.
 //
-// Ported from `legacy/lambda/modules/Lambda/Reconstruction.hh` with the physics unchanged and three
-// things different, each for a reason:
+// It takes and returns HepMC3::FourVector: no generator, no framework, no ROOT. From v1 (itself a
+// port of the legacy module) with the physics unchanged:
 //
-//   * **`HepMC3::FourVector`, not `ROOT::Math::LorentzVector`.** `Phys` is built on HepMC3 so that
-//     the physics layer has no ROOT dependency (D15, and P8-S02's own revision of the design). The
-//     boost below is therefore written out rather than delegated to `ROOT::Math::VectorUtil`.
-//   * **No Pythia in the signature.** The legacy `harvestParticles` took a `Pythia8::Pythia&`, which
-//     tied reconstruction to a live generator and made a replayed store unusable. It takes vectors
-//     now, so the same code runs on generated and replayed events alike, and is testable without a
-//     generator at all (`tests/cxx/test_lambda.cc`).
-//   * **`cosTheta` is used.** The legacy code computed it and then commented out the cut, so the
-//     configured `delta_theta_rad` did nothing. It is a real, optional cut here — off by default,
-//     so the ported behaviour is reproduced exactly until you ask for more.
-//
-// **The selection is the interesting part, and it is unchanged.** Every (p, π⁻) pair is a candidate;
-// pairs inside the mass window are *validated*; and the *selected* set is the greedy one-to-one
-// matching that takes the best mass agreement first and never reuses a track. `reserved_protons`
-// subtracts the beam protons that cannot have come from a Λ, which is what bounds the matching.
+//   * every (p, π⁻) pair is a candidate (unvalidated);
+//   * the pairs inside the mass window, and optionally the cos θ* cut, are validated;
+//   * the selected set is the greedy one-to-one matching: best mass agreement first, no track reused,
+//     bounded by the protons that are not beam remnants (`reserved_protons`, 2 × Z per beam pair).
 
 #include <algorithm>
 #include <cmath>
@@ -28,11 +18,11 @@
 #include <limits>
 #include <vector>
 
-#include "Phys.hh"
+#include "HepMC3/FourVector.h"
 
 namespace Lambda {
 
-    using Phys::FourVector;
+    using FourVector = HepMC3::FourVector;
 
     inline constexpr double kLambdaMass = 1.115683;   ///< PDG 2024, GeV
     inline constexpr int kProtonPid = 2212;
@@ -75,8 +65,7 @@ namespace Lambda {
     /// cos θ* — the angle between the daughters in the Λ rest frame.
     ///
     /// A genuine two-body decay gives −1 exactly, because the daughters are back to back there; a
-    /// combinatorial pair does not. Written out because `Phys` deliberately carries no ROOT
-    /// (D15), and a boost is six lines.
+    /// combinatorial pair does not. The boost is written out: six lines, and no ROOT.
     inline double cosThetaStar(const FourVector& proton, const FourVector& pion,
                                const FourVector& lambda) {
         const double energy = lambda.e();

@@ -1,195 +1,141 @@
-# lambda.toml — Λ → p π⁻ reconstruction from Pythia soft-QCD pp.
+# lambda.toml — Λ → p π⁻ from Pythia (Angantyr Ne-20 on Ne-20, lambda.cmnd), through two
+# analysis paths on the same events (rework v2 schema, docs/rework_v2/04_Config.md §8.2).
 #
-#   hep plan configs/Lambda/lambda.toml --study single
-#   hep run  configs/Lambda/lambda.toml --study single
-#   hep proc configs/Lambda/lambda.toml --study single   # → analysis.root per point
+#   hep run Lambda/lambda                   one run at 7 TeV, both paths
+#   hep run Lambda/lambda masswindow        the mass window swept through both paths at once
 #
-# The legacy version of this was four TOML files and four `main()`s
-# (legacy/lambda/configs/). It is one file now, and the parts that are missing are missing on
-# purpose — each one is something the framework owns rather than the analysis:
+# App_Pythia fans out to two FIFOs: the Rivet analysis Lamriv reads one, the module program Lambda
+# (modules/Lambda/Lambda.cc) the other. Both use modules/Lambda/Reconstruction.hh, so on the same
+# events they agree to floating-point precision, which checks both frameworks.
 #
-#   [threads]              → [run].threads. One number; the analyzers decide their own concurrency.
-#   [record.paths], serial → the results layout (07 §1). A point's directory is its identity.
-#   [monitor.*]            → the supervisor and the status stream (06). Not the analysis's business.
-#   [probe].input_file     → a store replay, if you want one: [store] + `hep run` on the store.
-#   [record].bin_count     → a module option, because it is a property of *these* histograms.
-#
-# What stayed in TOML is what the legacy file had that genuinely belongs to the analysis: the cuts.
-
-schema = 2
+# Translated from the v1 file (git show rework/v1-final:configs/Lambda/lambda.toml): [beams] became
+# the static beam quantities, [analyzers.module.options] the module's [config], v1's option
+# quantities are targeted quantities. A module option can now be swept (masstol, costheta), which v1
+# could not do (00/B40). The v1 `RESERVED = 2` (pp's 2 × Z) is kept with Ne–Ne beams, as v1 had it.
 
 [run]
-name = "lamriv"
-events = 20000
-seed = 31122
-threads = 16
-mode = "auto"          # the module is thread-safe, so this shards
+name          = "lambda"
+project       = "Lambda"
+configuration = "single"
+event_count   = 20_000
+threads       = 16
 
-[generator]
-tool = "pythia"
-card = "lambda.cmnd"
+[run.single]
+description = "One run at 7 TeV, both analysis paths"
+sweeps      = []
+tools       = [["pythia", "lamriv", "lambda"], "yd2rt"]
 
-[beams]
-ids = [1000100200, 1000100200]
-energies = 7000.0        # scalar = sqrt(s) in the CM frame; hep owns Beams:eCM, not the card
+[run.masswindow]
+description = "Mass-window scan through both paths: four points, each its own generation (V9)"
+sweeps      = ["masstol"]
+tools       = [["pythia", "lamriv", "lambda"], "yd2rt"]
 
-# ── the two analysis paths, side by side ─────────────────────────────────────
-# `Lamriv` (Rivet analysis) and `Lambda` (C++ module) measure the same thing from the *same* shared
-# reconstruction (modules/Lambda/Reconstruction.hh), so running both on one sample compares the two
-# framework paths rather than two implementations of the physics. Both land in one `analysis.yoda`,
-# under /Lamriv/... and /Lambda/... respectively (07 §1).
-#
-# Drop either one and the other still works: `[rivet]` alone is an ordinary Rivet run,
-# `[[analyzers.module]]` alone is the module-only case where `Analyzer::Modules` writes its own file.
-#
-# Rivet takes HepMC however it arrives — Pythia in process here, or an external generator's FIFO if
-# [generator].tool changes. `Analyzer::Rivet` is the same analyzer either way.
+[run.costheta]
+description = "Does the decay-angle cut buy anything the mass window does not?"
+sweeps      = ["costheta"]
+tools       = [["pythia", "lamriv", "lambda"], "yd2rt"]
 
-[rivet]
-analyses = ["Lamriv"]
+[run.cuts_grid]
+description = "Mass window x decay angle: one page per angle cut, mass-window curves on it"
+sweeps      = ["masstol", "costheta"]
+plot_points = ["costheta"]
+tools       = [["pythia", "lamriv", "lambda"], "yd2rt"]
 
-[rivet.options]
-RESERVED = 2          # keep the two paths' cuts identical, or the comparison measures the cuts
+[run.sets]
+description = "The three candidate sets as curves on one page (SET is a Lamriv option; the module books all three anyway)"
+sweeps      = ["set"]
+tools       = [["pythia", "lamriv", "lambda"], "yd2rt"]
 
-[[analyzers.module]]
-name = "Lambda"
+[run.energy]
+description = "Lambda yield against collision energy"
+sweeps      = ["sqrts"]
+tools       = [["pythia", "lamriv", "lambda"], "yd2rt"]
 
-[analyzers.module.options]
-# ── the physics cuts (the legacy [lambda] block) ─────────────────────────────
-mass_tolerance      = 0.15   # |m(pπ) − m(Λ)| accepted, GeV        (legacy delta_mass_gev)
-cos_theta_tolerance = 0.0    # 0 = off; else |cosθ* + 1| tolerance (legacy delta_theta_rad, unused)
-reserved_protons    = 2      # beam protons per event that cannot come from a Λ: 2 × Z, so 2 for pp
-                             # (the legacy 20 was Ne–Ne, 2 × 10; with 20 here nothing is ever selected)
+[run.replicas]
+description = "Three statistically equivalent runs at 7 TeV, for a stability check"
+sweeps      = ["replica"]
+tools       = [["pythia", "lamriv", "lambda"], "yd2rt"]
 
-# ── the tracks that are allowed to pair ──────────────────────────────────────
-# The legacy module had no such cut. Left wide open so this reproduces it; tighten to something
-# detector-like and watch the combinatorial background fall.
-track_pt_min  = 0.0
-track_eta_max = 8.0
+[prelim]
+fifo = ["to_rivet.hepmc", "to_module.hepmc"]     # fan-out: one FIFO per reader (V16)
 
-# ── histogram axes (the legacy [record].bin_count and Lambda_Limits.toml) ────
-bins          = 100
-mass_axis     = 0.4    # half-width of the mass axis about m(Λ)
-energy_axis   = 200.0
-momentum_axis = 200.0
-pt_axis       = 20.0
-eta_axis      = 8.0
-count_axis    = 50
+[static]
+sqrts  = "7tev"
+beam_a = "Ne20"
+beam_b = "Ne20"
 
-# ── the ROOT file ────────────────────────────────────────────────────────────
-# YODA stays the results format (D7/D14) and `hep-run` never links ROOT (D15); this turns each
-# point's analysis.yoda into analysis.root afterwards, in the half that is allowed to know about
-# ROOT. Delete it and re-run `hep proc` and you get it back — it is a view, not a record.
-[proc.export]
-enabled = true
-file    = "analysis.root"
-select  = ["/Lambda/*"]
+[tools.pythia]
+tool        = "pythia"
+baseconfig  = "lambda.cmnd"
+output_file = ["to_rivet.hepmc", "to_module.hepmc"]
 
-[plot]
-merge      = "overlay"
-legends    = "label"
-auto_range = true
+[tools.lamriv]
+tool        = "rivet"
+input       = "to_rivet.hepmc"
+analyses    = ["Lamriv"]
+options     = { RESERVED = 2 }     # the module's reserved_protons: the two paths' cuts must match
+output_file = "lamriv.yoda"
 
-[output]
-tag_style = "tag"
+[tools.lambda]
+tool        = "module"
+executable  = "Lambda.exe"         # build/Lambda/Lambda.exe, from modules/Lambda/Lambda.cc
+input       = "to_module.hepmc"
+output_file = "lambda.root"
 
-# ── sweeps ───────────────────────────────────────────────────────────────────
-#
-# **Only generator settings are swept here, and that is a real limitation, not a style choice.**
-# A `type = "option"` quantity targets a *Rivet analysis*: its values become `analysis:OPT=value`
-# and every value shares one generation, because one YODA holds every variant. A module is not like
-# that — `configure()` runs once per `hep-run`, so two cut values are two runs — and
-# `plan/spec.py` writes a module's options straight from `[analyzers.module.options]`, so a swept one
-# would never reach it. Declaring one would change the point *tags* and nothing else: three
-# directories with identical numbers. That is the 00/B5 shape, so it is not done.
-#
-# To vary a cut today: edit the value above, or run `hep run` twice with `--label`. Recorded as
-# 00/B40.
+[tools.lambda.config]              # Lamriv's option defaults, under the module's names
+mass_tolerance      = 0.15         # |m(pπ) − m(Λ)| accepted, GeV
+cos_theta_tolerance = 0.0          # 0 = off; else |cos θ* + 1| tolerance
+reserved_protons    = 2            # beam protons per event that cannot come from a Λ
+track_pt_min        = 0.0
+track_eta_max       = 8.0
+bins                = 100
 
-# ── sweeping the validation cut ──────────────────────────────────────────────
-# This is the thing a module *cannot* do (00/B40) and a Rivet analysis can.
-#
-# `type = "option"` sets an analysis option, so `hep` renders `Lamriv:MASSTOL=0.05` and Rivet runs
-# **every variant in one pass over one set of events**: one generation, one `analysis.yoda`, the
-# variants distinguished by their object paths (`/Lamriv:MASSTOL=0.05/validated_mass`). That is the
-# whole reason option sweeps are cheap — the cut is applied at analysis time, so varying it costs
-# nothing but a little CPU, not a re-generation.
-#
-# The option must be declared in `Lamriv.info` or `hep plan` refuses before anything runs (00/B14).
-# `hep analyses Lamriv --options` prints what is declared.
+[tools.yd2rt]
+tool        = "yd2rt"
+input       = "lamriv.yoda"
+output_file = "lamriv.root"
 
-# The three candidate sets, as curves on one page.
-#
-# `unvalidated` (every p-pi pair), `validated` (inside the mass window) and `selected` (the ranked
-# one-to-one matching) are three histograms *inside one point*, and a page overlays **points** — so
-# by default they land on three separate figures. Naming the set as an analysis option makes it a
-# point-level distinction, and the ordinary option-sweep machinery then draws them together: three
-# points, one generation, one page, three curves.
-[quantity.set]
-type   = "option"
-target = "Lamriv"
-option = "SET"
-values = ["unvalidated", "validated", "selected"]
-labels = ["all pairs", "in the mass window", "ranked, one-to-one"]
-tags   = ["unval", "val", "sel"]
-
-[quantity.masstol]
-type   = "option"
-target = "Lamriv"
-option = "MASSTOL"
-values = [0.05, 0.10, 0.15, 0.25]
-labels = ["$\\pm 50$ MeV", "$\\pm 100$ MeV", "$\\pm 150$ MeV", "$\\pm 250$ MeV"]
-tags   = ["m050", "m100", "m150", "m250"]
-use    = 3
-
-[quantity.costheta]
-type   = "option"
-target = "Lamriv"
-option = "COSTHETATOL"
-values = [0.0, 0.05, 0.2]
-labels = ["no $\\cos\\theta^*$ cut", "$|\\cos\\theta^* + 1| < 0.05$", "$< 0.2$"]
-tags   = ["noct", "ct005", "ct020"]
-
-[quantity.energy]
-type   = "energies"
+[quantities.sqrts]
 values = [900.0, 7000.0, 13000.0]
-labels = ["900 GeV", "7 TeV", "13 TeV"]
 tags   = ["900gev", "7tev", "13tev"]
-use    = 2
+labels = ["900 GeV", "7 TeV", "13 TeV"]
 
-[quantity.seed]
-type   = "seed"
+[quantities.beam_a]
+values = [1000100200]
+tags   = ["Ne20"]
+
+[quantities.beam_b]
+values = [1000100200]
+tags   = ["Ne20"]
+
+[quantities.masstol]               # one quantity, two consumers, a key for each
+target = ["lamriv/Lamriv", "lambda"]
+key    = { lamriv = "MASSTOL", lambda = "mass_tolerance" }
+values = [0.05, 0.10, 0.15, 0.25]
+tags   = ["m050", "m100", "m150", "m250"]
+labels = ["#pm 50 MeV", "#pm 100 MeV", "#pm 150 MeV", "#pm 250 MeV"]
+
+[quantities.costheta]
+target = ["lamriv/Lamriv", "lambda"]
+key    = { lamriv = "COSTHETATOL", lambda = "cos_theta_tolerance" }
+values = [0.0, 0.05, 0.2]
+tags   = ["noct", "ct005", "ct020"]
+labels = ["no cos#theta* cut", "|cos#theta* + 1| < 0.05", "|cos#theta* + 1| < 0.2"]
+
+[quantities.set]
+target = "lamriv/Lamriv"
+key    = "SET"
+values = ["unvalidated", "validated", "selected"]
+tags   = ["unval", "val", "sel"]
+labels = ["all pairs", "in the mass window", "ranked, one-to-one"]
+
+[quantities.replica]
+target = "pythia/seed"
 values = [1, 2, 3]
 tags   = ["s1", "s2", "s3"]
 
-[sweep]
-across = ["energy"]
-
-[study.single]
-description = "One run at 7 TeV — the quickest thing that produces a ROOT file"
-across = []
-
-[study.energy]
-description = "Lambda yield against collision energy"
-across = ["energy"]
-
-[study.sets]
-description = "The three candidate sets overlaid: how much the window cuts, and how much the ranking cuts again"
-across = ["set"]
-
-[study.masswindow]
-description = "Mass-window scan: how much of the peak is combinatorial background. One generation, four variants."
-across = ["masstol"]
-
-[study.costheta]
-description = "Does the decay-angle cut buy anything the mass window does not?"
-across = ["costheta"]
-
-[study.cuts_grid]
-description = "Mass window x decay angle: one page per angle cut, mass-window curves on it"
-across = ["masstol", "costheta"]
-overlay = "masstol"
-
-[study.replicas]
-description = "Three statistically equivalent runs at 7 TeV, for a stability check"
-across = ["seed"]
+# Pages come from the YODA product (lamriv.yoda); the module's lambda.root is for ROOT users.
+[plot]
+formats    = ["png"]
+objects    = ["/Lamriv*"]
+auto_range = true

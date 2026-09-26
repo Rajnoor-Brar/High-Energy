@@ -686,6 +686,7 @@ def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
         "threads": plan.threads, "events": plan.events,
         "input": str(step.inputs[0].path) if step.inputs else "",
         "inputs": [str(p) for i in step.inputs for p in (i.paths if i.kind == "points" else [i.path])],
+        "input_sidecar": _upstream_sidecar(plan, step),
         "output": str(step.outputs[0].path) if step.outputs else "",
         "outputs": ",".join(str(o.path) for o in step.outputs),
         "partial:": {"output": str(step.products[0][1]) if step.products else ""},
@@ -744,7 +745,7 @@ def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
             data["quantities"] = quantities_table
         if standard:
             data["standard"] = standard
-        if data or tool.config is not None:
+        if data or tool.config is not None or tool.tool == "module":   # a kit program always takes one
             step.config_path = plan.out / "config" / f"{step.tag}.toml"
             step.config_data = data
             step.identity_parts["config"] = tomli_w.dumps(data)
@@ -772,6 +773,17 @@ def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
         producer = plan.rendered.get(step.inputs[0].producer)
         if producer is not None and producer.sidecar is not None:
             step.count_check = (step.products[0][1], producer.sidecar, reader)
+
+
+def _upstream_sidecar(plan: PointPlan, step: Step) -> str:
+    """The first input's producer sidecar, when it is written before this step starts: a file from
+    an earlier group. In one group (a FIFO) it appears only after the stream ends."""
+    if not step.inputs or not step.inputs[0].producer:
+        return ""
+    producer = plan.rendered.get(step.inputs[0].producer)
+    if producer is None or producer.sidecar is None or producer.group >= step.group:
+        return ""
+    return str(producer.sidecar)
 
 
 def finalise(plan: PointPlan, seed: int) -> None:

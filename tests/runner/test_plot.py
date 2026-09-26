@@ -49,6 +49,7 @@ def test_keys_no_backend_honours_are_errors(scratch, table, message):
     (r"$x_\gamma^\mathrm{obs}$", "x_{#gamma}^{obs}"),
     (r"$\frac{1}{N}\,\mathrm{d}N/\mathrm{d}p_\perp$", "#frac{1}{N} dN/dp_{#perp}"),
     (r"$Q^2 \le 1$ GeV$^2$", "Q^{2} #leq 1 GeV^{2}"),
+    (r"$m(p\pi^-)$ [GeV]", "m(p#pi^{-}) [GeV]"),
     ("plain text", "plain text"),
 ])
 def test_latex_becomes_tlatex(latex, root):

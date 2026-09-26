@@ -90,6 +90,13 @@ sweeps      = ["radius"]
 tools       = [["pythia", "rivet"], "yd2rt"]
 static      = { energies = "18x275" }
 
+[run.inproc]
+serial      = 11
+description = "Pythia and Rivet in one process (InprocJets): the card and seeds of `single`, no FIFO"
+sweeps      = []
+tools       = ["jets", "yd2rt"]
+prelim      = {}              # no FIFO: the events never leave the process
+
 [run.replicas]
 serial      = 10
 description = "Three seed replicas at the static point, merged after them by rivet-merge (post)"
@@ -122,6 +129,13 @@ output_file = "photo.yoda"
 tool        = "yd2rt"
 input       = "photo.yoda"
 output_file = "photo.root"
+
+[tools.jets]                  # an integrated program: modules/PhotoProduction/InprocJets.cc (V21)
+tool           = "module"
+executable     = "InprocJets.exe"
+output_file    = "photo.yoda"
+pythia_cmnd    = true         # the point card App_Pythia would get, seeds included
+rivet_analyses = true         # the rivet table's analyses and the plugin path
 
 [tools.merge]                 # post: photo.yoda of every point → one YODA with their statistics
 tool        = "merge"

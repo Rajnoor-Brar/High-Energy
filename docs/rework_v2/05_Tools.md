@@ -104,7 +104,7 @@ look-alike (L26, the F1 lesson). A plugin imports only `errors`, `paths` and `qu
 | `paint` | visualisation | `build/Paint.exe` | — | standard | P3 (driven by `[plot]`) |
 | `yoda` | visualisation | `rivet-mkhtml` | — | none | P3 (driven by `[plot] backend = "yoda"`): `utils/Env/yoda/backend.py`, no `tool.toml` |
 | `merge` | analysis application | `rivet-merge` | no (files) | none | P3, in `post`: one product of every point, `-e` unless `equivalent = false` |
-| `module` | analysis application | `build/<P>/<Name>.exe` | yes | standard | P4 |
+| `module` | analysis application | `build/<P>/<Name>.exe` (a `Module.hh` program) | yes | standard | P4 S1; count check from the kit's report |
 | `delphes` | detector simulator | `DelphesHepMC3` | **no** (L11) | filters | P4 |
 | `herwig` | event generator | `Herwig` (read, then run) | — (writes) | filters | P4 |
 | `sherpa` | event generator | `Sherpa` | — (writes) | filters | P4 |
@@ -302,8 +302,26 @@ This is v1's in-process `hep-run` loop, back as **a user program** rather than a
 (V2). The runner neither knows nor cares that Pythia runs inside it.
 
 **The one rule the types no longer enforce** (v1's scaling contract): fill with raw weights, and
-scale **once**, after the loop. It is documented in `Module.hh` and tested with the Lambda program.
-If a histogram is drawn beside Rivet's, divide by the bin width as well (L21).
+scale **once**, after the loop. It is documented in `Module.hh`, and `RootOut::scale` refuses a
+second call. If a histogram is drawn beside Rivet's, divide by the bin width as well (L21):
+`out.scale(σ/ΣW, "width")`.
+
+**As built (P4 S1).**
+- The CLI is `CONFIG.toml --input=F --output=F --events=N --sidecar=F`. Both `--x=v` and `--x v`
+  work. An empty `--input=` means an integrated program, and an empty `--sidecar=` means none.
+- The module folder (`utils/Env/module/`) always passes a config and the `.partial` output. The
+  kit writes it as given, with a report beside it, `<output>.json` (events, ΣW, the σ used and its
+  source). The report travels with the product when the runner renames it, and the count check
+  reads it (`event_count = "json:events"`).
+- **σ.** `{input_sidecar}` names the producer's sidecar only when the producer ran in an earlier
+  group (a file chain). App_Pythia closes its outputs before writing the sidecar, so a FIFO reader
+  would race it. In a FIFO chain σ is the last event's, as Rivet's is (L2), which is also what
+  makes Lambda equal Lamriv.
+- **`RootOut` lives in `Module.hh`**, but only when ROOT's headers are on the include path
+  (`__has_include(<TFile.h>)`), which is exactly when the source requires `root`. `YodaOut` is not
+  written: no module needs it yet.
+- Integrated programs report their own events with `job.countEvent(w)` and
+  `job.setCrossSection(pb, err)`.
 
 Modules run single-threaded. A module that needs threads and clusters jets must respect L16.
 

@@ -122,3 +122,34 @@ def test_the_yoda_backend_draws_the_same_pages(stage):
     yoda = pytest.importorskip("yoda")
     references = yoda.read(str(work / "reference.yoda"))
     assert list(references) == ["/REF/photo_eic/d01-x01-y01"]                # only what the map names
+
+
+def test_a_swept_analysis_option_is_a_curve_not_a_page(scratch):
+    """Each point's YODA holds its own variant (/photo_eic:R=0.4/…): one page per object, one curve
+    per point, each read from its own path (found by the Lambda masswindow run, P4 S1)."""
+    data = raw(run__name="plotvariants", run__one__sweeps=["radius"],
+               quantities__radius={"target": "rivet/photo_eic", "key": "R", "values": [0.4, 0.7], "tags": ["r04", "r07"]},
+               plot={"formats": ["png"], "min_entries": 10})
+    run = parse(data, scratch)
+    configuration = run.configuration(None)
+    master = quantities.load_master(run.project, run.master_toml)
+    plans = []
+    for point in sweep.points(run, configuration):
+        plan = tools.plan_point(run, configuration, point, master)
+        plan.identity = record.identity(plan)
+        plans.append(plan)
+    for plan, r in zip(plans, ("0.4", "0.7")):
+        shutil.rmtree(plan.res, ignore_errors=True)
+        text = (LEGACY / "mini_27x920_ep_MSTW.yoda").read_text()
+        text = text.replace("/photo_eic/", f"/photo_eic:R={r}/")
+        product = plot.yoda_of(plan)
+        product.parent.mkdir(parents=True, exist_ok=True)
+        product.write_text(text)
+        record.complete_marker(plan).write_text(plan.identity + "\n")
+    pages = plot.pages(run, configuration, plans)
+    assert len(pages) == 17 and {p.name for p in pages} == {f"d{n:02d}-x01-y01" for n in range(1, 18)}
+    first = tomllib.loads(pages[0].config.read_text())
+    assert [c["object"] for c in first["curve"]] == ["photo_eic__R-0.4/" + pages[0].name, "photo_eic__R-0.7/" + pages[0].name]
+    assert [c["raw"] for c in first["curve"]] == ["RAW/" + c["object"] for c in first["curve"]]
+    said = []
+    assert plot.draw(run, configuration, plans, said.append) == 0, said

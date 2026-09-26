@@ -207,10 +207,16 @@ identity(point) = sha256( for each tool in the chain:
                           threads, event_count )
 ```
 
-- **Seeds** come from the identity: `base = 1 + int(identity[:12], 16) mod (9·10⁸ − threads)`, and
-  the thread seeds are `base … base + threads − 1`. That is disjoint within a point and in Pythia's
-  range (L4). Across the plan, the seed blocks are checked for overlap, and a clash is moved up by
-  `threads`. For Pythia, the card always gets `Random:setSeed = on` with `Random:seed = base`, and,
+- **Seeds** come from the **generator's** identity (P4 S1): the identity parts of the steps that
+  take seeds (their card lines without comments, base cards, binary, replica values), with threads
+  and events, but not the rest of the chain. `base = 1 + int(basis[:12], 16) mod (9·10⁸ − threads)`,
+  and the thread seeds are `base … base + threads − 1`. That is disjoint within a point and in
+  Pythia's range (L4). Across the plan, the seed blocks are checked for overlap, and a clash is
+  moved up by `threads`, so two points of one configuration never share events. Across
+  configurations, **the same generator setup gives the same events**: the chain's `single` point
+  and an integrated program's `inproc` point (04 §7.3) can be compared bin for bin. Until P4 S1 the
+  basis was the whole point's identity; the identity carries the rule (`"seeds": "generator"`), so
+  the change reran every point once. For Pythia, the card always gets `Random:setSeed = on` with `Random:seed = base`, and,
   at threads > 1, `Parallelism:seeds = {base, …}` as well. A serial `Pythia8::Pythia` in an
   integrated program (04 §7.3) and a `PythiaParallel` both read a seed meant for them; neither ever
   falls back to the base card's time-based `Random:seed = 0`.

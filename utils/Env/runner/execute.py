@@ -76,13 +76,23 @@ class NullSink:
 # ── the count check ────────────────────────────────────────────────────────────────────────────
 
 def read_count(path: Path, reader: str) -> float | None:
-    """`yoda:/RAW/_EVTCOUNT` → the counter's numEntries, read from the YODA text."""
+    """`yoda:/RAW/_EVTCOUNT` → the counter's numEntries, read from the YODA text;
+    `json:events` → that key of the product's report, <product>.json (the module kit writes it)."""
     kind, _, obj = reader.partition(":")
+    if kind == "json":
+        try:
+            return float(json.loads(report_of(path).read_text(encoding="utf-8"))[obj])
+        except (OSError, ValueError, KeyError, TypeError):
+            return None
     if kind != "yoda" or not path.exists():
         return None
     text = path.read_text(encoding="utf-8", errors="replace")
     match = re.search(re.escape(obj) + r"\n.*?# sumW[^\n]*\n\S+\s+\S+\s+(\S+)", text, re.S)
     return float(match.group(1)) if match else None
+
+
+def report_of(product: Path) -> Path:
+    return product.with_name(product.name + ".json")
 
 
 # ── [prelim] ───────────────────────────────────────────────────────────────────────────────────
@@ -97,8 +107,8 @@ def prepare(plan: PointPlan) -> None:
         write_atomic(path, text)
     for step in plan.rendered.values():  # a product left by an earlier attempt must not pass for this one's
         for final, partial in step.products:
-            final.unlink(missing_ok=True)
-            partial.unlink(missing_ok=True)
+            for path in (final, partial, report_of(final), report_of(partial)):
+                path.unlink(missing_ok=True)
     for interface in plan.interfaces.values():
         if interface.kind == "fifo":
             if interface.path.exists() or interface.path.is_symlink():
@@ -319,6 +329,8 @@ def _settle(group: list[Step], results: dict[str, ToolResult]) -> PointResult | 
         results[step.tag].message = f"count ok: {written} events"
     for step in group:
         for final, partial in step.products:
+            if report_of(partial).exists():          # a report travels with its product
+                report_of(partial).replace(report_of(final))
             if partial.exists():
                 partial.replace(final)
             elif not final.exists():
