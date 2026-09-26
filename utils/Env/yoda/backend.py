@@ -60,19 +60,21 @@ def _voided(yoda, source: Path, pages: list, target: Path) -> Path:
     changed = False
     for page in pages:
         voided = page.ranges.get("voided", [])
-        if not voided:
-            continue
-        estimate = objects[page.object]
-        if "Estimate" not in estimate.type():
-            raise HepError(f"cannot void bins of {page.object}, a {estimate.type()}", where=str(source))
-        for index in voided:
-            estimate.bin(index).setVal(float("nan"))
-            estimate.bin(index).rmErrs()
-        changed = True
+        for path in {v for s, v in zip(page.sources, page.variants) if s == source} if voided else ():
+            changed |= _void(objects[path], voided, source)
     if not changed:
         return source
     yoda.write(list(objects.values()), str(target))
     return target
+
+
+def _void(estimate, voided: list, source: Path) -> bool:
+    if "Estimate" not in estimate.type():
+        raise HepError(f"cannot void bins of {estimate.path()}, a {estimate.type()}", where=str(source))
+    for index in voided:
+        estimate.bin(index).setVal(float("nan"))
+        estimate.bin(index).rmErrs()
+    return True
 
 
 def _reference(yoda, page):
@@ -114,9 +116,12 @@ def draw(cells: dict, settings: dict, say) -> int:
         work = first.config.parent / "yoda"
         work.mkdir(parents=True, exist_ok=True)
         outdir = first.output.parent
-        labels = [c["label"] for c in first.document["curve"]]
+        # one file per point (its variants are curves mkhtml draws from it); labels by point
+        sources = list(dict.fromkeys(s for page in pages for s in page.sources))
+        label_of = {s: c["label"].split(" [")[0] for page in pages for s, c in zip(page.sources, page.document["curve"])}
+        labels = [label_of[s] for s in sources]
         curves = [_voided(yoda, source, pages, work / f"{i:02d}_{source.parent.name}.yoda")
-                  for i, source in enumerate(first.sources)]
+                  for i, source in enumerate(sources)]
         argv = ["rivet-mkhtml", "--no-rivet-refs", "-o", str(outdir), "-c", str(work / "pages.plot")]
         argv += [x for f in settings.get("formats", ["pdf"]) if FORMATS[f] for x in ("-f", FORMATS[f])]
         argv += [] if settings.get("ratio", False) else ["--no-ratio"]

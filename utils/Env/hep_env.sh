@@ -14,8 +14,8 @@ export HEP HEP_INSTALL HEKIT_ROOT
 # The file that sourced this one (the ~/HEP/setup.sh stub), re-sourced by hep_refresh
 export HEP_SETUP="${BASH_SOURCE[1]:-${BASH_SOURCE[0]}}"
 
-_HEP_PACKAGES="LHAPDF hepmc3 fastjet xrootd root yoda pythia8 rivet herwig7 delphes sherpa madgraph whizard onnxruntime"
-_HEP_SCALARS="LHAPDF_DATA_PATH ONNXRUNTIME_DIR"
+_HEP_PACKAGES="LHAPDF hepmc3 fastjet xrootd root yoda pythia8 rivet herwig7 delphes sherpa madgraph whizard onnxruntime geant4"
+_HEP_SCALARS="LHAPDF_DATA_PATH ONNXRUNTIME_DIR GEANT4_DATA_DIR"
 
 # _hep_prepend VAR DIR — prepend DIR if it exists and is not already present; record the addition.
 _hep_prepend() {
@@ -181,6 +181,8 @@ for _hep_var in $_HEP_SCALARS; do
 done
 unset _hep_var
 export LHAPDF_DATA_PATH="$HEP_INSTALL/LHAPDF/share/LHAPDF"
+# Geant4 11 finds every data set under one directory (what its geant4.sh exports)
+[ -d "$HEP_INSTALL/geant4/share/Geant4/data" ] && export GEANT4_DATA_DIR="$HEP_INSTALL/geant4/share/Geant4/data"
 export ONNXRUNTIME_DIR="$HEP_INSTALL/onnxruntime"
 # RIVET_ANALYSIS_PATH is deliberately not set: the rivet tool sets build/Rivet per run.
 export HEP_ENV_LOADED=1

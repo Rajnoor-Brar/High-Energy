@@ -47,9 +47,10 @@ class Page:
     config: Path         # the Paint config
     output: Path         # without extension
     cell: str = ""       # the plot_points tags, "" with no plot_points
-    object: str = ""     # the YODA path
+    object: str = ""     # the YODA path without analysis options: what the page is of
     document: dict = field(default_factory=dict)    # the Paint config, as written
-    sources: list = field(default_factory=list)     # each curve's YODA
+    sources: list = field(default_factory=list)     # each curve's YODA …
+    variants: list = field(default_factory=list)    # … and its object there (options included)
     data: tuple | None = None                       # (reference YODA, its object path)
     overrides: set = field(default_factory=set)     # [plot.object] keys that applied
     ranges: dict = field(default_factory=dict)      # Paint --dump-ranges, for other backends
@@ -117,7 +118,7 @@ def tlatex(text: str) -> str:
     out = re.sub(upright, r"\1", out)
     out = re.sub(r"\\mathbf\s*\{([^{}]*)\}", r"#bf{\1}", out)
     out = re.sub(r"\\([A-Za-z]+)", lambda m: _COMMANDS.get(m.group(1), "#" + m.group(1)), out)
-    out = re.sub(r"([_^])(#[A-Za-z]+|[A-Za-z0-9])", r"\1{\2}", out)   # p_\perp → p_{#perp}
+    out = re.sub(r"([_^])(#[A-Za-z]+|[A-Za-z0-9+*-])", r"\1{\2}", out)   # p_\perp → p_{#perp}, \pi^- → #pi^{-}
     out = re.sub(r"\{\s+", "{", out)
     return re.sub(r"\s+", " ", out).strip()
 
@@ -164,11 +165,27 @@ def root_name(path: str) -> str:
     return path.lstrip("/").replace(":", "__").replace("=", "-").replace(" ", "_")
 
 
+def base_of(path: str) -> str:
+    """/photo_eic:R=0.4/d01-x01-y01 → /photo_eic/d01-x01-y01: a page is of the object, and each
+    variant (a swept analysis option) is a curve on it, as in v1."""
+    analysis, _, rest = path.strip("/").partition("/")
+    return f"/{analysis.split(':')[0]}/{rest}"
+
+
 def objects_of(yoda: Path) -> list[str]:
-    """The 1D objects of a YODA file that get pages."""
+    """The 1D objects of a YODA file that get pages: the nominal weight only (Sherpa writes a
+    variation per extra weight, as /x[EXTRA__MEWeight])."""
     text = yoda.read_text(encoding="utf-8", errors="replace")
     found = re.findall(r"^BEGIN YODA_(?:ESTIMATE1D|HISTO1D|SCATTER2D)_V\d+ (\S+)$", text, re.M)
-    return [p for p in found if not p.startswith(("/RAW/", "/TMP/")) and p not in COUNTERS]
+    return [p for p in found if not p.startswith(("/RAW/", "/TMP/")) and p not in COUNTERS
+            and not p.endswith("]")]            # /x[EXTRA__NTrials]: a weight variation, not a page
+
+
+def raws_of(yoda: Path) -> set[str]:
+    """The /RAW Histo1D twins a YODA file has, whose entries App_yd2rt keeps. A ratio made in
+    finalize has none (or an Estimate1D one), and gets no min_entries."""
+    text = yoda.read_text(encoding="utf-8", errors="replace")
+    return set(re.findall(r"^BEGIN YODA_HISTO1D_V\d+ (/RAW/\S+)$", text, re.M))    # entries: Histo1D only
 
 
 def _sha(path: Path) -> str:
@@ -192,6 +209,30 @@ def convert(yoda: Path, target: Path) -> Path:
     return target
 
 
+def data_source(name: str, run) -> Path:
+    """[plot.data].file: `rivet:<Analysis>` is Rivet's own reference file (its data directory, or
+    build/Rivet for ours), which every installation has; anything else is under datasets/."""
+    if name.startswith("rivet:"):
+        analysis = name.split(":", 1)[1]
+        places = [build_root() / "Rivet"]
+        try:
+            found = subprocess.run(["rivet-config", "--datadir"], capture_output=True, text=True, timeout=30)
+            places += [Path(p) for p in found.stdout.strip().split(":") if p]
+        except (OSError, subprocess.SubprocessError):
+            pass
+        for place in places:
+            for candidate in (place / f"{analysis}.yoda", place / f"{analysis}.yoda.gz"):
+                if candidate.is_file():
+                    return candidate
+        raise HepError(f"Rivet has no reference data for {analysis}", where=f"{run.path}: [plot.data].file",
+                       hint=f"looked for {analysis}.yoda[.gz] in {', '.join(map(str, places))}")
+    source = resolve(name, "data", project=run.project, where=f"{run.path}: [plot.data].file")
+    if not source.is_file():
+        raise HepError("the reference data file does not exist", where=str(source),
+                       hint="datasets/ is not in git; `rivet:<Analysis>` names Rivet's own reference data")
+    return source
+
+
 def yoda_of(plan) -> Path | None:
     for interface in plan.interfaces.values():
         if interface.kind == "product" and interface.path.suffix == ".yoda":
@@ -211,12 +252,18 @@ def pages(run, configuration, plans) -> list[Page]:
     page_groups = [g for g in groups if set(g) & set(configuration.plot_points)]
     curve_groups = [g for g in groups if g not in page_groups]
 
-    objects = objects_of(yoda_of(complete[0]))
+    variants: dict[str, dict[str, list[str]]] = {}      # point → base path → its full paths
+    raws = {plan.point.name: raws_of(yoda_of(plan)) for plan in complete}
+    for plan in complete:
+        for full in objects_of(yoda_of(plan)):
+            variants.setdefault(plan.point.name, {}).setdefault(base_of(full), []).append(full)
+    objects = list(dict.fromkeys(b for plan in complete for b in variants.get(plan.point.name, {})))
     wanted = settings.get("objects", [])
     if wanted:
-        objects = [o for o in objects if any(fnmatch.fnmatch(o, g) for g in wanted)]
+        objects = [o for o in objects if any(fnmatch.fnmatch(o, g) or any(fnmatch.fnmatch(f, g)
+                   for v in variants.values() for f in v.get(o, [])) for g in wanted)]
         if not objects:
-            raise HepError(f"[plot].objects {wanted} match no object of {yoda_of(complete[0]).name}",
+            raise HepError(f"[plot].objects {wanted} match no object of the points' YODAs",
                            where=f"{run.path}: [plot].objects")
 
     out_dir, res_dir = complete[0].out.parent / "plots", complete[0].res.parent / "plots"
@@ -225,9 +272,7 @@ def pages(run, configuration, plans) -> list[Page]:
     data = settings.get("data", {})
     data_file = source = None
     if data:
-        source = resolve(data["file"], "data", project=run.project, where=f"{run.path}: [plot.data].file")
-        if not source.is_file():
-            raise HepError("the reference data file does not exist", where=str(source))
+        source = data_source(data["file"], run)
         data_file = convert(source, output_root() / run.project / ".cache" / "datasets" / f"{source.stem}.root")
 
     by_page: dict[str, list] = {}
@@ -266,10 +311,14 @@ def pages(run, configuration, plans) -> list[Page]:
                 "auto_range": bool(settings.get("auto_range", True)),
                 "range_pad": int(settings.get("range_pad", 0)),
             }
+            curves = [(plan, full) for plan in members for full in variants.get(plan.point.name, {}).get(path, [])]
+            several = {plan.point.name for plan, _ in curves if len(variants[plan.point.name][path]) > 1}
             document = {"page": page, "style": dict(style), "curve": [
-                {"file": str(inputs[plan.point.name]), "object": root_name(path),
-                 "raw": "RAW/" + root_name(path), "label": _curve_label(run, plan, curve_groups)}
-                for plan in members]}
+                {"file": str(inputs[plan.point.name]), "object": root_name(full),
+                 **({"raw": "RAW/" + root_name(full)} if "/RAW" + full in raws[plan.point.name] else {}),
+                 "label": _curve_label(run, plan, curve_groups)
+                          + (f" [{full.strip('/').split('/')[0].partition(':')[2]}]" if plan.point.name in several else "")}
+                for plan, full in curves]}
             if reference:
                 document["data"] = {"file": str(data_file), "object": root_name(reference),
                                     "label": data.get("legend", "Data")}
@@ -277,7 +326,7 @@ def pages(run, configuration, plans) -> list[Page]:
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(tomli_w.dumps(document), encoding="utf-8")
             made.append(Page(rel, config, res_dir / rel, cell=key, object=path, document=document,
-                             sources=[yoda_of(plan) for plan in members],
+                             sources=[yoda_of(plan) for plan, _ in curves], variants=[full for _, full in curves],
                              data=(source, reference) if reference else None, overrides=set(override)))
     return made
 

@@ -17,8 +17,8 @@
 # A path with a component starting with `_` is parked: never built by `make all`.
 #
 # Linking (§5.2): a source names its libraries in a `// requires: pythia8 hepmc3 …` line near the
-# top (`none` for none). Without the line it gets every library that was found. Including
-# "Module.hh" adds hepmc3 and toml. Flags come from build/flags.mk (§5.3).
+# top (`none` for none; a trailing `(…)` is a note). Without the line it gets every library that
+# was found. Including "Module.hh" adds hepmc3 and toml. Flags come from build/flags.mk (§5.3).
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := all
@@ -40,9 +40,10 @@ ifneq ($(FLAGS_KEY),$(FLAGS_KEY_NOW))
   $(shell utils/Env/flags.sh $(FLAGS_MK))
   include $(FLAGS_MK)
 endif
-KNOWN := pythia8 hepmc3 yoda root fastjet lhapdf rivet toml zstd zlib onnx delphes
+KNOWN := pythia8 hepmc3 yoda root fastjet lhapdf rivet geant4 toml zstd zlib onnx delphes
 
-req_line  = $(shell sed -n 's#^[[:space:]]*//[[:space:]]*requires:[[:space:]]*##p' $(1) | head -n1)
+open     := (
+req_line  = $(shell sed -n 's#^[[:space:]]*//[[:space:]]*requires:[[:space:]]*##p' $(1) | head -n1 | sed 's#[[:space:]]*$(open).*##')
 uses_kit  = $(if $(shell grep -ls 'include[[:space:]]*"Module.hh"' $(1)),hepmc3 toml)
 libs_of   = $(sort $(call uses_kit,$(1)) $(filter-out none,$(or $(call req_line,$(1)),$(FOUND))))
 lib_flags = $(if $(filter $(2),$(FOUND)),$(FLAGS_$(2)),$(error $(1): requires '$(2)', $(if \
@@ -127,6 +128,19 @@ $(foreach s,$(RIVETS),$(eval $(call rivet_rule,$(s))))
 
 ALL := $(foreach s,$(PROG_SRCS) $(APP_SRCS),$(call out_of,$(s))) $(foreach s,$(RIVET_SRCS),rivet_$(call ana_of,$(s)))
 TESTS := $(foreach s,$(TEST_SRCS),$(call out_of,$(s)))
+
+# Herwig's repository (utils/Env/herwig): its own install made none, because its defaults need the
+# CT14lo/CT14nlo PDF sets (L15). Built here, never in ~/HEP; a failure warns and leaves no file.
+HERWIG := $(shell command -v Herwig 2>/dev/null)
+ifneq ($(HERWIG),)
+HERWIG_HOME := $(patsubst %/bin/Herwig,%,$(HERWIG))
+$(BUILD)/Herwig/HerwigDefaults.rpo: $(HERWIG)
+	@mkdir -p $(@D)
+	@cd $(@D) && if Herwig init -L$(HERWIG_HOME)/lib/Herwig -i$(HERWIG_HOME)/share/Herwig \
+	    --repo=$(abspath $@) defaults/HerwigDefaults.in > init.log 2>&1; then echo "── $@"; \
+	  else rm -f $(abspath $@); echo "warning: Herwig's repository was not built: $$(tail -1 init.log)"; fi
+ALL += $(BUILD)/Herwig/HerwigDefaults.rpo
+endif
 
 .PHONY: all tests test test-slow clean configure list
 all: $(ALL)

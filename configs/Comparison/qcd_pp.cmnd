@@ -1,0 +1,6 @@
+! qcd_pp.cmnd — Pythia 8: pp → QCD 2→2, as the scratch generator_comparison.cc, with a 20 GeV
+! pT-hat cut so the three generators agree on the region (the scratch file had none).
+! Beams and √s come from the plan (beams, sqrts); seeds and events from the runner.
+HardQCD:all = on
+PhaseSpace:pTHatMin = 20.
+Next:numberCount = 0

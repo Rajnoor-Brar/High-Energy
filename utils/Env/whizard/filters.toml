@@ -1,0 +1,25 @@
+# utils/Env/whizard/filters.toml — Whizard only prints (05_Tools.md §3.2). A rule never fails a run.
+[[rule]]
+match = '^\| Starting integration'
+emit  = "phase"
+phase = "integrating"
+
+[[rule]]
+match = '^\| Starting simulation'
+emit  = "phase"
+phase = "generating"
+
+[[rule]]
+match = '^\| Events:\s+(?P<done>\d+)'
+emit  = "progress"
+
+[[rule]]
+match = '^\*\*\* (?:FATAL ERROR|ERROR)'
+emit  = "error"
+
+[[rule]]
+match = '^\*\*\* WARNING'
+emit  = "warn"
+
+[defaults]
+last_line = true

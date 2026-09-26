@@ -342,6 +342,7 @@ have got.
 description = "Pythia + Rivet in one process, same sweeps and seeds as the chain"
 sweeps      = ["pdf"]
 tools       = ["jets", "yd2rt"]            # pythia is never spawned here; jets runs it in-process
+prelim      = {}                           # no FIFO: the events never leave the process
 
 [tools.pythia]                             # configured, not spawned: it describes Pythia's card
 tool       = "pythia"
@@ -352,7 +353,7 @@ tool     = "rivet"
 analyses = ["photo_eic"]
 
 [tools.jets]
-tool           = "custom"
+tool           = "module"                  # a Module.hh program: config, --output, the report
 executable     = "InprocJets.exe"          # modules/PhotoProduction/InprocJets.cc
 output_file    = "photo.yoda"
 pythia_cmnd    = true                      # ask for the pythia table's rendered card (default false)
@@ -572,7 +573,7 @@ void_empty  = false
 min_entries = 1
 
 [plot.data]
-file   = "zeus_eic.yoda"
+file   = "rivet:ZEUS_2012_I1116258"
 legend = "ZEUS 2012"
 
 [plot.data.map]      # explicit, never matched by name (00/B5)
@@ -597,7 +598,7 @@ What this shows:
 ### 8.2 `configs/Lambda/lambda.toml` — two analysis paths, and a module option sweep
 
 ```toml
-# configs/Lambda/lambda.toml — v2 schema
+# configs/Lambda/lambda.toml (abridged: it also has costheta, cuts_grid, sets, energy, replicas)
 [run]
 name          = "lambda"
 project       = "Lambda"
@@ -608,76 +609,77 @@ threads       = 16
 [run.single]
 description = "One run at 7 TeV, both analysis paths"
 sweeps      = []
-tools       = [["pythia", "lamriv", "lambda"], ["yd2rt_rivet", "yd2rt_module"]]
+tools       = [["pythia", "lamriv", "lambda"], "yd2rt"]
 
 [run.masswindow]
-description = "Mass-window scan through both paths: four points, each its own 20k-event generation"
+description = "Mass-window scan through both paths: four points, each its own generation (V9)"
 sweeps      = ["masstol"]
-tools       = [["pythia", "lamriv", "lambda"], ["yd2rt_rivet", "yd2rt_module"]]
-
-[run.energy]
-description = "Lambda yield against collision energy"
-sweeps      = ["sqrts"]
-tools       = [["pythia", "lamriv", "lambda"], ["yd2rt_rivet", "yd2rt_module"]]
+tools       = [["pythia", "lamriv", "lambda"], "yd2rt"]
 
 [prelim]
-fifo = ["to_rivet.hepmc", "to_module.hepmc"]
+fifo = ["to_rivet.hepmc", "to_module.hepmc"]     # fan-out: one FIFO per reader (V16)
 
 [static]
-sqrts = "7tev"
+sqrts  = "7tev"
+beam_a = "Ne20"
+beam_b = "Ne20"
 
 [tools.pythia]
 tool        = "pythia"
 baseconfig  = "lambda.cmnd"
-output_file = ["to_rivet.hepmc", "to_module.hepmc"]     # fan-out: one FIFO per reader
+output_file = ["to_rivet.hepmc", "to_module.hepmc"]
 
 [tools.lamriv]
 tool        = "rivet"
 input       = "to_rivet.hepmc"
 analyses    = ["Lamriv"]
-options     = { RESERVED = 2 }
+options     = { RESERVED = 2 }     # the module's reserved_protons: the two paths' cuts must match
 output_file = "lamriv.yoda"
 
 [tools.lambda]
 tool        = "module"
-executable  = "Lambda.exe"                  # build/Lambda/Lambda.exe, from modules/Lambda/Lambda.cc
+executable  = "Lambda.exe"         # build/Lambda/Lambda.exe, from modules/Lambda/Lambda.cc
 input       = "to_module.hepmc"
-output_file = "lambda.yoda"
+output_file = "lambda.root"
 
-[tools.lambda.config]
-mass_tolerance      = 0.15
-cos_theta_tolerance = 0.0
-reserved_protons    = 2
+[tools.lambda.config]              # Lamriv's option defaults, under the module's names
+mass_tolerance      = 0.15         # |m(pπ) − m(Λ)| accepted, GeV
+cos_theta_tolerance = 0.0          # 0 = off; else |cos θ* + 1| tolerance
+reserved_protons    = 2            # beam protons per event that cannot come from a Λ
 track_pt_min        = 0.0
 track_eta_max       = 8.0
 bins                = 100
 
-[tools.yd2rt_rivet]
+[tools.yd2rt]
 tool        = "yd2rt"
 input       = "lamriv.yoda"
 output_file = "lamriv.root"
-
-[tools.yd2rt_module]
-tool        = "yd2rt"
-input       = "lambda.yoda"
-output_file = "lambda.root"
 
 [quantities.sqrts]
 values = [900.0, 7000.0, 13000.0]
 tags   = ["900gev", "7tev", "13tev"]
 labels = ["900 GeV", "7 TeV", "13 TeV"]
 
-[quantities.masstol]            # one quantity, two consumers, a key for each
+[quantities.beam_a]
+values = [1000100200]
+tags   = ["Ne20"]
+
+[quantities.beam_b]
+values = [1000100200]
+tags   = ["Ne20"]
+
+[quantities.masstol]               # one quantity, two consumers, a key for each
 target = ["lamriv/Lamriv", "lambda"]
 key    = { lamriv = "MASSTOL", lambda = "mass_tolerance" }
 values = [0.05, 0.10, 0.15, 0.25]
 tags   = ["m050", "m100", "m150", "m250"]
 labels = ["#pm 50 MeV", "#pm 100 MeV", "#pm 150 MeV", "#pm 250 MeV"]
 
+# Pages come from the YODA product (lamriv.yoda); the module's lambda.root is for ROOT users.
 [plot]
-backend = "root"
-formats = ["png"]
-objects = ["/Lambda/*", "/Lamriv/*"]
+formats    = ["png"]
+objects    = ["/Lamriv*"]
+auto_range = true
 ```
 
 What this shows:
@@ -688,8 +690,11 @@ What this shows:
   which costs seconds at this event count. Both paths see the *same* events within a point, because
   App_Pythia fans out to both.
 - **Fan-out is explicit.** Two readers need two FIFOs, and App_Pythia writes both.
-- **v1's normalisation mismatch (`00/B42`) is gone.** The module writes its own YODA file, and the
-  two paths are compared in plots, not in one file.
+- **v1's normalisation mismatch (`00/B42`) is gone.** The module writes its own `lambda.root`, as
+  densities (L21); Rivet's `lamriv.yoda` becomes `lamriv.root` through yd2rt. On the same events the
+  two agree to YODA's written precision (P4 S1).
+- **The beams are Ne-20 on Ne-20** (the card is Angantyr), as static `beam_a`/`beam_b` values that
+  the master maps to `Beams:idA`/`idB`. Lamriv's `.info` therefore has no `Beams` line (any beams).
 
 ### 8.3 A generator comparison as a configuration
 
@@ -803,7 +808,7 @@ range_pad   = 0                  # auto_range keeps this many whole bins either 
 legend      = "top-right"
 
 [plot.data]                      # reference data, optional
-file   = "zeus_eic.yoda"         # → datasets/
+file   = "rivet:ZEUS_2012_I1116258"   # Rivet's own reference data; a bare name is under datasets/
 legend = "ZEUS 2012"
 [plot.data.map]                  # MC object → reference object; explicit only (00/B5)
 "d01-x01-y01" = "/REF/ZEUS_2012_I1116258/d01-x01-y01"
@@ -852,7 +857,7 @@ All checked at plan time, before any process starts. Every error names the key o
 | C4 | `plot_points` must be a subset of `sweeps`, where an entangled group counts once. |
 | C5 | Every `tools`/`post` entry must be a `[tools.<tag>]` or an options-free standard tool. Nesting is at most one level. An `@q` entry's values must all be tool tags. |
 | C6 | The connection rules ([02 §5](02_Architecture.md#5-connections-how-data-moves-between-tools)): FIFOs within a group only, one reader per FIFO, no FIFO into a `streamable = false` tool, every input produced, one writer per output. |
-| C7 | Every active quantity (swept, or given a static value) must have at least one consumer (§6.1). |
+| C7 | Every active quantity (swept, or given a static value) must have at least one consumer (§6.1). In a chain that picks a tool by a quantity (`@generator`), a consumer among the configuration's alternatives is enough, and each point applies the value only to the tools it has; the selector quantity itself is consumed by the choice (P4 S3). |
 | C8 | Two sources setting one native key in one card is an error (v1's `_claim`). |
 | C9 | A Rivet option quantity's key must be declared in the analysis `.info` (`00/B14`). |
 | C10 | Provider checks: PDF sets named by values are installed (LHAPDF); base configs exist; executables are built (with a hint of the `make` target). |

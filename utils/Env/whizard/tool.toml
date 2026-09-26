@@ -1,0 +1,34 @@
+# utils/Env/whizard/tool.toml — Whizard 3, a process generator with its own showerless events
+# (05_Tools.md §2, L13). render.py writes the SINDARIN point card, base included last.
+# Integration (library, phase space, grids) is a cached [prepare] step; generation runs in that
+# cache entry, where Whizard finds them. It writes exactly n_events or fails: written = "requested".
+# Whizard writes no cross section into its HepMC output (v1, P7-S04): its σ is the integration's.
+[tool]
+category        = "process-generator"
+executable      = "whizard"
+status          = "filters"
+produces_events = true
+
+[card]
+style   = "render"
+ext     = "sin"
+comment = "#"
+
+[command]
+argv = ["{exe}", "{card}"]
+cwd  = "{prepared}"
+
+[prepare]
+argv   = ["{exe}", "{prepare_card}"]
+ignore = ["n_events", "$sample", "sample_format", "seed"]
+
+[outputs]
+sidecar = "{output}.json"
+written = "requested"
+
+[exports.sin]
+alias = "card"                      # whizard_sin = whizard_card
+
+[identity]
+files   = ["{exe}"]
+version = ["whizard", "--version"]

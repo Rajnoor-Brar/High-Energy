@@ -21,8 +21,8 @@ The layout is rework v2's ([docs/rework_v2/03_Layout_Build.md](../docs/rework_v2
 | `bots/`      | Bot configuration and plans (`current_plan.md`)                              |
 | `build/`     | Everything compiled (`make`/`hep build`); `build/Rivet/` holds the Rivet plugins |
 | `configs/`   | Run TOMLs and native cards per project (`configs/<Project>/`)                |
-| `datasets/`  | Third-party reference data (YODA), gitignored                                |
-| `docs/`      | `rework_v2/` (the plan being executed), `rework_v1/` (the v1 retrospective)  |
+| `datasets/`  | Your own reference data (YODA), gitignored; Rivet's are `rivet:<Analysis>` in `[plot.data]` |
+| `docs/`      | `GUIDE.md` (how to use it), `rework_v2/` (the executed plan), `rework_v1/` (the v1 retrospective) |
 | `modules/`   | Project sources: `<Name>.cc` programs, headers, Rivet plugins in `Rivet/` or `Rivet_*.cc`; `_`-prefixed folders are parked (not built) |
 | `output/`    | Technical files per project (cards, logs, FIFOs, status), and `output/tests/` for tests |
 | `results/`   | Products per project (YODA, ROOT, plots, provenance)                         |

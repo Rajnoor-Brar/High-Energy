@@ -1,0 +1,71 @@
+# sherpa.toml — EIC photoproduction with Sherpa 3 (photo_ep.sherpa.yaml), through the same Rivet
+# analysis as eic.toml (rework v2 schema, docs/rework_v2/04_Config.md).
+#
+#   hep run PhotoProduction/sherpa            18x275, LO, MPI off: v1 measured 9,636 ± 782 pb (L24)
+#   hep run PhotoProduction/sherpa pdf        the proton PDF swept (MPI_PDF_SET follows it)
+#
+# Its own file, because the Pythia-only settings of eic.toml (pT0Ref, MPI, ProcessType) have no
+# Sherpa key and would be refused as unconsumed (C7). The card's DIFFERS notes say where the two
+# generators' setups cannot be matched.
+
+[run]
+serial        = 4
+name          = "sherpa"
+project       = "PhotoProduction"
+configuration = "single"
+event_count   = 5_000
+threads       = 1                   # Sherpa runs one process per point
+
+[run.single]
+description = "One point at 18x275 e+p, LO, no MPI (the card's Amisic note)"
+sweeps      = []
+tools       = [["sherpa", "rivet"], "yd2rt"]
+
+[run.pdf]
+serial      = 1
+description = "Proton-PDF comparison at 18x275"
+sweeps      = ["pdf"]
+tools       = [["sherpa", "rivet"], "yd2rt"]
+
+[prelim]
+fifo = ["events.hepmc"]
+
+[static]
+energies = "18x275"
+beams    = "ep"
+pdf      = "NNPDF23lo"
+
+[tools.sherpa]
+tool        = "sherpa"
+baseconfig  = "photo_ep.sherpa.yaml"
+output_file = "events.hepmc"
+
+[tools.rivet]
+tool        = "rivet"
+input       = "events.hepmc"
+analyses    = ["photo_eic"]
+output_file = "photo.yoda"
+
+[tools.yd2rt]
+tool        = "yd2rt"
+input       = "photo.yoda"
+output_file = "photo.root"
+
+[quantities.energies]
+values = [[275, 18], [920, 27.5]]   # [E_p, E_e]: beam A is the proton, as in the card
+tags   = ["18x275", "27x920"]
+labels = ["18x275 GeV", "27x920 GeV"]
+
+[quantities.beams]
+values = [[2212, -11], [2212, 11]]
+tags   = ["ep", "em"]
+labels = ["e^{+}p", "e^{-}p"]
+
+[quantities.pdf]
+values = ["NNPDF23_lo_as_0130_qed", "MSTW2008lo68cl"]
+tags   = ["NNPDF23lo", "MSTW08lo"]
+labels = ["NNPDF 2.3 QCD+QED LO", "MSTW 2008 LO"]
+
+[plot]
+formats = ["png"]
+ratio   = true

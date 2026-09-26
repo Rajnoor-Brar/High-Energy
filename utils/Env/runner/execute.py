@@ -26,7 +26,7 @@ import signal
 import stat
 import subprocess
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from .errors import HepError
@@ -76,13 +76,31 @@ class NullSink:
 # ── the count check ────────────────────────────────────────────────────────────────────────────
 
 def read_count(path: Path, reader: str) -> float | None:
-    """`yoda:/RAW/_EVTCOUNT` → the counter's numEntries, read from the YODA text."""
+    """`yoda:/RAW/_EVTCOUNT` → the counter's numEntries, read from the YODA text;
+    `json:events` → that key of the product's report, <product>.json (the module kit writes it);
+    `root:Delphes` → that tree's entries (uproot, imported only here: the runner is stdlib otherwise)."""
     kind, _, obj = reader.partition(":")
+    if kind == "root":
+        try:
+            import uproot
+            with uproot.open(path) as file:
+                return float(file[obj].num_entries)
+        except Exception:                        # no uproot, no file, no tree: no count
+            return None
+    if kind == "json":
+        try:
+            return float(json.loads(report_of(path).read_text(encoding="utf-8"))[obj])
+        except (OSError, ValueError, KeyError, TypeError):
+            return None
     if kind != "yoda" or not path.exists():
         return None
     text = path.read_text(encoding="utf-8", errors="replace")
     match = re.search(re.escape(obj) + r"\n.*?# sumW[^\n]*\n\S+\s+\S+\s+(\S+)", text, re.S)
     return float(match.group(1)) if match else None
+
+
+def report_of(product: Path) -> Path:
+    return product.with_name(product.name + ".json")
 
 
 # ── [prelim] ───────────────────────────────────────────────────────────────────────────────────
@@ -97,8 +115,8 @@ def prepare(plan: PointPlan) -> None:
         write_atomic(path, text)
     for step in plan.rendered.values():  # a product left by an earlier attempt must not pass for this one's
         for final, partial in step.products:
-            final.unlink(missing_ok=True)
-            partial.unlink(missing_ok=True)
+            for path in (final, partial, report_of(final), report_of(partial)):
+                path.unlink(missing_ok=True)
     for interface in plan.interfaces.values():
         if interface.kind == "fifo":
             if interface.path.exists() or interface.path.is_symlink():
@@ -155,7 +173,7 @@ def run_group(plan: PointPlan, group: list[Step], *, sink, journal: Journal | No
             read_fd, write_fd = os.pipe()
             env["HEP_STATUS_FD"] = str(write_fd)
         try:
-            process = subprocess.Popen(step.argv, cwd=plan.out, env=env, stdin=subprocess.DEVNULL, stdout=log,
+            process = subprocess.Popen(step.argv, cwd=step.cwd or plan.out, env=env, stdin=subprocess.DEVNULL, stdout=log,
                                        stderr=subprocess.STDOUT, start_new_session=True,
                                        pass_fds=(write_fd,) if write_fd is not None else ())
         except OSError as error:
@@ -276,6 +294,13 @@ def run_point(plan: PointPlan, run, configuration, *, sink=None, journal: Journa
         _finished(plan, result, sink, journal)
         return result
 
+    ok, blamed, message = run_prepares(plan, sink=sink, journal=journal, stopper=stopper, results=results)
+    if not ok:
+        result = PointResult(False, stopped=stopper.requested, cause=blamed, message=message, tools=results)
+        _cleanup(plan)
+        _finished(plan, result, sink, journal)
+        return result
+
     for group in plan.groups:
         ok, blamed, message = run_group(plan, group, sink=sink, journal=journal, stopper=stopper, results=results)
         if not ok:
@@ -300,8 +325,41 @@ def run_point(plan: PointPlan, run, configuration, *, sink=None, journal: Journa
     return result
 
 
+def run_prepares(plan: PointPlan, *, sink, journal: Journal | None, stopper: Stopper,
+                 results: dict[str, ToolResult]) -> tuple[bool, str, str]:
+    """[prepare] steps (Herwig's read, Sherpa's integration), each in its cache entry, before the
+    groups. An entry with a `.prepared` stamp is a hit and runs nothing; the stamp is written only
+    after the step exited 0 and left its marker, so an interrupted integration is redone."""
+    for step in plan.rendered.values():
+        if step.prepare_dir is None or not step.prepare_needed:
+            continue
+        tag = f"{step.tag}:prepare"
+        stamp = step.prepare_dir / ".prepared"
+        if stamp.exists():
+            results[tag] = ToolResult(tag, exit=0, message=f"cache hit {step.prepare_dir.name}")
+            if hasattr(sink, "say"):
+                sink.say(f"   {tag}: cached ({step.prepare_dir})")
+            continue
+        step.prepare_dir.mkdir(parents=True, exist_ok=True)
+        job = replace(step, tag=tag, argv=step.prepare_argv, cwd=step.prepare_dir, inputs=[], outputs=[], products=[],
+                      count_check=None, sidecar=None, sidecar_written=None, log=plan.out / "logs" / f"{step.tag}.prepare.log",
+                      stall_after=max(step.stall_after, 3600.0))
+        ok, blamed, message = run_group(plan, [job], sink=sink, journal=journal, stopper=stopper, results=results)
+        if not ok:
+            return False, step.tag, message
+        marker = step.folder.spec["prepare"].get("marker")
+        if marker and not (step.prepare_dir / marker).exists():
+            return False, step.tag, f"{tag} exited 0 but left no {marker} in {step.prepare_dir}"
+        write_atomic(stamp, json.dumps({"argv": job.argv, "finished": now()}, indent=1) + "\n")
+    return True, "", ""
+
+
 def _settle(group: list[Step], results: dict[str, ToolResult]) -> PointResult | None:
     """After a group succeeded: the count checks, then partial → final names. None when all is well."""
+    for step in group:                           # [outputs] written = "requested": exit 0 means all of it
+        if step.sidecar_written is not None and step.sidecar is not None:
+            write_atomic(step.sidecar, json.dumps({"written": step.sidecar_written, "source": "requested",
+                                                   "tool": step.tag}) + "\n")
     for step in group:
         if step.count_check is None:
             continue
@@ -319,6 +377,8 @@ def _settle(group: list[Step], results: dict[str, ToolResult]) -> PointResult | 
         results[step.tag].message = f"count ok: {written} events"
     for step in group:
         for final, partial in step.products:
+            if report_of(partial).exists():          # a report travels with its product
+                report_of(partial).replace(report_of(final))
             if partial.exists():
                 partial.replace(final)
             elif not final.exists():

@@ -5,7 +5,10 @@ one run TOML, and conventions for where everything lives. Written 2026-09-26 aga
 (branch `rework`). Revised the same day, on the user's instruction *"do not be afraid to overhaul
 everything and scrapping entire utils. Do not be too risk averse"*.
 
-**Status: planned, not started.** Implementation begins only on the user's explicit order.
+**Status: executed**, 2026-09-26 to 2026-09-27, on the user's order, as commits on the branch
+`rework` (P0–P4, local). Each phase file's Log records what was measured and every deviation;
+[06_Roadmap.md §3](06_Roadmap.md#3-budgets) the measured budget. The user guide is
+[../GUIDE.md](../GUIDE.md).
 
 ---
 

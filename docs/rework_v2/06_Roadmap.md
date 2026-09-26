@@ -18,7 +18,7 @@ builds the brief directly.
 | [P1](phases/P1_one-chain.md) | One chain, end to end | 3 | `hep run PhotoProduction/eic single` generates, analyses, watches and records one point | legacy reference YODA reproduced bin for bin; σ at threads = 4 within 1e-6; failure injection never hangs | **done** |
 | [P2](phases/P2_sweeps.md) | Sweeps | 2 | every eic and zeus configuration plans and runs, with skip-unchanged | point and page counts equal `point_counts.toml`; a rerun spawns 0 processes | **done** |
 | [P3](phases/P3_results-and-plots.md) | Results and plots | 3 | YODA → ROOT, Paint pages, `rivet-mkhtml` when asked, `post`, and a new GUIDE | `energy_pdf` draws 4 pages per histogram; the gutter arithmetic is exact | **done** (style review open) |
-| [P4](phases/P4_modules-and-tools.md) | Modules and the other tools | 3 | Lambda as a program; Delphes, Herwig, Sherpa, Whizard, MadGraph; the generator comparison; budget measured | each tool produces a point and passes the count check; line counts within budget | not started |
+| [P4](phases/P4_modules-and-tools.md) | Modules and the other tools | 3 | Lambda as a program; Delphes, Herwig, Sherpa, Whizard, MadGraph; the generator comparison; budget measured | each tool produces a point and passes the count check; line counts within budget | **done** |
 
 ```
 P0 ──► P1 ──► P2 ──► P3 ──► P4
@@ -82,18 +82,31 @@ Measured at the end of P4 with the appendix commands of
 finding**, recorded with its cause, not smoothed over. v1's Python came in at 3.3× its estimate
 because it was sized by feel, so these are sized by surface area: commands, config sections, tools.
 
-| Part | v1 | v2 budget | Basis |
-|---|---|---|---|
-| Runner, `utils/Env/runner/` | 17,172 | **2,000** | 12 modules (02 §3) |
-| Tool folders, `utils/Env/<tool>/` | (adapters: 2,062) | **1,000** | 12 folders: `tool.toml`, `filters.toml`, and a `render.py` for 4 of them |
-| Shell, `utils/Env/{hep, hep_env.sh, flags.sh}` | 213 | **250** | |
-| C++ headers (`Status.hh`, `Module.hh`) | 6,546 (11 namespaces) | **320** | |
-| C++ apps (App_Pythia, App_yd2rt, Paint) | 291 (`hep-run`) | **1,400** | 250 + 250 + 900 |
-| Build (`Makefile`) | 691 | **200** | |
-| **Code total** | **~24,700** | **~5,200** | **≈ 0.2×** |
-| Tests | 33,178 (17k data) | **~1,500** + the reference data | runner, apps, integration |
-| Commands | 19 | **3** (`run`, `watch`, `build`) + `make` | |
-| Config sections | 19 | **9** (the brief's) | |
+| Part | v1 | v2 budget | Basis | **Measured (P4 S3)** | Ratio |
+|---|---|---|---|---|---|
+| Runner, `utils/Env/runner/` | 17,172 | **2,000** | 12 modules (02 §3) | 3,344 (14 modules; `tools.py` 950) | **1.67×** |
+| Tool folders, `utils/Env/<tool>/` | (adapters: 2,062) | **1,000** | 12 folders: `tool.toml`, `filters.toml`, and a `render.py` for 4 of them | 858 (12 folders, 3 `render.py`, 1 `backend.py`, the master) | 0.86× |
+| Shell, `utils/Env/{hep, hep_env.sh, flags.sh}` | 213 | **250** | | 325 | 1.30× |
+| C++ headers (`Status.hh`, `Module.hh`) | 6,546 (11 namespaces) | **320** | | 535 (163 + 372) | **1.67×** |
+| C++ apps (App_Pythia, App_yd2rt, Paint) | 291 (`hep-run`) | **1,400** | 250 + 250 + 900 | 1,248 (354 + 257 + 637) | 0.89× |
+| Build (`Makefile`) | 691 | **200** | | 160 | 0.80× |
+| **Code total** | **~24,700** | **~5,200** | **≈ 0.2×** | **6,470** | **1.24×** (0.26× of v1) |
+| Tests | 33,178 (17k data) | **~1,500** + the reference data | runner, apps, integration | 2,496 + 8,649 reference data | **1.66×** |
+| Commands | 19 | **3** (`run`, `watch`, `build`) + `make` | | 3 + `make` | 1.0× |
+| Config sections | 19 | **9** (the brief's) | | 9 | 1.0× |
+
+**Three rows are over 1.5×, each a finding with its cause (P4 S3):**
+- **The runner (1.67×)** was sized as 12 modules of about 170 lines. `tools.py` alone is 950: the
+  whole tool-folder contract lives there (placeholders, exports and prepare on demand (V21), C6
+  connections, C9 `.info` checks, card styles, the prepare key, seeds in argv). P3 and P4 added two
+  modules nobody planned (`post.py`, the plot backends) and the prepare stage in `execute.py`.
+  The core still names no tool; what grew is what a folder can say.
+- **The C++ headers (1.67×)**: `Module.hh` is 372 lines, because the kit took on the report, the
+  sidecar reader, the standard configurations (V21), `RootOut` and the integrated-program calls.
+- **Tests (1.66×)**: every tool folder got plan-time tests and a slow gate, and the plot stage's
+  legacy and v1 vectors were ported. The reference data are the same 8.6k lines v1 captured.
+
+The code total is 1.24× its budget and a quarter of v1's.
 
 ---
 

@@ -1,0 +1,15 @@
+# utils/Env/madgraph/filters.toml — MadGraph only prints (05_Tools.md §3.2). A rule never fails a run.
+[[rule]]
+match = '^INFO: (?:Running Survey|Refine results|Combining Events|Idle:)'
+emit  = "phase"
+
+[[rule]]
+match = '(?:Error|ERROR|Command .* failed)'
+emit  = "error"
+
+[[rule]]
+match = '^WARNING'
+emit  = "warn"
+
+[defaults]
+last_line = true

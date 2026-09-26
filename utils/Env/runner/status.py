@@ -101,7 +101,7 @@ class Reader:
                 data = handle.read(size - self.offset)
             self.offset = size
             self.state.last_activity = time.monotonic()
-            *lines, self.partial = (self.partial + data).split(b"\n")
+            *lines, self.partial = re.split(rb"\r\n|\r|\n", self.partial + data)   # \r: a progress counter
             for raw in lines:
                 text = raw.decode("utf-8", "replace").rstrip("\r")
                 if text.strip():

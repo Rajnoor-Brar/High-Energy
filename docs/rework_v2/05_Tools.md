@@ -65,11 +65,12 @@ be declared for it (V21). `[exports.<name>]` is for everything else:
 | Section | Holds |
 |---|---|
 | `[tool]` | category, executable, `streamable`, status mode, `consumes_events` / `produces_events` |
-| `[card]` | how a point card is made. `style` is one of: `"append"` (last wins: Pythia), `"prepend"` (the point card first, then include the base: Whizard, L13), `"merge"` (deep YAML merge written whole: Sherpa, L12), `"none"`, or `"render"` (call `render.py`) |
-| `[command]` | the argv template and environment |
+| `[card]` | how a point card is made. `style` is one of: `"append"` (last wins: Pythia, Herwig, Delphes), `"prepend"` (the point card first, then include the base: Whizard, L13), `"none"`, or `"render"` (`render.py` writes the whole card: Sherpa's YAML merge, L12). `line` is the native form of one value (`"{key} = {value}"` by default, `"set {key} {value}"` for ThePEG and Tcl); `footer` lines end the card (Herwig's `saverun`, Pythia's `Beams:LHEF = {input}`), and a footer line whose placeholders are all empty is left out; `seed` lines come after both |
+| `[command]` | the argv template, environment and, optionally, `cwd` (Whizard generates in its cache entry). `{seed}` in argv, and `{seed}`/`{prepared}` in card lines, are filled in last, so identities stay seed- and path-free |
 | `[options]` | a schema for the tool-specific keys, in the runner's field vocabulary: `kind`, `item`, `required`, `choices`. Every option is also an argv placeholder; `kind = "flag"` (with `flag = "-e"`, `default`) expands to the flag or to nothing |
-| `[outputs]` | which outputs are products, and how an event count is read back |
-| `[prepare]` | optional: a prepare step (integration, process build), its cache key, and its marker file |
+| `[outputs]` | which outputs are products, and how an event count is read back: `yoda:/RAW/_EVTCOUNT`, `json:events` (the module kit's report) or `root:<tree>` (Delphes). `written = "requested"`: a generator that always makes what it is asked for or fails (Herwig, Sherpa) gets its sidecar written by the runner |
+| `[prepare]` | optional: a step run before the point, in a cache entry `output/<P>/.cache/<tool>/<key>/` (`argv`, a `marker` it must leave, card keys to `ignore` in the key, like the event count, and `key = "base"` to key on the base card only). A hit, stamped `.prepared`, runs nothing; `{prepared}` names the entry. A `render.py` may define `prepare_card(lines, bases, context)`, the card the step reads (`{prepare_card}`) |
+| `[checks]` | optional: Rivet's `.info` directories, and `files` that must exist before a plan (Herwig's repository) |
 | `[exports.<name>]` | optional: configuration a custom tool may request as `<tool>_<name> = true` ([04 §7.3](04_Config.md#73-standard-configurations-for-custom-tools)): what it gives (`path`, `parts`, or named values), and `needs_prepare` |
 
 **How a tool consumes quantities** is not in the tool folder. It is in the master TOML
@@ -81,11 +82,12 @@ it, so all quantity knowledge is in one readable file.
 Only for dialects that `[card] style` cannot write. It is plain functions, not classes:
 
 ```python
-# utils/Env/sherpa/render.py
-def card(base_text: str, overrides: list[Override], point: PointContext) -> str: ...
-def beam_energies(value, point) -> list[Override]: ...     # named in master.toml: render = "beam_energies"
-def prepare_key(card_text: str) -> str: ...                # what the prepare cache hashes
+# utils/Env/sherpa/render.py (as built, P4 S2)
+def card(bases: list[str], overrides: list[Override], context: dict) -> str: ...   # the whole card, before seeds
 ```
+
+The prepare key is not the plugin's business: the runner hashes the card lines, minus `[prepare]
+ignore` keys. Sherpa's keys are paths into the tree, with list indices (`PDF_SET[0]`).
 
 `Override` is the runner's own `NamedTuple(key, value, origin)`. Tests use the real type, never a
 look-alike (L26, the F1 lesson). A plugin imports only `errors`, `paths` and `quantities`
@@ -104,12 +106,13 @@ look-alike (L26, the F1 lesson). A plugin imports only `errors`, `paths` and `qu
 | `paint` | visualisation | `build/Paint.exe` | — | standard | P3 (driven by `[plot]`) |
 | `yoda` | visualisation | `rivet-mkhtml` | — | none | P3 (driven by `[plot] backend = "yoda"`): `utils/Env/yoda/backend.py`, no `tool.toml` |
 | `merge` | analysis application | `rivet-merge` | no (files) | none | P3, in `post`: one product of every point, `-e` unless `equivalent = false` |
-| `module` | analysis application | `build/<P>/<Name>.exe` | yes | standard | P4 |
-| `delphes` | detector simulator | `DelphesHepMC3` | **no** (L11) | filters | P4 |
-| `herwig` | event generator | `Herwig` (read, then run) | — (writes) | filters | P4 |
-| `sherpa` | event generator | `Sherpa` | — (writes) | filters | P4 |
-| `whizard` | process generator | `whizard` | — (writes) | filters | P4 |
-| `madgraph` | process generator | `mg5_aMC` | — (writes a file) | filters | P4 |
+| `module` | analysis application | `build/<P>/<Name>.exe` (a `Module.hh` program) | yes | standard | P4 S1; count check from the kit's report |
+| `delphes` | detector simulator | `DelphesHepMC3` | **no** (L11) | filters | P4 S2: `set` card with `RandomSeed`, count from the `Delphes` tree |
+| `herwig` | event generator | `Herwig` (read as a cached prepare, then run) | — (writes) | filters | P4 S2: needs `build/Herwig/HerwigDefaults.rpo` (`hep build`); seed and events are flags |
+| `sherpa` | event generator | `Sherpa` | — (writes) | filters | P4 S2: `render.py`; integration as a cached prepare |
+| `whizard` | process generator | `whizard` | — (writes) | filters | P4 S3: `render.py` writes the point card first and includes the base; integration from `prepare_card` (no generation lines); generation in the cache entry (`[command] cwd`) |
+| `geant4` | detector simulator | a module program: `build/<P>/<X>.exe` | as the module | standard | P4 S3: no folder of its own; `// requires: geant4` links it, `GEANT4_DATA_DIR` comes from `hep_env.sh` |
+| `madgraph` | process generator | `mg5_aMC` | — (writes a file) | filters | P4 S3: the proc card built once (`[prepare] key = "base"`); a launch script per point, its run named `r<seed>`, unpacked to a file; Pythia showers it (`Beams:LHEF` footer) |
 
 **Exports.** These are what a custom or module tool can request with a `<tool>_<export> = true`
 key ([04 §7.3](04_Config.md#73-standard-configurations-for-custom-tools)). **Every tool with a card
@@ -302,8 +305,26 @@ This is v1's in-process `hep-run` loop, back as **a user program** rather than a
 (V2). The runner neither knows nor cares that Pythia runs inside it.
 
 **The one rule the types no longer enforce** (v1's scaling contract): fill with raw weights, and
-scale **once**, after the loop. It is documented in `Module.hh` and tested with the Lambda program.
-If a histogram is drawn beside Rivet's, divide by the bin width as well (L21).
+scale **once**, after the loop. It is documented in `Module.hh`, and `RootOut::scale` refuses a
+second call. If a histogram is drawn beside Rivet's, divide by the bin width as well (L21):
+`out.scale(σ/ΣW, "width")`.
+
+**As built (P4 S1).**
+- The CLI is `CONFIG.toml --input=F --output=F --events=N --sidecar=F`. Both `--x=v` and `--x v`
+  work. An empty `--input=` means an integrated program, and an empty `--sidecar=` means none.
+- The module folder (`utils/Env/module/`) always passes a config and the `.partial` output. The
+  kit writes it as given, with a report beside it, `<output>.json` (events, ΣW, the σ used and its
+  source). The report travels with the product when the runner renames it, and the count check
+  reads it (`event_count = "json:events"`).
+- **σ.** `{input_sidecar}` names the producer's sidecar only when the producer ran in an earlier
+  group (a file chain). App_Pythia closes its outputs before writing the sidecar, so a FIFO reader
+  would race it. In a FIFO chain σ is the last event's, as Rivet's is (L2), which is also what
+  makes Lambda equal Lamriv.
+- **`RootOut` lives in `Module.hh`**, but only when ROOT's headers are on the include path
+  (`__has_include(<TFile.h>)`), which is exactly when the source requires `root`. `YodaOut` is not
+  written: no module needs it yet.
+- Integrated programs report their own events with `job.countEvent(w)` and
+  `job.setCrossSection(pb, err)`.
 
 Modules run single-threaded. A module that needs threads and clusters jets must respect L16.
 

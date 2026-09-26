@@ -11,7 +11,7 @@
 # of every tool probed, plus the two directories the non-config libraries come from.
 set -u
 
-TOOLS=(pythia8-config HepMC3-config yoda-config root-config fastjet-config lhapdf-config rivet-config pkg-config)
+TOOLS=(pythia8-config HepMC3-config yoda-config root-config fastjet-config lhapdf-config rivet-config geant4-config pkg-config)
 
 key() {
     local t
@@ -59,6 +59,7 @@ dir_lib() {                                 # dir_lib NAME DIR LIB — a library
     probe fastjet fastjet-config --cxxflags --libs --plugins=yes
     probe lhapdf  lhapdf-config --cppflags --ldflags
     probe rivet   rivet-config --cppflags --ldflags --libs
+    probe geant4  geant4-config --cflags --libs
     probe toml    pkg-config --cflags --libs tomlplusplus
     probe zstd    pkg-config --cflags --libs libzstd
     probe zlib    pkg-config --cflags --libs zlib

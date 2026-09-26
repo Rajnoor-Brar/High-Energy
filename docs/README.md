@@ -1,6 +1,6 @@
 # docs/
 
-- **[rework_v2/](rework_v2/)** — **the plan being executed**: the user's design
+- **[rework_v2/](rework_v2/)** — **the plan, executed** (2026-09-26/27): the user's design
   ([00_Brief.md](rework_v2/00_Brief.md)), the assessment of v1 and its knowledge ledger, the v2
   architecture, layout and build, configuration and tool contracts, and the roadmap with one file
   per phase. Start with [rework_v2/README.md](rework_v2/README.md).
