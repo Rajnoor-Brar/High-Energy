@@ -2,7 +2,7 @@
 
 | Status | Steps | Depends on | Ends with | Updated |
 |---|---|---|---|---|
-| **in progress** | 3 | P0 | `hep run PhotoProduction/eic single` runs App_Pythia ══FIFO══► rivet, watched, checked and recorded | 2026-09-26 |
+| **done** (2026-09-26) | 3 | P0 | `hep run PhotoProduction/eic single` runs App_Pythia ══FIFO══► rivet, watched, checked and recorded | 2026-09-26 |
 
 ## Goal
 
@@ -195,4 +195,20 @@ Tests: `tests/runner` 47 (config 15, plan 18, paths 10, imports 4); `tests/integ
   arguments.
 - **Provenance** records each tool's version (`[identity].version`), binary sha256, argv, card
   sha256 and result, plus git revision/dirty, host and times.
+
+### S3 — 2026-09-26 — done
+
+| Row | Result |
+|---|---|
+| 1 | Live view on a real terminal (`script -qfc`): rich bars, rate, ETA, and the `point 1/1 · m:ss` line. **Row replaced with the question it meant:** the displayed rate (1,494/s) is 17% above `written / wall`, because App_Pythia counts from the start of generation and the wall time includes ~2.5 s of init. Against the generation window taken from `status.jsonl`, the displayed rate is exact (0.00%). |
+| 2 | `hep watch PhotoProduction/eic single --plain` from a second shell follows the running point (progress, both exits, the verdict) and exits by itself when the run finishes |
+| 3 | `hep run … > log` (not a TTY): plain lines, **0** control codes |
+| 4 | A custom `python3 -c` tool that only prints: spinner plus `working on step 9` (its last line), exit 0 |
+
+- **The journal marks runs and points.** `status.jsonl` now carries `run` started/finished, `point`
+  started/verdict and `exit` records, so `hep watch` knows where the latest run begins in an
+  appended journal and when it ends. Its unit tests are `tests/runner/test_status.py` (3).
+- `make test`: 58 passed.
+
+**P1 is done.** `hep run PhotoProduction/eic single` is the working tool again, so R3 is closed.
 

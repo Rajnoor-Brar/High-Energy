@@ -1,6 +1,6 @@
 # Current plan
 
-## rework v2 — EXECUTING (ordered by the user 2026-09-26). Active: **P1 — One chain, end to end**
+## rework v2 — EXECUTING (ordered by the user 2026-09-26). Active: **P2 — Sweeps**
 
 The plan is `docs/rework_v2/`:
 read `README.md` (decisions V1–V20, traceability) → `00_Brief.md` (the user's design, verbatim) →
@@ -21,11 +21,13 @@ read `README.md` (decisions V1–V20, traceability) → `00_Brief.md` (the user'
 - **P0 — Clean slate: done** (`8daff46` plan, tag `rework/v1-final`, `0c3df8f` S1, then S2).
   The v1 baseline is 1,455 events/s (50k events, 20 threads). The user's edits are in `stash@{0}`;
   untracked leftovers are in `output/_v1/`.
-- **P1 — One chain** (`docs/rework_v2/phases/P1_one-chain.md`), in progress:
-  - S1: `Status.hh` + App_Pythia; the reference gate (bin for bin vs `tests/reference/legacy_run`)
-    and the σ gate (threads = 4).
-  - S2: the runner core for one point (config, tools, execute, status, record, `--plan`, exports).
-  - S3: the watch view.
+- **P1 — One chain: done.** App_Pythia passes both gates (reference byte-identical, σ at 4 threads
+  to 1.3e-8). The runner core runs a point byte-identical to the hand chain, failure injection never
+  hangs (SIGPIPE is never the cause), and the live view and `hep watch` work.
+- **P2 — Sweeps** (`docs/rework_v2/phases/P2_sweeps.md`), in progress. quantities.py and sweep.py
+  already exist from P1 S2; P2 adds the remaining checks (C9 .info options, C10 PDF sets), the
+  master/consumer table in --plan, points.json, and the point_counts gate over every eic/zeus
+  configuration (zeus_validation.toml still to translate).
 
 ---
 

@@ -17,9 +17,10 @@ import sys
 from . import config as configmod
 from . import execute, record, sweep, tools
 from .errors import HepError
+from .paths import output_root
 from .quantities import load_master
 from .status import Journal
-from .watch import PlainView
+from .watch import follow, view
 
 
 def parser() -> argparse.ArgumentParser:
@@ -38,7 +39,9 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--plain", action="store_true", help="plain lines instead of the live view")
 
     watch = commands.add_parser("watch", help="attach the live view to a running job")
-    watch.add_argument("config", nargs="?", help="the run config whose job to watch")
+    watch.add_argument("config", nargs="?", help="the run config whose job to watch (default: the latest job)")
+    watch.add_argument("configuration", nargs="?", help="overrides [run].configuration")
+    watch.add_argument("--plain", action="store_true", help="plain lines instead of the live view")
     return top
 
 
@@ -76,8 +79,7 @@ def cmd_run(args) -> int:
         print_plan(run, configuration, plans)
         return 0
 
-    view = PlainView()
-    view.begin(len(plans))
+    shown = view(args.plain)
     stopper = execute.Stopper()
 
     def on_signal(signum, frame):
@@ -90,25 +92,53 @@ def cmd_run(args) -> int:
 
     base = plans[0].out.parent if plans else None
     journal = Journal(base / "status.jsonl") if base else None
+    title = f"{run.name} · {configuration.key}: {len(plans)} point(s), {configuration.event_count} events, {configuration.threads} threads"
+    shown.begin(len(plans), title)
+    if journal:
+        journal.write("", "", {"k": "run", "state": "started", "points": len(plans), "title": title})
     if base:
         record.write_atomic(base / "plan.json", json.dumps({
             "run": run.name, "configuration": configuration.key, "config_file": str(run.path),
             "points": [{"name": p.point.name, "identity": p.identity, "seed": p.seed, "results": str(p.res)}
                        for p in plans]}, indent=1) + "\n")
-    failed = 0
+    failed = done = 0
+    verdict = "stopped"
     try:
         for plan in plans:
             if not args.rerun and record.is_complete(plan):
-                view.skipped(plan)
+                shown.skipped(plan)
                 continue
-            result = execute.run_point(plan, run, configuration, sink=view, journal=journal, stopper=stopper)
+            result = execute.run_point(plan, run, configuration, sink=shown, journal=journal, stopper=stopper)
             if result.stopped or stopper.requested:
                 return 6
             failed += not result.ok
+            done += result.ok
+        verdict = f"{done} done, {failed} failed, {len(plans) - done - failed} skipped"
     finally:
+        shown.end()
         if journal:
+            journal.write("", "", {"k": "run", "state": "finished", "verdict": verdict})
             journal.close()
+    shown.say(verdict)
     return 1 if failed else 0
+
+
+def cmd_watch(args) -> int:
+    """Follow a job from another terminal: its status.jsonl, or the most recent one under output/."""
+    if args.config:
+        run = configmod.load(args.config)
+        configuration = run.configuration(args.configuration)
+        journal = (output_root() / run.project / tools.location(run.serial, run.name)
+                   / tools.location(configuration.serial, configuration.name) / "status.jsonl")
+    else:
+        found = sorted(output_root().glob("*/*/*/status.jsonl"), key=lambda p: p.stat().st_mtime)
+        if not found:
+            raise HepError("no job to watch", where=str(output_root()), hint="start one with hep run")
+        journal = found[-1]
+    if not journal.exists():
+        raise HepError("that configuration has no status yet", where=str(journal),
+                       hint="it has not been run, or is about to start")
+    return follow(journal, plain=args.plain)
 
 
 def main(argv: list[str]) -> int:
@@ -116,7 +146,7 @@ def main(argv: list[str]) -> int:
     try:
         if args.command == "run":
             return cmd_run(args)
-        raise HepError("`hep watch` arrives in P1 S3")
+        return cmd_watch(args)
     except HepError as error:
         print(error.render(), file=sys.stderr)
         return 2

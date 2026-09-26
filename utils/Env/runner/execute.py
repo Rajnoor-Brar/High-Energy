@@ -183,6 +183,9 @@ def run_group(plan: PointPlan, group: list[Step], *, sink, journal: Journal | No
                 exits.append(entry)
                 results[entry.step.tag] = ToolResult(entry.step.tag, entry.process.returncode,
                                                      entry.exited_at - entry.started)
+                if journal is not None:
+                    journal.write(plan.point.name, entry.step.tag, {"k": "exit", "code": entry.process.returncode,
+                                                                    "seconds": round(entry.exited_at - entry.started, 3)})
                 sink.tool_finished(entry.state, results[entry.step.tag])
         sink.tick([e.state for e in running])
         alive = [e for e in running if e.exited_at is None]
@@ -260,11 +263,13 @@ def run_point(plan: PointPlan, run, configuration, *, sink=None, journal: Journa
     started = now()
     results: dict[str, ToolResult] = {}
     sink.point_started(plan)
+    if journal is not None:
+        journal.write(plan.point.name, "", {"k": "point", "state": "started", "index": plan.point.index})
     try:
         prepare(plan)
     except HepError as error:
         result = PointResult(False, cause="prelim", message=error.render())
-        sink.point_finished(plan, result)
+        _finished(plan, result, sink, journal)
         return result
 
     for group in plan.groups:
@@ -272,7 +277,7 @@ def run_point(plan: PointPlan, run, configuration, *, sink=None, journal: Journa
         if not ok:
             result = PointResult(False, stopped=stopper.requested, cause=blamed, message=message, tools=results)
             _cleanup(plan)
-            sink.point_finished(plan, result)
+            _finished(plan, result, sink, journal)
             return result
 
     # the checks: event counts against the producer's sidecar, then every declared product exists
@@ -291,7 +296,7 @@ def run_point(plan: PointPlan, run, configuration, *, sink=None, journal: Journa
             results.setdefault(step.tag, ToolResult(step.tag)).cause = "count"
             result = PointResult(False, cause=step.tag, message=message, tools=results)
             _cleanup(plan)
-            sink.point_finished(plan, result)
+            _finished(plan, result, sink, journal)
             return result
         results[step.tag].message = f"count ok: {written} events"
     for step in plan.rendered.values():
@@ -300,7 +305,7 @@ def run_point(plan: PointPlan, run, configuration, *, sink=None, journal: Journa
                 partial.replace(final)
             elif not final.exists():
                 result = PointResult(False, cause=step.tag, message=f"{step.tag} did not write {final.name}", tools=results)
-                sink.point_finished(plan, result)
+                _finished(plan, result, sink, journal)
                 return result
 
     _cleanup(plan)
@@ -309,8 +314,16 @@ def run_point(plan: PointPlan, run, configuration, *, sink=None, journal: Journa
     write_atomic(plan.res / "provenance.json", json.dumps(record, indent=1, default=str) + "\n")
     write_atomic(complete_marker(plan), plan.identity + "\n")
     result = PointResult(True, tools=results)
-    sink.point_finished(plan, result)
+    _finished(plan, result, sink, journal)
     return result
+
+
+def _finished(plan: PointPlan, result: PointResult, sink, journal: Journal | None) -> None:
+    if journal is not None:
+        journal.write(plan.point.name, "", {"k": "point", "state": "done" if result.ok else
+                                            "stopped" if result.stopped else "failed",
+                                            "cause": result.cause, "msg": result.message})
+    sink.point_finished(plan, result)
 
 
 def _cleanup(plan: PointPlan) -> None:
