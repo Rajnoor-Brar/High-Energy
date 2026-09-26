@@ -145,4 +145,19 @@ Revert the step commits. The work is additive on the P0 skeleton.
 
 ## Log
 
-*(filled during execution)*
+### S1 — 2026-09-26 — gates passed; unit tests still to write
+
+| Row | Result |
+|---|---|
+| 1 | **Open:** `tests/cxx/test_status.cc` and `test_app_pythia.cc` are not written yet |
+| 2 | **Reference gate: byte-identical** (0 differing lines of 1,530) for MSTW, *with the capture-time analysis*. The current `photo_eic.cc` defaults to `ETMIN = 17` and `ETMIN2 = 21` (changed in `f125fba`/`65feb97`; its `.info` still says 5/10), so the gate used `sources/PhotoProduction/photo_eic.cc` at `a2eac4e`. σ = 71,422.158 pb (reference 71,422.16). |
+| 3 | NNLO byte-identical; written = 4,999 of 5,000 (L5) |
+| 4 | **σ gate: Rivet `/_XSEC` = 75,215.52 pb, sidecar 75,215.52097 pb, a relative difference of 1.3e-8** (threads = 4, 100k). The count check agrees: `/RAW/_EVTCOUNT` numEntries 99,987 = sidecar written. The stamping approach is kept; `rivet -x` is not needed. |
+| 5 | A rejected setting gives exit 1 and no output; a missing PDF set (init fails) gives exit 3 and no output |
+| 6 | A FIFO with no reader, then SIGINT: exit 6 ("stopped while waiting to open …") |
+| 7 | 50k events, 20 threads, end to end: **1,312 events/s, 0.90×** v1's 1,455 inside `hep-run`, and 38.1 s against v1's whole command at 44.7 s. Rivet, single-threaded, sets the pace (R4). |
+
+- **Not done: warning aggregation.** It is not implemented in App_Pythia. `pythia.stat()` goes to the
+  log, and the runner's filters surface errors from there.
+- **Card hashes left to the runner.** The sidecar lists the cards but not their sha256s (05 §4 said
+  it would); the runner's provenance hashes the cards instead.
