@@ -2,7 +2,7 @@
 
 | Status | Steps | Depends on | Ends with | Updated |
 |---|---|---|---|---|
-| not started | 3 | P2 | YODA → ROOT conversion; ROOT pages from Paint; `rivet-mkhtml` when asked; `post` tools; a new GUIDE | 2026-09-26 |
+| **in progress** | 3 | P2 | YODA → ROOT conversion; ROOT pages from Paint; `rivet-mkhtml` when asked; `post` tools; a new GUIDE | 2026-09-26 |
 
 ## Goal
 

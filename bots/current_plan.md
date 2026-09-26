@@ -1,6 +1,6 @@
 # Current plan
 
-## rework v2 — EXECUTING (ordered by the user 2026-09-26). Active: **P2 — Sweeps**
+## rework v2 — EXECUTING (ordered by the user 2026-09-26). Active: **P3 — Results and plots**
 
 The plan is `docs/rework_v2/`:
 read `README.md` (decisions V1–V20, traceability) → `00_Brief.md` (the user's design, verbatim) →
@@ -24,10 +24,12 @@ read `README.md` (decisions V1–V20, traceability) → `00_Brief.md` (the user'
 - **P1 — One chain: done.** App_Pythia passes both gates (reference byte-identical, σ at 4 threads
   to 1.3e-8). The runner core runs a point byte-identical to the hand chain, failure injection never
   hangs (SIGPIPE is never the cause), and the live view and `hep watch` work.
-- **P2 — Sweeps** (`docs/rework_v2/phases/P2_sweeps.md`), in progress. quantities.py and sweep.py
-  already exist from P1 S2; P2 adds the remaining checks (C9 .info options, C10 PDF sets), the
-  master/consumer table in --plan, points.json, and the point_counts gate over every eic/zeus
-  configuration (zeus_validation.toml still to translate).
+- **P2 — Sweeps: done.** The counts gate passes for all 12 legacy cases; C9/C10 are in; reruns
+  spawn 0 processes; eic and zeus are fully translated; points.json lists every point.
+- **P3 — Results and plots** (`docs/rework_v2/phases/P3_results-and-plots.md`), in progress:
+  - S1: App_yd2rt (C++) + the yd2rt tool folder + the reference-data conversion cache.
+  - S2: the Paint app (utils/Apps/Paint/main.cc) + plot.py (pages from points.json) + `--only plot`.
+  - S3: the yoda backend (rivet-mkhtml), `post`, and a new docs/GUIDE.md.
 
 ---
 

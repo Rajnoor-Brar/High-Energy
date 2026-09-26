@@ -114,3 +114,26 @@ def write_atomic(path: Path, text: str) -> None:
     partial = path.with_name(path.name + ".tmp")
     partial.write_text(text, encoding="utf-8")
     partial.replace(path)
+
+
+def points_manifest(plans: list[PointPlan], run, configuration) -> dict:
+    """points.json (02 §6): every point's values, page, products and state, for plot and post tools."""
+    from .sweep import label_of, tag_of
+    page_names = [name for entry in configuration.sweeps for name in (entry if isinstance(entry, list) else [entry])
+                  if (set(entry) if isinstance(entry, list) else {entry}) & set(configuration.plot_points)]
+    points = []
+    for plan in plans:
+        quantity = run.quantities
+        points.append({
+            "name": plan.point.name, "index": plan.point.index,
+            "values": {name: {"tag": tag_of(quantity[name], i), "label": label_of(quantity[name], i),
+                              "value": quantity[name].values[i], "swept": name in plan.point.choice}
+                       for name, i in plan.values.items()},
+            "page": [tag_of(quantity[name], plan.point.choice[name]) for name in page_names],
+            "products": {i.name: str(i.path) for i in plan.interfaces.values() if i.kind == "product"},
+            "results": str(plan.res), "output": str(plan.out),
+            "identity": plan.identity, "seed": plan.seed, "complete": is_complete(plan),
+        })
+    return {"run": run.name, "project": run.project, "configuration": configuration.key,
+            "config_file": str(run.path), "plot_points": configuration.plot_points, "points": points}
+

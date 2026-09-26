@@ -2,7 +2,7 @@
 
 | Status | Steps | Depends on | Ends with | Updated |
 |---|---|---|---|---|
-| **in progress** | 2 | P1 | every eic and zeus configuration plans and runs; quantities are checked for consumers; reruns are free | 2026-09-26 |
+| **done** (2026-09-26) | 2 | P1 | every eic and zeus configuration plans and runs; quantities are checked for consumers; reruns are free | 2026-09-26 |
 
 ## Goal
 
@@ -102,4 +102,40 @@ Revert the step commits. The v1 configs are in git at `rework/v1-final`.
 
 ## Log
 
-*(filled during execution)*
+### S1 — 2026-09-26 — done
+
+Most of S1 had come forward in P1 S2 (`quantities.py`, `sweep.py`, the master TOML, the consumer
+table). Added here:
+
+- **C9.** The rivet folder's `[checks]` says where `.info` files are (`build/Rivet/` and
+  `rivet-config --datadir`). An unknown analysis is refused, and so is an option its `.info` does
+  not declare.
+- **C10.** A master mapping can carry `check = "lhapdf"`, and a PDF set missing from
+  `LHAPDF_DATA_PATH` is refused with the `lhapdf install` line to type.
+- **Redundant overrides.** An override equal to the base card's value (e.g. `pT0Ref = 3.2`) is still
+  written, but no longer changes the identity.
+
+| Row | Result |
+|---|---|
+| 1 | (S2 row 1 below) |
+| 2 | A swept quantity nobody consumes: refused (C7, `test_plan.py`) |
+| 3 | Entangled groups with unequal lengths: refused (C3, `test_config.py`) |
+| 4 | The `--plan` consumer table of `energy_pdf`: energies → pythia `[Beams:eA, Beams:eB]`, pdf → `PDF:pSet`, lepton (static) → `Beams:idB` (`test_sweeps.py`) |
+| 5 | Two sources for `PDF:pSet`: refused (C8) |
+
+### S2 — 2026-09-26 — done
+
+| Row | Result |
+|---|---|
+| 1 | **Point and page counts equal the legacy table for all 12 cases** (11 eic configurations incl. the default, plus zeus): `energy_pdf` (16, 4), `mpi_grid` (6, 2), `radius` (3, 1), and so on. `single` has 1 page in v2 against 0 in legacy, by design; the table's `pages_v2` column records it. |
+| 2 | `hep run PhotoProduction/eic pdf` at 50k events: 4 points, all with `.complete` and provenance, 2 min 33 s |
+| 3 | The same command again: **0 processes**; "4 skipped" |
+| 4 | With `--set run.pdf.threads=8`, `--plan` marks all 4 points "to run" (the seed block depends on the threads) |
+| 5 | Seed blocks across every eic configuration are disjoint (`test_sweeps.py`) |
+| 6 | `--points MSTW08lo --rerun`: exactly 1 point runs |
+
+- **`zeus_validation.toml` translated.** Its beams, fixed in v1's `[beams]`, are now static
+  quantities, and its lepton is still e+ via `lepton = "ep"`.
+- **`points.json` lists every point** (values with tags and labels, page, products, identity, seed,
+  complete), even under `--points`. `plan.json` is dropped: `points.json` carries the same content.
+- Tests: `tests/runner` 71 (`test_sweeps.py` +21, including the 12-case count gate); `make test` 79.

@@ -96,8 +96,7 @@ out with placeholders the runner fills in:
 
 ```
 output/<Project>/<run>/<configuration>/
-  plan.json                 what was decided: points, identities, seeds, connections, consumer table
-  points.json               the points manifest handed to post tools (02 §6)
+  points.json               every point: values, page, products, identity, seed, complete (02 §6)
   status.jsonl              every status message, for `hep watch`
   <point>/
     cards/<tag>.<ext>       each tool's rendered card: for pythia, <tag>.point.cmnd (the overrides) and

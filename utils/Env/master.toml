@@ -13,7 +13,7 @@ energies = { keys = ["Beams:eA", "Beams:eB"] }      # [E_A, E_B], beam A first
 sqrts    = { key = "Beams:eCM" }
 beam_a   = { key = "Beams:idA" }
 beam_b   = { key = "Beams:idB" }
-pdf      = { key = "PDF:pSet", format = "LHAPDF6:{}" }
+pdf      = { key = "PDF:pSet", format = "LHAPDF6:{}", check = "lhapdf" }   # the set must be installed (C10)
 events   = { key = "Main:numberOfEvents" }          # built-in
 threads  = { key = "Parallelism:numThreads" }       # built-in
 

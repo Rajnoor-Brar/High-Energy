@@ -41,6 +41,7 @@ class Mapping:
     key: Any = None      # the native key(s), flag, render function, config key or option name
     format: str = ""
     analysis: str = ""   # for form = option
+    check: str = ""      # a provider check on the value (C10), e.g. "lhapdf"
 
 
 def load_master(project: str, master_toml: str | None) -> dict:
@@ -144,7 +145,7 @@ def _from_master(tag: str, entry: dict, where: str) -> Mapping:
     forms = [f for f in ("key", "keys", "flag", "render") if f in entry]
     if len(forms) != 1:
         raise HepError("a master mapping takes exactly one of key, keys, flag, render", where=where)
-    return Mapping(tag, forms[0], entry[forms[0]], entry.get("format", ""))
+    return Mapping(tag, forms[0], entry[forms[0]], entry.get("format", ""), check=entry.get("check", ""))
 
 
 def builtin_mappings(master: dict, run, tags: list[str], name: str) -> list[Mapping]:
@@ -165,3 +166,19 @@ def consumer_table(run, master: dict, active: list[str], tags: list[str]) -> dic
                                 "a master mapping, or drop it: a value that changes nothing is refused (C7)")
         table[name] = found
     return table
+
+
+# ── providers: things a value needs installed (02 §4, category 1) ─────────────────────────────
+
+def check_provider(kind: str, value, where: str) -> None:
+    """Refuse at plan time a value whose provider is missing (C10)."""
+    import os
+    if kind == "lhapdf":
+        dirs = [d for d in os.environ.get("LHAPDF_DATA_PATH", "").split(":") if d]
+        name = str(value).split("/")[0]
+        if not any((Path(d) / name / f"{name}.info").is_file() for d in dirs):
+            raise HepError(f"the PDF set '{name}' is not installed", where=where,
+                           hint=f"lhapdf install {name}   (searched LHAPDF_DATA_PATH: {', '.join(dirs) or 'unset'})")
+    else:
+        raise HepError(f"unknown provider check '{kind}'", where=where)
+
