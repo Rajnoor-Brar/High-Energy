@@ -68,5 +68,24 @@ labels = ["MSTW 2008 LO", "NNPDF 2.3 QCD+QED LO", "NNPDF 2.3 QCD+QED NLO", "PDF4
 void_empty  = true
 min_entries = 10
 auto_range  = true
-# v1 drew Rivet's own ZEUS reference data (rivet_refs = true); in v2 that is a [plot.data] entry,
-# written when the plot stage lands (P3).
+ratio       = true
+
+# v1 drew Rivet's own reference data (rivet_refs = true). datasets/zeus_eic.yoda holds the same
+# numbers (Rivet's ZEUS_2012_I1116258.yoda.gz, HEPData titles), and the map is the identity.
+[plot.data]
+file   = "zeus_eic.yoda"
+legend = "ZEUS 2012"
+
+[plot.data.map]
+"d01-x01-y01" = "/REF/ZEUS_2012_I1116258/d01-x01-y01"
+"d02-x01-y01" = "/REF/ZEUS_2012_I1116258/d02-x01-y01"
+"d03-x01-y01" = "/REF/ZEUS_2012_I1116258/d03-x01-y01"
+"d04-x01-y01" = "/REF/ZEUS_2012_I1116258/d04-x01-y01"
+"d05-x01-y01" = "/REF/ZEUS_2012_I1116258/d05-x01-y01"
+"d06-x01-y01" = "/REF/ZEUS_2012_I1116258/d06-x01-y01"
+"d07-x01-y01" = "/REF/ZEUS_2012_I1116258/d07-x01-y01"
+"d08-x01-y01" = "/REF/ZEUS_2012_I1116258/d08-x01-y01"
+"d09-x01-y01" = "/REF/ZEUS_2012_I1116258/d09-x01-y01"
+"d10-x01-y01" = "/REF/ZEUS_2012_I1116258/d10-x01-y01"
+"d11-x01-y01" = "/REF/ZEUS_2012_I1116258/d11-x01-y01"
+"d12-x01-y01" = "/REF/ZEUS_2012_I1116258/d12-x01-y01"

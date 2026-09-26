@@ -339,8 +339,9 @@ About 250 lines, `// requires: yoda root`.
 compiled as standalone program, and called to output based on config file"* (*Brief §Plotting*).
 It is about 900 lines, `// requires: root toml`.
 
-**Input.** One page config per page, written by the runner from `[plot]`
-(`output/…/plots/<page>.toml`):
+**Input.** One page config per page and object, written by the runner from `[plot]`
+(`output/…/plots/<page>/<object>.toml`). `raw` names the curve's `/RAW` twin, whose `__entries`
+App_yd2rt writes with `--keep-raw`, for `min_entries`:
 
 ```toml
 [page]
@@ -379,7 +380,10 @@ label  = "ZEUS 2012"
 4. **auto-range** over curves and data together;
 5. apply the gutters: y maximum = `y_gutter ×` the largest drawn value (the brief's definition),
    and `x_gutter` widens x symmetrically;
-6. draw the main pad, the legend and the optional ratio pad;
+6. draw the main pad, the legend and the optional ratio pad. The ratio pad divides each curve by
+   the data, or by the first curve when there are none; its range is at least 0.5–1.5, widened to
+   the ratios drawn, within 0–3. A curve whose every bin is voided stays in the legend as
+   "(no entries)";
 7. save each format.
 
 The algorithms of steps 2–4 are v1's `plot/transform.py` and `plot/data.py`, read in git and

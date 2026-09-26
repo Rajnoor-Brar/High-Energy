@@ -28,7 +28,8 @@ read `README.md` (decisions V1–V20, traceability) → `00_Brief.md` (the user'
   spawn 0 processes; eic and zeus are fully translated; points.json lists every point.
 - **P3 — Results and plots** (`docs/rework_v2/phases/P3_results-and-plots.md`), in progress:
   - S1: App_yd2rt (C++) + the yd2rt tool folder + the reference-data conversion cache.
-  - S2: the Paint app (utils/Apps/Paint/main.cc) + plot.py (pages from points.json) + `--only plot`.
+  - S2: done (Paint + plot.py + `--only plot`; legacy ranges and voids 17/17). Open: the style
+    review of the first pages by the user (task 3).
   - S3: the yoda backend (rivet-mkhtml), `post`, and a new docs/GUIDE.md.
 
 ---

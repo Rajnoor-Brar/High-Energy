@@ -15,7 +15,7 @@ import signal
 import sys
 
 from . import config as configmod
-from . import execute, record, sweep, tools
+from . import execute, plot, record, sweep, tools
 from .errors import HepError
 from .paths import output_root
 from .quantities import load_master
@@ -59,6 +59,7 @@ def build_plans(args):
     record.assign_seeds(plans)
     for plan in plans:
         tools.finalise(plan, plan.seed)
+    plot.validate(run)
     return run, configuration, plans, [p for p in plans if p.point.index in chosen]
 
 
@@ -70,15 +71,21 @@ def print_plan(run, configuration, plans) -> None:
         for line in tools.describe(plan, run):
             print(line)
         print(f"  output  {plan.out}\n  results {plan.res}   ({state})")
+    if run.plot and plans:
+        count = len(sweep.pages(configuration, [p.point for p in plans]))
+        print(f"plot ({run.plot.get('backend', 'root')}): {count} page(s) per object, "
+              f"{', '.join(run.plot.get('formats', ['pdf']))} → {plans[0].res.parent / 'plots'}")
 
 
 def cmd_run(args) -> int:
     run, configuration, every, plans = build_plans(args)
-    if args.only:
-        raise HepError(f"--only {args.only} arrives with the plot and post stages (P3)")
+    if args.only == "post":
+        raise HepError("--only post arrives with the post stage (P3 S3)")
     if args.plan:
         print_plan(run, configuration, plans)
         return 0
+    if args.only == "plot":
+        return 1 if plot.draw(run, configuration, every, print) else 0
 
     shown = view(args.plain)
     stopper = execute.Stopper()
@@ -115,6 +122,7 @@ def cmd_run(args) -> int:
             failed += not result.ok
             done += result.ok
         verdict = f"{done} done, {failed} failed, {len(plans) - done - failed} skipped"
+        failed += plot.draw(run, configuration, every, shown.say) > 0
     finally:
         shown.end()
         manifest()

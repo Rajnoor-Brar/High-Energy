@@ -9,7 +9,8 @@
 //     Scatter2D             → TGraphAsymmErrors
 //     Counter, Estimate0D   → a one-bin TH1D
 // Rivet 4 writes its finalised histograms as Estimate1D and the unscaled fills under /RAW. /RAW and
-// /TMP are skipped unless --keep-raw. A variant path (/photo_eic:R=0.4/d01-x01-y01) becomes the
+// /TMP are skipped unless --keep-raw, which also writes <name>__entries (per-bin raw entry counts)
+// beside each /RAW histogram. A variant path (/photo_eic:R=0.4/d01-x01-y01) becomes the
 // directory photo_eic__R-0.4 (directories nest as the path does). Every object's title is its original YODA path, and the `paths` TTree
 // maps each ROOT path back to it.
 //
@@ -224,6 +225,18 @@ int main(int argc, char** argv) {
         target->cd();
         if (auto* h = dynamic_cast<TH1*>(made)) h->SetDirectory(target);
         made->Write(nullptr, TObject::kOverwrite);
+        // A raw fill histogram also gets its per-bin entry counts, which a TH1D cannot carry: Paint's
+        // min_entries voiding reads them (docs/rework_v2/05_Tools.md §7).
+        if (auto* raw = dynamic_cast<YODA::Histo1D*>(ao); raw && path.rfind("/RAW/", 0) == 0) {
+            TH1D* entries = fromHisto1D(*raw, name + "__entries");
+            for (size_t i = 0; i < raw->edges<0>().size() + 1; ++i) {
+                entries->SetBinContent(static_cast<int>(i), raw->bin(i).numEntries());
+                entries->SetBinError(static_cast<int>(i), 0.0);
+            }
+            entries->SetDirectory(target);
+            entries->Write(nullptr, TObject::kOverwrite);
+            delete entries;
+        }
         rootPath = dir.empty() ? name : dir + "/" + name;
         yodaPath = path;
         file.cd();

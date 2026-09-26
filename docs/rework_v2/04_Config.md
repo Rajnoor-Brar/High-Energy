@@ -793,7 +793,8 @@ x_gutter    = 1.0                # the same for x (1.0 = none)
 logy        = false
 auto_range  = true               # trim empty edges, as v1's auto_range
 void_empty  = false
-min_entries = 1
+min_entries = 1                  # void a bin fewer raw entries went into, in any curve (across the page)
+range_pad   = 0                  # auto_range keeps this many whole bins either side of the filled ones
 legend      = "top-right"
 
 [plot.data]                      # reference data, optional
@@ -815,7 +816,13 @@ y_gutter = 3.0
 - Titles and axis labels come from the Rivet `.plot` file, as in v1 (D9): one label source.
   `[plot.object.<name>]` may override them.
 - With `backend = "root"`, `[plot]` becomes one Paint config per page:
-  `output/…/plots/<page>.toml`, run by `build/Paint.exe` ([05_Tools.md §7](05_Tools.md#7-paint)).
+  `output/…/plots/<page>/<object>.toml`, run by `build/Paint.exe`
+  ([05_Tools.md §7](05_Tools.md#7-paint)), drawn to `results/…/plots/<page>/<object>.<fmt>`. The page
+  name is the `plot_points` tags joined by `_`; with no `plot_points` the `<page>/` level is absent.
+- Pages are drawn after the points, from the **complete** ones, and again on
+  `hep run … --only plot` without running anything. Each point's YODA is converted once, with its
+  raw entries, into `output/…/plots/inputs/<point>.root` (keyed by its sha256); the reference data
+  into `output/<P>/.cache/datasets/`.
 - With `backend = "yoda"`, the same keys drive the slimmed v1 backend. Keys a backend cannot honour
   are **errors**, not silently ignored: v1's `LegendXPos` was parsed and dropped.
 

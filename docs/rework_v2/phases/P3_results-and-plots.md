@@ -129,3 +129,33 @@ Revert the step commits.
   takes its select globs as extra arguments.
 - **The reference-data conversion is left to S2**, where Paint needs it.
 - `yd2rt` is in every eic and zeus chain as a second group.
+
+### S2 — 2026-09-26 — done, except the style review (task 3)
+
+`utils/Apps/Paint/` is 636 lines (`Page.hh` 92, `Transform.hh` 175, `Draw.hh` 276, `main.cc` 93),
+against the 900 estimated. `plot.py` is 296.
+
+| Row | Result |
+|---|---|
+| 1 | `hep run PhotoProduction/eic energy_pdf` at 3k events (16 points, 1 min 37 s), then `--only plot`: **68 pages = 4 per object × 17, in pdf and png**, 12 s. `--plan` prints "4 page(s) per object". |
+| 2 | `y_gutter = 1.5`: y max = 1.5 × the largest drawn value to 1e-9, the largest checked against uproot's reading of the inputs; on a log axis the gutter is half the decades shown; `x_gutter = 1.2` widens x by 1.2, about its centre (`test_paint.py`) |
+| 3 | **Auto-range equals the legacy `auto_range.plot` for 17/17 objects**, and the **voided bins equal the legacy ydmrg output for 17/17** (min_entries = 10, pad 1, across both curves); v1's own vectors pass too: the void rules, pad 0/1, nothing filled, alignment to the longest run, unaligned data dropped (`test_paint.py`, 15 tests) |
+| 4 | energy_pdf at 27x920: `[data]` on d01–d12, none on d13–d17. Data whose edges line up nowhere are dropped (`data_bins = 0`). |
+| 5 | An unknown key in `[plot]`, `[plot.style]`, `[plot.data]` or `[plot.object."…"]` (v1's `LegendXPos`), an unknown backend, format or legend position, and a data file without a map: refused at plan time (`test_plot.py`, 9 cases) |
+
+**Deviations and additions:**
+- **`range_pad`** is a `[plot]` key (default 0, as in v1); the legacy plots used 1.
+- **The ratio pad follows the ratios.** At 18x275 every MC/ZEUS ratio is about 0.07, which a fixed
+  0.5–1.5 pad hid. The range is now at least 0.5–1.5, widened to the ratios drawn, within 0–3.
+- **A curve with every bin voided** (5x41 at 3k events: no jet passes the cuts) stays in the legend
+  as "(no entries)" instead of leaving a blank row.
+- **LaTeX → TLatex**: `\mathrm{…}`/`\text{…}` keep their group after `_`/`^` (`E_T^\text{jet}` →
+  `E_{T}^{jet}`); the title falls back to the `.plot`'s `LegendTitle`, since photo_eic's `Title` is empty.
+- **zeus_validation draws the ZEUS data.** `datasets/zeus_eic.yoda` has the same numbers as Rivet's
+  `ZEUS_2012_I1116258.yoda.gz` (only the titles differ), so its `[plot.data]` maps d01–d12 one to one.
+- A page that crashes is reported by its signal, not by ROOT's stack-trace banner. The first draw
+  crashed on exit, because the pads were freed twice (by the canvas and by the keep-alive list).
+- Tests: `test_paint.py` 15, `test_plot_stage.py` 6, `test_plot.py` 20; `make test` 124 (was 83).
+- **Open: task 3, the style review.** The defaults (legend rows, font size, gutter 1.5) are what the
+  first pages used. With 4 curves, a header and data, the top-right legend overlaps the data peak on
+  the η pages. They are adjusted once, after the user has looked at the pages.
