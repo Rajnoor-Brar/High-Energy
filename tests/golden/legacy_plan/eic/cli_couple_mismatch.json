@@ -1,7 +1,0 @@
-{
- "config": "configs/PhotoProduction/eic.toml",
- "arguments": {
-  "across": "cmnd.beams+cmnd.lepton"
- },
- "error": "Coupled quantities need equal value counts (cmnd.beams=4, cmnd.lepton=2)"
-}

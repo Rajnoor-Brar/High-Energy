@@ -13,66 +13,51 @@
 
 ### Directory Layout
 
+The layout is rework v2's ([docs/rework_v2/03_Layout_Build.md](../docs/rework_v2/03_Layout_Build.md)).
+
 | Path         | Purpose                                                                      |
 | ------------ | ---------------------------------------------------------------------------- |
-| `analyses/`  | Rivet analysis plugins per project (`analyses/<Project>/`), built by `hep build` |
-| `aux/`       | VSCode extensions and tooling for HEP UX                                     |
-| `bots/`      | Bot configuration, plans (`current_plan.md`, `intent.md`), and `lessons.md`   |
-| `cmake/`     | `Find*.cmake` modules for the `~/HEP` stack                                  |
-| `configs/`   | User configs per project (`configs/<Project>/`)                              |
-| `datasets/`  | Third-party datasets downloaded from the internet                            |
-| `docs/`      | `GUIDE.md` (use), `MAP.md` (layout), `rework/` (design and step Logs)        |
-| `env/`       | Versioned shell environment (`hep_env.sh`), sourced by the `~/HEP` stub      |
-| `legacy/`    | Frozen pre-rework code, tests, configs, docs and the retired tools — never included from outside |
-| `modules/`   | User C++ analysis modules (`modules/<Project>/`), one shared library each    |
-| `output/`    | Build artefacts and scratch (`output/scratch/` for tests and dry runs)       |
-| `results/`   | Presentable outputs (YODA, images, HTML pages)                               |
-| `tests/`     | `python/`, `integration/`, `cxx/`, `golden/` (frozen fixtures), `e2e/`       |
-| `utils/`     | The toolkit: C++ namespaces (`utils/<Namespace>.hh` + `<Namespace>/`) and the `hekit` Python package under `utils/python/` |
+| `aux/`       | VSCode extensions and tooling for HEP UX (not framework)                     |
+| `bots/`      | Bot configuration and plans (`current_plan.md`)                              |
+| `build/`     | Everything compiled (`make`/`hep build`); `build/Rivet/` holds the Rivet plugins |
+| `configs/`   | Run TOMLs and native cards per project (`configs/<Project>/`)                |
+| `datasets/`  | Third-party reference data (YODA), gitignored                                |
+| `docs/`      | `rework_v2/` (the plan being executed), `rework_v1/` (the v1 retrospective)  |
+| `modules/`   | Project sources: `<Name>.cc` programs, headers, Rivet plugins in `Rivet/` or `Rivet_*.cc`; `_`-prefixed folders are parked (not built) |
+| `output/`    | Technical files per project (cards, logs, FIFOs, status), and `output/tests/` for tests |
+| `results/`   | Products per project (YODA, ROOT, plots, provenance)                         |
+| `tests/`     | `runner/`, `cxx/`, `integration/`, and `reference/` (data the gates compare against) |
+| `utils/`     | `Status.hh`, `Module.hh`, `App_*.cc`, `Apps/<Name>/`, and `Env/` (shell, the Python runner, tool folders) |
 
-- For any module or utility `Foo`, its submodules reside in `Foo/`.
-- `sources/` and `tools/` are gone: the drivers became `hep-run` and the analyses moved to
-  `analyses/`; the legacy tools were retired into `legacy/` in P4-S06.
-- `legacy/` is reference only: copy or adapt from it, never `#include` or import it
-  (see `legacy/PORTING.md`).
+- v1 (the `hekit` package, the C++ namespaces, CMake, `legacy/`) was deleted in rework v2 P0.
+  It is at the git tag `rework/v1-final`. Consult it with `git show rework/v1-final:<path>`,
+  and never restore it wholesale.
 - `BOT.md` contains directives for bots and agents (BOTs).
 - Additional rules given explicitly by the user may be appended to their dedicated file.
-- Bots may record frequent issues, pitfalls, and observed code style conventions
-  in `bots/lessons.md`. This file is consulted at lower priority than explicit
-  instructions in `BOT.md` or user messages, only when context is otherwise
-  insufficient.
 
 ## Code Design
 
-Modules and utils are collectively called **Namespaces**. Each has a corresponding
-submodule directory (e.g. `Foo/` for namespace `Foo`).
-
-- `Namespace.hh` exposes only the primary functions that define the namespace's mission.
-- Supporting logic is distributed to submodules, for example:
-  - **Types** — type definitions
-  - **Type Methods** — member/free functions on those types
-  - **Type Interfacing** — initialisation, import/export
-  - **Workers** — task-specific logic
-  - **Helpers** — internal utilities
-- Submodules should preferably:
-  - build linearly on each other (minimise circular dependencies)
-  - be self-sufficient with minimal includes, even of sibling submodules
-  - expose a minimal interface to other namespaces — typically `Types.hh` is
-    sufficient for cross-namespace communication
-  - avoid sub-namespacing unless it meaningfully improves readability
+- C++ in `utils/` is a few headers and apps. There are no library namespaces: rework v2 decision V7.
+  A header holds one PascalCase namespace, checked against the installed toolchain (X11 defines
+  `Status`), with `camelCase` functions and no `using namespace` of external libraries at
+  namespace scope.
+- A source declares what it links in a `// requires: …` line near the top.
+- The Python runner is one flat package, `utils/Env/runner/`. A module imports only from lower
+  ranks (docs/rework_v2/02_Architecture.md §3), and `tests/runner/test_imports.py` enforces it.
+- Everything the runner knows about a tool lives in `utils/Env/<tool>/`. The runner core never
+  names a tool.
+- Before writing code for a tool, read its rows in the knowledge ledger
+  (docs/rework_v2/01_Assessment.md §7).
 
 ## Testing
 
-- Tests and dry runs never write into `results/` or `configs/`. Use the scratch root
-  `output/scratch/` (gitignored), or `HEKIT_RESULTS` once the new stack exists.
-  The legacy tools resolve paths relative to the CWD, so run them from a scratch CWD with
-  symlinks for `configs`, `output`, `datasets` and `sources` and its own `results/`
-  (see `output/scratch/legacy/`, built by `tests/golden/capture_legacy.py`).
-- Golden fixtures of the legacy tools live in `tests/golden/` and are captured from frozen
-  config copies in `tests/golden/inputs/`; recapture deliberately, and record every expected
-  difference in `tests/golden/legacy_plan/EXPECTED_DELTAS.md`.
-- If a test run is interrupted or fails, do not restore paths automatically —
-  report the state to the user and wait for instruction.
+- Tests and dry runs never write into `results/` or `configs/`. Use `output/tests/`, with
+  `HEKIT_RESULTS`/`HEKIT_OUTPUT` pointing there.
+- The gates compare against `tests/reference/`: the legacy pipeline's cards, base card and YODAs,
+  and `point_counts.toml`. Never regenerate them.
+- A fake in a test has the real type (ledger L26).
+- If a test run is interrupted or fails, do not restore paths automatically. Report the state to
+  the user and wait for instruction.
 - Do not modify source or output paths permanently without user confirmation.
-- Never rely on the locale default encoding: reading a YODA file resets `LC_ALL` to `C`
-  (00/B29), so name `encoding="utf-8"` on every text read and write.
+- Never rely on the locale default encoding: reading a YODA file resets `LC_ALL` to `C` (L17), so
+  name `encoding="utf-8"` on every text read and write.

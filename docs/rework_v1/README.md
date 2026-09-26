@@ -1,5 +1,10 @@
 # rework_v1 — the framework as built, and why
 
+> **Historical.** The code this set describes, and the documents it links to (`docs/rework/`,
+> `docs/post_rework/`, `GUIDE.md`, `MAP.md`, `legacy/`), were removed in rework v2 P0. They are at
+> the git tag `rework/v1-final`; read them with `git show rework/v1-final:<path>`. The current
+> plan is [../rework_v2/](../rework_v2/).
+
 A reference for the system that exists, and a case study for the next overhaul.
 
 Written 2026-09-21, against `rework/v1` (`ddfeb40`); updated 2026-09-23. It describes the state

@@ -127,4 +127,41 @@ ledger as L15.
 
 ## Log
 
-*(filled during execution)*
+### S1 — 2026-09-26 — done
+
+- The user's uncommitted edits are in `stash@{0}`; `docs/Untitled-1.md` is in `output/_v1/`.
+- The plan was committed as `8daff46`, and tagged **`rework/v1-final`** there.
+- **Baseline (R4)**, v1 at `rework/v1-final`:
+
+  | Setting | Value |
+  |---|---|
+  | command | `hep run configs/PhotoProduction/eic.toml --study single --set run.events=50000` |
+  | results | `HEKIT_RESULTS=output/_v1/baseline` |
+  | threads | 20 |
+  | mode | `serial` (photo_eic cannot shard, L16) |
+  | events accepted / attempted | 49,995 / 50,000 |
+  | wall inside `hep-run` | **34.36 s**, i.e. **1,455 events/s** |
+  | whole command | 44.7 s wall, 253 MB RSS |
+  | σ | 73,078.39 ± 136.50 pb |
+  | seeds | 680145921 … 680145940 |
+
+- Row 4: 23 moves, all **R100**. One file added (`tests/reference/point_counts.toml`, with a
+  `pages_v2` column: v2 draws a page even for a one-point configuration). 520 files deleted.
+- Row 5: the tracked tree, excluding `aux/`, `literature/` and `docs/rework_v*`, went from
+  **226,337 → 137,197 lines**. The rest is mostly `configs/`, `aux`-adjacent assets and data.
+- Deviations:
+  - **Lamriv parked with Lambda.** `Lamriv` went to `modules/Lambda/_v1/Rivet/`, not
+    `modules/Lambda/Rivet/`, because it includes the parked `Reconstruction.hh`, which needs the
+    deleted `Phys`.
+  - **Legacy plot intermediates kept.** `tests/reference/legacy_run/{ydmrg,ydplt_p1}/` came along
+    (the voided curves and `auto_range.plot`). They are the P3 test vectors.
+  - **Untracked leftovers moved, not deleted.** The old `build/`, `output/scratch/`,
+    `output/PhotoProduction/`, `.pytest_cache/` and the `__pycache__` trees are in `output/_v1/`.
+  - **Old stub backed up.** `~/HEP/setup.sh` was repointed to `utils/Env/hep_env.sh`; the old one is
+    `~/HEP/setup.sh.pre-v2`.
+  - **`rework_v1/README.md` banner.** It now opens with a banner pointing at the tag, for its 14
+    links into the deleted docs.
+  - **`hekit` is still installed in the venv.** It is an editable install in `~/HEP/.venv`, which was
+    not touched. Its `hep` entry point is now dead, and S2 makes `utils/Env` come first on `PATH`.
+
+*(S2 below)*

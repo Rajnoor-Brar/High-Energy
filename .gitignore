@@ -20,7 +20,6 @@ dump
 archive/*
 /.claude
 datasets/*
-tests/tmp_paint/
 
 # OS / profiler noise
 .DS_Store
