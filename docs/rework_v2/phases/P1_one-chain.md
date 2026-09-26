@@ -145,11 +145,11 @@ Revert the step commits. The work is additive on the P0 skeleton.
 
 ## Log
 
-### S1 — 2026-09-26 — gates passed; unit tests still to write
+### S1 — 2026-09-26 — done
 
 | Row | Result |
 |---|---|
-| 1 | **Open:** `tests/cxx/test_status.cc` and `test_app_pythia.cc` are not written yet |
+| 1 | `tests/cxx/test_status.cc` passes: the envelope, escaping, drop-on-full (4 MB into a 64 kB pipe never blocks), heartbeat, plain fallback. The App_Pythia checks are process-level, so they are pytest in `tests/integration/test_app_pythia.py` (8 tests: sidecar schema, seed refusal ×2, a rejected card, usage exit codes, gz/zst magic, fan-out byte-identity). Rows 2 and 4 are kept as the slow tests `tests/integration/test_gates_p1.py` (3 tests, 36 s). |
 | 2 | **Reference gate: byte-identical** (0 differing lines of 1,530) for MSTW, *with the capture-time analysis*. The current `photo_eic.cc` defaults to `ETMIN = 17` and `ETMIN2 = 21` (changed in `f125fba`/`65feb97`; its `.info` still says 5/10), so the gate used `sources/PhotoProduction/photo_eic.cc` at `a2eac4e`. σ = 71,422.158 pb (reference 71,422.16). |
 | 3 | NNLO byte-identical; written = 4,999 of 5,000 (L5) |
 | 4 | **σ gate: Rivet `/_XSEC` = 75,215.52 pb, sidecar 75,215.52097 pb, a relative difference of 1.3e-8** (threads = 4, 100k). The count check agrees: `/RAW/_EVTCOUNT` numEntries 99,987 = sidecar written. The stamping approach is kept; `rivet -x` is not needed. |
