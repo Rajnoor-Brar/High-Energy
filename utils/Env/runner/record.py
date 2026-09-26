@@ -6,8 +6,8 @@ docs/rework_v2/02_Architecture.md §7 and §10.
   (before seeds), argv, extracted config, analyses and files, plus threads and events. It is
   computed before the seeds are written into the cards, and the seeds are then derived from it.
 * Seeds: base = 1 + int(basis[:12], 16) mod (9e8 − threads); the threads use base … base+threads−1.
-  The basis is the generator's own identity (the steps that take seeds: their cards, binaries and
-  replica values), so the same generator setup gives the same events in any configuration: the
+  The basis is the generator's own identity (the `produces_events` steps: their cards, binaries
+  and replica values), so the same generator setup gives the same events in any configuration: the
   chain's point and an integrated program's (P4 S1). Without a seeded step it is the point's
   identity. Blocks are checked for overlap across the whole plan, and a clash moves up by
   `threads` (L4), so two points of one plan never share events (V9).
@@ -52,12 +52,12 @@ def seed_of(identity_hex: str, threads: int) -> int:
 
 
 def seed_basis(plan: PointPlan) -> str:
-    """What the seeds follow: the identity of the steps that take seeds, without their argv (which
-    names this point's FIFOs) or card comments, whether they run or are only exported to an
-    integrated program."""
+    """What the seeds follow: the identity of the event generators (`produces_events`), without their
+    argv (which names this point's FIFOs) or card comments, whether they run or are only exported to
+    an integrated program. A detector simulation downstream does not move the generator's seeds."""
     seeded = []
     for _, step in sorted(plan.rendered.items()):
-        if not step.folder.get("card", "seed"):
+        if not step.folder.get("tool", "produces_events"):      # the generators, not Delphes
             continue
         parts = {k: v for k, v in step.identity_parts.items() if k != "argv" and not k.startswith("_")}
         comment = step.folder.get("card", "comment", "")

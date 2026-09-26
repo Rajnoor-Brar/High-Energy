@@ -1,0 +1,43 @@
+# utils/Env/sherpa/tool.toml — Sherpa 3, an event generator (05_Tools.md §2, L12).
+#
+# The card is YAML, deep-merged by render.py and written whole. Integration is a [prepare] step,
+# cached by the card without its event count, so every seed replica and rerun shares it. The
+# events go to a relative name: Sherpa prepends "./" to what it is given (L12), and it runs in the
+# point's directory. It writes exactly the events it is asked for or fails, so the runner writes its
+# sidecar (written = "requested") for the count check.
+[tool]
+category        = "event-generator"
+executable      = "Sherpa"
+status          = "filters"
+produces_events = true
+
+[card]
+style   = "render"
+ext     = "yaml"
+comment = "#"
+footer  = ["EVENT_OUTPUT: HepMC3_GenEvent[{output_name}]"]
+seed    = ["RANDOM_SEED: {seed}"]
+
+[command]
+argv = ["{exe}", "-f", "{card}", "RESULT_DIRECTORY: {prepared}/Results"]
+
+[prepare]
+# EVENT_OUTPUT: None, or Sherpa opens the FIFO at initialisation and waits for a reader (L12)
+argv   = ["{exe}", "-f", "{card}", "-e", "0", "RESULT_DIRECTORY: {prepared}/Results", "EVENT_OUTPUT: None"]
+ignore = ["EVENTS"]
+marker = "Results.zip"
+
+[outputs]
+sidecar = "{output}.json"
+written = "requested"
+
+[exports.results]                   # sherpa_results = true: the integration, run on demand
+path          = "{prepared}/Results"
+needs_prepare = true
+
+[exports.yaml]
+alias = "card"                      # sherpa_yaml = sherpa_card
+
+[identity]
+files   = ["{exe}"]
+version = ["Sherpa-config", "--version"]

@@ -65,11 +65,12 @@ be declared for it (V21). `[exports.<name>]` is for everything else:
 | Section | Holds |
 |---|---|
 | `[tool]` | category, executable, `streamable`, status mode, `consumes_events` / `produces_events` |
-| `[card]` | how a point card is made. `style` is one of: `"append"` (last wins: Pythia), `"prepend"` (the point card first, then include the base: Whizard, L13), `"merge"` (deep YAML merge written whole: Sherpa, L12), `"none"`, or `"render"` (call `render.py`) |
+| `[card]` | how a point card is made. `style` is one of: `"append"` (last wins: Pythia, Herwig, Delphes), `"prepend"` (the point card first, then include the base: Whizard, L13), `"none"`, or `"render"` (`render.py` writes the whole card: Sherpa's YAML merge, L12). `line` is the native form of one value (`"{key} = {value}"` by default, `"set {key} {value}"` for ThePEG and Tcl); `footer` lines end the card (Herwig's `saverun`); `seed` lines come after both |
 | `[command]` | the argv template and environment |
 | `[options]` | a schema for the tool-specific keys, in the runner's field vocabulary: `kind`, `item`, `required`, `choices`. Every option is also an argv placeholder; `kind = "flag"` (with `flag = "-e"`, `default`) expands to the flag or to nothing |
-| `[outputs]` | which outputs are products, and how an event count is read back |
-| `[prepare]` | optional: a prepare step (integration, process build), its cache key, and its marker file |
+| `[outputs]` | which outputs are products, and how an event count is read back: `yoda:/RAW/_EVTCOUNT`, `json:events` (the module kit's report) or `root:<tree>` (Delphes). `written = "requested"`: a generator that always makes what it is asked for or fails (Herwig, Sherpa) gets its sidecar written by the runner |
+| `[prepare]` | optional: a step run before the point, in a cache entry `output/<P>/.cache/<tool>/<key>/` (`argv`, a `marker` it must leave, and card keys to `ignore` in the key, like the event count). A hit, stamped `.prepared`, runs nothing; `{prepared}` names the entry |
+| `[checks]` | optional: Rivet's `.info` directories, and `files` that must exist before a plan (Herwig's repository) |
 | `[exports.<name>]` | optional: configuration a custom tool may request as `<tool>_<name> = true` ([04 §7.3](04_Config.md#73-standard-configurations-for-custom-tools)): what it gives (`path`, `parts`, or named values), and `needs_prepare` |
 
 **How a tool consumes quantities** is not in the tool folder. It is in the master TOML
@@ -81,11 +82,12 @@ it, so all quantity knowledge is in one readable file.
 Only for dialects that `[card] style` cannot write. It is plain functions, not classes:
 
 ```python
-# utils/Env/sherpa/render.py
-def card(base_text: str, overrides: list[Override], point: PointContext) -> str: ...
-def beam_energies(value, point) -> list[Override]: ...     # named in master.toml: render = "beam_energies"
-def prepare_key(card_text: str) -> str: ...                # what the prepare cache hashes
+# utils/Env/sherpa/render.py (as built, P4 S2)
+def card(bases: list[str], overrides: list[Override], context: dict) -> str: ...   # the whole card, before seeds
 ```
+
+The prepare key is not the plugin's business: the runner hashes the card lines, minus `[prepare]
+ignore` keys. Sherpa's keys are paths into the tree, with list indices (`PDF_SET[0]`).
 
 `Override` is the runner's own `NamedTuple(key, value, origin)`. Tests use the real type, never a
 look-alike (L26, the F1 lesson). A plugin imports only `errors`, `paths` and `quantities`
@@ -105,9 +107,9 @@ look-alike (L26, the F1 lesson). A plugin imports only `errors`, `paths` and `qu
 | `yoda` | visualisation | `rivet-mkhtml` | — | none | P3 (driven by `[plot] backend = "yoda"`): `utils/Env/yoda/backend.py`, no `tool.toml` |
 | `merge` | analysis application | `rivet-merge` | no (files) | none | P3, in `post`: one product of every point, `-e` unless `equivalent = false` |
 | `module` | analysis application | `build/<P>/<Name>.exe` (a `Module.hh` program) | yes | standard | P4 S1; count check from the kit's report |
-| `delphes` | detector simulator | `DelphesHepMC3` | **no** (L11) | filters | P4 |
-| `herwig` | event generator | `Herwig` (read, then run) | — (writes) | filters | P4 |
-| `sherpa` | event generator | `Sherpa` | — (writes) | filters | P4 |
+| `delphes` | detector simulator | `DelphesHepMC3` | **no** (L11) | filters | P4 S2: `set` card with `RandomSeed`, count from the `Delphes` tree |
+| `herwig` | event generator | `Herwig` (read as a cached prepare, then run) | — (writes) | filters | P4 S2: needs `build/Herwig/HerwigDefaults.rpo` (`hep build`); seed and events are flags |
+| `sherpa` | event generator | `Sherpa` | — (writes) | filters | P4 S2: `render.py`; integration as a cached prepare |
 | `whizard` | process generator | `whizard` | — (writes) | filters | P4 |
 | `madgraph` | process generator | `mg5_aMC` | — (writes a file) | filters | P4 |
 

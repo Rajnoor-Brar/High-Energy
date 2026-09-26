@@ -129,6 +129,19 @@ $(foreach s,$(RIVETS),$(eval $(call rivet_rule,$(s))))
 ALL := $(foreach s,$(PROG_SRCS) $(APP_SRCS),$(call out_of,$(s))) $(foreach s,$(RIVET_SRCS),rivet_$(call ana_of,$(s)))
 TESTS := $(foreach s,$(TEST_SRCS),$(call out_of,$(s)))
 
+# Herwig's repository (utils/Env/herwig): its own install made none, because its defaults need the
+# CT14lo/CT14nlo PDF sets (L15). Built here, never in ~/HEP; a failure warns and leaves no file.
+HERWIG := $(shell command -v Herwig 2>/dev/null)
+ifneq ($(HERWIG),)
+HERWIG_HOME := $(patsubst %/bin/Herwig,%,$(HERWIG))
+$(BUILD)/Herwig/HerwigDefaults.rpo: $(HERWIG)
+	@mkdir -p $(@D)
+	@cd $(@D) && if Herwig init -L$(HERWIG_HOME)/lib/Herwig -i$(HERWIG_HOME)/share/Herwig \
+	    --repo=$(abspath $@) defaults/HerwigDefaults.in > init.log 2>&1; then echo "── $@"; \
+	  else rm -f $(abspath $@); echo "warning: Herwig's repository was not built: $$(tail -1 init.log)"; fi
+ALL += $(BUILD)/Herwig/HerwigDefaults.rpo
+endif
+
 .PHONY: all tests test test-slow clean configure list
 all: $(ALL)
 tests: $(TESTS)

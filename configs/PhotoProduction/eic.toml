@@ -97,6 +97,13 @@ sweeps      = []
 tools       = ["jets", "yd2rt"]
 prelim      = {}              # no FIFO: the events never leave the process
 
+[run.delphes]
+serial      = 12
+description = "Detector level: the events to a file, Delphes (ATLAS card), then a jet count (04 §8.4)"
+sweeps      = []
+tools       = ["pythia_file", "delphes", "jets_reco"]
+prelim      = { files = ["showered.hepmc"] }       # a file: Delphes cannot read a FIFO (L11)
+
 [run.replicas]
 serial      = 10
 description = "Three seed replicas at the static point, merged after them by rivet-merge (post)"
@@ -136,6 +143,24 @@ executable     = "InprocJets.exe"
 output_file    = "photo.yoda"
 pythia_cmnd    = true         # the point card App_Pythia would get, seeds included
 rivet_analyses = true         # the rivet table's analyses and the plugin path
+
+[tools.pythia_file]           # the same generator, writing a file for a tool that cannot stream
+tool        = "pythia"
+baseconfig  = "photo_ep.cmnd"
+output_file = "showered.hepmc"
+
+[tools.delphes]
+tool        = "delphes"
+baseconfig  = "delphes_card_ATLAS.tcl"
+input       = "showered.hepmc"
+output_file = "delphes.root"
+
+[tools.jets_reco]             # a custom analysis at detector level
+tool        = "custom"
+executable  = "python3"
+arguments   = ["{repo}/modules/PhotoProduction/delphes_jets.py", "{input}", "{partial:output}"]
+input       = "delphes.root"
+output_file = "jets_reco.json"
 
 [tools.merge]                 # post: photo.yoda of every point → one YODA with their statistics
 tool        = "merge"

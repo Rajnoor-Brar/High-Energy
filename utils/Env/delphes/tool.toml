@@ -1,0 +1,31 @@
+# utils/Env/delphes/tool.toml — DelphesHepMC3, a detector simulation (05_Tools.md §2).
+#
+# L11: Delphes sizes its input before reading it and skips a zero-length one, so a FIFO reads as
+# empty: it takes a file from an earlier group (streamable = false, refused at plan time otherwise).
+# It creates its ROOT file before reading the card, so it writes the .partial name the runner gives.
+[tool]
+category        = "detector-simulation"
+executable      = "DelphesHepMC3"
+streamable      = false
+status          = "filters"
+consumes_events = true
+
+[card]
+style   = "append"                  # Tcl: a later `set` wins
+ext     = "tcl"
+comment = "#"
+line    = "set {key} {value}"
+seed    = ["set RandomSeed {seed}"]
+
+[command]
+argv = ["{exe}", "{card}", "{partial:output}", "{input}"]
+
+[outputs]
+products    = ["root"]
+event_count = "root:Delphes"        # the Delphes tree's entries, against the producer's sidecar
+
+[exports.tcl]
+alias = "card"                      # delphes_tcl = delphes_card
+
+[identity]
+files = ["{exe}"]

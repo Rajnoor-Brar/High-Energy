@@ -1,0 +1,18 @@
+# utils/Env/delphes/filters.toml — DelphesHepMC3 only prints (05_Tools.md §3.2). Its progress bar
+# gives a percentage, not an event count, so only the phase is followed. A rule never fails a run.
+[[rule]]
+match = '^\*\* Reading '
+emit  = "phase"
+phase = "simulating"
+
+[[rule]]
+match = '^\*\* INFO: initializing module'
+emit  = "phase"
+phase = "init"
+
+[[rule]]
+match = '(?:\*\* ERROR|ERROR:|Error in)'
+emit  = "error"
+
+[defaults]
+last_line = true

@@ -19,3 +19,14 @@ threads  = { key = "Parallelism:numThreads" }       # built-in
 
 # rivet consumes no named quantity: it reads beams and energies from the events, and its analysis
 # options are always targeted explicitly (target = "<tag>/<analysis>", key = "<OPTION>").
+
+[quantities.sherpa.compatible_quantities]           # keys are paths into the YAML card (render.py)
+energies = { key = "BEAM_ENERGIES" }                # [E_A, E_B]: the card puts the proton first
+beams    = { key = "BEAMS" }                        # [id_A, id_B]: the plan owns BEAMS, so it is set whole
+pdf      = { key = "PDF_SET[0]", check = "lhapdf" }  # the proton's; MPI_PDF_SET follows it
+events   = { key = "EVENTS" }                       # built-in
+
+[quantities.herwig.compatible_quantities]           # ThePEG `set` lines; events and seed are flags
+# snippets/EPCollider.in puts the lepton on beam A and the proton on B; energies are [E_p, E_e]
+energies = { keys = ["/Herwig/EventHandlers/Luminosity:BeamEMaxB", "/Herwig/EventHandlers/Luminosity:BeamEMaxA"], format = "{}*GeV" }
+

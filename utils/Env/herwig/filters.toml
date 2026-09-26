@@ -1,0 +1,16 @@
+# utils/Env/herwig/filters.toml — Herwig only prints (05_Tools.md §3.2). Its counter is
+# "event> <done> <total>", rewritten in place with \r. A rule never fails a run.
+[[rule]]
+match = 'event>\s+(?P<done>\d+)\s+(?P<total>\d+)'
+emit  = "progress"
+
+[[rule]]
+match = '^(?:Error|ERROR)\b'
+emit  = "error"
+
+[[rule]]
+match = '^Warning'
+emit  = "warn"
+
+[defaults]
+last_line = true

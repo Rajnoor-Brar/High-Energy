@@ -193,3 +193,49 @@ Each tool folder is independent: remove it and its master entries.
 - TLatex: a sign after `^`/`_` is grouped (`\pi^-` → `#pi^{-}`).
 - Tests: `test_module_kit` (C++), `test_module.py` 4, `test_plot_stage.py` +1, `test_plot.py` +1,
   and the slow `test_modules_p4.py` 4 (rows 1–2, 6–8). `make test` 142; `make test-slow` 12.
+
+### S2 — 2026-09-27 — done
+
+| Row | Result |
+|---|---|
+| 1 | `eic delphes`: pythia → `showered.hepmc` (a `[prelim]` file) → delphes (ATLAS card) → `jets_reco` (a Python custom tool): **the Delphes tree holds 2,000 entries = the sidecar's `written`**, and the count check reads it (`root:Delphes`). 5.5 s at 2k events. |
+| 2 | The same chain with a FIFO into delphes: refused at plan time ("'delphes' cannot read a FIFO", `test_generators.py`) |
+| 3 | `sherpa` (its own run TOML), 18×275 LO, MPI off, 5k events: **σ = 9,201 ± 306 pb against v1's 9,636 ± 782 pb** (0.5σ apart). Integration 76 s, generation 15 s. |
+| 4 | `sherpa pdf` (NNPDF23lo, MSTW08lo): 2 points, 2 integrations (another PDF is another card), 17 pages. `render.py` is tested with the runner's `Override` (L26), including `MPI_PDF_SET` following `PDF_SET`. |
+| 5 | `herwig` (ep NC DIS at 18×275, 2k events): count check ok; **Rivet's σ (the last event's) = 29,910.68 pb = Herwig's own 29.9(3) nb** |
+| 6 | Reruns: `sherpa:prepare: cached`, `herwig:prepare: cached`, with 0 integration time; the Sherpa key ignores `EVENTS`, so another event count shares the integration |
+| 7 | `herwig export`: a custom tool with `herwig_run = true` and no herwig in `tools` gets `…/.cache/herwig/<key>/point.run`. Its card equals the chain's, so the read is the same cache entry (**one read for both**). |
+
+**The runner, generalised by folder keys (the core still names no tool):**
+- `[card] line` (`set {key} {value}` for ThePEG and Tcl) and `footer` (Herwig's HepMC output and
+  `saverun`, which must come last); `style = "render"` calls `render.py`, which returns the whole
+  card. The unimplemented `"merge"` style is gone: it is render.py's job.
+- `[prepare]` (`argv`, `marker`, `ignore`), run before a point's groups as its own supervised
+  step, in `output/<P>/.cache/<tool>/<key>/`. The key is the card before seeds, the base cards and
+  the binary, minus the `ignore` keys. A `.prepared` stamp is written only after exit 0 and the
+  marker, so an interrupted integration is redone. `--plan` shows each prepare and its state.
+- Exports can give a prepared `path` and set `needs_prepare`: prepare on demand (04 §7.3).
+- `{seed}` in argv (Herwig's `-s`) is filled in by `finalise`; the identity keeps the placeholder.
+- Seeds follow the `produces_events` steps, so Delphes' card never moves the generator's seed.
+- `[outputs] written = "requested"`: for a generator that writes exactly the events asked for or
+  fails (Herwig, Sherpa), the runner writes the sidecar after exit 0, so Rivet is count-checked.
+- `[checks] files`: Herwig's repository is checked at plan time, with the hint `hep build`.
+- The status reader splits on `\r` as well, for counters rewritten in place (Herwig's `event>`).
+- The `root:<tree>` count reader imports uproot lazily; it is the runner's only non-stdlib import.
+
+**Findings:**
+- **Herwig could not run at all: its install has no repository.** `Herwig init` needs the CT14lo and
+  CT14nlo PDF sets, which were not installed, so the install hook failed quietly. On the user's
+  choice, `lhapdf install CT14lo CT14nlo` (1.5 MB + 82 MB), and `hep build` now makes
+  `build/Herwig/HerwigDefaults.rpo` with `Herwig init --repo=…`. `~/HEP/install` is not touched.
+- **Sherpa writes a YODA variation per extra weight** (`/x[EXTRA__NTrials]` and two more), which the
+  plot stage drew as pages: 68 instead of 17. Only the nominal weight gets pages now.
+- `dis_ep.herwig.in` is DIS, a chain check: Herwig photoproduction is not set up (a comparison in S3
+  would need it). The Delphes card is ATLAS's, copied into `configs/PhotoProduction/`: at EIC
+  energies only 0.9% of events have a reconstructed jet, and a real study wants an EIC card.
+- Sherpa and Herwig have their own run TOMLs: eic's Pythia-only statics (`pt0ref`, `mpi`) have no
+  key there and would be refused as unconsumed (C7). S3's `@generator` comparison meets the same
+  rule.
+- Size: the runner is 3,279 lines (`tools.py` 924); the tool folders, plugins and master are 583
+  against 1,000.
+- Tests: `test_generators.py` 10; the slow `test_generators_p4.py` 3 (rows 1, 3, 5–7). `make test` 152.

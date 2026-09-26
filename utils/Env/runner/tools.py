@@ -32,16 +32,16 @@ ENV = Path(__file__).resolve().parents[1]                 # utils/Env
 
 FOLDER_SECTIONS = {
     "tool": {"category", "executable", "streamable", "status", "consumes_events", "produces_events"},
-    "card": {"style", "ext", "comment", "bools", "seed", "seed_parallel"},
+    "card": {"style", "ext", "comment", "bools", "seed", "seed_parallel", "line", "footer"},
     "command": {"argv", "env"},
     "options": None,                                      # free: the schema of tool-specific keys
-    "outputs": {"products", "event_count", "sidecar"},
+    "outputs": {"products", "event_count", "sidecar", "written"},
     "exports": None,
     "identity": {"files", "version"},
-    "prepare": None,
-    "checks": {"info_dirs", "info_dirs_command"},
+    "prepare": {"argv", "marker", "ignore"},
+    "checks": {"info_dirs", "info_dirs_command", "files"},
 }
-CARD_STYLES = ("append", "prepend", "merge", "none", "render")
+CARD_STYLES = ("append", "prepend", "none", "render")
 EXPORT = re.compile(r"^(?P<tool>[a-z0-9]+)_(?P<export>[a-z0-9_]+)$")
 
 
@@ -59,6 +59,18 @@ class Folder:
     @property
     def card_style(self) -> str:
         return self.get("card", "style", "none")
+
+    @property
+    def plugin(self):
+        """utils/Env/<tool>/render.py, for `[card] style = "render"` (05 §1)."""
+        path = self.dir / "render.py"
+        if not path.is_file():
+            raise HepError(f'{self.name} has [card] style = "render" but no render.py', where=str(self.dir))
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(f"hep_render_{self.name}", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
 
     @property
     def filters(self) -> list[dict]:
@@ -247,6 +259,11 @@ class Step:
     config_path: Path | None = None
     config_data: dict | None = None
     identity_parts: dict = field(default_factory=dict)
+    cwd: Path | None = None            # where it runs (default: the point's output directory)
+    prepare_dir: Path | None = None    # the prepare cache entry ([prepare]), keyed by the card
+    prepare_argv: list[str] = field(default_factory=list)
+    prepare_needed: bool = False       # in the chain, or asked for by an export with needs_prepare
+    sidecar_written: int | None = None # [outputs] written = "requested": the runner writes the sidecar
 
 
 @dataclass
@@ -401,6 +418,11 @@ def plan_point(run, configuration, point, master: dict, *, post: dict | None = N
         folder = folder_of(tool)
         where = f"{run.path}: [tools.{tag}]"
         _check_options(tool, folder, where)
+        for pattern in folder.get("checks", "files", []):          # what the tool needs built first
+            needed = Path(expand(pattern, {"repo": str(repo_root())}, f"{folder.name}/tool.toml [checks].files"))
+            if not needed.exists():
+                raise HepError(f"{folder.name} needs {needed}, which does not exist", where=where,
+                               hint="hep build (see utils/Env/" + folder.name + "/tool.toml)")
         step = Step(tag=tag, tool=tool, folder=folder, group=group_of.get(tag, -1),
                     exe=executable_of(tool, folder, run.project))
         step.status = tool.status or folder.get("tool", "status", "none")
@@ -422,8 +444,11 @@ def plan_point(run, configuration, point, master: dict, *, post: dict | None = N
 
     for tag in rendered_tags:
         _render(plan, plan.rendered[tag], run, master)
+        _prepare_argv(plan, plan.rendered[tag])
     for tag in chain:
         _argv(plan, plan.rendered[tag], run, requests.get(tag, {}))
+        if plan.rendered[tag].prepare_dir is not None:
+            plan.rendered[tag].prepare_needed = True   # a chain step always runs its prepare (cached)
 
     plan.groups = [[plan.rendered[tag] for tag in group] for group in groups_tags]
     return plan
@@ -517,6 +542,8 @@ def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
     flags: list[str] = []
     options: dict[str, dict[str, str]] = {}
     config_values: dict[str, Any] = {}
+    overrides: list[qmod.Override] = []          # style "render": the values, for render.py
+    line_format = folder.get("card", "line", "{key} = {value}")
 
     def claim(key: str, value: Any, origin: str, fmt: str = "") -> None:
         normal = "".join(key.split()).lower()
@@ -524,7 +551,8 @@ def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
             raise HepError(f"'{key}' is set by both {owners[normal]} and {origin}", where=f"[tools.{step.tag}]",
                            hint="one source per native key (C8): pin it in one place")
         owners[normal] = origin
-        line = f"{key} = {native(value, bools, fmt)}"
+        overrides.append(qmod.Override(key, value, origin))
+        line = line_format.replace("{key}", key).replace("{value}", native(value, bools, fmt))
         lines.append(line)
         if base_values.get(normal) is not None and _same(base_values[normal], native(value, bools, fmt)):
             redundant.append(line)
@@ -564,7 +592,7 @@ def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
                 apply(mapping, quantity.values[index], origin)
 
     step.identity_parts.update({"flags": flags, "options": options, "config_values": config_values})
-    if style == "append":
+    if style in ("append", "render"):
         ext = folder.get("card", "ext", "txt")
         comment = folder.get("card", "comment", "#")
         step.card_base = [resolve(b, "baseconfig", project=run.project, where=f"[tools.{step.tag}].baseconfig")
@@ -572,14 +600,24 @@ def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
         for base in step.card_base:
             if not base.is_file():
                 raise HepError("base config not found", where=f"[tools.{step.tag}].baseconfig: {base}")
-        step.card_lines = [f"{comment} point card for [tools.{step.tag}], point {plan.point.name}, written by hep run",
-                           *lines]
-        step.card_point = plan.out / "cards" / f"{step.tag}.point.{ext}"
+        output_name = (step.outputs[0].path.name if step.outputs          # an export-only step: its table's
+                       else Path(tool.output_file[0]).name if tool.output_file else "")
+        footer = [expand(line, {"output_name": output_name, "tag": step.tag}, f"{folder.name}/tool.toml [card].footer")
+                  for line in folder.get("card", "footer", [])]
+        header = f"{comment} point card for [tools.{step.tag}], point {plan.point.name}, written by hep run"
+        if style == "append":
+            step.card_lines = [header, *lines, *footer]
+            step.card_point = plan.out / "cards" / f"{step.tag}.point.{ext}"
+        else:                                   # render.py writes the whole card: base and values merged
+            text = folder.plugin.card([b.read_text(encoding="utf-8") for b in step.card_base], overrides,
+                                      {"point": plan.point.name, "tag": step.tag, "output_name": output_name})
+            step.card_lines = [header, *text.rstrip("\n").splitlines(), *footer]
         step.card_combined = plan.out / "cards" / f"{step.tag}.{ext}"
         step.identity_parts["base_sha256"] = [sha256_file(b) for b in step.card_base]
         step.identity_parts["card"] = [line for line in step.card_lines if line not in redundant]
-    elif style in ("prepend", "merge", "render"):
-        raise HepError(f"card style '{style}' arrives with the {folder.name} tool folder (P4)", where=folder.name)
+        _prepare_key(plan, step, run)
+    elif style == "prepend":
+        raise HepError(f"card style '{style}' arrives with the {folder.name} tool folder (P4 S3)", where=folder.name)
     elif lines:
         raise HepError(f"{folder.name} has no card, but quantities set native keys on it: {', '.join(lines)}",
                        where=f"[tools.{step.tag}]", hint="target an option or a config key instead")
@@ -608,6 +646,37 @@ def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
                 if path.is_file():
                     step.identity_parts.setdefault("files_sha256", {})[str(path)] = sha256_file(path)
     step.identity_parts["_flags"] = flags
+
+
+def _prepare_key(plan: PointPlan, step: Step, run) -> None:
+    """[prepare]: a cache entry per card, output/<P>/.cache/<tool>/<key>/. The key is the card before
+    seeds, the base cards and the binary, without the lines setting `ignore` keys (the event count,
+    say), so every point, replica and rerun with the same physics shares one integration."""
+    spec = step.folder.spec.get("prepare")
+    if not spec:
+        return
+    comment = step.folder.get("card", "comment", "#")
+    ignore = spec.get("ignore", [])
+    pattern = re.compile(r"\s*(?:set\s+)?(" + "|".join(map(re.escape, ignore)) + r")\s*[:=\s]") if ignore else None
+    keyed = [line for line in step.card_lines
+             if not line.startswith(comment) and not (pattern and pattern.match(line))]
+    text = "\n".join([step.folder.name, step.identity_parts.get("exe_sha256", str(step.exe)),
+                      *step.identity_parts["base_sha256"], *keyed])
+    step.prepare_dir = output_root() / run.project / ".cache" / step.folder.name / hashlib.sha256(text.encode()).hexdigest()[:16]
+    step.identity_parts["prepare"] = step.prepare_dir.name
+
+
+def _prepare_argv(plan: PointPlan, step: Step) -> None:
+    """The prepare command, run in the cache entry: for chain steps and export-only ones alike."""
+    if step.prepare_dir is None:
+        return
+    context = {"repo": str(repo_root()), "exe": str(step.exe), "card": str(step.card_combined or ""),
+               "prepared": str(step.prepare_dir), "out": str(plan.out)}
+    argv = []
+    for template in step.folder.spec["prepare"].get("argv", []):
+        piece = expand(template, context, f"{step.folder.name}/tool.toml [prepare].argv")
+        argv.extend(piece if isinstance(piece, list) else [piece] if piece != "" else [])
+    step.prepare_argv = argv
 
 
 def _base_values(tool, run, folder: Folder) -> dict[str, str]:
@@ -687,6 +756,9 @@ def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
         "input": str(step.inputs[0].path) if step.inputs else "",
         "inputs": [str(p) for i in step.inputs for p in (i.paths if i.kind == "points" else [i.path])],
         "input_sidecar": _upstream_sidecar(plan, step),
+        "output_name": step.outputs[0].path.name if step.outputs else "",
+        "prepared": str(step.prepare_dir or ""),
+        "seed": "{seed}",                      # filled in by finalise: seeds derive from the identity
         "output": str(step.outputs[0].path) if step.outputs else "",
         "outputs": ",".join(str(o.path) for o in step.outputs),
         "partial:": {"output": str(step.products[0][1]) if step.products else ""},
@@ -714,10 +786,19 @@ def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
         export = EXPORT.match(key).group("export")
         declared = source.folder.spec.get("exports", {}).get(export, {})
         if export == "card" or declared.get("alias") == "card":
-            standard[key] = {"tool": source.tool.tool, "tag": tag, "path": str(source.card_combined),
-                             "parts": [str(p) for p in source.card_base] + [str(source.card_point)]}
+            parts = [str(p) for p in source.card_base] + ([str(source.card_point)] if source.card_point else [])
+            standard[key] = {"tool": source.tool.tool, "tag": tag, "path": str(source.card_combined), "parts": parts}
         else:
             values = {"tool": source.tool.tool, "tag": tag}
+            if declared.get("needs_prepare"):          # prepare on demand (04 §7.3)
+                if source.prepare_dir is None:
+                    raise HepError(f"{source.folder.name} export '{export}' needs a prepare step the tool does not have",
+                                   where=f"{source.folder.name}/tool.toml")
+                source.prepare_needed = True
+            if "path" in declared:
+                values["path"] = expand(declared["path"], {"prepared": str(source.prepare_dir or ""),
+                                                           "card": str(source.card_combined or "")},
+                                        f"{source.folder.name}/tool.toml [exports.{export}]")
             for give in declared.get("gives", []):
                 if give == "analyses":
                     values["analyses"] = source.identity_parts.get("analyses", [])
@@ -764,6 +845,8 @@ def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
     step.argv = argv
     step.env = {k: expand(v, context, f"{folder.name}/tool.toml [command].env")
                 for k, v in folder.get("command", "env", {}).items()}
+    if folder.get("outputs", "written") == "requested":
+        step.sidecar_written = plan.events          # it always makes what it is asked for, or fails
     step.identity_parts["argv"] = [a.replace(str(plan.out), "{out}").replace(str(plan.res), "{res}") for a in argv]
 
     # the count check: a consumer of events reads its count back and compares it with the producer's sidecar
@@ -791,7 +874,8 @@ def finalise(plan: PointPlan, seed: int) -> None:
     plan.seed = seed
     seeds = [seed + i for i in range(plan.threads)]
     for step in plan.rendered.values():
-        if step.card_point is None:
+        step.argv = [a.replace("{seed}", str(seed)) for a in step.argv]
+        if step.card_combined is None:
             continue
         lines = list(step.card_lines)
         seed_lines = step.folder.get("card", "seed", [])
@@ -801,6 +885,9 @@ def finalise(plan: PointPlan, seed: int) -> None:
             if plan.threads > 1:
                 lines += [expand(line, context, step.folder.name) for line in step.folder.get("card", "seed_parallel", [])]
         point_text = "\n".join(lines) + "\n"
+        if step.card_point is None:                # style "render": the card is whole already
+            plan.writes[step.card_combined] = point_text
+            continue
         combined = "".join(b.read_text(encoding="utf-8") for b in step.card_base) + "\n" + point_text
         plan.writes[step.card_point] = point_text
         plan.writes[step.card_combined] = combined
@@ -826,6 +913,11 @@ def describe(plan: PointPlan, run) -> list[str]:
                 lines.append(f"      reads  {interface.kind:7s} {where}")
             for interface in step.outputs:
                 lines.append(f"      writes {interface.kind:7s} {interface.path}")
+    for step in plan.rendered.values():
+        if step.prepare_dir is not None and step.prepare_needed:
+            state = "cached" if (step.prepare_dir / ".prepared").exists() else "to run"
+            lines.append(f"  prepare {step.tag}: {' '.join(step.prepare_argv)}")
+            lines.append(f"    in {step.prepare_dir}   ({state})")
     export_only = [t for t, s in plan.rendered.items() if s.group < 0]
     if export_only:
         lines.append(f"  configured, not run (exported): {', '.join(export_only)}")

@@ -1,0 +1,13 @@
+# dis_ep.herwig.in — Herwig 7 ep neutral-current DIS, from Herwig's share/Herwig/DIS.in.
+#
+# A chain check for the herwig tool folder (P4 S2), not a photoproduction reference: Herwig's ep
+# set-up (snippets/EPCollider.in) collides a lepton on beam A with a proton on beam B, and this
+# card asks for DIS matrix elements only. The runner appends the point's energies, the HepMC3
+# output and `saverun` (utils/Env/herwig/tool.toml), so the card ends before them.
+read snippets/EPCollider.in
+cd /Herwig/Generators
+set /Herwig/Shower/ShowerHandler:PDFB /Herwig/Partons/ShowerLOPDF
+set /Herwig/Partons/MPIExtractor:SecondPDF /Herwig/Partons/MPIPDF
+set /Herwig/Partons/EPExtractor:SecondPDF /Herwig/Partons/HardNLOPDF
+cd /Herwig/MatrixElements/
+insert SubProcess:MatrixElements[0] MEDISNC

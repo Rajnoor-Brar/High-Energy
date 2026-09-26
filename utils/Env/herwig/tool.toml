@@ -1,0 +1,48 @@
+# utils/Env/herwig/tool.toml — Herwig 7, an event generator (05_Tools.md §2, L15).
+#
+# `Herwig read` turns the card into a run file: a [prepare] step, cached by the card (events and
+# seed are flags, so every point and replica with the same physics shares it). It needs the
+# repository build/Herwig/HerwigDefaults.rpo, which `hep build` makes (Herwig's own install did
+# not: its defaults need CT14lo/CT14nlo). `Herwig run` then writes HepMC3 (HepMCFile) to a relative
+# name, in the point's directory. It writes exactly -N events or fails: the runner writes the
+# sidecar (written = "requested").
+[tool]
+category        = "event-generator"
+executable      = "Herwig"
+status          = "filters"
+produces_events = true
+
+[card]
+style   = "append"                  # ThePEG: a later `set` wins; `saverun` must come last (footer)
+ext     = "in"
+comment = "#"
+line    = "set {key} {value}"
+footer  = ["read snippets/HepMC.in",
+           "set /Herwig/Analysis/HepMC:PrintEvent 1000000000",
+           "set /Herwig/Analysis/HepMC:Filename {output_name}",
+           "cd /Herwig/Generators",
+           "saverun point EventGenerator"]
+
+[command]
+argv = ["{exe}", "run", "{prepared}/point.run", "-N", "{events}", "-s", "{seed}", "-d", "0"]
+
+[prepare]
+argv   = ["{exe}", "read", "--repo={repo}/build/Herwig/HerwigDefaults.rpo", "{card}"]
+marker = "point.run"
+
+[outputs]
+sidecar = "{output}.json"
+written = "requested"
+
+[exports.run]                       # herwig_run = true: the run file, read on demand
+path          = "{prepared}/point.run"
+needs_prepare = true
+
+[exports.in]
+alias = "card"                      # herwig_in = herwig_card
+
+[checks]
+files = ["{repo}/build/Herwig/HerwigDefaults.rpo"]
+
+[identity]
+version = ["Herwig", "--version"]

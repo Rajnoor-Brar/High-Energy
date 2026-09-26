@@ -61,6 +61,8 @@ hep watch                                        # from another terminal: the li
 | `--plain` | plain lines instead of the live view |
 
 A point that is complete with the same identity is skipped, so a second `hep run` does nothing.
+Slow preparation (Sherpa's integration, Herwig's read) is cached by card under `output/<P>/.cache/`:
+a rerun, a replica or another event count reuses it.
 The identity covers cards, argv, binaries, analyses, events and threads, and the seeds are derived
 from it. Change anything and the points it affects run again.
 
@@ -133,6 +135,10 @@ The complete schema, the validation rules, and translated examples are in
 | `rivet` | `rivet` reading HepMC | `analyses`, `options`; its YODA's event count is checked against Pythia's |
 | `yd2rt` | `build/App_yd2rt.exe`: YODA → ROOT | `select = ["/photo_eic/*"]`; the ROOT file is a product |
 | `merge` | `rivet-merge` over one product of every point | post only: `input = "photo.yoda"`; `equivalent = false` sums different processes |
+| `module` | a `utils/Module.hh` program, `build/<P>/<X>.exe` | its `[config]`, `--input`/`--output`; count-checked from its report |
+| `delphes` | `DelphesHepMC3` with a Tcl card | reads a **file** from an earlier group (never a FIFO); counted from the `Delphes` tree |
+| `sherpa` | Sherpa 3 with a YAML card | the integration is cached per card (`output/<P>/.cache/sherpa/`) |
+| `herwig` | Herwig 7 | `Herwig read` is cached per card; needs `hep build` for its repository |
 | `custom` | any executable | `executable`, `arguments`, `[tools.<tag>.config]` |
 
 A **custom tool** gets `output/…/config/<tag>.toml` as its first argument. It holds its

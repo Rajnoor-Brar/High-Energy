@@ -173,10 +173,12 @@ def base_of(path: str) -> str:
 
 
 def objects_of(yoda: Path) -> list[str]:
-    """The 1D objects of a YODA file that get pages."""
+    """The 1D objects of a YODA file that get pages: the nominal weight only (Sherpa writes a
+    variation per extra weight, as /x[EXTRA__MEWeight])."""
     text = yoda.read_text(encoding="utf-8", errors="replace")
     found = re.findall(r"^BEGIN YODA_(?:ESTIMATE1D|HISTO1D|SCATTER2D)_V\d+ (\S+)$", text, re.M)
-    return [p for p in found if not p.startswith(("/RAW/", "/TMP/")) and p not in COUNTERS]
+    return [p for p in found if not p.startswith(("/RAW/", "/TMP/")) and p not in COUNTERS
+            and not p.endswith("]")]            # /x[EXTRA__NTrials]: a weight variation, not a page
 
 
 def _sha(path: Path) -> str:

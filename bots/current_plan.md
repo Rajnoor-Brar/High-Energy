@@ -32,8 +32,9 @@ read `README.md` (decisions V1–V20, traceability) → `00_Brief.md` (the user'
   3,073 vs 2,000 budget (1.54×): a finding for P4 S3.
 - **P4 — Modules and the other tools** (`docs/rework_v2/phases/P4_modules-and-tools.md`), next:
   S1 done (Module.hh, the module folder, Lambda = Lamriv to YODA precision, InprocJets = the chain
-  bin for bin; seeds now follow the generator). Next: S2 Delphes/Herwig/Sherpa; S3 Whizard/MadGraph,
-  comparison, budget.
+  bin for bin; seeds now follow the generator). S2 done (Delphes file chain, Sherpa σ = v1's,
+  Herwig with its repository in build/; [prepare] caches). Next: S3 Whizard/MadGraph, the
+  generator comparison, the budget.
 ---
 
 # v1 (finished) — the working plan as it stood at `rework/v1`
