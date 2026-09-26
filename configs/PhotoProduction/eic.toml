@@ -27,39 +27,39 @@ threads       = 20
 [run.single]
 description = "One run at the static point (27x920 e+p)"
 sweeps      = []
-tools       = [["pythia", "rivet"]]
+tools       = [["pythia", "rivet"], "yd2rt"]
 
 [run.pdf]
 serial      = 1
 description = "Proton-PDF comparison at the static beams"
 sweeps      = ["pdf"]
-tools       = [["pythia", "rivet"]]
+tools       = [["pythia", "rivet"], "yd2rt"]
 
 [run.energies]
 serial      = 2
 description = "Beam-energy comparison at the static PDF"
 sweeps      = ["energies"]
-tools       = [["pythia", "rivet"]]
+tools       = [["pythia", "rivet"], "yd2rt"]
 
 [run.energy_pdf]
 serial      = 3
 description = "Beams x PDF grid: one page per energy, PDF curves on each"
 sweeps      = ["energies", "pdf"]
 plot_points = ["energies"]
-tools       = [["pythia", "rivet"]]
+tools       = [["pythia", "rivet"], "yd2rt"]
 
 [run.mpi]
 serial      = 4
 description = "MPI pT0Ref scan at 18x275 with MPI on"
 sweeps      = ["pt0ref"]
-tools       = [["pythia", "rivet"]]
+tools       = [["pythia", "rivet"], "yd2rt"]
 static      = { energies = "18x275" }
 
 [run.mpi_onoff]
 serial      = 5
 description = "MPI on vs off at 18x275"
 sweeps      = ["mpi"]
-tools       = [["pythia", "rivet"]]
+tools       = [["pythia", "rivet"], "yd2rt"]
 static      = { energies = "18x275" }
 
 [run.mpi_grid]
@@ -67,27 +67,27 @@ serial      = 6
 description = "pT0Ref x MPI grid: one page per MPI setting, pT0Ref curves on each"
 sweeps      = ["pt0ref", "mpi"]
 plot_points = ["mpi"]
-tools       = [["pythia", "rivet"]]
+tools       = [["pythia", "rivet"], "yd2rt"]
 static      = { energies = "18x275" }
 
 [run.pthatmin]
 serial      = 7
 description = "Generation-cut stability at the static beams (00/B27)"
 sweeps      = ["pthatmin"]
-tools       = [["pythia", "rivet"]]
+tools       = [["pythia", "rivet"], "yd2rt"]
 
 [run.process]
 serial      = 8
 description = "Photon:ProcessType 0 vs 1 at 18x275: a null comparison with this card (00/B13)"
 sweeps      = ["process"]
-tools       = [["pythia", "rivet"]]
+tools       = [["pythia", "rivet"], "yd2rt"]
 static      = { energies = "18x275" }
 
 [run.radius]
 serial      = 9
 description = "Jet radius R at 18x275 (three points, three generations: V9)"
 sweeps      = ["radius"]
-tools       = [["pythia", "rivet"]]
+tools       = [["pythia", "rivet"], "yd2rt"]
 static      = { energies = "18x275" }
 
 [prelim]
@@ -110,6 +110,11 @@ tool        = "rivet"
 input       = "events.hepmc"
 analyses    = ["photo_eic"]
 output_file = "photo.yoda"
+
+[tools.yd2rt]
+tool        = "yd2rt"
+input       = "photo.yoda"
+output_file = "photo.root"
 
 [quantities.energies]
 values = [[41, 5], [100, 10], [275, 18], [920, 27.5]]     # [E_p, E_e]: beam A is the proton

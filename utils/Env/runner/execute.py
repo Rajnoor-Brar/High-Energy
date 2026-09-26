@@ -279,9 +279,26 @@ def run_point(plan: PointPlan, run, configuration, *, sink=None, journal: Journa
             _cleanup(plan)
             _finished(plan, result, sink, journal)
             return result
+        # a group's products are checked and take their final names before the next group reads them
+        failure = _settle(group, results)
+        if failure is not None:
+            _cleanup(plan)
+            _finished(plan, failure, sink, journal)
+            return failure
 
-    # the checks: event counts against the producer's sidecar, then every declared product exists
-    for step in plan.rendered.values():
+    _cleanup(plan)
+    record = provenance(plan, run, configuration, started, now(),
+                        {tag: {"exit": r.exit, "seconds": round(r.seconds, 3), "note": r.message} for tag, r in results.items()})
+    write_atomic(plan.res / "provenance.json", json.dumps(record, indent=1, default=str) + "\n")
+    write_atomic(complete_marker(plan), plan.identity + "\n")
+    result = PointResult(True, tools=results)
+    _finished(plan, result, sink, journal)
+    return result
+
+
+def _settle(group: list[Step], results: dict[str, ToolResult]) -> PointResult | None:
+    """After a group succeeded: the count checks, then partial → final names. None when all is well."""
+    for step in group:
         if step.count_check is None:
             continue
         product, sidecar, reader = step.count_check
@@ -294,28 +311,15 @@ def run_point(plan: PointPlan, run, configuration, *, sink=None, journal: Journa
             message = (f"{step.tag} analysed {counted if counted is None else round(counted)} events; "
                        f"the producer wrote {written} ({sidecar.name})")
             results.setdefault(step.tag, ToolResult(step.tag)).cause = "count"
-            result = PointResult(False, cause=step.tag, message=message, tools=results)
-            _cleanup(plan)
-            _finished(plan, result, sink, journal)
-            return result
+            return PointResult(False, cause=step.tag, message=message, tools=results)
         results[step.tag].message = f"count ok: {written} events"
-    for step in plan.rendered.values():
+    for step in group:
         for final, partial in step.products:
             if partial.exists():
                 partial.replace(final)
             elif not final.exists():
-                result = PointResult(False, cause=step.tag, message=f"{step.tag} did not write {final.name}", tools=results)
-                _finished(plan, result, sink, journal)
-                return result
-
-    _cleanup(plan)
-    record = provenance(plan, run, configuration, started, now(),
-                        {tag: {"exit": r.exit, "seconds": round(r.seconds, 3), "note": r.message} for tag, r in results.items()})
-    write_atomic(plan.res / "provenance.json", json.dumps(record, indent=1, default=str) + "\n")
-    write_atomic(complete_marker(plan), plan.identity + "\n")
-    result = PointResult(True, tools=results)
-    _finished(plan, result, sink, journal)
-    return result
+                return PointResult(False, cause=step.tag, message=f"{step.tag} did not write {final.name}", tools=results)
+    return None
 
 
 def _finished(plan: PointPlan, result: PointResult, sink, journal: Journal | None) -> None:

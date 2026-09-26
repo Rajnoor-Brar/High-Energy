@@ -17,12 +17,12 @@ threads       = 20
 [run.default]
 description = "Proton-PDF comparison at 27.5x920 GeV e+p against ZEUS 2012 (built-in Rivet analysis)"
 sweeps      = ["pdf"]
-tools       = [["pythia", "rivet"]]
+tools       = [["pythia", "rivet"], "yd2rt"]
 
 [run.single]
 description = "One run at the static point"
 sweeps      = []
-tools       = [["pythia", "rivet"]]
+tools       = [["pythia", "rivet"], "yd2rt"]
 
 [prelim]
 fifo = ["events.hepmc"]
@@ -41,6 +41,11 @@ tool        = "rivet"
 input       = "events.hepmc"
 analyses    = ["ZEUS_2012_I1116258"]
 output_file = "zeus.yoda"
+
+[tools.yd2rt]
+tool        = "yd2rt"
+input       = "zeus.yoda"
+output_file = "zeus.root"
 
 [quantities.energies]
 values = [[41, 5], [100, 10], [275, 18], [920, 27.5]]

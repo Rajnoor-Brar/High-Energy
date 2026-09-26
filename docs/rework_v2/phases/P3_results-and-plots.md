@@ -108,4 +108,24 @@ Revert the step commits.
 
 ## Log
 
-*(filled during execution)*
+### S1 — 2026-09-26 — done
+
+| Row | Result |
+|---|---|
+| 1 | App_yd2rt on the legacy reference YODA, read back with uproot and compared with YODA's own Python reading: **all 17 Estimate1D objects** have equal edges, and contents and errors equal to 1e-12 (`tests/integration/test_yd2rt.py`) |
+| 2 | `/photo_eic:R=0.4/d01-x01-y01` becomes `photo_eic__R-0.4/d01-x01-y01`, and the `paths` TTree maps it back |
+| 3 | Changing only yd2rt's `select`, then rerunning: the whole point reruns, **16.1 s instead of 0.2 s** (identity per point, V9). This is R5's cost, measured. |
+
+**Deviations:**
+- **Rivet 4 writes final histograms as `Estimate1D`**, with the unscaled fills as `Histo1D` under
+  `/RAW`. Both become `TH1D`. An Estimate's error is the average of its total down and up errors,
+  where 05 §6 had said `TGraphAsymmErrors`. Photo_eic's errors are symmetric, and a `TH1D` is what
+  Paint overlays and divides.
+- **Directories nest** as the YODA path does (`RAW/photo_eic/…`), and only `:`/`=` are mapped.
+- **Products take their final names per group**, after that group's count checks. Before, the rename
+  waited for the last group, so a later group could not read an earlier product (yd2rt reads rivet's
+  YODA). `.complete` is still written last.
+- **Tool options are placeholders**: every `[options]` key of a tool folder, empty when unset. yd2rt
+  takes its select globs as extra arguments.
+- **The reference-data conversion is left to S2**, where Paint needs it.
+- `yd2rt` is in every eic and zeus chain as a second group.

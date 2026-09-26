@@ -681,6 +681,11 @@ def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
         "card": str(step.card_combined or ""),
         "analyses": [x for a in step.identity_parts.get("analyses", []) for x in ("-a", a)],
     }
+    # every option the tool folder declares is a placeholder too: its value, or empty when unset
+    for key, rule in folder.spec.get("options", {}).items():
+        if key not in context:
+            value = tool.extra.get(key, [] if rule.get("kind") == "list" else "")
+            context[key] = [str(v) for v in value] if isinstance(value, list) else str(value)
     # standard configurations handed to a custom/module tool (V21, 04 §7.3)
     standard: dict[str, dict] = {}
     for key, tag in requests.items():
