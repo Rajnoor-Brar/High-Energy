@@ -93,13 +93,13 @@ Revert.
   **`docs/MAP.md`** is where things live: the two halves and the narrow contract between them, the
   C++ layering, the `hekit` packages, the shape of a results directory, and a "finding your way in"
   table. It names the two invariants a reader should know before opening the code — the scaling
-  contract, and that concurrency is a property of the sink.
+  contract, and that concurrency is a property of the analyzer.
 
   **The design is now a record, not a proposal.** `rework/README.md` says so, and carries a table of
-  **eleven places where building it changed it** — jet clustering that cannot be sharded, a sink
+  **eleven places where building it changed it** — jet clustering that cannot be sharded, an analyzer
   exception that would have called `std::terminate`, Delphes that cannot read a FIFO, Whizard's
   missing photon structure function, ROOT dropped from the physics layer, a Δφ that does not
-  terminate, a plugin convention that had never been run, a module sink that cannot always shard, a
+  terminate, a plugin convention that had never been run, a module analyzer that cannot always shard, a
   χ² that is not a general minimisation, a derived histogram that must not be a `Histo1D`, and
   derived tables deferred with evidence. A reader of the design should not have to find those one at
   a time.

@@ -86,7 +86,7 @@ ratio = true
 [output]
 tag_style = "tag"
 
-[settle.use]
+[static.use]
 energies = "27x920"
 beams = "ep"
 

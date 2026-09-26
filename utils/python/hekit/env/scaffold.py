@@ -122,7 +122,7 @@ def module_source(name: str) -> str:
 // Built as `libhekit_{name}.so` by the ordinary CMake rule and loaded with `dlopen`, so adding one
 // never rebuilds `hep-run`. Named in a config as
 //
-//     [[sinks.module]]
+//     [[analyzers.module]]
 //     name = "{name}"
 //     paths = ["build/modules/<project>"]
 //
@@ -230,7 +230,7 @@ paths = ["build/analyses/{name}"]
 [output]
 tag_style = "tag"
 
-[settle.use]
+[static.use]
 energies = "27x920"
 
 [quantity.energies]

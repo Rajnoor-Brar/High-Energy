@@ -63,7 +63,7 @@ namespace Core {
         double wall_seconds = 0.0;
         long long events_requested = 0;      // what the spec asked for
         long long attempted = 0;             // next() calls: Main:numberOfEvents (P0-S04)
-        long long accepted = 0;              // events that reached the sinks
+        long long accepted = 0;              // events that reached the analyzers
         double xsec_pb = 0.0;
         double xsec_error_pb = 0.0;
         // Whether the source could measure one at all. A stream from a generator that writes no

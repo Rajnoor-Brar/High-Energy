@@ -153,7 +153,7 @@ def test_a_module_scores_its_jets(tmp_path):
                    "cards": [str(cards / "photo_ep.cmnd"), str(cards / "point.cmnd")]},
         "output": {"dir": str(tmp_path), "yoda": "analysis.yoda",
                    "summary": "run.summary.json"},
-        "sink": [{"kind": "module", "name": "ToyJets",
+        "analyzer": [{"kind": "module", "name": "ToyJets",
                   "paths": [str(MODULE.parent)],
                   "options": {"pt_min": 0.5, "eta_max": 5.0, "model": str(model)}}],
         "status": {"fd": 3, "heartbeat_ms": 500},
@@ -205,7 +205,7 @@ def test_a_missing_model_is_caught_by_the_preflight(tmp_path):
                    "cards": [str(cards / "photo_ep.cmnd"), str(cards / "point.cmnd")]},
         "output": {"dir": str(tmp_path), "yoda": "analysis.yoda",
                    "summary": "run.summary.json"},
-        "sink": [{"kind": "module", "name": "ToyJets", "paths": [str(MODULE.parent)],
+        "analyzer": [{"kind": "module", "name": "ToyJets", "paths": [str(MODULE.parent)],
                   "options": {"model": str(tmp_path / "no-such-model.onnx")}}],
         "status": {"fd": 3, "heartbeat_ms": 500},
     }

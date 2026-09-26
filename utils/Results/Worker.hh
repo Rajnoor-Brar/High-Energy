@@ -3,7 +3,7 @@
 // ── Results/Worker.hh ────────────────────────────────────────────────────────
 // One worker's own copy of everything a module booked (05 §5).
 //
-// `Sink::Modules` is sharded, so each slot fills its own clones and nothing is shared or locked
+// `Analyzer::Modules` is sharded, so each slot fills its own clones and nothing is shared or locked
 // during the event loop. That is the whole reason this type exists: a module with one set of
 // objects would need a mutex per fill, and a mutex per fill is the thing sharding was for.
 //

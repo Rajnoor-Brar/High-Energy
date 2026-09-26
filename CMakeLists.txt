@@ -31,7 +31,7 @@ foreach(component RIVET HEPMC ONNX)
 endforeach()
 # In-process Delphes is deferred (07, 13 §3: its global `class Event` clashes); external Delphes is a
 # supervised process and needs no build option.
-set(HEKIT_WITH_DELPHES OFF CACHE STRING "Build the in-process Delphes sink (deferred; AUTO/ON/OFF)")
+set(HEKIT_WITH_DELPHES OFF CACHE STRING "Build the in-process Delphes analyzer (deferred; AUTO/ON/OFF)")
 set_property(CACHE HEKIT_WITH_DELPHES PROPERTY STRINGS ${_auto_values})
 
 # hekit_component(<NAME> <package>…) — resolve one AUTO/ON/OFF option into HEKIT_<NAME> (0/1).
@@ -95,7 +95,7 @@ endif()
 # ── facade libraries (13 §2) ─────────────────────────────────────────────────
 # One INTERFACE library per namespace, in dependency order: a lower layer never links a higher one.
 # They carry no sources yet; P2-S03 onwards adds headers under utils/<Namespace>/.
-set(HEKIT_FACADES Core Status Events Store Results ML Phys Source Module Sink Run)
+set(HEKIT_FACADES Core Status Events Store Results ML Phys Source Module Analyzer Run)
 foreach(facade IN LISTS HEKIT_FACADES)
   add_library(hekit_${facade} INTERFACE)
   target_include_directories(hekit_${facade} INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/utils)
@@ -115,8 +115,8 @@ target_link_libraries(hekit_Phys INTERFACE hekit_Events)
 target_link_libraries(hekit_ML INTERFACE hekit_Events)
 target_link_libraries(hekit_Source INTERFACE hekit_Events Pythia8::Pythia8)
 target_link_libraries(hekit_Module INTERFACE hekit_Results hekit_Phys hekit_ML)
-target_link_libraries(hekit_Sink INTERFACE hekit_Results hekit_Store hekit_Module)
-target_link_libraries(hekit_Run INTERFACE hekit_Sink hekit_Source)
+target_link_libraries(hekit_Analyzer INTERFACE hekit_Results hekit_Store hekit_Module)
+target_link_libraries(hekit_Run INTERFACE hekit_Analyzer hekit_Source)
 
 if(HEKIT_HEPMC)
   target_link_libraries(hekit_Events INTERFACE HepMC3::HepMC3)
@@ -133,8 +133,8 @@ if(HEKIT_HEPMC)
   endif()
 endif()
 if(HEKIT_RIVET)
-  target_link_libraries(hekit_Sink INTERFACE Rivet::Rivet FastJet::FastJet)
-  target_compile_definitions(hekit_Sink INTERFACE HEKIT_WITH_RIVET=1)
+  target_link_libraries(hekit_Analyzer INTERFACE Rivet::Rivet FastJet::FastJet)
+  target_compile_definitions(hekit_Analyzer INTERFACE HEKIT_WITH_RIVET=1)
   # `Phys/Jets.hh` needs FastJet itself, not Rivet — but this build only has FastJet because Rivet
   # brought it, so the two are found together (P8-S02).
   target_link_libraries(hekit_Phys INTERFACE FastJet::FastJet)
@@ -154,8 +154,8 @@ if(HEKIT_ONNX)
   file(CREATE_LINK ${_onnx_include} ${HEKIT_ONNX_COMPAT}/onnxruntime SYMBOLIC)
 endif()
 if(HEKIT_DELPHES)
-  target_link_libraries(hekit_Sink INTERFACE Delphes::Delphes)
-  target_compile_definitions(hekit_Sink INTERFACE HEKIT_WITH_DELPHES=1)
+  target_link_libraries(hekit_Analyzer INTERFACE Delphes::Delphes)
+  target_compile_definitions(hekit_Analyzer INTERFACE HEKIT_WITH_DELPHES=1)
 endif()
 
 # ── hep-run ──────────────────────────────────────────────────────────────────
@@ -243,7 +243,7 @@ endforeach()
 # ── user modules, one MODULE library per source (05 §5, P8-S01) ──────────────
 # `modules/<project>/<Name>.cc` → `libhekit_<Name>.so`, dlopen'd at run time, so adding a module
 # never rebuilds `hep-run` — the same arrangement Rivet plugins have. **The library is named after
-# the file**, and `[[sinks.module]].name` is that name, so the config and the build cannot drift.
+# the file**, and `[[analyzers.module]].name` is that name, so the config and the build cannot drift.
 # A module books YODA objects, so this only exists where YODA does.
 if(HEKIT_WITH_RIVET)
 file(GLOB _module_dirs RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}/modules ${CMAKE_CURRENT_SOURCE_DIR}/modules/*)
@@ -301,7 +301,7 @@ if(HEKIT_PYTEST)
            ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_plot_vs_legacy.py)
   set_tests_properties(plot_equivalence PROPERTIES LABELS "slow" TIMEOUT 3600)
 
-  # Replaying a store through the same sinks as fresh events (P5-S02).
+  # Replaying a store through the same analyzers as fresh events (P5-S02).
   add_test(NAME store_replay COMMAND ${HEKIT_PYTEST} -q
            ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_store_replay.py)
   set_tests_properties(store_replay PROPERTIES LABELS "slow" TIMEOUT 3600)
@@ -342,7 +342,7 @@ if(HEKIT_PYTEST)
            ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_modules.py)
   set_tests_properties(modules PROPERTIES LABELS "slow" TIMEOUT 3600)
 
-  # The same measurement through both analysis paths — a Rivet plugin and a module sink — from one
+  # The same measurement through both analysis paths — a Rivet plugin and a module analyzer — from one
   # shared reconstruction, so a disagreement is a framework defect and nothing else (00/B42).
   add_test(NAME lambda_paths COMMAND ${HEKIT_PYTEST} -q
            ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/test_lambda_paths.py)

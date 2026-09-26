@@ -5,7 +5,7 @@
 | Status | done |
 | Kind | code |
 | Phase | P3 — Supervision, results layout, terminal |
-| Depends on | [P3-S02](P3-S02_supervisor.md), [P3-S03](P3-S03_results-provenance.md), [P3-S04](P3-S04_terminal.md), [P2-S05](P2-S05_rivet-sink-results-writer.md) |
+| Depends on | [P3-S02](P3-S02_supervisor.md), [P3-S03](P3-S03_results-provenance.md), [P3-S04](P3-S04_terminal.md), [P2-S05](P2-S05_rivet-analyzer-results-writer.md) |
 | Blocks | [P4-S06](P4-S06_retire-legacy-tools.md), [P7-S01](P7-S01_adapter-framework.md) |
 | Effort | 0.5 d |
 | Findings / decisions | R1–R6; rule 1 |

@@ -14,11 +14,11 @@ from reading.
 | `Core` | 8 | 949 | | `Phys` | 5 | 887 |
 | `Status` | 5 | 469 | | `Source` | 4 | 736 |
 | `Events` | 2 | 143 | | `Module` | 3 | 217 |
-| `Store` | 5 | 662 | | `Sink` | 6 | 960 |
+| `Store` | 5 | 662 | | `Analyzer` | 6 | 960 |
 | `Results` | 5 | 604 | | `Run` | 2 | 327 |
 | `ML` | 3 | 437 | | `apps` | 1 | 291 |
 
-Largest file: `Sink/Rivet.hh` at 383 lines. Then `Core/Spec.hh` 363, `Source/Replay.hh` 329,
+Largest file: `Analyzer/Rivet.hh` at 383 lines. Then `Core/Spec.hh` 363, `Source/Replay.hh` 329,
 `Run/Loop.hh` 296.
 
 **Verdict: healthy.** No God file, no namespace over a thousand lines, and the biggest file is the
@@ -49,7 +49,7 @@ else is proportionate.
 The documented layering (13 §2) is:
 
 ```
-Core ─► Status ─► Events ─► { Store, Results, ML, Phys } ─► { Source, Module } ─► Sink ─► Run ─► apps
+Core ─► Status ─► Events ─► { Store, Results, ML, Phys } ─► { Source, Module } ─► Analyzer ─► Run ─► apps
 rank    0         1          2          3                     4                    5       6
 ```
 
@@ -62,23 +62,23 @@ Measured from `#include` directives:
 | `Store` | 3 | Core, Status |
 | `ML` | 3 | Core |
 | `Phys` | 3 | Core |
-| `Results` | 3 | Core, Status, **Sink** ← |
-| `Module` | 4 | Core, Events, Results, **Sink** ← |
+| `Results` | 3 | Core, Status, **Analyzer** ← |
+| `Module` | 4 | Core, Events, Results, **Analyzer** ← |
 | `Source` | 4 | Core, Events, Status, Store |
-| `Sink` | 5 | Core, Events, Status, Store, Results, Module |
-| `Run` | 6 | Core, Events, Status, Results, Sink, Source |
-| `apps` | — | Core, Status, Run, Sink |
+| `Analyzer` | 5 | Core, Events, Status, Store, Results, Module |
+| `Run` | 6 | Core, Events, Status, Results, Analyzer, Source |
+| `apps` | — | Core, Status, Run, Analyzer |
 
 ### Finding C1 — two layering violations, and they are the same 9 lines
 
 ```
-Module/Types.hh    (rank 4) includes Sink   (rank 5)
-Results/Summary.hh (rank 3) includes Sink   (rank 5)
+Module/Types.hh    (rank 4) includes Analyzer   (rank 5)
+Results/Summary.hh (rank 3) includes Analyzer   (rank 5)
 ```
 
-Both produce a **cycle**: `Module ⇄ Sink` and `Results ⇄ Sink`.
+Both produce a **cycle**: `Module ⇄ Analyzer` and `Results ⇄ Analyzer`.
 
-The cause is not a tangle of logic. It is **two** pure value types that live in `Sink/Types.hh` and
+The cause is not a tangle of logic. It is **two** pure value types that live in `Analyzer/Types.hh` and
 are needed further down:
 
 ```cpp
@@ -86,24 +86,24 @@ struct Needs  { bool pythia; bool hepmc; };                // 4 lines
 struct Output { std::string kind, path; bool partial; };   // 5 lines
 ```
 
-`Module::Base::needs()` returns a `Sink::Needs`; `Results::summaryJson()` takes a
-`std::vector<Sink::Output>`. Neither has anything to do with the `Sink` *interface* — they are the
-vocabulary the layers use to talk about sinks, put in the namespace of the thing they describe
+`Module::Base::needs()` returns a `Analyzer::Needs`; `Results::summaryJson()` takes a
+`std::vector<Analyzer::Output>`. Neither has anything to do with the `Analyzer` *interface* — they are the
+vocabulary the layers use to talk about analyzers, put in the namespace of the thing they describe
 rather than in one both sides can see.
 
 **9 lines of struct cause both violations of the project's own layering rule.**
 
-Checked and *not* a violation: `Sink::Concurrency` is referenced only from `Sink/` and `Run/`, both
-at or above `Sink`. It belongs where it is. An audit that swept it up with the other two would be
+Checked and *not* a violation: `Analyzer::Concurrency` is referenced only from `Analyzer/` and `Run/`, both
+at or above `Analyzer`. It belongs where it is. An audit that swept it up with the other two would be
 moving a type for symmetry rather than for a reason.
 
-There is already a precedent for the fix: **`Core::SinkSpec` exists** (`Core/Spec.hh:59`), as does
-`Core::Exit::Sink`. `Core` already carries sink vocabulary; these two types are the ones that did
+There is already a precedent for the fix: **`Core::AnalyzerSpec` exists** (`Core/Spec.hh:59`), as does
+`Core::Exit::Analyzer`. `Core` already carries analyzer vocabulary; these two types are the ones that did
 not get the same treatment.
 
 ### Finding C2 — nothing else is wrong
 
-Every other edge respects the ranking. `Sink` legitimately sits above `Results`, `Store` and
+Every other edge respects the ranking. `Analyzer` legitimately sits above `Results`, `Store` and
 `Module`; `Run` sits above everything. The `Events`/`Store` split holds. This is a graph that was
 designed and then obeyed, which is rare enough to say out loud.
 

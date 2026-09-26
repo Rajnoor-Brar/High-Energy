@@ -1,9 +1,9 @@
 #pragma once
 
-// ── Sink/Modules.hh ──────────────────────────────────────────────────────────
+// ── Analyzer/Modules.hh ──────────────────────────────────────────────────────────
 // User C++ analysis, booking YODA into the same file as Rivet's (05 §5).
 //
-// This is the sink that can actually be sharded here. `Sink::Rivet` cannot, because its analyses
+// This is the analyzer that can actually be sharded here. `Analyzer::Rivet` cannot, because its analyses
 // cluster jets and SISCone keeps its cache in process-wide statics (00/B31); a module holds nothing
 // but its own YODA objects, one set per worker, so k workers fill k clones and the clones are added
 // at the end. The equality that makes that sound is the one P6-S01 arrived at: **fills add**, and a
@@ -11,7 +11,7 @@
 //
 // The objects go into the **same `analysis.yoda`** as Rivet's, under `/<module>/<name>`, so
 // `rivet-mkhtml` and `hep plot` treat them alike and nothing downstream has to learn a second format
-// (07 §1). `Results::Writer` does the writing; this sink only hands over the objects.
+// (07 §1). `Results::Writer` does the writing; this analyzer only hands over the objects.
 
 #include <atomic>
 #include <memory>
@@ -28,14 +28,14 @@
 #include "Results/Booker.hh"
 #include "Results/Merge.hh"
 #include "Results/Worker.hh"
-#include "Sink/Types.hh"
+#include "Analyzer/Types.hh"
 #include "Status.hh"
 
-namespace Sink {
+namespace Analyzer {
 
-    class Modules : public Sink {
+    class Modules : public Analyzer {
       public:
-        Modules(std::vector<Core::SinkSpec> specs, std::vector<std::string> paths,
+        Modules(std::vector<Core::AnalyzerSpec> specs, std::vector<std::string> paths,
                 Status::Writer& status)
             : specs_(std::move(specs)), paths_(std::move(paths)), status_(status) {}
 
@@ -54,8 +54,8 @@ namespace Sink {
         // Nothing here is shared between workers, so there is nothing to lock (05 §3) — unless a
         // module says otherwise. `Phys::cluster` is the case that matters: FastJet keeps clustering
         // state in process-wide statics, so a module that makes jets races in exactly the way that
-        // stopped the Rivet sink from sharding (00/B31). One mutex around this sink is enough;
-        // making the whole run serial would give up parallel generation for one sink's sake.
+        // stopped the Rivet analyzer from sharding (00/B31). One mutex around this analyzer is enough;
+        // making the whole run serial would give up parallel generation for one analyzer's sake.
         Concurrency concurrency() const override {
             return threadSafe() ? Concurrency::Sharded : Concurrency::Locked;
         }
@@ -70,7 +70,7 @@ namespace Sink {
         // duplicate object name costs a second rather than a run (06 §3.3).
         void prepare() override {
             if (!loaded_.empty()) return;
-            for (const Core::SinkSpec& spec : specs_) {
+            for (const Core::AnalyzerSpec& spec : specs_) {
                 Loaded loaded;
                 loaded.name = spec.name;
                 loaded.module = Module::load(spec.name, paths_);
@@ -114,7 +114,7 @@ namespace Sink {
         void event(Events::View& view) override {
             const std::size_t slot =
                 slots_ <= 1 ? 0 : static_cast<std::size_t>(view.slot()) % slots_;
-            // Σw is the denominator of every normalisation, and only this sink is in a position to
+            // Σw is the denominator of every normalisation, and only this analyzer is in a position to
             // count it per event; atomic because k workers are here at once.
             const double weight = view.weights().nominal();
             double seen = sum_of_weights_.load(std::memory_order_relaxed);
@@ -140,8 +140,8 @@ namespace Sink {
             status_.log(Status::Level::Info, "modules",
                         joined() + ": " + std::to_string(found.size()) + " objects");
 
-            // Normally the Rivet sink writes them, so they land in the *same* `analysis.yoda`
-            // (07 §1). With no Rivet sink in the run there is nobody to hand them to, so this
+            // Normally the Rivet analyzer writes them, so they land in the *same* `analysis.yoda`
+            // (07 §1). With no Rivet analyzer in the run there is nobody to hand them to, so this
             // writes the file itself rather than dropping them.
             if (writes_own_ && !found.empty()) {
                 Results::Writer writer(output_dir_);
@@ -163,20 +163,20 @@ namespace Sink {
             return found;
         }
 
-        /// Where to write when there is no Rivet sink to hand the objects to.
+        /// Where to write when there is no Rivet analyzer to hand the objects to.
         void writesOwnFile(std::string output_dir, std::string yoda_name) {
             writes_own_ = true;
             output_dir_ = std::move(output_dir);
             yoda_name_ = std::move(yoda_name);
         }
 
-        /// The Rivet sink is taking them, so do not write a second file.
+        /// The Rivet analyzer is taking them, so do not write a second file.
         void handsOver() { writes_own_ = false; }
 
         /// The merged, finalized objects, for `Results::Writer` to put beside Rivet's (07 §1).
         ///
         /// Shared pointers with **no deleter**: the writer wants the same type Rivet's handler
-        /// gives it, and this sink owns the objects. Handing over an owning pointer would mean two
+        /// gives it, and this analyzer owns the objects. Handing over an owning pointer would mean two
         /// owners and a double free the moment the writer's vector went out of scope.
         std::vector<std::shared_ptr<YODA::AnalysisObject>> objects() const {
             std::vector<std::shared_ptr<YODA::AnalysisObject>> found;
@@ -205,7 +205,7 @@ namespace Sink {
             return out;
         }
 
-        std::vector<Core::SinkSpec> specs_;
+        std::vector<Core::AnalyzerSpec> specs_;
         std::vector<std::string> paths_;
         Status::Writer& status_;
         std::vector<Loaded> loaded_;
@@ -217,4 +217,4 @@ namespace Sink {
         std::vector<Output> outputs_;
     };
 
-}  // namespace Sink
+}  // namespace Analyzer

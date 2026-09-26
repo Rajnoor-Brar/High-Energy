@@ -20,7 +20,7 @@ namespace Core {
         Usage = 2,
         Init = 3,          // the generator failed to initialise (vanishing cross section, bad beams)
         Source = 4,        // input I/O: a FIFO closed early, an unparsable event
-        Sink = 5,          // output: a failed finalize or write
+        Analyzer = 5,          // output: a failed finalize or write
         Stopped = 6,       // a signal stopped the run; partial outputs were finalised
         Stalled = 7,       // set by the supervisor, never by us
         Internal = 70,     // a bug: an invariant we hold ourselves to
@@ -35,7 +35,7 @@ namespace Core {
             case Exit::Usage: return "usage";
             case Exit::Init: return "init";
             case Exit::Source: return "input";
-            case Exit::Sink: return "output";
+            case Exit::Analyzer: return "output";
             case Exit::Stopped: return "partial";
             case Exit::Stalled: return "stall";
             case Exit::Internal: return "bug";

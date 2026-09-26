@@ -44,7 +44,7 @@ High-Energy/
 ### Namespaces
 
 - **Top-level only, PascalCase, no nesting.** `Core`, `Status`, `Events`, `Store`, `Results`, `ML`,
-  `Phys`, `Source`, `Module`, `Sink`, `Run`. The only sub-namespace permitted is `detail`.
+  `Phys`, `Source`, `Module`, `Analyzer`, `Run`. The only sub-namespace permitted is `detail`.
 - **Facade plus submodules.** Namespace `Foo` has a facade `utils/Foo.hh` exposing its primary
   functions and a directory `utils/Foo/` for the pieces. Cross-namespace code includes the facade or
   `Foo/Types.hh`, never a deeper header.
@@ -79,7 +79,7 @@ Each namespace is an `INTERFACE` library naming exactly its allowed dependencies
 target_link_libraries(hekit_Status  INTERFACE hekit_Core)
 target_link_libraries(hekit_Events  INTERFACE hekit_Status Pythia8::Pythia8)
 target_link_libraries(hekit_Module  INTERFACE hekit_Results hekit_Phys hekit_ML)
-target_link_libraries(hekit_Sink    INTERFACE hekit_Results hekit_Store hekit_Module)
+target_link_libraries(hekit_Analyzer    INTERFACE hekit_Results hekit_Store hekit_Module)
 ```
 
 **This is why the C++ layering held and the Python one did not.** A rule a build system enforces is
@@ -152,7 +152,7 @@ misspelled keys and command names.
 **The identity chain is the convention that matters most.** For a module:
 
 ```
-ToyJets.cc  →  libhekit_ToyJets.so  →  HEKIT_MODULE("ToyJets", ToyJets)  →  [[sinks.module]].name
+ToyJets.cc  →  libhekit_ToyJets.so  →  HEKIT_MODULE("ToyJets", ToyJets)  →  [[analyzers.module]].name
 ```
 
 All the same string. The build and the config cannot drift because there is nowhere for them to
@@ -210,9 +210,16 @@ Recorded because a conventions document that only lists the rules that worked is
 | **`results/` fuses three layers** | Layout (lowest), judgement (near-top) and housekeeping in one package. It is the junction that forces `results → plot` and `prov → results`. |
 | **Five commands hand-roll the same preamble** | `load_config → select_points → build → Layout.of`, and it has already drifted: `hep compare` passes `overlay` but not `style`. |
 | **`env/` is a grab-bag** | `paths.py` is a rank-0 utility living in a package that also scaffolds Rivet plugins and probes LHAPDF. |
-| **Two C++ value types sit in the wrong namespace** | 9 lines (`Sink::Needs`, `Sink::Output`) cause both C++ layering violations. |
-| **The module build is guarded on Rivet** | `Sink::Modules` has zero Rivet includes and YODA is unconditionally required, but the CMake guard is `HEKIT_WITH_RIVET` and it links `Rivet::Rivet`. |
+| **Two C++ value types sit in the wrong namespace** | 9 lines (`Analyzer::Needs`, `Analyzer::Output`) cause both C++ layering violations. |
+| **The module build is guarded on Rivet** | `Analyzer::Modules` has zero Rivet includes and YODA is unconditionally required, but the CMake guard is `HEKIT_WITH_RIVET` and it links `Rivet::Rivet`. |
 | **`LegendXPos`/`LegendYPos` are parsed then ignored** by the mpl backend | The keys reach `settings` and `draw_one` hardcodes `loc="best"`. A silently-ignored style key is the class of bug `00/B5` was. |
+| **A module's options cannot be swept** (`00/B40`) | `type = "option"` targets a Rivet analysis; a module's options come straight from `[analyzers.module.options]` and never see the swept value. Declaring one changes the point tags and nothing else. |
+| **An option sweep draws every variant on every curve** (`00/B43`) | `curves_for` narrows the curves; nothing narrows the *objects*, so each curve's file still holds all N variants. N× the drawing and an N×-repeated legend. Affects `photo_eic`'s `radius` too. |
+| **Module and Rivet histograms use different normalisation conventions** (`00/B42`) | Rivet writes a density; `Results::Final::normalise()` writes per-bin integrals. They differ by the bin width, in one file, silently. |
+
+**Two entries were fixed** while building the Lambda example, and are listed in
+[07_Glossary.md](07_Glossary.md)'s companion note rather than here: `hep build --modules` never
+worked for any project (`00/B41`), and a `.info`/`.plot` edit did not rebuild its copy (`00/B44`).
 
 Fixes and costs for the first five are in
 [post_rework/02_Proposals.md](../post_rework/02_Proposals.md). **The single highest-value one** is

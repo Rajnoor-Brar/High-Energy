@@ -206,7 +206,7 @@ def test_a_journal_round_trips_through_the_view(tmp_path: Path):
         book.header(cli="hep run eic.toml --study pdf", project="PhotoProduction", git="0a10209",
                     study="pdf", points=["a", "b"])
         book.point("a", model.RUNNING)
-        book.raw('{"t": 1.0, "k": "init", "threads": 2, "mode": "serial", "sinks": ["rivet"]}',
+        book.raw('{"t": 1.0, "k": "init", "threads": 2, "mode": "serial", "analyzers": ["rivet"]}',
                  point="a", stage="hep-run")
         book.raw('{"t": 2.0, "k": "progress", "done": 50, "total": 100, "rate": 25.0,'
                  ' "workers": [25, 25]}', point="a", stage="hep-run")

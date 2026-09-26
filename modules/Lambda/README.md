@@ -1,6 +1,6 @@
 # Lambda
 
-Λ → p π⁻ reconstruction from Pythia, as a C++ module sink. A worked example of the framework: the
+Λ → p π⁻ reconstruction from Pythia, as a C++ module analyzer. A worked example of the framework: the
 legacy `Lambda` (839 lines across nine headers plus four `main()`s) rebuilt as **one module plus one
 TOML**.
 
@@ -39,7 +39,7 @@ On 20k events at 7 TeV: 21.5 → 8.1 → 1.7 candidates per event, peak at 1.107
 
 ## Configure it
 
-Everything analysis-specific is in `[sinks.module.options]` of
+Everything analysis-specific is in `[analyzers.module.options]` of
 [`configs/Lambda/lambda.toml`](../../configs/Lambda/lambda.toml):
 
 | Option | Default | |
@@ -73,14 +73,14 @@ checking the selection meant generating events and hoping one had the case you w
 
 | legacy Lambda | now |
 |---|---|
-| own worker pool and collectors | `Sink::Modules` shards; one clone per worker |
+| own worker pool and collectors | `Analyzer::Modules` shards; one clone per worker |
 | own ROOT `Record::Writer` | `Results::Booker` → YODA → `[proc.export]` |
 | own checkpoints, heartbeat, logs | the supervisor and the status stream |
 | own serial/directory/file naming | the results layout |
 | four `main()` variants | one `hep run`, three studies in one TOML |
 | hand-rolled TOML reading | the schema, validated before anything starts |
 
-**It declares `threadSafe() == true`**, because it clusters nothing and shares nothing — so the sink
+**It declares `threadSafe() == true`**, because it clusters nothing and shares nothing — so the analyzer
 shards and the module is free on a many-threaded run. Compare `modules/Examples/ToyJets.cc`, which
 must say `false` because FastJet keeps clustering state in process-wide statics (00/B31).
 
@@ -115,9 +115,9 @@ what lets a plugin use `Phys` and a project's own headers.
 21/21 histograms, floating-point tolerance, because it is one sample written twice rather than two
 samples compared.
 
-Drop either sink and the other still works. Rivet takes HepMC however it arrives — Pythia in
+Drop either analyzer and the other still works. Rivet takes HepMC however it arrives — Pythia in
 process here, or an external generator's FIFO if `[generator].tool` changes — and writes YODA either
-way; `Sink::Rivet` is the same sink.
+way; `Analyzer::Rivet` is the same analyzer.
 
 **What it caught: 00/B42.** Rivet's `finalize` writes a *density* (dσ/dx); `Results::Final::normalise()`
 leaves per-bin integrals. The two disagreed by exactly the bin width — 125× on the mass axis, 0.25× on

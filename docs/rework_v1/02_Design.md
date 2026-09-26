@@ -14,7 +14,7 @@ why the boundaries are where they are, and what happens if you move one.
                           │ spec.toml (resolved)                         │ JSON lines on fd 3
                           ▼                                              │
                   ┌─────────────────────────── hep-run (C++) ────────────┴────────────────────┐
-                  │  Source ──► Run::Loop ──► Sinks {Rivet, Modules, Store, Delphes, Count}   │
+                  │  Source ──► Run::Loop ──► Analyzers {Rivet, Modules, Store, Delphes, Count}   │
                   └───────────────────────────────────────────────────────────────────────────┘
                                                       │
                                                       ▼
@@ -46,22 +46,22 @@ You never add a flag here. You add a key to the spec schema.
 
 **Parsing is strict** — an unknown option is a usage error, because a silently ignored flag in a
 batch job is worse than a failure. **Exit codes are a contract**: `0` ok, `1` spec/card, `2` usage,
-`3` init, `4` source, `5` sink, `6` stopped-with-partials, `7` stalled, `70` internal.
+`3` init, `4` source, `5` analyzer, `6` stopped-with-partials, `7` stalled, `70` internal.
 
 ---
 
 ## 2. The C++ side: eleven namespaces, strictly ranked
 
 ```
-Core ─► Status ─► Events ─► { Store, Results, ML, Phys } ─► { Source, Module } ─► Sink ─► Run ─► apps
+Core ─► Status ─► Events ─► { Store, Results, ML, Phys } ─► { Source, Module } ─► Analyzer ─► Run ─► apps
  0       1         2          3                              4                    5       6
 ```
 
 A lower layer never links a higher one. The ranking is enforced by the CMake link graph — each
 namespace is an `INTERFACE` library naming exactly its allowed dependencies — which is why it
 mostly held: **two violations in 6,837 lines**, both caused by the same 9 lines of value types
-(`Sink::Needs`, `Sink::Output`) living in the namespace of the thing they *describe* rather than in
-one both sides can see. `Core::SinkSpec` already exists as the precedent for the fix.
+(`Analyzer::Needs`, `Analyzer::Output`) living in the namespace of the thing they *describe* rather than in
+one both sides can see. `Core::AnalyzerSpec` already exists as the precedent for the fix.
 
 | Namespace | Owns | Depends on |
 |---|---|---|
@@ -74,14 +74,14 @@ one both sides can see. `Core::SinkSpec` already exists as the precedent for the
 | `Phys` | PDG data, kinematics on `FourVector`, `GenEvent` selectors, jet definitions | Events |
 | `Source` | where events come from: Pythia, a store replay, a stream | Events, Store |
 | `Module` | the user-module interface and its `dlopen` loader | Results, Phys, ML |
-| `Sink` | where events go: Rivet, store, modules, the Delphes tee | Results, Store, Module |
-| `Run` | wires source to sinks; chunking, concurrency mode, the summary | Sink, Source |
+| `Analyzer` | where events go: Rivet, store, modules, the Delphes tee | Results, Store, Module |
+| `Run` | wires source to analyzers; chunking, concurrency mode, the summary | Analyzer, Source |
 
 **Why `Events` is separate from `Core`** despite being only 143 lines: it depends on Pythia and
 HepMC3, and folding it downward would drag both into the bottom layer and cost the all-off build.
 Small is not a defect.
 
-**Why `Phys` and `ML` sit at rank 3** rather than beside `Sink`: they are libraries a *user's*
+**Why `Phys` and `ML` sit at rank 3** rather than beside `Analyzer`: they are libraries a *user's*
 module calls, so they must be visible to `Module` without `Module` reaching upward.
 
 ### The two invariants to know before reading the code
@@ -89,7 +89,7 @@ module calls, so they must be visible to `Module` without `Module` reaching upwa
 **The scaling contract.** Fills carry raw weights in `process`; scaling happens once in `finalize`,
 when σ and Σw are known. `Results::Worker` has no `scale()`; `Results::Final` has no `fill()`.
 
-**Concurrency is a property of the sink.** Each sink answers `Serial`, `Locked` or `Sharded`;
+**Concurrency is a property of the analyzer.** Each analyzer answers `Serial`, `Locked` or `Sharded`;
 `Run::Loop::decideMode()` asks all of them and decides. The measured cost that made `Locked` worth
 having: 92 µs/event locked against 124 µs/event fully serial.
 
@@ -207,10 +207,11 @@ binning actually drawn; auto-range last so it sees both curves and data.
 | A Rivet analysis | `analyses/<Project>/<name>.cc` (+ `.info`, `.plot`) | glob picks it up; `hep build` |
 | A C++ module | `modules/<Project>/<Name>.cc` + `HEKIT_MODULE(…)` | glob; `dlopen`'d, never relinks `hep-run` |
 | A generator | `adapters/<tool>.py` with five functions + `register()` | FIFO wiring, event counting, cache, supervision all inherited |
-| A sink | `utils/Sink/<Name>.hh` answering `concurrency()` | must declare its own thread-safety |
+| An analyzer | `utils/Analyzer/<Name>.hh` answering `concurrency()` | must declare its own thread-safety |
 | A status message | a `Status::Kind` | old readers log-and-ignore it |
 | A command | an entry in `cli.COMMANDS` | lazily imported, so `hep --help` stays fast |
 | A fit backend | `proc/backends/<name>.py` | `ORDER` decides preference; falls back automatically |
+| A ROOT view of a point | `[proc.export]` in the config | derived from `analysis.yoda`; `hep-run` still links no ROOT |
 
 The property these share: **adding one thing touches one file**. Where that is not true — five
 commands hand-rolling the same `load_config → select_points → build → Layout.of` preamble, already
@@ -226,9 +227,9 @@ Eleven places where building it changed it, listed in full at
 
 **Rivet analyses cannot be sharded** (`00/B31`). FastJet keeps clustering state in process-wide
 statics; a race changes the jets rather than crashing. This is why concurrency became a property of
-the sink instead of a global mode, and why `Module::Base::threadSafe()` exists.
+the analyzer instead of a global mode, and why `Module::Base::threadSafe()` exists.
 
-**A sink exception would have called `std::terminate`** (`00/B32`). `PythiaParallel` runs the
+**An analyzer exception would have called `std::terminate`** (`00/B32`). `PythiaParallel` runs the
 callback on worker threads in *both* modes, so a throw unwound through `std::thread`. Both sources
 now catch at the thread boundary and rethrow on the main thread.
 

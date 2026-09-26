@@ -1,6 +1,6 @@
 """The two Lambda analysis paths must agree (00/B42).
 
-`analyses/Lambda/Lamriv.cc` (a Rivet analysis) and `modules/Lambda/Lambda.cc` (a C++ module sink)
+`analyses/Lambda/Lamriv.cc` (a Rivet analysis) and `modules/Lambda/Lambda.cc` (a C++ module analyzer)
 measure the same thing from the **same** shared reconstruction, `modules/Lambda/Reconstruction.hh`.
 Running both on one sample therefore compares the two *framework* paths, not two implementations of
 the physics — which is exactly what makes this test worth having: any disagreement is a framework
@@ -48,7 +48,7 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 def objects(tmp_path_factory):
-    """One short run with both sinks attached, into a scratch results root."""
+    """One short run with both analyzers attached, into a scratch results root."""
     results = tmp_path_factory.mktemp("results")
     environment = dict(os.environ, HEKIT_RESULTS=str(results))
     arguments = ["--plain", "run", str(CONFIG), "--study", "single", "--events", str(EVENTS)]

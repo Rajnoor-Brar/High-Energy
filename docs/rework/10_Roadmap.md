@@ -55,10 +55,10 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | D1 | Language split | Python orchestration, C++ event loop | A single-language codebase |
 | D2 | Config validation | Once, in Python; C++ reads a resolved spec | User-facing config ergonomics in `hep-run` (it gets `--plain` only) |
 | D3 | Physics in TOML | No. Native cards + overrides only. | Cross-generator "same physics" guarantees (Q7 is a documented decision instead) |
-| D4 | Pythia → Rivet | In-process sink | The HepMC text round trip (still available as the store / FIFO tee) |
+| D4 | Pythia → Rivet | In-process analyzer | The HepMC text round trip (still available as the store / FIFO tee) |
 | D5 | External generators → Rivet | FIFO into `hep-run` (uniform); native Rivet as an option | Some speed for Sherpa Rivet-only runs |
 | D6 | Rendering | Python `rich`, one renderer across stages | The C++ progress bar when running `hep-run` by hand |
-| D7 *(revised)* | Numerical results | **YODA only**, including C++ module histograms; ROOT is not a results format | Record's ROOT histograms/trees; the earlier RNTuple sink idea (withdrawn) |
+| D7 *(revised)* | Numerical results | **YODA only**, including C++ module histograms; ROOT is not a results format | Record's ROOT histograms/trees; the earlier RNTuple analyzer idea (withdrawn) |
 | D8 *(revised)* | Reading events | **HepMC3 store + replay** (D13); `Source::Stream` for external generators; RDataFrame/uproot only for Delphes output | Probe's ROOT Event/Feed join model |
 | D9 | Plotting | `rivet-mkhtml` + mplhep; `.plot` files as the label source | Paint's ROOT canvases |
 | D10 | Build | CMake with optional components (+ thin Makefile) | Make simplicity |

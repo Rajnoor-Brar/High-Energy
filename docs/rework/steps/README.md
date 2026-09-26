@@ -36,7 +36,7 @@ Date: 2026-09-17 · Source: [10_Roadmap.md](../10_Roadmap.md) · 55 steps in 11 
 | P2 | C++ core, CMake, hep-run v1 | Pythia + serial in-process Rivet with merged σ, status on fd 3, atomic outputs. | Full and minimal CMake builds; ctest green including the `slow` equivalence gate against the legacy FIFO pipeline; decisions D-Q1/D-Q2/D-SEEDS recorded. | P1 | 4.5 d | 6 | done |
 | P3 | Supervision, results layout, terminal | `hep run` end-to-end with a live view, provenance, and skip/partial rules. | e2e mini run in scratch; Ctrl-C → partial result + exit 6; fake-stage suite green; `hep watch` works; legacy tools still work. | P2 | 3.4 d | 5 | done |
 | P4 | Plotting, compare, retirement of the legacy tools | `hep plot`/`hep compare` replace `ydplt`/`ydmrg`; `photo_eic` is re-entrant; legacy tools retired. | Golden page comparisons pass; real-study cross-check passes; tools in `legacy/`; v2 configs canonical; Makefile wraps CMake. | P3 | 4.25 d | 6 | done |
-| P5 | HepMC3 event store and replay | Sharded HepMC3 store with an index; `tool = "store"` replay into any sinks. | Write → replay reproduces the in-process YODA; σ comes from the index; one reader per shard. | P3 (can run alongside P4) | 2.5 d | 3 | done |
+| P5 | HepMC3 event store and replay | Sharded HepMC3 store with an index; `tool = "store"` replay into any analyzers. | Write → replay reproduces the in-process YODA; σ comes from the index; one reader per shard. | P3 (can run alongside P4) | 2.5 d | 3 | done |
 | P6 | Throughput | Sharded Rivet, event groups, benchmark. | Serial ≡ sharded; the radius study needs one generation; `hep bench` recommends a mode. | P4-S05, P5 | 2 d | 3 | done |
 | P7 | External generators and Delphes | Sherpa, Whizard, MadGraph, Herwig (gated) and external Delphes through the same pipeline. | Sherpa and MG+Pythia points via `hep run`; prepare cache hit on a seed study; `delphes.root` produced; Herwig runs or is explicitly gated. | P3, P5-S02 | 7 d | 8 | done (S07 blocked) |
 | P8 | Modules, YODA results, Phys, ML | User C++ modules book YODA into `analysis.yoda`; physics helpers; ONNX inference. | Toy module exact at 1/4/20 threads; ONNX toy works; derived-tables decision recorded. | P2, P5-S01, P6-S01 | 3 d | 4 | done |
@@ -64,7 +64,7 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P0-S07 | [Reduce the Makefile to what is still built](P0-S07_makefile-hygiene.md) | code | P0-S06 | 0.2 d | done |
 | P1-S01 | [Create the hekit package, CLI entry point and test guard](P1-S01_package-skeleton.md) | code | P0-S07 | 0.3 d | done |
 | P1-S02 | [Implement the schema-2 loader with strict validation and layering](P1-S02_config-schema.md) | code | P1-S01 | 1 d | done |
-| P1-S03 | [Port quantities, across, settle, studies and pins (with fixes)](P1-S03_sweep-engine.md) | code | P1-S02 | 1 d | done |
+| P1-S03 | [Port quantities, across, static, studies and pins (with fixes)](P1-S03_sweep-engine.md) | code | P1-S02 | 1 d | done |
 | P1-S04 | [Identity hashing and disjoint seed blocks](P1-S04_identity-seeds-hash.md) | code | P1-S03 | 0.5 d | done |
 | P1-S05 | [Plan groups, stage chains, resolved specs and point cards](P1-S05_plan-render.md) | code | P1-S04 | 1 d | done |
 | P1-S06 | [Migration tool and schema-2 configs](P1-S06_config-migrate.md) | code | P1-S05 | 0.5 d | done |
@@ -72,8 +72,8 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P2-S01 | [CMake build with optional components](P2-S01_cmake-skeleton.md) | code | P0-S07 | 0.75 d | done |
 | P2-S02 | [Decide chunked runs, σ error and seed blocks (spike)](P2-S02_pythia-parallel-spike.md) | decision | P2-S01 | 0.5 d | done |
 | P2-S03 | [Core and Status namespaces](P2-S03_core-status.md) | code | P2-S01, P1-S01 | 1 d | done |
-| P2-S04 | [Pythia source, event view, sink interface and run loop](P2-S04_source-run-loop.md) | code | P2-S02, P2-S03, P1-S05 | 1 d | done |
-| P2-S05 | [Serial Rivet sink and atomic results writer](P2-S05_rivet-sink-results-writer.md) | code | P2-S04 | 0.75 d | done |
+| P2-S04 | [Pythia source, event view, analyzer interface and run loop](P2-S04_source-run-loop.md) | code | P2-S02, P2-S03, P1-S05 | 1 d | done |
+| P2-S05 | [Serial Rivet analyzer and atomic results writer](P2-S05_rivet-analyzer-results-writer.md) | code | P2-S04 | 0.75 d | done |
 | P2-S06 | [Equivalence gate against the legacy FIFO pipeline](P2-S06_equivalence-gate.md) | test | P2-S05, P0-S04 | 0.5 d | done |
 | P3-S01 | [Decide the serial label and the fate of legacy results](P3-S01_decide-serial-and-legacy-results.md) | decision | P0-S04 | 0.1 d | done |
 | P3-S02 | [Process supervisor, FIFO transport and stall detection](P3-S02_supervisor.md) | code | P2-S03 | 1 d | done |
@@ -86,7 +86,7 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P4-S04 | [hep compare and shared statistics](P4-S04_compare.md) | code | P4-S01 | 0.5 d | done |
 | P4-S05 | [Make photo_eic re-entrant and fix plugin defects](P4-S05_photo-eic-reentrant.md) | code | P2-S05, P4-S04 | 0.5 d | done |
 | P4-S06 | [Retire rivpyth/ydplt/ydmrg and generator.cc](P4-S06_retire-legacy-tools.md) | git | P4-S02, P4-S05, P3-S05, P2-S06, P1-S06 | 0.5 d | done |
-| P5-S01 | [Store namespace, store sink and store CLI](P5-S01_store-writer.md) | code | P2-S05 | 1 d | done |
+| P5-S01 | [Store namespace, store analyzer and store CLI](P5-S01_store-writer.md) | code | P2-S05 | 1 d | done |
 | P5-S02 | [Store and stream sources with parallel readers](P5-S02_store-source-replay.md) | code | P5-S01, P3-S03 | 1 d | done |
 | P5-S03 | [Replay equivalence and hep events](P5-S03_replay-equivalence-events.md) | test | P5-S02 | 0.5 d | done |
 | P6-S01 | [Sharded Rivet and concurrency modes](P6-S01_sharded-rivet.md) | code | P4-S05, P5-S02 | 1 d | done |
@@ -100,7 +100,7 @@ P0 ─► P1 ─► P2 ─► P3 ─┬─► P4 ─┬────────�
 | P7-S06 | [Decide and (optionally) rebuild ThePEG/Herwig](P7-S06_decide-herwig-rebuild.md) | decision | P1-S07 | 0.25 d + build | done |
 | P7-S07 | [Herwig adapter](P7-S07_herwig.md) | code | P7-S06, P7-S01 | 1 d | blocked |
 | P7-S08 | [External Delphes stage](P7-S08_delphes-external.md) | code | P7-S01 | 0.75 d | done |
-| P8-S01 | [Module API, YODA results layer and module sink](P8-S01_module-sink-yoda.md) | code | P6-S01, P5-S01 | 1.5 d | done |
+| P8-S01 | [Module API, YODA results layer and module analyzer](P8-S01_module-analyzer-yoda.md) | code | P6-S01, P5-S01 | 1.5 d | done |
 | P8-S02 | [Phys namespace](P8-S02_phys.md) | code | P2-S03 | 0.5 d | done |
 | P8-S03 | [ML namespace (ONNX Runtime)](P8-S03_onnx.md) | code | P8-S01 | 0.75 d | done |
 | P8-S04 | [Decide the derived-tables format (deferred)](P8-S04_decide-derived-tables.md) | decision | P8-S01 | 0.1 d | done |
@@ -138,7 +138,7 @@ flowchart LR
     P2_S02["P2-S02 pythia-parallel-spike"]
     P2_S03["P2-S03 core-status"]
     P2_S04["P2-S04 source-run-loop"]
-    P2_S05["P2-S05 rivet-sink-results-writer"]
+    P2_S05["P2-S05 rivet-analyzer-results-writer"]
     P2_S06["P2-S06 equivalence-gate"]
   end
   subgraph P3["P3 Supervision, results layout, terminal"]
@@ -177,7 +177,7 @@ flowchart LR
     P7_S08["P7-S08 delphes-external"]
   end
   subgraph P8["P8 Modules, YODA results, Phys, ML"]
-    P8_S01["P8-S01 module-sink-yoda"]
+    P8_S01["P8-S01 module-analyzer-yoda"]
     P8_S02["P8-S02 phys"]
     P8_S03["P8-S03 onnx"]
     P8_S04["P8-S04 decide-derived-tables"]
@@ -288,7 +288,7 @@ flowchart LR
 | D-Q9 | HepMC3 gzip support? | P5-S01 | answered | yes, compile-time flags |
 | D-STORE-COMP | Default store compression (gz vs zstd) | P5-S01 | answered | **zst**, measured on 10 000 real events: 9 866 B/event vs 10 223 (2.96× vs 2.86×), **2.1× faster to write** (2 289 vs 1 086 ev/s) and 1.26× faster to read (5 624 vs 4 461). No axis favours gz. `gz` stays the fallback where zstd is not compiled in, and the codec is recorded in the index |
 | D-DERIVED | Derived per-candidate tables | P8-S04 | deferred | trigger: first ML training dataset (D23). Recorded P8-S04 with the four options costed: Parquet needs pyarrow/Arrow (**neither installed**), RNTuple needs **nothing** (ROOT 6.40.04 + uproot), and exact replay (P5-S03) means any offline table can be built later against stores that already exist |
-| D-B11 | EIC studies run e⁺ via `[settle.use]` | P0-S05 | answered | no action (test bed, D20) |
+| D-B11 | EIC studies run e⁺ via `[static.use]` | P0-S05 | answered | no action (test bed, D20) |
 | D-B12 | PDF tags `NNLO`/`NNNLO` misleading | P1-S06 | answered | rename in v2 migration with alias map |
 | D-B22 | Pin selector precedence | P1-S03 | answered | tag → exact value (numeric-aware) → `#N` index; `use` stays an index |
 | D-B27 | pTHatMin (6) above jet ETMIN (5) | P0-S05 | answered | record only; pthatmin study measures it |

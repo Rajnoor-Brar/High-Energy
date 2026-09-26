@@ -1,5 +1,5 @@
 // ── modules/Lambda/Lambda.cc ─────────────────────────────────────────────────
-// Λ → p π⁻ reconstruction from Pythia events, as a module sink (05 §5).
+// Λ → p π⁻ reconstruction from Pythia events, as a module analyzer (05 §5).
 //
 // This is the legacy `Lambda` module rebuilt on the current framework. The physics is in
 // `Reconstruction.hh`; this file is the *framework* half, and it is short on purpose — which is the
@@ -9,7 +9,7 @@
 //
 //   | legacy Lambda did it              | now                                              |
 //   |-----------------------------------|--------------------------------------------------|
-//   | own worker pool, collectors       | `Sink::Modules` shards; one clone per worker     |
+//   | own worker pool, collectors       | `Analyzer::Modules` shards; one clone per worker     |
 //   | own ROOT `Record::Writer`         | `Results::Booker` → YODA → `hep proc --export`   |
 //   | own checkpoint/heartbeat/log      | the supervisor and the status stream (06)        |
 //   | own serial/directory/file naming  | the results layout (07 §1)                       |
@@ -22,7 +22,7 @@
 // them into ROOT directories.
 //
 // **Thread safety.** This module clusters nothing and holds nothing shared: `process` reads the
-// event and fills its own worker's clones, so `threadSafe()` stays true and the sink shards
+// event and fills its own worker's clones, so `threadSafe()` stays true and the analyzer shards
 // (00/B31 and 00/B36 are about the case where it cannot). On a 20-thread run that is the difference
 // between the module being free and the module being the run.
 

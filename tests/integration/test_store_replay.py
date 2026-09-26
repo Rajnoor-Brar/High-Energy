@@ -1,4 +1,4 @@
-"""Replaying a store through the same sinks as fresh events (P5-S02, 11 §4).
+"""Replaying a store through the same analyzers as fresh events (P5-S02, 11 §4).
 
 The claim this step makes is strong and easy to check: a replay is *the same events*, so analysing a
 store must give exactly what analysing the generation gave — not compatible, identical. The rest is
@@ -70,7 +70,7 @@ def generated(tmp_path_factory):
                 "seeds": {"point": 424001, "instances": [424001, 424002, 424003]}},
         "source": {"kind": "pythia", "cards": cards(directory)},
         "output": {"dir": str(directory), "yoda": "analysis.yoda", "summary": "run.summary.json"},
-        "sink": [{"kind": "rivet", "analyses": ["photo_eic"], "paths": [str(PLUGIN)],
+        "analyzer": [{"kind": "rivet", "analyses": ["photo_eic"], "paths": [str(PLUGIN)],
                   "xsec": "generator", "weights": "nominal", "dump_every": 0, "check_beams": True},
                  {"kind": "store", "dir": str(directory / "events"), "compression": "zst"}],
         "status": {"fd": 3, "heartbeat_ms": 500},
@@ -90,7 +90,7 @@ def replay_spec(store: Path, output: Path, *, analyses=("photo_eic",), queue: in
         "run": {"events": 0, "threads": 0, "seed": 0, "seeds": {"point": 0, "instances": []}},
         "source": {"kind": "store", "input": str(store), "store": document},
         "output": {"dir": str(output), "yoda": "analysis.yoda", "summary": "run.summary.json"},
-        "sink": [{"kind": "rivet", "analyses": list(analyses), "paths": [str(PLUGIN)],
+        "analyzer": [{"kind": "rivet", "analyses": list(analyses), "paths": [str(PLUGIN)],
                   "xsec": "generator", "weights": "nominal", "dump_every": 0, "check_beams": True}],
         "status": {"fd": 3, "heartbeat_ms": 500},
     }

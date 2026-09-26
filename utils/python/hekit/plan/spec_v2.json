@@ -157,7 +157,7 @@
         }
       }
     },
-    "sink": {
+    "analyzer": {
       "type": "array",
       "items": {
         "type": "object",

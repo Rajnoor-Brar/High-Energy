@@ -1,19 +1,19 @@
-# 05 — `hep-run`: sources, sinks, concurrency
+# 05 — `hep-run`: sources, analyzers, concurrency
 
 `hep-run` is the one C++ executable. It:
 - reads a resolved spec (03 §7);
 - opens one **source**;
-- fans events out to **sinks**;
+- fans events out to **analyzers**;
 - emits status (06);
 - writes a run summary for provenance (07).
 
-Namespaces follow the house style ([13](13_Namespaces.md)): `Core`, `Status`, `Events`, `Source`, `Store`, `Results`, `Sink`, `Module`, `ML`, `Phys`, `Run`.
+Namespaces follow the house style ([13](13_Namespaces.md)): `Core`, `Status`, `Events`, `Source`, `Store`, `Results`, `Analyzer`, `Module`, `ML`, `Phys`, `Run`.
 
 ```
 hep-run SPEC.toml                   # run
 hep-run SPEC.toml --check           # read cards + init only, no events (exit 0/1/3)
 hep-run SPEC.toml --plain           # no status fd; human progress lines on stderr (standalone use)
-hep-run SPEC.toml --list N          # generate N events, emit them as "event" status messages (06 §5), no sinks
+hep-run SPEC.toml --list N          # generate N events, emit them as "event" status messages (06 §5), no analyzers
 hep-run --capabilities              # JSON: built components (rivet, hepmc, compression, onnx, delphes), versions
 ```
 
@@ -21,7 +21,7 @@ hep-run --capabilities              # JSON: built components (rivet, hepmc, comp
 
 ## 1. Event view (`Events::View`)
 
-The event view is the common currency. Each event is converted **at most once**, and only if a sink needs it.
+The event view is the common currency. Each event is converted **at most once**, and only if an analyzer needs it.
 
 ```cpp
 namespace Events {
@@ -35,14 +35,14 @@ struct View {
 }
 ```
 
-- **Needs `hepmc()`:** Rivet, the store sink, the Delphes tee, and modules written for replay.
+- **Needs `hepmc()`:** Rivet, the store analyzer, the Delphes tee, and modules written for replay.
 - **Can skip the conversion:** a module that only runs during generation may use `pythia->event`, but then it cannot run on a store. Modules declare this via `Needs` (§2).
 - **Accessors carried over from Probe** (00b §4): labelled collections via `Phys` selectors, typed per-particle values, per-event scalars (weights, attributes), and coordinate conversions.
 
-## 2. Sink interface
+## 2. Analyzer interface
 
 ```cpp
-namespace Sink {
+namespace Analyzer {
 enum class Needs       : unsigned { Pythia = 1, HepMC = 2 };
 enum class Concurrency { Serial, Sharded, Locked };
 
@@ -59,7 +59,7 @@ public:
     virtual void summary(Status::Writer&) const {}       // fragment for the final report
 };
 
-// Sharded sinks are created per worker and merged at the end.
+// Sharded analyzers are created per worker and merged at the end.
 class Sharded : public Base {
 public:
     virtual std::unique_ptr<Base> shard(int worker) = 0;
@@ -68,18 +68,18 @@ public:
 }
 ```
 
-**Creating sinks:**
-- Sinks are created from `[[sink]]` entries by a small factory keyed by `kind`: `rivet`, `module`, `store`, `delphes`.
+**Creating analyzers:**
+- Analyzers are created from `[[analyzer]]` entries by a small factory keyed by `kind`: `rivet`, `module`, `store`, `delphes`.
 - Optional kinds are registered only when their CMake component is built.
 - Asking for a missing kind is a spec error, which `hep plan` catches first using `hep-run --capabilities`.
 
 ## 3. Concurrency (`Run`)
 
-| Mode | Pythia setting | Sink calls | When |
+| Mode | Pythia setting | Analyzer calls | When |
 |---|---|---|---|
-| `serial` | `processAsync = off` | all sinks on the callback thread | Simplest; today's behaviour |
-| `sharded` | `processAsync = on` | `Sharded` sinks get a per-worker shard; `Locked` sinks go through one mutex | Analysis cost is comparable to generation (01 A4) |
-| `auto` (default) | — | `sharded` if threads > 1 **and** every Rivet analysis is `Reentrant: true` **and** jet clustering is thread-safe in this build **and** at least one sink is shardable; otherwise `serial`, with a notice naming the reason | — |
+| `serial` | `processAsync = off` | all analyzers on the callback thread | Simplest; today's behaviour |
+| `sharded` | `processAsync = on` | `Sharded` analyzers get a per-worker shard; `Locked` analyzers go through one mutex | Analysis cost is comparable to generation (01 A4) |
+| `auto` (default) | — | `sharded` if threads > 1 **and** every Rivet analysis is `Reentrant: true` **and** jet clustering is thread-safe in this build **and** at least one analyzer is shardable; otherwise `serial`, with a notice naming the reason | — |
 
 Set with `[run].mode`, which is a machine key: it changes the wall clock, not the events, and is not
 part of a point's identity.
@@ -107,9 +107,9 @@ handlers cannot reconstruct and `AnalysisHandler::merge` falls back to copying. 
 generator, is applied once to the merged total (D-Q1), and lands in `/_XSEC` and `run.summary.json`.
 
 **Decision rule.** Measure, don't guess: `hep bench` (P6-S03) times generation only, generation with
-sinks serially, the same sharded, and a replay, then recommends a mode. It recommends `sharded` only
+analyzers serially, the same sharded, and a replay, then recommends a mode. It recommends `sharded` only
 when it was *allowed* and measured at least 1.15x faster — a refused leg is reported as its reason,
-which is the more useful answer. Measured on PhotoProduction: the sinks are **~75 % of a serial run's
+which is the more useful answer. Measured on PhotoProduction: the analyzers are **~75 % of a serial run's
 wall clock** (assumption 01 A4, answered), a replay reads back ~1.5x faster than generating, and
 sharding is refused outright because the analysis clusters jets.
 
@@ -140,7 +140,7 @@ Pythia derives `Random:seed + i`, which is the same block.
 
 **Replay and stream sources parallelise too:**
 - one reader thread per shard (or per FIFO) fills a bounded queue;
-- N consumer workers pop from it, each owning sink shards.
+- N consumer workers pop from it, each owning analyzer shards.
 
 ## 4. Sources
 
@@ -177,9 +177,9 @@ Replays a HepMC3 store ([11](11_EventStore.md)):
 - σ comes from the **last** event's `GenCrossSection` (04 §8). The event count is checked against the spec.
 - Compressed files use `ReaderGZ` (compile-time flags, 09 §1).
 
-## 5. Sinks
+## 5. Analyzers
 
-### `Sink::Rivet` (Sharded)
+### `Analyzer::Rivet` (Sharded)
 - **Per shard:** an `AnalysisHandler`, the analyses with options, `setCheckBeams`, and the weight policy (`nominal` → skip multi-weights; `all`).
 - **Initialisation:** Rivet initialises from the first event. Construction and first-event init run under a global lock (Rivet is not thread-safe there).
 - **End of run:**
@@ -196,22 +196,22 @@ Replays a HepMC3 store ([11](11_EventStore.md)):
   - serial vs FIFO legacy (P2-S06);
   - serial vs sharded (P6-S01).
 
-### `Sink::Store` (Sharded)
+### `Analyzer::Store` (Sharded)
 - **Per-worker writer:** a `WriterGZ<WriterAscii>` into `events/events.<k>.hepmc.gz.part`, renamed on close.
 - **Index:** written last ([11](11_EventStore.md) §2–3).
 - **Tee mode:** pointed at a FIFO, with no index. It feeds external Delphes.
 
-### `Sink::Modules` (Sharded) — user C++ analysis, results in YODA
+### `Analyzer::Modules` (Sharded) — user C++ analysis, results in YODA
 ```cpp
 namespace Module {
 class Base {                                           // modules/<project>/<Name>.cc → libhekit_<name>.so
 public:
     virtual ~Base() = default;
-    virtual void configure(const Core::Options&) = 0;         // from [[sinks.module]].options
+    virtual void configure(const Core::Options&) = 0;         // from [[analyzers.module]].options
     virtual void book(Results::Booker&) = 0;                  // declare YODA objects (Histo1D/2D, Profile1D, Counter, Estimate)
     virtual void process(const Events::View&, Results::Worker&) = 0;   // fill this worker's clones
     virtual void finalize(Results::Final&, const Run::Result&) {}      // scale/derive after the merge (σ, ΣW known)
-    virtual unsigned needs() const { return unsigned(Sink::Needs::HepMC); }
+    virtual unsigned needs() const { return unsigned(Analyzer::Needs::HepMC); }
     virtual bool threadSafe() const { return true; }                   // false if it clusters jets (00/B31, B36)
 };
 }
@@ -230,20 +230,20 @@ HEKIT_MODULE("mymodule", MyModule);
 - **`Phys` is what a module writes with** (13 §2, P8-S02): `Phys::finalState(event, acceptance)` for the
   selection, `HepMC3::FourVector` for the momentum it already has, `Phys::deltaR`/`disKinematics` for the
   derived quantities, and `Phys::jetDefinition("antikt:0.4")` + `Phys::cluster` for jets.
-- **Thread safety is the module's to declare.** `Sink::Modules` is the one sink that shards, so `process`
+- **Thread safety is the module's to declare.** `Analyzer::Modules` is the one analyzer that shards, so `process`
   is called from several workers at once by default — which is only sound because a module fills nothing
   but its own worker's clones. A module that touches anything shared says `threadSafe() == false`, and
   **jet clustering is the case that matters**: FastJet keeps clustering state in process-wide statics, so
-  a module that makes jets races in exactly the way that stops the Rivet sink from sharding (00/B31).
-  The sink then reports `Concurrency::Locked` rather than `Sharded`; the run still shards, and only the
-  sink call is serialised. Measured in P8-S02: 92 µs/event that way against 124 µs/event fully serial.
+  a module that makes jets races in exactly the way that stops the Rivet analyzer from sharding (00/B31).
+  The analyzer then reports `Concurrency::Locked` rather than `Sharded`; the run still shards, and only the
+  analyzer call is serialised. Measured in P8-S02: 92 µs/event that way against 124 µs/event fully serial.
 - **ML:** a module may hold an `ML::OnnxModel`.
 - **Derived per-candidate tables** (ML features) are **deferred** (decision D-DERIVED, P8-S04). Modules produce YODA only.
 
-### `Sink::Delphes` (optional)
+### `Analyzer::Delphes` (optional)
 | Mode | How |
 |---|---|
-| `external` (the only mode for now) | `Sink::Delphes` tees the events to `events.delphes.hepmc` and a supervised `DelphesHepMC3 <card> delphes.root <events>` stage reads it **afterwards**. This keeps Delphes' ROOT/`TObject` global state out of our process. |
+| `external` (the only mode for now) | `Analyzer::Delphes` tees the events to `events.delphes.hepmc` and a supervised `DelphesHepMC3 <card> delphes.root <events>` stage reads it **afterwards**. This keeps Delphes' ROOT/`TObject` global state out of our process. |
 
 **Not a FIFO, measured in P7-S08.** `DelphesHepMC3` sizes its input before reading and *skips any
 input whose length is zero* (`readers/DelphesHepMC3.cpp:160-169`: `fseek(END); ftello(); if (length
@@ -305,7 +305,7 @@ class Row { ... };        // one row, filled by name, refused until complete
 | `Events` + `Source` (Pythia, StoreReplay, Stream) | 550 |
 | `Store` | 350 |
 | `Results` + `Module` | 450 |
-| `Sink` (Rivet, Store, Modules, Delphes tee) | 350 |
+| `Analyzer` (Rivet, Store, Modules, Delphes tee) | 350 |
 | `Run` | 250 |
 | `ML` + `Phys` | 300 |
 | `apps/hep-run.cc` | 150 |

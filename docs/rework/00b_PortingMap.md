@@ -30,7 +30,7 @@ This file lists every piece of existing code worth keeping, and says where it go
 | 78 | `reject_keys` | error with a hint for removed keys | `hekit.config.migrate` | P1-S06 | PDF |
 | 84 | `reject_unknown` | unknown-key error | `config.schema`, plus did-you-mean | P1-S02 | |
 | 90–100 | `PDF_MIGRATION`, `MOVED_ANALYSIS_KEYS`, `MOVED_YODA_KEYS` | migration tables | `config.migrate` | P1-S06 | PDF |
-| 103 | `read_config` | loads `[analysis]`/`[yoda]`/`[rivpyth]` + sweep/settle/study | `config.load` (one dataclass per section) | P1-S02 | LEG (148–152), 00/B7 |
+| 103 | `read_config` | loads `[analysis]`/`[yoda]`/`[rivpyth]` + sweep/static/study | `config.load` (one dataclass per section) | P1-S02 | LEG (148–152), 00/B7 |
 | 157 | `validate_config` | cross-field checks | `config.validate`, run **after** study/pins are applied | P1-S03 | 00/B7 |
 
 ### Quantities and sweeps
@@ -47,11 +47,11 @@ This file lists every piece of existing code worth keeping, and says where it go
 | 229 | `check_option_value` | Rivet option value (no `:` or `=`) | `adapters.rivet`, which also validates the name against `.info` | P1-S05 | 00/B14 |
 | 235–300 | `Quantity` dataclass (`value_text`, `label`, `tag`, `legend`, `settings`, `find_value`) | catalogue entry | `config.schema.Quantity` + `plan.naming` + `sweep.select` | P1-S02/S03 | |
 | 303 | `Sweep` | across/overlay/only/tag_style/legends/seed_step/skip | `sweep.model`; the fields move to `[output]`/`[plot]`/`[run]` | P1-S03 | |
-| 326 | `Settle` | settle settings | `config.schema.Settle` | P1-S02 | |
+| 326 | `Static` | static settings | `config.schema.Static` | P1-S02 | |
 | 334 / 392 | `read_quantity` / `read_sweep` | catalogue parsing and duplicate-option checks | `config.schema`, `sweep.select` | P1-S02/S03 | |
 | 427 / 434 | `flat_groups` / `set_groups` | group resolution; coupled length checks | `sweep.select` | P1-S03 | 00/B6 (overlay re-flattens) |
 | 456 | `parse_across` | CLI grammar `a+b,c` | `cli` → `sweep.select` | P1-S03 | DUP (help text ×3) |
-| 464 | `read_settle` | settle.cmnd/rivet/use/tag | `config.schema`; shorthands in `config.migrate` | P1-S02/S06 | |
+| 464 | `read_static` | static.cmnd/rivet/use/tag | `config.schema`; shorthands in `config.migrate` | P1-S02/S06 | |
 | 520–530 | `STUDY_KEYS`, `check_across`, `read_studies` | study presets | `config.schema` (+ per-section overrides) | P1-S02 | |
 | 561 | `parse_pin` | `KEY=SEL`; all-digit selector means index | `cli` + `sweep.select` | P1-S03 | **00/B22** |
 | 569–587 | `apply_pins`, `apply_study`, `apply_overrides` | layering study → pins → CLI | `sweep.select` | P1-S03 | 00/B6, 00/B7 |
@@ -109,7 +109,7 @@ The behaviours to preserve and the fixes are listed in [00_Audit.md §4.3](00_Au
 | Cards read in order, later wins; failure → exit 1 | `Source::Pythia` | P2-S04 |
 | `Print:quiet` default; cards may re-enable output (goes to the log) | `Source::Pythia` + supervisor log | P2-S04, P3-S02 |
 | Runner owns `processAsync` | `Run` concurrency mode | P2-S04, P6-S01 |
-| Output opened only after `init()` | `Run` + sinks | P2-S04 |
+| Output opened only after `init()` | `Run` + analyzers | P2-S04 |
 | `Pythia8ToHepMC` conversion | `Events::View` (lazy, per worker) | P2-S04 |
 | Exit 2 = usage, 1 = card/init | exit-code table (06 §3.3; init → 3) | P2-S04 |
 | **Fix:** merged σ, write-failure exit, disjoint seeds | `Run`, `Results`, `Store`, planner | P2-S02/S05, P1-S04 |

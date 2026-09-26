@@ -11,7 +11,7 @@ namespace Status {
 
     enum class Kind {
         Phase,        // which stage of the run we are in
-        Init,         // what the run turned out to be: beams, threads, mode, sinks
+        Init,         // what the run turned out to be: beams, threads, mode, analyzers
         Progress,     // done/total and a rate, rate-limited
         Xsec,         // a cross-section estimate, final or not
         Log,          // a message from a tool, with a level

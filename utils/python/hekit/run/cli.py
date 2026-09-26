@@ -621,9 +621,9 @@ def _seconds(value: Any) -> float:
 @click.option("--json", "as_json", is_flag=True, help="print the report as JSON")
 def bench(config_file: Path, events: int | None, threads: int | None, point_name: str,
           no_replay: bool, refresh: bool, as_json: bool) -> None:
-    """Measure what the sinks cost and recommend a concurrency mode (05 §3).
+    """Measure what the analyzers cost and recommend a concurrency mode (05 §3).
 
-    Runs the first point of the config three ways — generating only, generating with its sinks
+    Runs the first point of the config three ways — generating only, generating with its analyzers
     serially, and sharded — and reports which is faster. Nothing is written into `results/`: a
     benchmark is not a result, so it runs in `output/scratch/bench/` and caches its numbers there.
     """
@@ -690,9 +690,9 @@ def _show_bench(report: Any, *, as_json: bool, cached: bool) -> None:
         click.echo(f"  {entry.name:<{width}}  {entry.wall_s:8.2f}s  "
                    f"{entry.rate:10.0f} ev/s  ({entry.events} events, {entry.mode})")
     click.echo("")
-    if report.sink_share > 0:
+    if report.analyzer_share > 0:
         # Assumption A4, answered with a number rather than an expectation.
-        click.echo(f"  the sinks are {report.sink_share * 100:.0f}% of a serial run's wall clock")
+        click.echo(f"  the analyzers are {report.analyzer_share * 100:.0f}% of a serial run's wall clock")
     click.echo(f"  recommended: [run].mode = \"{report.mode}\"")
     click.echo(f"  because {_one_line(report.reason)}")
 

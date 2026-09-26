@@ -298,7 +298,7 @@ def test_provenance_folds_the_run_summary_into_the_whole_story(layout: Layout, t
     directory = write_result(layout.point("p"), point="p", point_hash="sha256:aa")
     spec = {"meta": {"point": "p", "hash": "sha256:aa"},
             "source": {"cards": [str(card)]},
-            "sink": [{"kind": "rivet", "analyses": ["photo_eic:R=0.4"], "paths": []}]}
+            "analyzer": [{"kind": "rivet", "analyses": ["photo_eic:R=0.4"], "paths": []}]}
     summary = json.loads((directory / "run.summary.json").read_text(encoding="utf-8"))
 
     record = provenance.assemble(
@@ -342,7 +342,7 @@ def test_an_analysis_plugin_is_hashed_when_it_can_be_found(tmp_path: Path):
     plugins.mkdir()
     plugin = plugins / "Rivet_photo_eic.so"
     plugin.write_bytes(b"not really a library")
-    spec = {"sink": [{"kind": "rivet", "analyses": ["photo_eic:R=0.4"], "paths": [str(plugins)]}]}
+    spec = {"analyzer": [{"kind": "rivet", "analyses": ["photo_eic:R=0.4"], "paths": [str(plugins)]}]}
     found = provenance.resources_of(spec)
     assert found["analyses"]["photo_eic"]["so_sha256"] == provenance.sha256(plugin)
     assert found["analyses"]["photo_eic"]["path"] == str(plugin)

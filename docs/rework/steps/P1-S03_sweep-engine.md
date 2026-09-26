@@ -1,4 +1,4 @@
-# P1-S03 — Port quantities, across, settle, studies and pins (with fixes)
+# P1-S03 — Port quantities, across, static, studies and pins (with fixes)
 
 | Field | Value |
 |---|---|
@@ -13,7 +13,7 @@
 
 ## Goal
 
-The sweep semantics of `eic.toml` work on schema 2 — coupled/grid groups, overlay, settle, studies, pins — and the four legacy bugs are fixed with regression tests.
+The sweep semantics of `eic.toml` work on schema 2 — coupled/grid groups, overlay, static, studies, pins — and the four legacy bugs are fixed with regression tests.
 
 ## Context
 
@@ -24,7 +24,7 @@ The sweep semantics of `eic.toml` work on schema 2 — coupled/grid groups, over
 
 | Source | What to take | How |
 |---|---|---|
-| `tools/rivpyth_common.py:235-760` | Quantity, Sweep, Settle, read_*, flat_groups, set_groups, parse_across, apply_*, expand_points, naming helpers | port per 00b §1 |
+| `tools/rivpyth_common.py:235-760` | Quantity, Sweep, Static, read_*, flat_groups, set_groups, parse_across, apply_*, expand_points, naming helpers | port per 00b §1 |
 
 Never `#include`/import from `legacy/`; copy or adapt.
 

@@ -1,14 +1,14 @@
 #pragma once
 
-// ── Sink/Store.hh ────────────────────────────────────────────────────────────
+// ── Analyzer/Store.hh ────────────────────────────────────────────────────────────
 // Writing the events a run generates, so they can be analysed again without regenerating them
 // (11 §3, decision D13).
 //
-// This is the sink that makes "generate once, analyse many" possible, and it is also how external
+// This is the analyzer that makes "generate once, analyse many" possible, and it is also how external
 // Delphes is fed (a store pointed at a FIFO, with no index). Two things it is careful about:
 //
-//   * **it needs the HepMC record, and says so** through `needs()`. A run whose only sink is Rivet
-//     already pays for that conversion; a run with no HepMC-consuming sink never does (05 §1).
+//   * **it needs the HepMC record, and says so** through `needs()`. A run whose only analyzer is Rivet
+//     already pays for that conversion; a run with no HepMC-consuming analyzer never does (05 §1).
 //   * **the shard is chosen by the worker that generated the event**, not by the thread that happens
 //     to be running the callback. With `processAsync = off` callbacks move between threads, so keying
 //     on anything else would interleave two workers' events in one shard and make the layout depend
@@ -22,21 +22,21 @@
 
 #include "Core.hh"
 #include "Events.hh"
-#include "Sink/Types.hh"
+#include "Analyzer/Types.hh"
 #include "Status.hh"
-// The submodules directly, not the `Store.hh` facade: this file *is* `Sink/Store.hh`, and a quoted
+// The submodules directly, not the `Store.hh` facade: this file *is* `Analyzer/Store.hh`, and a quoted
 // include looks in its own directory first — so `#include "Store.hh"` here finds itself.
 #include "Store/Compression.hh"
 #include "Store/Types.hh"
 #include "Store/Writer.hh"
 
-namespace Sink {
+namespace Analyzer {
 
 #if defined(HEKIT_WITH_HEPMC)
 
-    class Store : public Sink {
+    class Store : public Analyzer {
       public:
-        Store(const Core::SinkSpec& spec, std::string directory, Status::Writer& status)
+        Store(const Core::AnalyzerSpec& spec, std::string directory, Status::Writer& status)
             : spec_(spec), directory_(std::move(directory)), status_(status) {}
 
         std::string name() const override { return "store"; }
@@ -64,7 +64,7 @@ namespace Sink {
             HepMC3::GenEvent* genEvent = view.hepmcOrNull();
             if (genEvent == nullptr)
                 throw Core::Error{Core::Exit::Internal,
-                                  "the store sink was given an event with no HepMC record"};
+                                  "the store analyzer was given an event with no HepMC record"};
             writer_->write(view.worker(), *genEvent);
         }
 
@@ -95,7 +95,7 @@ namespace Sink {
         std::int64_t events() const { return writer_ != nullptr ? writer_->events() : 0; }
 
       private:
-        Core::SinkSpec spec_;
+        Core::AnalyzerSpec spec_;
         std::string directory_;
         Status::Writer& status_;
         Core::Beams beams_;
@@ -105,4 +105,4 @@ namespace Sink {
 
 #endif  // HEKIT_WITH_HEPMC
 
-}  // namespace Sink
+}  // namespace Analyzer

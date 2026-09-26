@@ -5,7 +5,7 @@
 // which particles of an event you wanted, and a jet definition from a string (13 §2).
 //
 // It sits beside `Store`, `Results` and `ML` in the layering — above `Events`, below `Module` — so
-// it may know about HepMC3 and FastJet and knows nothing of sinks, sources or the run. That is what
+// it may know about HepMC3 and FastJet and knows nothing of analyzers, sources or the run. That is what
 // makes it usable from a Rivet analysis and a module alike.
 //
 // The submodules gate themselves on what the build has, so this facade is safe to include anywhere:

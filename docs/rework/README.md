@@ -19,13 +19,13 @@ list exists so a reader of the design does not have to find them one at a time.
 | The design said | What running it showed | Step |
 |---|---|---|
 | Rivet analyses can be sharded across workers | Jet clustering cannot: FastJet keeps its state in process-wide statics, and a race changes the jets rather than crashing (00/B31) | P6-S01 |
-| A sink error would propagate normally | It unwound through `std::thread` and would have called `std::terminate` (00/B32) | P6-S01 |
+| An analyzer error would propagate normally | It unwound through `std::thread` and would have called `std::terminate` (00/B32) | P6-S01 |
 | Delphes can read the tee through a FIFO | It sizes its input and skips anything of length zero, which a FIFO always is. It reads a regular file, in a later phase | P7-S08 |
 | Whizard can do resolved photoproduction | Its manual says there is no photon structure function; `pdf_builtin_photon` throws. Direct only, and deferred (D-Q7) | P7-S02 |
 | `Physics` kinematics on a ROOT four-vector | Dropped for `HepMC3::FourVector` — no conversion, no ROOT dependency in the physics layer | P8-S02 |
 | Δφ wraps with a `while` loop | It does not terminate for ±∞, and HepMC3's own `delta_phi` has the same defect (00/B35) | P8-S02 |
 | `Requires: ONNX` hands a plugin working flags | It had never been run, and the include path was wrong for a source build (00/B37) | P8-S03 |
-| A module sink can always shard | Not once a module clusters jets; it declares `threadSafe()` and the sink takes one lock (00/B36) | P8-S02 |
+| A module analyzer can always shard | Not once a module clusters jets; it declares `threadSafe()` and the analyzer takes one lock (00/B36) | P8-S02 |
 | `scipy.optimize` fits a χ² | Not with a general minimiser: `L-BFGS-B` stopped at χ²/ndf = 12.5 where `least_squares` reached 0.835 | P9-S01 |
 | Derived histograms are a YODA `Histo1D` | YODA 2 splits fillable from finished; a `Histo1D` is silently skipped by every plotting path | P9-S02 |
 | Per-candidate tables need deciding now | Deferred with evidence: exact replay means any table can be built later from stores that already exist (D-DERIVED) | P8-S04 |
@@ -39,17 +39,17 @@ code is shaped as it is).
 
 - **Two halves, one contract.**
   - **`hep`** is a Python CLI (package `hekit`). It validates TOML, expands sweeps, renders native cards, supervises processes, draws the terminal dashboard, plots, processes results and records provenance.
-  - **`hep-run`** is one C++ executable. It runs the event loop: a Pythia, store or stream source feeds sinks (Rivet, event store, user modules, Delphes tee).
+  - **`hep-run`** is one C++ executable. It runs the event loop: a Pythia, store or stream source feeds analyzers (Rivet, event store, user modules, Delphes tee).
   - They communicate through a **resolved spec** (TOML in) and a **status stream** (JSON lines out).
 - **Formats have fixed roles:**
   - **Events:** HepMC3. Sharded stores with an index replace the old ROOT-tree buffering (Probe) and support parallel replay ([11](11_EventStore.md)).
   - **Numerical results:** YODA only, for Rivet and C++ modules alike, in one `analysis.yoda` per group.
   - **ROOT:** a processing layer only: fits, statistics, RDataFrame on Delphes output (`hep proc`, [12](12_Processing.md)).
 - **Physics stays in native cards.** TOML carries run control, wiring, overrides and sweeps.
-  - The proven `eic.toml` model (typed quantities, `across`, `settle`, studies) is generalised to every generator.
+  - The proven `eic.toml` model (typed quantities, `across`, `static`, studies) is generalised to every generator.
   - `beams` holds PDG ids and `energies` holds energies.
   - Seeds come from a point's identity, with disjoint per-thread blocks.
-- **C++ follows the house style** ([13](13_Namespaces.md)): PascalCase facade namespaces `Core`, `Status`, `Events`, `Store`, `Results`, `ML`, `Phys`, `Source`, `Module`, `Sink`, `Run`.
+- **C++ follows the house style** ([13](13_Namespaces.md)): PascalCase facade namespaces `Core`, `Status`, `Events`, `Store`, `Results`, `ML`, `Phys`, `Source`, `Module`, `Analyzer`, `Run`.
 - **One renderer** (`rich`) shows every stage. Tool chatter goes to logs, with curated warnings on screen. `hep watch` works from anywhere.
 - **Getting there safely:**
   - The current tools move into the repo and get the physics-relevant hotfixes first.
@@ -69,7 +69,7 @@ code is shaped as it is).
 | 02 | [02_Architecture.md](02_Architecture.md) | Language split, component diagram, stage chains, contracts, repo layout, policies, tool roles |
 | 03 | [03_Configuration.md](03_Configuration.md) | TOML anatomy, layering, quantities (`beams`/`energies`), sweeps/studies, identity and seeds, validation, migration, resolved spec |
 | 04 | [04_Generators.md](04_Generators.md) | Adapter interface, capability matrix, Pythia / Sherpa / Whizard / Herwig / MadGraph / store |
-| 05 | [05_EventPipeline.md](05_EventPipeline.md) | `hep-run`: `Events::View`, sink interface, concurrency and reproducibility, sources, Rivet/Store/Modules/Delphes sinks, ONNX |
+| 05 | [05_EventPipeline.md](05_EventPipeline.md) | `hep-run`: `Events::View`, analyzer interface, concurrency and reproducibility, sources, Rivet/Store/Modules/Delphes analyzers, ONNX |
 | 06 | [06_Terminal.md](06_Terminal.md) | Dashboard, plain mode, status protocol, exit codes, supervision, event inspection, remote watching |
 | 07 | [07_Outputs.md](07_Outputs.md) | Results layout, provenance, partial outputs, merging, plotting, comparison, retention |
 | 08 | [08_CLI.md](08_CLI.md) | Code-vs-command criteria, `hep` command tree, transition path, shell layer (`env/hep_env.sh`), `hep doctor` |
@@ -101,6 +101,6 @@ These are also the P0 steps.
 
 `legacy/docs/plans/` (2026-09-16, archived in P0-S06) asked how to **integrate** the new tools into the *existing* module stack.
 - This rework answers the from-scratch question and **supersedes** it. The mapping of its items to steps is in `legacy/docs/plans/README.md`.
-- In-process Rivet (plans B) and sinks (plans C) are kept.
+- In-process Rivet (plans B) and analyzers (plans C) are kept.
 - Unified configuration (plans A) is realised by validating in Python.
 - The old modules are archived, not adapted.

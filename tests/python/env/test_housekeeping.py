@@ -31,7 +31,7 @@ from hekit.errors import HepError                                        # noqa:
 from hekit.results import clean as clean_module                          # noqa: E402
 
 #: The legacy tools, and the storage design that was rejected (D13).
-LEGACY_NAMES = ("rivpyth", "ydmrg", "ydplt", "NtupleSink", "RNTuple")
+LEGACY_NAMES = ("rivpyth", "ydmrg", "ydplt", "NtupleAnalyzer", "RNTuple")
 
 #: Where v1 may still be spoken. The Goal names `migrate`; `validate` only *detects* a v1 file so it
 #: can say "run hep config migrate" instead of a wall of unknown-key errors, which is the error path
@@ -86,7 +86,7 @@ def test_the_rejected_storage_design_is_gone_entirely():
     """D13 chose HepMC3 shards over ROOT ntuples; no code should mention the road not taken."""
     for path in python_sources():
         text = path.read_text(encoding="utf-8")
-        assert "NtupleSink" not in text, path
+        assert "NtupleAnalyzer" not in text, path
         assert "RNTuple" not in text, path
 
 

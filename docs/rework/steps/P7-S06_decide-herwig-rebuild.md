@@ -70,6 +70,15 @@ Never `#include`/import from `legacy/`; copy or adapt.
   So the cost is a rebuild, not an investigation, and the risk is low — the flags are known and the
   old install can be kept by building into a separate prefix.
 
+  **Correction (2026-09-24):** the command below, as first recorded, still fails — confirmed by
+  running it: `configure: error: Use '--with-hepmc=' to set a path or use '--without-hepmc'.`
+  `--with-hepmc=` alone is not enough. `m4/hepmc.m4` defaults `--with-hepmcversion` to **2** when it
+  is not given explicitly, so `--with-hepmc=…/hepmc3` sends configure looking for `HepMC/HepMCDefs.h`
+  — a HepMC2 header — inside a HepMC3 install, which has only `HepMC3/`. The version-3 branch of the
+  same macro checks for `HepMC3/Writer.h` instead and would pass. `--with-rivet` requires HepMC to
+  succeed first (`THEPEG_CHECK_RIVET` disables itself when `with_hepmc = no`), so this one flag is
+  what was blocking both. The command below now includes it.
+
 - **Decision: later** (user sign-off, 2026-09-20). Record the commands, gate Herwig off, and rebuild
   when a Herwig comparison is actually wanted.
 
@@ -85,6 +94,7 @@ Never `#include`/import from `legacy/`; copy or adapt.
   cd $HOME/HEP/src/ThePEG-2.3.0 && make distclean
   ./configure --prefix=$P \
       --with-hepmc=$HOME/HEP/install/hepmc3 \
+      --with-hepmcversion=3 \
       --with-rivet=$HOME/HEP/install/rivet \
       --with-fastjet=$HOME/HEP/install/fastjet \
       --with-lhapdf=$HOME/HEP/install/LHAPDF \

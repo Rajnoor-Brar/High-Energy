@@ -1,6 +1,6 @@
 """The external Delphes stage (P7-S08, 05 §5).
 
-Delphes is a sink with a process behind it, not a generator, so what is worth pinning is the wiring:
+Delphes is an analyzer with a process behind it, not a generator, so what is worth pinning is the wiring:
 which file it reads, which phase it runs in, and what is left behind afterwards.
 
 The phase is the part that is *not* what the design assumed. 05 §5 described a FIFO tee with Delphes
@@ -75,8 +75,8 @@ def test_asking_for_a_stage_without_a_card_is_an_error():
 
 # ── the wiring ───────────────────────────────────────────────────────────────
 
-def test_the_sink_points_at_the_intermediate(tmp_path):
-    document = delphes.sink_document(tmp_path)
+def test_the_analyzer_points_at_the_intermediate(tmp_path):
+    document = delphes.analyzer_document(tmp_path)
     assert document["kind"] == "delphes"
     assert document["dir"] == str(tmp_path / delphes.FIFO_NAME)
 

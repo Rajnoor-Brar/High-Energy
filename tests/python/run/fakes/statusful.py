@@ -18,7 +18,7 @@ def emit(payload):
 
 emit({"k": "phase", "phase": "init"})
 emit({"k": "init", "beam_ids": [2212, 11], "beam_energies": [27.5, 920.0], "sqrt_s": 318.1,
-      "threads": 2, "mode": "serial", "sinks": ["rivet"]})
+      "threads": 2, "mode": "serial", "analyzers": ["rivet"]})
 for index in range(messages):
     emit({"k": "progress", "done": (index + 1) * 100, "total": messages * 100,
           "rate": 100.0, "workers": [(index + 1) * 50, (index + 1) * 50]})

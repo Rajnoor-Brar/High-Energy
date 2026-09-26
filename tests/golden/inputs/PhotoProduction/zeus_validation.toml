@@ -7,13 +7,13 @@ cmnd_file   = "photo_ep.cmnd"
 event_count = 1_000_000
 seed        = 270403
 
-[settle.rivet]
+[static.rivet]
 plugin = "ZEUS_2012_I1116258"
 
-[settle.cmnd]
+[static.cmnd]
 beams = [920, 27.5]                       # HERA; not part of the EIC beams catalogue
 
-[settle.use]
+[static.use]
 "cmnd.lepton" = "ep"
 
 [sweep]
@@ -22,7 +22,7 @@ tag_style    = "tag"
 yoda_legends = "label"
 seed_step    = 20                         # >= [rivpyth].threads: Pythia gives thread i seed+i (00/B2)
 
-# ── Quantity catalogue (use = 0: applied only when scanned or pinned in [settle.use]) ──
+# ── Quantity catalogue (use = 0: applied only when scanned or pinned in [static.use]) ──
 
 [sweep.cmnd.beams]
 type   = "beams"                          # [eA, eB] → frameType 2; single eCM → frameType 1

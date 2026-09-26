@@ -64,7 +64,7 @@ Never `#include`/import from `legacy/`; copy or adapt.
 
 | Check | Command | Expected |
 |---|---|---|
-| No stale design terms | `grep -rnE 'NtupleSink\|ntuple\.root\|hekit::\|sink::\|timing-dependent' docs/rework` | hits only in removed/withdrawn context |
+| No stale design terms | `grep -rnE 'NtupleAnalyzer\|ntuple\.root\|hekit::\|analyzer::\|timing-dependent' docs/rework` | hits only in removed/withdrawn context |
 | Links resolve | scratch link-check script over `docs/rework/**/*.md` | 0 broken |
 | Index ↔ files | scratch script: index IDs = step files; deps exist; graph acyclic | OK |
 | Scope | `git status --porcelain` | only `docs/`, `bots/current_plan.md` |

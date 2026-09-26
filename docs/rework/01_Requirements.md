@@ -17,16 +17,16 @@
 |---|---|---|
 | R1 | Generate events with **Pythia 8** in-process, multi-threaded, from a native `.cmnd` base plus TOML overrides. | Must |
 | R2 | Run **Rivet** analyses (project plugins with options, and standard analyses) on generated events. Write YODA normalised to the **merged** cross-section. | Must |
-| R3 | **Sweeps and studies:** typed quantities, coupled/grid groups, `settle`, named studies, pins, overlay. This is the current `eic.toml` model. | Must |
+| R3 | **Sweeps and studies:** typed quantities, coupled/grid groups, `static`, named studies, pins, overlay. This is the current `eic.toml` model. | Must |
 | R4 | **Plot:** per-point pages, overlays, seed merges, data/reference overlays, empty-bin voiding, auto x-range. | Must |
 | R5 | **Terminal presentation:** a live, readable view of every running stage (progress, rate, ETA, σ, warnings), with full tool output kept in logs. | Must |
 | R6 | **Provenance:** every output can be traced to its resolved config, native cards (sha256), tool versions, git state, seed and event count. | Must |
-| R7 | **External generators:** Sherpa, Whizard and Herwig through their native cards. Their events are analysed by the same Rivet/sink chain. | Should |
-| R8 | **MadGraph:** matrix-element LHE → shower/hadronise in the Pythia runner → same sinks. | Should |
+| R7 | **External generators:** Sherpa, Whizard and Herwig through their native cards. Their events are analysed by the same Rivet/analyzer chain. | Should |
+| R8 | **MadGraph:** matrix-element LHE → shower/hadronise in the Pythia runner → same analyzers. | Should |
 | R9 | **Delphes** detector simulation on generated events. Its ROOT output is analysed with RDataFrame/uproot, and derived histograms are written as YODA (12). | Should |
 | R10 | **Custom C++ analysis modules** that book **YODA** histograms, merged across workers and written into the same `analysis.yoda` as Rivet (D14). Derived per-candidate tables are **deferred** (P8-S04). | Should |
 | R11 | **ONNX inference** inside C++ modules and Rivet plugins. Python ONNX for offline evaluation. | Could |
-| R12 | **HepMC3 event store and replay:** sharded HepMC3 files with an index; replay into any sinks (D13, [11](11_EventStore.md)). This replaces the old ROOT-tree buffering (Probe). | Should (the design must not be shaped by it; guideline 4) |
+| R12 | **HepMC3 event store and replay:** sharded HepMC3 files with an index; replay into any analyzers (D13, [11](11_EventStore.md)). This replaces the old ROOT-tree buffering (Probe). | Should (the design must not be shaped by it; guideline 4) |
 | R13 | **LHAPDF helpers:** list and verify the PDF sets a config needs, and install missing ones. | Could |
 | R14 | **Environment checks:** tool versions, Python importability, missing modules (e.g. ThePEG-HepMC). | Should |
 | R15 | **Processing layer:** post-run fits (Minuit2/RooFit, scipy fallback), statistics, and RDataFrame on Delphes output. Results go to `fits.json` and YODA (D15, [12](12_Processing.md)). | Should |
@@ -78,7 +78,7 @@
 | A1 | Runs are sequential on one machine. Parallelism is *within* a run (threads), not across runs. | Add a batch backend later (10 §4). The point spec is already self-contained. |
 | A2 | Physics settings stay in each generator's native language. TOML carries only run control, overrides and sweeps. | A physics-in-TOML layer would be a large, fragile translation effort. It is rejected. |
 | A3 | Rivet stays the primary analysis framework for comparisons. Custom C++ is for things Rivet does poorly: candidate reconstruction, ML features, detector-level. | — |
-| A4 | Rivet's CPU cost per event is comparable to or larger than Pythia's (three jet algorithms incl. SISCone). | **Settled in P6-S01, and the answer moots the question for this project**: the three jet algorithms are exactly what makes `photo_eic` unshardable (00/B31), so it runs serially whatever its cost. The threaded mode exists, is measured (1.67x on four threads with a jet-free analysis) and is behind `[run].mode` (05 §3). |
+| A4 | Rivet's CPU cost per event is comparable to or larger than Pythia's (three jet algorithms incl. SISCone). | **Static in P6-S01, and the answer moots the question for this project**: the three jet algorithms are exactly what makes `photo_eic` unshardable (00/B31), so it runs serially whatever its cost. The threaded mode exists, is measured (1.67x on four threads with a jet-free analysis) and is behind `[run].mode` (05 §3). |
 | A5 | Weight variations (Pythia `UncertaintyBands`, Sherpa on-the-fly) may later replace some re-generation sweeps. | The design supports multi-weight YODA from day one, since Rivet handles it natively. |
 | A6 | **PhotoProduction is a test bed** for the new stack (D20). Physics, maths and logic must be correct; specific physics choices (lepton charge, tag names, cut values) are not blockers. | — |
 

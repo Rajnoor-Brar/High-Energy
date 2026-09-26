@@ -14,9 +14,9 @@ else is already touching those files.**
 **Fixes:** C1 (both C++ layering violations, both cycles).
 **Cost:** ~30 minutes. **Risk:** near zero.
 
-`Needs` and `Output` are 9 lines of plain data that describe sinks but are *used* by `Module` and
-`Results`. Put them beside the sink vocabulary `Core` already carries (`Core::SinkSpec`,
-`Core::Exit::Sink`) — in `Core/Types.hh`, or a new `Core/Contract.hh` if that reads better:
+`Needs` and `Output` are 9 lines of plain data that describe analyzers but are *used* by `Module` and
+`Results`. Put them beside the analyzer vocabulary `Core` already carries (`Core::AnalyzerSpec`,
+`Core::Exit::Analyzer`) — in `Core/Types.hh`, or a new `Core/Contract.hh` if that reads better:
 
 ```cpp
 namespace Core {
@@ -25,26 +25,26 @@ namespace Core {
 }
 ```
 
-and have `Sink/Types.hh` re-export them, so no call site changes:
+and have `Analyzer/Types.hh` re-export them, so no call site changes:
 
 ```cpp
-namespace Sink {
+namespace Analyzer {
     using Needs  = Core::Needs;
     using Output = Core::Output;
 }
 ```
 
-**`Sink::Concurrency` stays put.** It is referenced only from `Sink/` and `Run/`, which sit at or
-above `Sink`, so it violates nothing. Moving it too would be tidying by symmetry — which is how the
+**`Analyzer::Concurrency` stays put.** It is referenced only from `Analyzer/` and `Run/`, which sit at or
+above `Analyzer`, so it violates nothing. Moving it too would be tidying by symmetry — which is how the
 *next* audit gets a finding about types living far from their users.
 
-**Result:** `Module → Sink` and `Results → Sink` both disappear. The C++ graph becomes a strict DAG
+**Result:** `Module → Analyzer` and `Results → Analyzer` both disappear. The C++ graph becomes a strict DAG
 matching 13 §2 exactly, and the rule in that document becomes true rather than aspirational.
 
 **Trade-off:** `Core` grows by two structs it does not itself use. The alternative — a separate
 rank-0 `Contract` namespace — is tidier in theory and adds a twelfth namespace to a project that
 already asks a reader to hold eleven. `Core` already holds `Spec`, `Provenance`, `Errors` *and*
-`SinkSpec`, which are the same kind of shared vocabulary; these belong with them.
+`AnalyzerSpec`, which are the same kind of shared vocabulary; these belong with them.
 
 **Then enforce it.** A ~30-line test that parses the includes and asserts the ranking, run in ctest.
 Without it this decays again the next time a type is needed one layer down — which is exactly how
@@ -194,8 +194,8 @@ Drops the largest file to roughly 550 lines, which is still large but is one com
 
 | Idea | Why not |
 |---|---|
-| **Merge `Events` (143 lines) into `Core`** | Small is not a defect. `Events` is the one type every sink sees and it depends on Pythia and HepMC3; folding it into `Core` would drag both into the bottom layer and cost the all-off build. |
-| **Split `Sink/Rivet.hh` (383 lines)** | It is the largest file because Rivet is the most complicated dependency — merging, dumps, thread-safety refusal and cross-section handling are one story. Splitting it scatters that story across files without reducing it. |
+| **Merge `Events` (143 lines) into `Core`** | Small is not a defect. `Events` is the one type every analyzer sees and it depends on Pythia and HepMC3; folding it into `Core` would drag both into the bottom layer and cost the all-off build. |
+| **Split `Analyzer/Rivet.hh` (383 lines)** | It is the largest file because Rivet is the most complicated dependency — merging, dumps, thread-safety refusal and cross-section handling are one story. Splitting it scatters that story across files without reducing it. |
 | **Rename `results` → `outputs` for symmetry with `output/`** | Churn across 9 files and every test, for a synonym. The confusion is between `results/` (the directory) and `results/` (the package), and proposal 3 removes most of it by taking layout out. |
 | **One `cli/` package holding all 19 commands** | Would centralise placement (P7) but destroy the lazy-import property that keeps `hep --help` fast — the whole point of the current command tree. |
 | **Collapse `prov` (461 lines) into `results`** | Backwards: `prov` is *lower* than judgement and the current `prov → results` edge is one of the cycles. Proposal 3 separates them properly. |

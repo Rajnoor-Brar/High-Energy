@@ -7,7 +7,7 @@
 // framework, not in the reconstruction.
 //
 //   modules/Lambda/Reconstruction.hh   the pairing, the mass window, cos θ*, the greedy matching
-//   modules/Lambda/Lambda.cc           calls it as a `Module::Base` (framework sink)
+//   modules/Lambda/Lambda.cc           calls it as a `Module::Base` (framework analyzer)
 //   analyses/Lambda/Lamriv.cc          calls it as a `Rivet::Analysis`  ← this file
 //
 // The build passes `-I utils -I modules/<project> -DHEKIT_WITH_HEPMC=1` to `rivet-build`, which is
@@ -15,7 +15,7 @@
 // so no extra library is needed.
 //
 // **Input.** Whatever Rivet is given: Pythia in process, or an external generator's HepMC3 through
-// the usual FIFO — `Sink::Rivet` is the same sink either way, and this analysis cannot tell the
+// the usual FIFO — `Analyzer::Rivet` is the same analyzer either way, and this analysis cannot tell the
 // difference. Output is YODA, as for any analysis.
 //
 // **Cuts** are analysis options, so they come from the run TOML rather than from a recompile:

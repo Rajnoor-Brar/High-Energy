@@ -32,7 +32,7 @@ Never `#include`/import from `legacy/`; copy or adapt.
 
 **In**
 
-- `[delphes]` card; `Sink::Store` tee to FIFO; stage wiring; sidecar
+- `[delphes]` card; `Analyzer::Store` tee to FIFO; stage wiring; sidecar
 
 **Out (non-goals)**
 
@@ -73,7 +73,7 @@ Revert.
 ## Log
 
 - 2026-09-17 — step file created (P0-S00).
-- 2026-09-20 — implemented `Sink::Delphes` and `hekit/adapters/delphes.py`. Delphes 3.5.1 is
+- 2026-09-20 — implemented `Analyzer::Delphes` and `hekit/adapters/delphes.py`. Delphes 3.5.1 is
   installed, so both rows were run. New ctest test `delphes` (label `slow`, 7 cases) and 11 unit
   tests. **Phase P7 is complete** apart from P7-S07, which D-Q6 left blocked.
 
@@ -81,10 +81,10 @@ Revert.
 
   | Row | Result |
   |---|---|
-  | Output | 200 events → `delphes.root`, read back with **uproot**: 200 entries and the `Jet` branches. The Rivet sink still ran on the same events — the tee is a tee — and `delphes.json` beside the ROOT file names the card, its sha256 and the point's identity |
+  | Output | 200 events → `delphes.root`, read back with **uproot**: 200 entries and the `Jet` branches. The Rivet analyzer still ran on the same events — the tee is a tee — and `delphes.json` beside the ROOT file names the card, its sha256 and the point's identity |
   | Failure | a card with a syntax error fails the point and is attributed to the `delphes` stage. Exit **1**, not 4 or 5: Delphes says 1 and 1 is "spec or card error", which is more specific than the role default. A *crash* still maps to 5 through `ROLE_EXIT["detector"]` |
 
-  **The design assumed a FIFO, and that cannot work.** 05 §5 described a `Sink::Store` tee on a pipe
+  **The design assumed a FIFO, and that cannot work.** 05 §5 described a `Analyzer::Store` tee on a pipe
   with Delphes reading it alongside `hep-run`. `DelphesHepMC3` sizes its input before reading and
   **skips anything whose length is zero** — `readers/DelphesHepMC3.cpp:160-169`:
   `fseek(END); length = ftello(); if (length <= 0) { fclose; continue; }` — and a FIFO always
@@ -103,7 +103,7 @@ Revert.
 
   **Design notes**
 
-  1. `Sink::Delphes` opens its output in `start()`, not `prepare()` — `--check` stops between the two
+  1. `Analyzer::Delphes` opens its output in `start()`, not `prepare()` — `--check` stops between the two
      (06 §3.3), and on a FIFO that would have been 00/B33 from the writing side. It stayed that way
      after the switch to a file: there is no reason for a preflight to create one.
   2. The intermediate is deleted once Delphes succeeds. It is uncompressed and routinely larger than
@@ -113,7 +113,7 @@ Revert.
 
   **Deviations**
 
-  1. A FIFO tee, per the note above. `Sink::Store` is not reused either: a store is sharded and
+  1. A FIFO tee, per the note above. `Analyzer::Store` is not reused either: a store is sharded and
      indexed because it is meant to be replayed, and this is one stream to one reader.
   2. The failure row says "exit 4/5"; a bad card gives 1. Delphes' own code is more specific than the
      role default, and 1 already means "spec or card error" in the table (06 §3.3).

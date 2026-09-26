@@ -20,7 +20,7 @@ namespace Core {
         bool stopped = false;
     };
 
-    // Beams, as every adapter and sink needs them (03 §1: ids and energies are separate).
+    // Beams, as every adapter and analyzer needs them (03 §1: ids and energies are separate).
     struct Beams {
         std::vector<int> ids;                    // PDG, [A, B]
         std::vector<double> energies;            // GeV, [E_A, E_B]; one entry means √s
@@ -41,7 +41,7 @@ namespace Core {
     };
 
 
-    /// Free-form options a user's module is configured with (`[[sinks.module]].options`, 05 §5).
+    /// Free-form options a user's module is configured with (`[[analyzers.module]].options`, 05 §5).
     ///
     /// Everything arrives as text, because the spec is TOML and a module's options are whatever that
     /// module invented. The typed readers say what was expected when a value is not that, which is

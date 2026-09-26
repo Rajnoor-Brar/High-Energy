@@ -63,7 +63,7 @@ def test_the_reader_folds_a_run(tmp_path):
     lines = [
         '{"t":1.0,"k":"phase","phase":"init","detail":"reading 2 cards"}',
         '{"t":1.1,"k":"init","beam_ids":[2212,11],"beam_energies":[41,5],"sqrt_s":28.64,'
-        '"threads":2,"mode":"serial","sinks":["rivet"]}',
+        '"threads":2,"mode":"serial","analyzers":["rivet"]}',
         '{"t":2.0,"k":"progress","done":500,"total":1000,"rate":250.0,"workers":[250,250]}',
         '{"t":2.5,"k":"xsec","value_pb":71422.16,"err_pb":95.0,"final":false}',
         '{"t":2.6,"k":"log","level":"warn","source":"pythia","msg":"stuck in loop"}',
@@ -75,7 +75,7 @@ def test_the_reader_folds_a_run(tmp_path):
     reader = StatusReader().feed_lines(lines)
     assert reader.phase == "init" and reader.detail == "reading 2 cards"
     assert reader.beams == {"ids": [2212, 11], "energies": [41, 5], "sqrt_s": 28.64}
-    assert (reader.threads, reader.mode, reader.sinks) == (2, "serial", ["rivet"])
+    assert (reader.threads, reader.mode, reader.analyzers) == (2, "serial", ["rivet"])
     assert (reader.done, reader.total, reader.rate) == (500, 1000, 250.0)
     assert reader.workers == [250, 250]
     assert reader.fraction == 0.5 and reader.eta_seconds() == 2.0
@@ -139,7 +139,7 @@ def test_the_cpp_writer_and_the_python_reader_agree(tmp_path):
     reader = StatusReader().feed_lines(lines)
     assert reader.phase == "init"
     assert reader.beams["ids"] == [2212, 11] and reader.beams["energies"] == [41.0, 5.0]
-    assert reader.threads == 2 and reader.sinks == ["rivet", "store"]
+    assert reader.threads == 2 and reader.analyzers == ["rivet", "store"]
     assert (reader.done, reader.total) == (500, 1000)
     assert reader.workers == [250, 250]
     assert reader.xsec_pb == 71422.16

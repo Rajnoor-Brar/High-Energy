@@ -56,7 +56,7 @@ namespace Core {
         bool stopped = false;                     // the store is partial, so this replay is too
     };
 
-    struct SinkSpec {
+    struct AnalyzerSpec {
         std::string kind;                       // rivet | module | store | delphes
         std::vector<std::string> analyses;      // rivet
         std::vector<std::string> paths;         // rivet: plugin search path
@@ -94,15 +94,15 @@ namespace Core {
         std::string output_dir;
         std::string yoda_name = "analysis.yoda";
         std::string summary_name = "run.summary.json";
-        // [[sink]]
-        std::vector<SinkSpec> sinks;
+        // [[analyzer]]
+        std::vector<AnalyzerSpec> analyzers;
         // [status]
         int status_fd = 3;
         std::int64_t heartbeat_ms = 500;
 
         bool wants(const std::string& kind) const {
-            return std::any_of(sinks.begin(), sinks.end(),
-                               [&](const SinkSpec& sink) { return sink.kind == kind; });
+            return std::any_of(analyzers.begin(), analyzers.end(),
+                               [&](const AnalyzerSpec& analyzer) { return analyzer.kind == kind; });
         }
     };
 
@@ -123,7 +123,7 @@ namespace Core {
             throw Error{Exit::Config, "[run] threads is negative"};
         if (spec.mode != "auto" && spec.mode != "serial" && spec.mode != "sharded")
             throw Error{Exit::Config, "[run] mode is not one of auto, serial, sharded: " + spec.mode,
-                        "\"auto\" shards only when every sink can be (05 §3)"};
+                        "\"auto\" shards only when every analyzer can be (05 §3)"};
         if (spec.events < 0)
             throw Error{Exit::Config, "[run] events is negative"};
 
@@ -143,13 +143,13 @@ namespace Core {
             throw Error{Exit::Config, "[run] seed does not match the first instance seed",
                         "the point seed is the base of its block (03 §5)"};
 
-        for (const SinkSpec& sink : spec.sinks) {
-            if (sink.kind == "rivet" && sink.analyses.empty())
-                throw Error{Exit::Config, "a rivet sink has no analyses"};
-            if (sink.kind == "module" && sink.name.empty())
-                throw Error{Exit::Config, "a module sink has no name"};
-            if (sink.kind == "store" && sink.dir.empty())
-                throw Error{Exit::Config, "a store sink has no directory"};
+        for (const AnalyzerSpec& analyzer : spec.analyzers) {
+            if (analyzer.kind == "rivet" && analyzer.analyses.empty())
+                throw Error{Exit::Config, "a rivet analyzer has no analyses"};
+            if (analyzer.kind == "module" && analyzer.name.empty())
+                throw Error{Exit::Config, "a module analyzer has no name"};
+            if (analyzer.kind == "store" && analyzer.dir.empty())
+                throw Error{Exit::Config, "a store analyzer has no directory"};
         }
     }
 
@@ -289,31 +289,31 @@ namespace Core {
         spec.yoda_name = detail::value<std::string>(output, "yoda", spec.yoda_name);
         spec.summary_name = detail::value<std::string>(output, "summary", spec.summary_name);
 
-        if (const toml::node* sinks = document.get("sink")) {
-            const toml::array* array = sinks->as_array();
+        if (const toml::node* analyzers = document.get("analyzer")) {
+            const toml::array* array = analyzers->as_array();
             if (array == nullptr)
-                throw Error{Exit::Config, "[[sink]] must be an array of tables"};
+                throw Error{Exit::Config, "[[analyzer]] must be an array of tables"};
             for (const toml::node& entry : *array) {
                 const toml::table* table = entry.as_table();
                 if (table == nullptr)
-                    throw Error{Exit::Config, "[[sink]] must be an array of tables"};
-                SinkSpec sink;
-                sink.kind = detail::value<std::string>(*table, "kind", "");
-                if (sink.kind.empty()) throw Error{Exit::Config, "a sink has no kind"};
-                sink.analyses = detail::strings(*table, "analyses");
-                sink.paths = detail::strings(*table, "paths");
-                sink.xsec = detail::numberOrText(*table, "xsec", sink.xsec);
-                sink.weights = detail::value<std::string>(*table, "weights", sink.weights);
-                sink.dump_every = detail::value<std::int64_t>(*table, "dump_every", 0);
-                sink.check_beams = detail::value<bool>(*table, "check_beams", true);
-                sink.name = detail::value<std::string>(*table, "name", "");
-                sink.library = detail::value<std::string>(*table, "library", "");
-                sink.dir = detail::value<std::string>(*table, "dir", "");
-                sink.compression = detail::value<std::string>(*table, "compression", "");
-                sink.card = detail::value<std::string>(*table, "card", "");
+                    throw Error{Exit::Config, "[[analyzer]] must be an array of tables"};
+                AnalyzerSpec analyzer;
+                analyzer.kind = detail::value<std::string>(*table, "kind", "");
+                if (analyzer.kind.empty()) throw Error{Exit::Config, "an analyzer has no kind"};
+                analyzer.analyses = detail::strings(*table, "analyses");
+                analyzer.paths = detail::strings(*table, "paths");
+                analyzer.xsec = detail::numberOrText(*table, "xsec", analyzer.xsec);
+                analyzer.weights = detail::value<std::string>(*table, "weights", analyzer.weights);
+                analyzer.dump_every = detail::value<std::int64_t>(*table, "dump_every", 0);
+                analyzer.check_beams = detail::value<bool>(*table, "check_beams", true);
+                analyzer.name = detail::value<std::string>(*table, "name", "");
+                analyzer.library = detail::value<std::string>(*table, "library", "");
+                analyzer.dir = detail::value<std::string>(*table, "dir", "");
+                analyzer.compression = detail::value<std::string>(*table, "compression", "");
+                analyzer.card = detail::value<std::string>(*table, "card", "");
                 if (const toml::node* options = table->get("options")) {
                     if (!options->is_table())
-                        throw Error{Exit::Config, "[[sink]].options must be a table"};
+                        throw Error{Exit::Config, "[[analyzer]].options must be a table"};
                     // Everything becomes text: a module's options are that module's own invention,
                     // and `Core::Options` gives it typed readers that say what was expected (05 §5).
                     for (const auto& [key, node] : *options->as_table()) {
@@ -328,13 +328,13 @@ namespace Core {
                         } else if (const auto* as_bool = node.as_boolean())
                             text = as_bool->get() ? "true" : "false";
                         else
-                            throw Error{Exit::Config, "[[sink]].options." +
+                            throw Error{Exit::Config, "[[analyzer]].options." +
                                                           std::string(key.str()) +
                                                           " is not a scalar"};
-                        sink.options.set(std::string(key.str()), text);
+                        analyzer.options.set(std::string(key.str()), text);
                     }
                 }
-                spec.sinks.push_back(std::move(sink));
+                spec.analyzers.push_back(std::move(analyzer));
             }
         }
 

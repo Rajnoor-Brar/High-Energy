@@ -104,7 +104,7 @@ Delete tag.
   replaced 10 404**, covering more tools, with the store, the results layer and the module API that
   the old code did not have. Per group the overshoot is concentrated where the work turned out to
   be: `ML` + `Phys` at 2.9x (DIS invariants, jet parsing and selectors that the one-line budget row
-  did not anticipate) and `Sink` at 1.8x (four sinks, not two).
+  did not anticipate) and `Analyzer` at 1.8x (four analyzers, not two).
 
   **The Python budget was missed outright, in every area, by 2 to 5x**, and the reason is visible in
   how it was set: ~4 000 lines was scoped as "port `rivpyth_common`" (1 147 lines) plus some glue.

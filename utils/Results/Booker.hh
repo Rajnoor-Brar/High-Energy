@@ -13,7 +13,7 @@
 //   1. a handle is an index, so filling costs an array lookup rather than a map lookup or a
 //      `dynamic_cast`;
 //   2. the module never owns an object, so it cannot keep one across a merge and be surprised;
-//   3. **there is one object per worker, not one object.** `Sink::Modules` is sharded (05 §3), so a
+//   3. **there is one object per worker, not one object.** `Analyzer::Modules` is sharded (05 §3), so a
 //      module that held a pointer would be holding one of k clones and filling only that one. A
 //      handle names "the thing I booked", and which clone that is depends on which worker is asking.
 //

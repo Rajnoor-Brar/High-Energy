@@ -104,7 +104,7 @@ Revert.
     declares **no** options, so scanning `R` on it now fails with "does not take R … it declares: none".
     A missing `.info` is a warning, not an error, because the plugin may simply not be built yet.
   - **Resolved spec** (03 §7): `[meta]` (schema, point, aliases, hash, origin), `[run]` + `[run.seeds]`,
-    `[source]`, `[output]`, `[[sink]]` (rivet, module, store), `[status]`. `spec_v2.json` is the shared
+    `[source]`, `[output]`, `[[analyzer]]` (rivet, module, store), `[status]`. `spec_v2.json` is the shared
     contract, validated with `jsonschema` (added to the `dev` extra) and by a structural fallback when it
     is absent. Every spec of every study validates.
   - **Commands:** `hep plan CONFIG [--study/--pin/--across/--style/--overlay/--set] [--index]

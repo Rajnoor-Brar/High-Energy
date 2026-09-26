@@ -286,7 +286,7 @@ def test_a_run_we_stopped_is_reported_as_stopped_not_failed():
 
 
 def test_a_lone_crash_is_named_by_its_role():
-    """No SIGPIPE, so nothing says the data path broke: an analysis that crashed is a sink failure."""
+    """No SIGPIPE, so nothing says the data path broke: an analysis that crashed is an analyzer failure."""
     attribution = signal_policy.attribute([("rivet", "analyse", -signal.SIGSEGV)])
     assert attribution.exit_code == signal_policy.EXIT_SINK
     assert signal_policy.attribute(

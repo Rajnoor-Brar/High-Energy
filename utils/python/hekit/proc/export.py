@@ -1,6 +1,6 @@
 """`[proc.export]`: a ROOT file of the histograms a point produced (12 §2.3).
 
-**Why this is in Python and not a sink.** D7 and D14 make YODA the results format, and D15 keeps ROOT
+**Why this is in Python and not an analyzer.** D7 and D14 make YODA the results format, and D15 keeps ROOT
 out of `hep-run` entirely — the event loop links Pythia and YODA and nothing else. A module that
 wrote ROOT directly would put a second results format inside the event loop and contradict both. So
 the run still produces one `analysis.yoda`, and this turns it into ROOT afterwards, in the half that

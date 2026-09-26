@@ -265,7 +265,7 @@ def new(kind: str, name: str, project: str, into: Path | None) -> None:
     elif kind == "module":
         where = root / "modules" / (project or name)
         written.append(scaffold.write(where / f"{name}.cc", scaffold.module_source(name)))
-        after = (f"hep build    # then [[sinks.module]] name = \"{name}\"")
+        after = (f"hep build    # then [[analyzers.module]] name = \"{name}\"")
     else:
         where = root / "configs" / name
         written.append(scaffold.write(where / "base.cmnd", scaffold.project_card(name)))

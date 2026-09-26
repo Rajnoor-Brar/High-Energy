@@ -93,7 +93,7 @@ namespace Store {
             std::error_code code;
             std::filesystem::create_directories(directory_, code);
             if (code)
-                throw Core::Error{Core::Exit::Sink,
+                throw Core::Error{Core::Exit::Analyzer,
                                   "cannot create the event store directory: " + directory_,
                                   code.message()};
         }
@@ -109,7 +109,7 @@ namespace Store {
                 const std::lock_guard<std::mutex> guard(shard.lock);
                 shard.writer->write_event(const_cast<HepMC3::GenEvent&>(event));
                 if (shard.writer->failed())
-                    throw Core::Error{Core::Exit::Sink,
+                    throw Core::Error{Core::Exit::Analyzer,
                                       "writing the event store failed: " + shard.partial,
                                       "a full disk is the usual cause"};
                 shard.events += 1;
@@ -128,7 +128,7 @@ namespace Store {
                     std::error_code code;
                     std::filesystem::rename(shard.partial, final_path, code);
                     if (code)
-                        throw Core::Error{Core::Exit::Sink,
+                        throw Core::Error{Core::Exit::Analyzer,
                                           "cannot move the shard into place: " + shard.name,
                                           code.message()};
                     shard.closed = true;
@@ -152,7 +152,7 @@ namespace Store {
             index.shards = closeShards();
             index.events = index.events ? index.events : events();
             if (!index.consistent())
-                throw Core::Error{Core::Exit::Sink,
+                throw Core::Error{Core::Exit::Analyzer,
                                   "the event store's shard counts do not add up: " +
                                       std::to_string(index.shardEvents()) + " in shards, " +
                                       std::to_string(index.events) + " recorded",
@@ -167,16 +167,16 @@ namespace Store {
             {
                 std::ofstream out(temporary, std::ios::binary | std::ios::trunc);
                 if (!out)
-                    throw Core::Error{Core::Exit::Sink, "cannot write " + temporary};
+                    throw Core::Error{Core::Exit::Analyzer, "cannot write " + temporary};
                 out << indexJson(index);
                 if (!out)
-                    throw Core::Error{Core::Exit::Sink, "cannot write " + temporary};
+                    throw Core::Error{Core::Exit::Analyzer, "cannot write " + temporary};
             }
             std::error_code code;
             std::filesystem::rename(temporary, target, code);
             if (code) {
                 std::filesystem::remove(temporary, code);
-                throw Core::Error{Core::Exit::Sink, "cannot move the store index into place",
+                throw Core::Error{Core::Exit::Analyzer, "cannot move the store index into place",
                                   code.message()};
             }
         }
@@ -213,7 +213,7 @@ namespace Store {
             shard.partial = path(shard.name) + ".part";
             shard.writer = makeWriter(shard.partial, codec_);
             if (shard.writer->failed())
-                throw Core::Error{Core::Exit::Sink, "cannot open the shard " + shard.partial};
+                throw Core::Error{Core::Exit::Analyzer, "cannot open the shard " + shard.partial};
             if (run_ != nullptr) shard.writer->set_run_info(run_);
             return shard;
         }

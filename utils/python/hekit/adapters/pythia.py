@@ -32,7 +32,7 @@ RESERVED = {
     "random:seed": "[run] seed",
     "random:setseed": "[run] seed",
 }
-#: Set by the sink concurrency mode, never by a user card (04 §3, 05 §3).
+#: Set by the analyzer concurrency mode, never by a user card (04 §3, 05 §3).
 FORBIDDEN_IN_CARD = {"parallelism:processasync": "the concurrency mode is chosen by hep, not by the card"}
 
 
@@ -63,7 +63,7 @@ def check_card(text: str, where: str) -> None:
 
 
 def check_overrides(point: Any, where: str) -> None:
-    """A quantity or `[settle.gen]` may not set what the plan owns (04 §3)."""
+    """A quantity or `[static.gen]` may not set what the plan owns (04 §3)."""
     for assignment in point.settings:
         key = normalise_key(assignment.key)
         if key in RESERVED:

@@ -3,7 +3,7 @@
 // ── Source/Replay.hh ─────────────────────────────────────────────────────────
 // Replaying stored events, and reading a stream (11 §4, decision D13).
 //
-// "Generate once, analyse many": a store's events go through the same sinks as fresh ones, so a
+// "Generate once, analyse many": a store's events go through the same analyzers as fresh ones, so a
 // different analysis, a new histogram or a changed cut costs a read rather than a generation. The
 // same class reads a FIFO, because a stream is a store with one shard and no index — which is how
 // external generators deliver events (04 §8).
@@ -24,7 +24,7 @@
 // **Sharded replay keeps the chunk boundary.** The consumers run a chunk's worth of events and are
 // joined; only then does the main thread checkpoint and look at the stop flag. That is the same
 // shape as the generator (D-Q2) and it is what makes "stop" and "write a partial result" mean the
-// same thing for both sources — a checkpoint never runs while a sink is being called.
+// same thing for both sources — a checkpoint never runs while an analyzer is being called.
 
 #include <algorithm>
 #include <atomic>
@@ -174,11 +174,11 @@ namespace Source {
                         view.adoptHepMC(frame.event.get());
                         view.weights().values.assign(1, weightOf(*frame.event));
                         bump(frame.worker);
-                        remember(frame.event);            // keeps the event alive for the sinks
+                        remember(frame.event);            // keeps the event alive for the analyzers
                         consume(view);
                     }
                 } catch (...) {
-                    // A sink threw on a thread we started; carry it to the main thread rather than
+                    // An analyzer threw on a thread we started; carry it to the main thread rather than
                     // letting it unwind through `std::thread` into `std::terminate`.
                     const std::lock_guard<std::mutex> guard(failure_mutex);
                     if (!failure) failure = std::current_exception();
@@ -205,7 +205,7 @@ namespace Source {
                     reader_->join();
                     std::rethrow_exception(failure);
                 }
-                // Nothing is running now, so a checkpoint sees a settled set of sinks.
+                // Nothing is running now, so a checkpoint sees a static set of analyzers.
                 if (checkpoint) checkpoint(counts.accepted);
                 if (stop && stop()) {
                     reader_->stop();                      // a blocked FIFO read ends here
@@ -297,7 +297,7 @@ namespace Source {
                 counted_[static_cast<std::size_t>(worker)].fetch_add(1, std::memory_order_relaxed);
         }
 
-        // The sinks only borrow the event, so one reference has to outlive the call; a stream also
+        // The analyzers only borrow the event, so one reference has to outlive the call; a stream also
         // reads σ off the last one it saw (there being no index to read it from).
         void remember(const std::shared_ptr<HepMC3::GenEvent>& event) {
             const std::lock_guard<std::mutex> guard(last_lock_);

@@ -61,11 +61,11 @@ def cards(directory: Path) -> list[str]:
 
 def spec_for(directory: Path, *, mode: str, analyses, paths=(), events: int = 600,
              threads: int = THREADS, check_beams: bool = False, store: bool = False) -> dict:
-    sinks = [{"kind": "rivet", "analyses": list(analyses), "paths": [str(entry) for entry in paths],
+    analyzers = [{"kind": "rivet", "analyses": list(analyses), "paths": [str(entry) for entry in paths],
               "xsec": "generator", "weights": "nominal", "dump_every": 0,
               "check_beams": check_beams}]
     if store:
-        sinks.append({"kind": "store", "dir": str(directory / "events"), "compression": "zst"})
+        analyzers.append({"kind": "store", "dir": str(directory / "events"), "compression": "zst"})
     return {
         "meta": {"schema": 2, "point": "sharded", "hash": "sha256:" + "ab" * 32,
                  "origin": "P6-S01", "aliases": []},
@@ -76,7 +76,7 @@ def spec_for(directory: Path, *, mode: str, analyses, paths=(), events: int = 60
                           "instances": [770001 + index for index in range(threads)]}},
         "source": {"kind": "pythia", "cards": cards(directory / "cards")},
         "output": {"dir": str(directory), "yoda": "analysis.yoda", "summary": "run.summary.json"},
-        "sink": sinks,
+        "analyzer": analyzers,
         "status": {"fd": 3, "heartbeat_ms": 500},
     }
 
@@ -269,12 +269,12 @@ def test_the_project_analysis_still_runs_under_auto(tmp_path):
     assert any("FASTJET" in notice for notice in notices(messages)), notices(messages)
 
 
-# ── the sinks that can be sharded ────────────────────────────────────────────
+# ── the analyzers that can be sharded ────────────────────────────────────────────
 
 def test_a_store_written_from_several_threads_is_whole(tmp_path):
     """The store shards on the *worker*, so a sharded run writes the same layout as a serial one.
 
-    This is the sink that can actually be sharded here, and the one whose writer had to be made safe
+    This is the analyzer that can actually be sharded here, and the one whose writer had to be made safe
     for it: the shard map grows when a worker first appears, and the total is counted across threads.
     """
     from hekit.store import index as index_module

@@ -110,11 +110,11 @@ namespace Status {
 
         void init(const std::vector<int>& beam_ids, const std::vector<double>& beam_energies,
                   double sqrt_s, int threads, const std::string& mode,
-                  const std::vector<std::string>& sinks) {
+                  const std::vector<std::string>& analyzers) {
             emit(Kind::Init,
                  "\"beam_ids\":" + jsonList(beam_ids) + ",\"beam_energies\":" + jsonList(beam_energies) +
                      ",\"sqrt_s\":" + number(sqrt_s) + ",\"threads\":" + std::to_string(threads) +
-                     ",\"mode\":\"" + escape(mode) + "\",\"sinks\":" + jsonList(sinks),
+                     ",\"mode\":\"" + escape(mode) + "\",\"analyzers\":" + jsonList(analyzers),
                  "sqrt(s) = " + number(sqrt_s) + " GeV, " + std::to_string(threads) + " threads, " + mode);
         }
 

@@ -4,12 +4,12 @@
 the analysis is expensive enough that letting k events be in flight at once pays for itself, and the
 honest way to answer it is to run the thing three ways and time it:
 
-1. **generation only** — no sinks at all. The ceiling: nothing can be faster than this;
-2. **generation with the config's sinks, serially** — what a run costs today;
-3. **generation with the config's sinks, sharded** — if the sinks allow it. If they do not, the
+1. **generation only** — no analyzers at all. The ceiling: nothing can be faster than this;
+2. **generation with the config's analyzers, serially** — what a run costs today;
+3. **generation with the config's analyzers, sharded** — if the analyzers allow it. If they do not, the
    measurement is replaced by the reason, which is a more useful answer than a number.
 
-The difference between (1) and (2) is the sink cost, which is exactly assumption A4 ("is Rivet's CPU
+The difference between (1) and (2) is the analyzer cost, which is exactly assumption A4 ("is Rivet's CPU
 cost per event comparable to Pythia's?"). The difference between (2) and (3) is whether sharding is
 worth turning on, and it is measured rather than predicted because the prediction has too many terms:
 how well the analysis parallelises, how much of it is under a lock, and what the machine is doing.
@@ -75,7 +75,7 @@ class Report:
     measurements: list[Measurement] = field(default_factory=list)
     mode: str = "serial"
     reason: str = ""
-    sink_share: float = 0.0           # fraction of the wall clock the sinks account for, serially
+    analyzer_share: float = 0.0           # fraction of the wall clock the analyzers account for, serially
     speedup: float = 0.0              # sharded vs serial, when both were measured
 
     def of(self, name: str) -> Measurement | None:
@@ -108,18 +108,18 @@ def recommend(generation: Measurement, serial: Measurement, sharded: Measurement
                            f"({serial.wall_s:.1f}s -> {sharded.wall_s:.1f}s)")
 
     # It is allowed and it does not help. Say *why* it does not, because the two reasons lead
-    # somewhere different: cheap sinks mean the generator is the bottleneck and more threads would
-    # help, whereas an expensive-but-unparallelisable sink means something is under a lock.
+    # somewhere different: cheap analyzers mean the generator is the bottleneck and more threads would
+    # help, whereas an expensive-but-unparallelisable analyzer means something is under a lock.
     if generation.measured and serial.wall_s <= generation.wall_s * 1.1:
-        return "serial", ("the sinks cost almost nothing next to generation "
+        return "serial", ("the analyzers cost almost nothing next to generation "
                           f"({serial.wall_s:.1f}s vs {generation.wall_s:.1f}s generating only), "
                           "so there is nothing to parallelise")
     return "serial", (f"sharded is only {speedup:.2f}x faster, which is not worth the extra moving "
                       f"parts (the threshold is {WORTH_IT:.2f}x)")
 
 
-def sink_share(generation: Measurement, serial: Measurement) -> float:
-    """What fraction of a serial run's wall clock the sinks account for. This is assumption A4."""
+def analyzer_share(generation: Measurement, serial: Measurement) -> float:
+    """What fraction of a serial run's wall clock the analyzers account for. This is assumption A4."""
     if not (generation.measured and serial.measured) or serial.wall_s <= 0:
         return 0.0
     return max(0.0, (serial.wall_s - generation.wall_s) / serial.wall_s)
@@ -158,7 +158,7 @@ def save_cached(report: Report) -> Path:
     return path
 
 
-def prepare_variant(config: Any, group: Any, directory: Path, name: str, *, sinks: list,
+def prepare_variant(config: Any, group: Any, directory: Path, name: str, *, analyzers: list,
                     mode: str, events: int) -> Path:
     """Write one variant's card and spec into its own directory, and return the spec's path."""
     import copy
@@ -173,7 +173,7 @@ def prepare_variant(config: Any, group: Any, directory: Path, name: str, *, sink
     document["meta"]["point"] = f"bench_{group.name}"
     document["run"]["events"] = int(events)
     document["run"]["mode"] = mode
-    document["sink"] = sinks
+    document["analyzer"] = analyzers
 
     card_name = naming.card_path(config, group.name, config.generator.tool).name
     document = spec_module.relocated(document, target, card_name)
@@ -224,9 +224,9 @@ def time_run(binary: str, spec_path: Path, *, timeout: int = 3600) -> tuple[floa
     return (summary.get("run", {}).get("wall_s") or elapsed), summary, notices
 
 
-def prepare_replay(config: Any, group: Any, directory: Path, store: Path, *, sinks: list,
+def prepare_replay(config: Any, group: Any, directory: Path, store: Path, *, analyzers: list,
                    events: int) -> Path:
-    """The replay leg: the same sinks, fed from the store the `store` leg just wrote (11 §4)."""
+    """The replay leg: the same analyzers, fed from the store the `store` leg just wrote (11 §4)."""
     import copy
 
     from ..adapters import store as store_adapter
@@ -241,7 +241,7 @@ def prepare_replay(config: Any, group: Any, directory: Path, store: Path, *, sin
                        "seeds": {"point": 0, "instances": []}}
     document["source"] = {"kind": "store", "input": str(store),
                           "store": store_adapter.store_document(store)}
-    document["sink"] = sinks
+    document["analyzer"] = analyzers
     document["output"] = {"dir": str(target), "yoda": "analysis.yoda",
                           "summary": "run.summary.json"}
 
@@ -256,18 +256,18 @@ def measure(config: Any, group: Any, binary: str, directory: Path, *, events: in
     report = Report(project=getattr(config, "project", ""), point=group.name,
                     machine=machine_id(), threads=threads, events=events)
 
-    real_sinks = list(spec_sinks(config, group))
+    real_analyzers = list(spec_analyzers(config, group))
     plans = [
-        # No sinks at all: `hep-run` then uses its counting sink, which needs no HepMC record, so
+        # No analyzers at all: `hep-run` then uses its counting analyzer, which needs no HepMC record, so
         # this really is generation and nothing else.
         ("generation", [], "serial"),
-        ("serial", real_sinks, "serial"),
-        ("sharded", real_sinks, "sharded"),
+        ("serial", real_analyzers, "serial"),
+        ("sharded", real_analyzers, "sharded"),
     ]
-    for name, sinks, mode in plans:
+    for name, analyzers, mode in plans:
         measurement = Measurement(name=name, mode=mode, threads=threads)
         try:
-            path = prepare_variant(config, group, directory, name, sinks=sinks, mode=mode,
+            path = prepare_variant(config, group, directory, name, analyzers=analyzers, mode=mode,
                                    events=events)
             wall, summary, notices = time_run(binary, path)
             measurement.wall_s = wall
@@ -275,9 +275,9 @@ def measure(config: Any, group: Any, binary: str, directory: Path, *, events: in
             measurement.mode = summary.get("run", {}).get("mode", mode)
             measurement.threads = summary.get("run", {}).get("threads", threads)
             if mode == "sharded" and measurement.mode != "sharded":
-                # It ran, but serially: the sinks would not be shared out, and the notice says why.
+                # It ran, but serially: the analyzers would not be shared out, and the notice says why.
                 measurement.refused = next((notice for notice in notices if notice), "") or \
-                    "the sinks would not be sharded"
+                    "the analyzers would not be sharded"
         except HepError as error:
             # A refusal is an answer, not a failure: an analysis that clusters jets stops a sharded
             # run on purpose (00/B31), and that is exactly what the recommendation needs to know.
@@ -290,21 +290,21 @@ def measure(config: Any, group: Any, binary: str, directory: Path, *, events: in
 
     if replay:
         report.measurements.append(_replay_leg(config, group, binary, directory,
-                                               sinks=real_sinks, events=events))
+                                               analyzers=real_analyzers, events=events))
 
     generation = report.of("generation") or Measurement("generation")
     serial = report.of("serial") or Measurement("serial")
     sharded = report.of("sharded") or Measurement("sharded")
     report.mode, report.reason = recommend(generation, serial, sharded)
-    report.sink_share = sink_share(generation, serial)
+    report.analyzer_share = analyzer_share(generation, serial)
     if serial.measured and sharded.measured:
         report.speedup = serial.wall_s / sharded.wall_s if sharded.wall_s > 0 else 0.0
     return report
 
 
-def _replay_leg(config: Any, group: Any, binary: str, directory: Path, *, sinks: list,
+def _replay_leg(config: Any, group: Any, binary: str, directory: Path, *, analyzers: list,
                 events: int) -> Measurement:
-    """Write a store, then time reading it back through the same sinks.
+    """Write a store, then time reading it back through the same analyzers.
 
     Reported, never used by `recommend`: it answers a different question — is "generate once,
     analyse many" (11) worth it on this machine's disk? — and the answer depends on how often the
@@ -313,12 +313,12 @@ def _replay_leg(config: Any, group: Any, binary: str, directory: Path, *, sinks:
     measurement = Measurement(name="replay", mode="serial", threads=0)
     try:
         store_dir = (directory / "store" / "events").resolve()
-        store_sink = [{"kind": "store", "dir": str(store_dir), "compression": "zst"}]
-        store_spec = prepare_variant(config, group, directory, "store", sinks=store_sink,
+        store_analyzer = [{"kind": "store", "dir": str(store_dir), "compression": "zst"}]
+        store_spec = prepare_variant(config, group, directory, "store", analyzers=store_analyzer,
                                      mode="serial", events=events)
         time_run(binary, store_spec)
 
-        path = prepare_replay(config, group, directory, store_dir, sinks=sinks, events=events)
+        path = prepare_replay(config, group, directory, store_dir, analyzers=analyzers, events=events)
         wall, summary, _ = time_run(binary, path)
         measurement.wall_s = wall
         measurement.events = summary.get("run", {}).get("events", 0)
@@ -330,7 +330,7 @@ def _replay_leg(config: Any, group: Any, binary: str, directory: Path, *, sinks:
     return measurement
 
 
-def spec_sinks(config: Any, group: Any) -> list[dict]:
+def spec_analyzers(config: Any, group: Any) -> list[dict]:
     from ..plan import spec as spec_module
 
-    return spec_module.sink_documents(config, group)
+    return spec_module.analyzer_documents(config, group)

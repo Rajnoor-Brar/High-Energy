@@ -1,7 +1,7 @@
 """A real Whizard point through `hep run` (P7-S04, 04 §5).
 
 Whizard 3.1.8 is installed here, so this runs it. Two rows: a toy `e+e- → jj`, and the ep card D-Q7
-settled on — direct photoproduction, which is Whizard's own physics rather than a cross-check of
+static on — direct photoproduction, which is Whizard's own physics rather than a cross-check of
 `photo_ep.cmnd`.
 
 Two findings are pinned here because they are properties of Whizard that bite immediately and would
@@ -94,7 +94,7 @@ paths = []
 [output]
 tag_style = "tag"
 
-[settle.use]
+[static.use]
 energies = "{tag}"
 
 [quantity.energies]
@@ -191,7 +191,7 @@ def test_the_integration_card_is_written_beside_the_grids(toy):
 
 @pytest.mark.skipif(not CARD.is_file(), reason="the Whizard ep card is missing")
 def test_the_ep_card_runs(tmp_path_factory):
-    """The card D-Q7 settled on: direct photoproduction, Whizard's own physics."""
+    """The card D-Q7 static on: direct photoproduction, Whizard's own physics."""
     root = tmp_path_factory.mktemp("whizard_ep")
     config = write_config(root / "proj", card=CARD.read_text(encoding="utf-8"),
                           card_name=CARD.name, events=50, beams="2212, 11",
@@ -218,10 +218,10 @@ def test_without_a_cross_section_the_run_is_refused(tmp_path_factory):
     config = write_config(root / "proj", card=CARD.read_text(encoding="utf-8"),
                           card_name=CARD.name, events=50, beams="2212, 11",
                           energies="[275.0, 18.0]", tag="18x275")      # no xsec
-    # Exit 5 is the sink's own code (06 §3.3): the generator did its job, the sink refused to
+    # Exit 5 is the analyzer's own code (06 §3.3): the generator did its job, the analyzer refused to
     # normalise by nothing, and `hep run` reports the code the stage gave it.
     done = hep("run", str(config), "--plain", results=root / "results", expect=5)
-    assert "sink error" in done.text
+    assert "analyzer error" in done.text
 
     # The message itself is in the stage's log, which is where a tool's own output belongs (06 §4).
     log = (only_point(root / "results") / "logs" / "hep-run.log").read_text(encoding="utf-8",

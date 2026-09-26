@@ -5,7 +5,7 @@
 | Status | done |
 | Kind | code |
 | Phase | P4 — Plotting, compare, retirement of the legacy tools |
-| Depends on | [P2-S05](P2-S05_rivet-sink-results-writer.md), [P4-S04](P4-S04_compare.md) |
+| Depends on | [P2-S05](P2-S05_rivet-analyzer-results-writer.md), [P4-S04](P4-S04_compare.md) |
 | Blocks | [P4-S06](P4-S06_retire-legacy-tools.md), [P6-S01](P6-S01_sharded-rivet.md) |
 | Effort | 0.5 d |
 | Findings / decisions | 00/B25, B26; 00 §4.2 |
@@ -106,7 +106,7 @@ Revert.
   only scales and normalises booked objects, which is what re-entrancy requires.
 
   **`Beams: [p+, e-], [p+, e+]`** added to the `.info`. Both charges are run (00/B11: the EIC studies
-  use e⁺ through `[settle.use]`), and `check_beams` is on by default, so both have to be declared.
+  use e⁺ through `[static.use]`), and `check_beams` is on by default, so both have to be declared.
 
   **Deviations**
 

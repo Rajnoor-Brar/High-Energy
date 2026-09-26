@@ -174,7 +174,7 @@ def _points_of(plan: Any, layout: Any) -> list[tuple[str, Path]]:
     if found:
         return found
 
-    # No pages. A config whose only sink is a C++ module declares no Rivet analysis, so the planner
+    # No pages. A config whose only analyzer is a C++ module declares no Rivet analysis, so the planner
     # builds no page — but it still produces one `analysis.yoda` per point, and `hep proc` works on
     # points, not on pages. Falling back to the plan's own points is what makes a module-only
     # config processable at all.

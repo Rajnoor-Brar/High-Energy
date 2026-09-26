@@ -1,4 +1,4 @@
-# P2-S04 — Pythia source, event view, sink interface and run loop
+# P2-S04 — Pythia source, event view, analyzer interface and run loop
 
 | Field | Value |
 |---|---|
@@ -6,14 +6,14 @@
 | Kind | code |
 | Phase | P2 — C++ core, CMake, hep-run v1 |
 | Depends on | [P2-S02](P2-S02_pythia-parallel-spike.md), [P2-S03](P2-S03_core-status.md), [P1-S05](P1-S05_plan-render.md) |
-| Blocks | [P2-S05](P2-S05_rivet-sink-results-writer.md), [P7-S05](P7-S05_madgraph.md) |
+| Blocks | [P2-S05](P2-S05_rivet-analyzer-results-writer.md), [P7-S05](P7-S05_madgraph.md) |
 | Effort | 1 d |
 | Findings / decisions | 00 §4.3 (generator behaviours); utils defect: unchecked readFile/init |
 | Updated | 2026-09-18 |
 
 ## Goal
 
-`hep-run SPEC` runs Pythia from cards with checked errors and forced run control, fans events to (empty) sinks, stops cleanly, and supports `--check`, `--plain`, `--capabilities`, `--list N`.
+`hep-run SPEC` runs Pythia from cards with checked errors and forced run control, fans events to (empty) analyzers, stops cleanly, and supports `--check`, `--plain`, `--capabilities`, `--list N`.
 
 ## Context
 
@@ -34,12 +34,12 @@ Never `#include`/import from `legacy/`; copy or adapt.
 
 **In**
 
-- `Source::Pythia`, `Events::View` (lazy per-worker HepMC), `Sink::Base`/`Sharded`, `Run::{Context,Result,Loop}`, `utils/apps/hep-run.cc`
+- `Source::Pythia`, `Events::View` (lazy per-worker HepMC), `Analyzer::Base`/`Sharded`, `Run::{Context,Result,Loop}`, `utils/apps/hep-run.cc`
 - Warnings from the Pythia Logger → `log` status messages
 
 **Out (non-goals)**
 
-- Rivet sink (S05)
+- Rivet analyzer (S05)
 - sharded mode (P6-S01)
 
 ## Added by P2-S02
@@ -53,7 +53,7 @@ Never `#include`/import from `legacy/`; copy or adapt.
 ## Design notes
 
 - Run control from the spec overrides cards (events, threads, `Parallelism:seeds`, `Next:numberCount = 0`).
-- `--list N`: generate N events, emit `event` messages (06 §5), no sinks.
+- `--list N`: generate N events, emit `event` messages (06 §5), no analyzers.
 
 ## Tasks
 
@@ -62,7 +62,7 @@ Never `#include`/import from `legacy/`; copy or adapt.
 
 ## Outputs
 
-- `utils/{Events,Source,Sink,Run}*`
+- `utils/{Events,Source,Analyzer,Run}*`
 - `utils/apps/hep-run.cc`
 - `tests/cpp/run_*`
 
@@ -91,9 +91,9 @@ Revert.
 ## Log
 
 - 2026-09-17 — step file created (P0-S00).
-- 2026-09-18 — implemented: `utils/{Events,Sink,Source,Run}` facades + submodules and a rewritten
-  `utils/apps/hep-run.cc`, 942 lines. Loop order is fixed in one place: configure → init → start sinks →
-  [chunk: events → checkpoint → stop?] → final forced progress → finish sinks → summary.
+- 2026-09-18 — implemented: `utils/{Events,Analyzer,Source,Run}` facades + submodules and a rewritten
+  `utils/apps/hep-run.cc`, 942 lines. Loop order is fixed in one place: configure → init → start analyzers →
+  [chunk: events → checkpoint → stop?] → final forced progress → finish analyzers → summary.
 
   **Verification, all rows measured** (specs written by `hekit.plan`, run from `output/scratch/`):
 
@@ -116,7 +116,7 @@ Revert.
 
   **Tests:** `tests/cxx/test_run_rules.cc` (ctest `run_rules`) for the arithmetic — the D-Q2 chunk rule
   as a property over 3200 (threads, wanted) pairs, the D-Q1 σ combination including a zero-weight
-  instance, `Sink::Count` and an empty `Events::View`; `tests/python/run/test_hep_run.py`, 25 cases
+  instance, `Analyzer::Count` and an empty `Events::View`; `tests/python/run/test_hep_run.py`, 25 cases
   driving the real binary against real planned specs (12 s, four Pythia initialisations shared through
   module-scoped fixtures). Suite: 9/9 ctest, 359 Python.
 
@@ -133,9 +133,9 @@ Revert.
   3. **A written spec held a relative path.** `hep plan --write out/dir` (a relative `--write`) left a
      relative card path in the spec, so the spec was only runnable from the directory it was written
      from. `spec.relocated()` now resolves the target: 03 §7 says a resolved spec has no relative paths.
-  4. **`Sink/Types.hh` and `Run/Types.hh` named `Core::RunRecord` without including `Core/Provenance.hh`**
+  4. **`Analyzer/Types.hh` and `Run/Types.hh` named `Core::RunRecord` without including `Core/Provenance.hh`**
      and only compiled because `hep-run` includes `Core.hh` first. The new test, which includes
-     `Sink.hh` alone, failed to compile — which is the point of a test that does not include the facade.
+     `Analyzer.hh` alone, failed to compile — which is the point of a test that does not include the facade.
   5. `Source::chunkFor` and `Source::Combine` were split out of `Source/Pythia.hh` into
      `Source/Types.hh`, so D-Q1 and D-Q2 can be checked without linking a generator.
   6. The chunk target is `min(events, 20000) / 10` floored at 1, then rounded up to a whole number of

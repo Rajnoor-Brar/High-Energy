@@ -21,7 +21,7 @@ Same author, same period, same care. The difference is that one half's rank is e
 build checks every time — and the other half's rank was never written down at all.
 
 The two C++ violations are instructive: they come from **9 lines** of pure value types
-(`Sink::Needs`, `Sink::Output`) sitting in the namespace of the thing they *describe* rather than in
+(`Analyzer::Needs`, `Analyzer::Output`) sitting in the namespace of the thing they *describe* rather than in
 one both sides can see. Even with enforcement, the leak found the one shape the enforcement did not
 cover — a type, not a dependency.
 
@@ -59,10 +59,10 @@ architecture:
 | Finding | What reading could not have told you |
 |---|---|
 | `00/B31` | FastJet keeps clustering state in **process-wide statics**, and this build has `FASTJET_HAVE_LIMITED_THREAD_SAFETY` undefined. A race changes the jets rather than crashing. |
-| `00/B32` | `PythiaParallel` runs the event callback on worker threads in **both** modes; `processAsync = off` only adds a mutex. A sink throw would have unwound through `std::thread` into `std::terminate`. |
+| `00/B32` | `PythiaParallel` runs the event callback on worker threads in **both** modes; `processAsync = off` only adds a mutex. An analyzer throw would have unwound through `std::thread` into `std::terminate`. |
 | Delphes/FIFO | Delphes sizes its input and skips anything of length zero, which a FIFO always is. |
 
-Each forced a real design change — concurrency became a property of the sink, both sources catch at
+Each forced a real design change — concurrency became a property of the analyzer, both sources catch at
 the thread boundary, and the stage model gained phases.
 
 **For next time.** Budget for a "the design was wrong" list and write it as you go. Eleven entries

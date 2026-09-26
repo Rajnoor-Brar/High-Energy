@@ -4,7 +4,7 @@
 // Replaces photo_5x41 / photo_10x100 / photo_18x275, which differed only by
 // their hard-coded W window (the HERA inelasticity range 0.1992 < y < 0.8483
 // expressed in GeV for each sqrt(s)). Here the cuts are analysis options, set
-// from the run TOML ([settle.rivet].options or [sweep.rivet.*] quantities):
+// from the run TOML ([static.rivet].options or [sweep.rivet.*] quantities):
 //
 //   YMIN, YMAX   inelasticity window (default 0.1992, 0.8483), used unless
 //   WMIN, WMAX   a photon-proton W window in GeV is given (reproduces the old plugins)

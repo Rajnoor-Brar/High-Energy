@@ -12,7 +12,7 @@
 
 TOML carries:
 1. **Run control:** events, seeds, threads, outputs.
-2. **Wiring:** which generator, which sinks, which analyses.
+2. **Wiring:** which generator, which analyzers, which analyses.
 3. **Overrides and sweeps** that are rendered *into* the native card.
 4. **Presentation:** plots, terminal.
 
@@ -59,7 +59,7 @@ dump_every   = 100_000                      # periodic finalize → partial YODA
 enabled     = false
 compression = "gz"                          # gz | zst (after D-STORE-COMP) | none
 
-[[sinks.module]]                            # optional user C++ module → YODA objects in analysis.yoda (05 §5)
+[[analyzers.module]]                            # optional user C++ module → YODA objects in analysis.yoda (05 §5)
 name    = "mymodule"                        # registered name (HEKIT_MODULE), found in modules/<project>/
 options = { window = 0.010 }
 
@@ -99,12 +99,12 @@ dashboard = "auto"                          # auto | live | plain
 log_tail  = 6
 stall_after = "5m"
 
-[settle]  …   [quantity.<q>]  …   [sweep]  …   [study.<s>]  …     # §3–§5
+[static]  …   [quantity.<q>]  …   [sweep]  …   [study.<s>]  …     # §3–§5
 ```
 
 **Section ownership:**
 - Each section maps to one Python dataclass in `hekit.config.schema`.
-- Adapters and sinks read **only** their own section.
+- Adapters and analyzers read **only** their own section.
 - The planner is the only reader that sees everything.
 
 ## 2. Layering and precedence
@@ -112,7 +112,7 @@ stall_after = "5m"
 Precedence, lowest to highest:
 ```
 built-in defaults  <  machine file  <  extends chain (left→right)  <  this file
-                   <  [settle]  <  --study  <  --pin / --set  <  sweep values at a point
+                   <  [static]  <  --study  <  --pin / --set  <  sweep values at a point
 ```
 
 - **Machine file:** `~/.config/hekit/machine.toml`.
@@ -121,7 +121,7 @@ built-in defaults  <  machine file  <  extends chain (left→right)  <  this fil
 - **`extends`:**
   - tables merge deeply; arrays and scalars replace;
   - "deeply" stops at a key that holds one value: an inline table on such a key (for example the per-tool
-    `[quantity.<q>].key = { pythia = "PDF:pSet" }`) replaces as a whole, while a *free* table — `[settle.gen]`,
+    `[quantity.<q>].key = { pythia = "PDF:pSet" }`) replaces as a whole, while a *free* table — `[static.gen]`,
     `[rivet].options`, `[plot.data].map` — merges key by key (P1-S02);
   - paths are resolved relative to the file that wrote them;
   - cycles are an error.
@@ -191,16 +191,16 @@ use    = 1
 
 **Other catalogue fields** carry over unchanged: `values`, `labels`, `tags`, `use` (1-based; applied when the quantity is not scanned), `note`.
 
-## 4. Sweeps, settle, studies
+## 4. Sweeps, static, studies
 
 These are unchanged in meaning from the current design, which has proven itself on `eic.toml`:
 
 - **`[sweep] across = ["energies+beams", "pdf"]`:**
   - `+` couples quantities by index; commas or list entries form a grid;
   - `overlay = "pdf"` picks the curve quantity; other combinations become pages.
-- **`[settle]`:** fixed values that are not scanned.
-  - `[settle.use]` pins a quantity to one of its values;
-  - **Selector rule** (D-B22, P1-S03), used by `[settle.use]`, a study's `pin` and `--pin`, in this order:
+- **`[static]`:** fixed values that are not scanned.
+  - `[static.use]` pins a quantity to one of its values;
+  - **Selector rule** (D-B22, P1-S03), used by `[static.use]`, a study's `pin` and `--pin`, in this order:
     1. a declared **tag** (`energies=18x275`);
     2. an exact **value**, compared as text and numerically when both sides are numbers, so
        `pthatmin=6` finds a stored `6.0` — the legacy rule read every all-digit selector as a position,
@@ -208,14 +208,14 @@ These are unchanged in meaning from the current design, which has proven itself 
     3. `#N`, an explicit 1-based **index** (`pdf=#2`).
     A selector that matches nothing lists the tags and values that exist. `[quantity.<q>].use` stays a
     1-based index, because it is a catalogue field rather than a selector;
-  - `[settle.<section>]` fixes raw keys (`[settle.gen] "PhaseSpace:pTHatMin" = 4`);
+  - `[static.<section>]` fixes raw keys (`[static.gen] "PhaseSpace:pTHatMin" = 4`);
   - a clash with a quantity is an error.
 - **`[study.<name>]`:** `description`, `across`, `overlay`, `pin`, plus any section override (`[study.x.run] events = 1e5`).
 - **Point naming:** `<name>_<tags of applied quantities in catalogue order>`. Pages end in `_by_<overlay>`.
 
 **New: shared generation.**
 - Points that differ **only in analysis-side quantities** (types `analysis`, `option`) form one **event group**.
-- The planner runs one `hep-run` per group, with every analysis variant in one `Sink::Rivet`. Rivet supports the same analysis with different options in one handler.
+- The planner runs one `hep-run` per group, with every analysis variant in one `Analyzer::Rivet`. Rivet supports the same analysis with different options in one handler.
 - A group can also replay a stored run (`[generator] tool = "store"`, [11](11_EventStore.md)). On a store, only analysis-side quantities are allowed.
 - Example: a jet-radius study with three R values costs one generation instead of three.
 
@@ -261,9 +261,9 @@ All validation runs in `hep plan`, before any process starts.
   - `hep config migrate old.toml` (rewrites the schema-1 `[analysis]/[yoda]/[rivpyth]/[sweep.cmnd.*]` keys).
     - Old `type = "beams"` quantities (energy pairs or √s) become `type = "energies"`.
     - A `pythia` quantity on `Beams:idA`/`Beams:idB` becomes `type = "beams"` with `side = "a"`/`"b"`.
-    - `[settle.cmnd] beams = […]` becomes `[beams].energies`.
+    - `[static.cmnd] beams = […]` becomes `[beams].energies`.
     - `[analysis]` → `[run]` + `[generator].card`; `[yoda]` → `[plot]` + `[plot.data]`; `[rivpyth]` → dropped (`threads` → `[run]`, `plugin_dir` → `[rivet].paths`, `yoda_file` stem → `[run].name`; `serial`, `generator`, `hepmc_file` and `path_literal` are removed).
-    - `[settle.rivet] plugin/options` → `[rivet].analyses/options`; `[sweep.cmnd.*]`/`[sweep.rivet.*]` → `[quantity.*]` (`pythia` → `setting` with `setting` → `key`; `plugin` → `analysis`).
+    - `[static.rivet] plugin/options` → `[rivet].analyses/options`; `[sweep.cmnd.*]`/`[sweep.rivet.*]` → `[quantity.*]` (`pythia` → `setting` with `setting` → `key`; `plugin` → `analysis`).
     - `seed_step` is dropped in favour of identity seeds.
 
 **Transition.** Migrated files are committed **next to** the originals (`eic.v2.toml`) while the old tools are still in use (P1-S06). They replace the originals at P4-S06, and the `.v2` suffix is dropped in P10-S01.
@@ -299,7 +299,7 @@ dir     = "/…/points/eic_5x41_em_NNLO"
 yoda    = "analysis.yoda"                 # written as .tmp, renamed on success; analysis.partial.yoda if stopped
 summary = "run.summary.json"              # merged σ, counts, seeds, warnings → provenance.json
 
-[[sink]]
+[[analyzer]]
 kind = "rivet"
 analyses = ["photo_eic:R=0.4", "photo_eic:R=1.0"]
 paths = ["/…/build/analyses/PhotoProduction"]
@@ -308,13 +308,13 @@ weights = "nominal"
 dump_every = 100000                       # only for re-entrant analyses
 check_beams = true
 
-[[sink]]
+[[analyzer]]
 kind = "module"
 name = "mymodule"
 library = "/…/build/modules/PhotoProduction/libhekit_mymodule.so"
 options = { window = 0.010 }
 
-[[sink]]
+[[analyzer]]
 kind = "store"
 dir = "/…/points/eic_5x41_em_NNLO/events"
 compression = "gz"

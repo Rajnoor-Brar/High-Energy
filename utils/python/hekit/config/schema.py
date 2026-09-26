@@ -29,9 +29,9 @@ RUN = Section("run", doc="Run control: how much, how parallel, where to.",
     "seed": Field("int", 0, "base of the identity seed policy (03 §5); never offset by sweep position",
                   minimum=0, maximum=900_000_000),
     "threads": Field("int", 0, "worker threads; 0 = all cores, resolved by hep", minimum=0, maximum=4096),
-    "mode": Field("str", "auto", "how the sinks see the threads (05 \u00a73): \"serial\" calls them one "
+    "mode": Field("str", "auto", "how the analyzers see the threads (05 \u00a73): \"serial\" calls them one "
                                  "event at a time, \"sharded\" gives each worker its own analysis "
-                                 "handler and merges at the end, \"auto\" shards only when every sink "
+                                 "handler and merges at the end, \"auto\" shards only when every analyzer "
                                  "and analysis can be. A performance choice, not a physics one: it is "
                                  "not part of a point's identity",
                   choices=("auto", "serial", "sharded")),
@@ -65,7 +65,7 @@ BEAMS = Section("beams", doc="Beam particles and energies; each adapter renders 
     "energies": Field("any", None, "either [E_A, E_B] in GeV (lab frame) or a scalar √s (CM frame)"),
 })
 
-# ── sinks ────────────────────────────────────────────────────────────────────
+# ── analyzers ────────────────────────────────────────────────────────────────────
 
 RIVET = Section("rivet", doc="In-process Rivet analyses.", fields={
     "analyses": Field("list", [], "analysis names, optionally with ':OPT=VALUE'", item="str"),
@@ -89,7 +89,7 @@ STORE = Section("store", doc="Optional HepMC3 event store (11).", fields={
                          choices=("gz", "zst", "none")),
 })
 
-MODULE_SINK = Section("sinks.module", shape="array", doc="User C++ modules booking YODA objects (05 §5).",
+MODULE_SINK = Section("analyzers.module", shape="array", doc="User C++ modules booking YODA objects (05 §5).",
                       fields={
     "name": Field("str", "", "registered module name, found in modules/<project>/", required=True),
     "options": Field("table", {}, "options passed to the module's configure()", free=True, value_kind="scalar"),
@@ -214,7 +214,7 @@ SWEEP = Section("sweep", doc="Which quantities vary (03 §4).", fields={
     "only": Field("int", 0, "run only this 1-based point; 0 = all", minimum=0),
 })
 
-SETTLE = Section("settle", doc="Values held fixed (03 §4).", fields={
+STATIC = Section("static", doc="Values held fixed (03 §4).", fields={
     "tag": Field("str", "", "tag appended to every point name"),
     "use": Field("table", {}, "quantity → 1-based index or tag to pin", free=True, value_kind="scalar"),
     "gen": Field("table", {}, "native generator settings held fixed", free=True, value_kind="scalar"),
@@ -252,7 +252,7 @@ TOP_LEVEL = {
 SECTIONS: dict[str, Section] = {
     section.name: section for section in (
         RUN, GENERATOR, BEAMS, RIVET, STORE, MODULE_SINK, DELPHES, OUTPUT, PLOT, TERMINAL,
-        PROC_FIT, PROC_HIST, PROC_EXPORT, QUANTITY, SWEEP, SETTLE, STUDY, PATHS, TOOLS,
+        PROC_FIT, PROC_HIST, PROC_EXPORT, QUANTITY, SWEEP, STATIC, STUDY, PATHS, TOOLS,
     )
 }
 
@@ -296,11 +296,11 @@ def section_of(path: tuple[str, ...]) -> tuple[Section | None, tuple[str, ...]]:
     """Which section a dotted key path belongs to, and the key path inside it.
 
     `("plot", "data", "file")` → the `plot.data` subsection; `("quantity", "pdf", "values")` → the
-    `quantity` family; `("sinks", "module")` → the module sink array.
+    `quantity` family; `("analyzers", "module")` → the module analyzer array.
     """
     if not path:
         return None, ()
-    if path[0] == "sinks" and len(path) >= 2 and path[1] == "module":
+    if path[0] == "analyzers" and len(path) >= 2 and path[1] == "module":
         return MODULE_SINK, path[2:]
     if path[0] == "proc" and len(path) >= 2 and path[1] in {"fit", "hist", "export"}:
         return {"fit": PROC_FIT, "hist": PROC_HIST, "export": PROC_EXPORT}[path[1]], path[2:]

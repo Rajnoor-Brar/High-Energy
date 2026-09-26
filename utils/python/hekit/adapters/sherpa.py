@@ -49,7 +49,7 @@ RESERVED = {
     "beam_energies": "[beams] energies",
     "random_seed": "[run] seed (the seed block is derived from the point identity)",
     "events": "[run] events",
-    "event_output": "the sink chain owns where events go",
+    "event_output": "the analyzer chain owns where events go",
     "result_directory": "the prepare cache owns this",
 }
 
@@ -207,7 +207,7 @@ def render_card(point: Any, *, seeds: Any, threads: int, card_path: str = "", ca
     # very card, so putting it in would be circular. It goes on the command line instead (04 §4).
 
     if mode == "native":
-        # Sherpa runs Rivet itself: no FIFO, no `hep-run`, and no store, module or Delphes sink
+        # Sherpa runs Rivet itself: no FIFO, no `hep-run`, and no store, module or Delphes analyzer
         # (04 §4). `ANALYSIS_OUTPUT` is the YODA's stem, so it lands where every other point's does.
         document.pop("EVENT_OUTPUT", None)
         document["ANALYSIS"] = "Rivet"
@@ -304,7 +304,7 @@ def generate(config: Any, group: Any, fifo: Path) -> base.Stage:
     native = getattr(config.rivet, "mode", "inprocess") == "native"
     environment: dict[str, str] = {}
     if native:
-        # Sherpa loads the analysis itself, so it needs the plugin path that `Sink::Rivet` would
+        # Sherpa loads the analysis itself, so it needs the plugin path that `Analyzer::Rivet` would
         # otherwise set for us (05 §5). A stage carries its own environment for exactly this.
         found = [str(entry) for entry in _analysis_paths(config)]
         if found:

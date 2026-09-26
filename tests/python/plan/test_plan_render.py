@@ -183,7 +183,7 @@ def test_a_pinned_energies_quantity_beats_the_beams_section(project):
 
 def test_an_override_may_not_set_what_hep_owns(project, tmp_path):
     text = (project / "eic.toml").read_text(encoding="utf-8") + \
-        '\n[settle.gen]\n"Beams:eA" = 100\n'
+        '\n[static.gen]\n"Beams:eA" = 100\n'
     path = tmp_path / "beams.toml"
     path.write_text(text, encoding="utf-8")
     (tmp_path / "photo_ep.cmnd").write_bytes((INPUTS / "photo_ep.cmnd").read_bytes())
@@ -237,8 +237,8 @@ def test_the_spec_matches_its_schema(project):
                                                "eic_18x275_ep_NNLO_pt32_mpi_r10"]
     assert spec["run"]["seeds"]["instances"][0] == spec["run"]["seed"]
     assert spec["source"]["kind"] == "pythia" and len(spec["source"]["cards"]) == 2
-    assert spec["sink"][0]["kind"] == "rivet"
-    assert spec["sink"][0]["analyses"] == plan.groups[0].analyses
+    assert spec["analyzer"][0]["kind"] == "rivet"
+    assert spec["analyzer"][0]["analyses"] == plan.groups[0].analyses
     assert spec["status"] == {"fd": 3, "heartbeat_ms": 500}
 
 
@@ -258,16 +258,16 @@ def test_a_broken_spec_is_rejected():
                            "status": {"fd": 3, "heartbeat_ms": 500}})
 
 
-def test_module_and_store_sinks_reach_the_spec(project, tmp_path):
+def test_module_and_store_analyzers_reach_the_spec(project, tmp_path):
     text = (project / "eic.toml").read_text(encoding="utf-8") + \
-        '\n[[sinks.module]]\nname = "mymodule"\noptions = { window = 0.01 }\n' \
+        '\n[[analyzers.module]]\nname = "mymodule"\noptions = { window = 0.01 }\n' \
         '\n[store]\nenabled = true\ncompression = "gz"\n'
-    path = tmp_path / "sinks.toml"
+    path = tmp_path / "analyzers.toml"
     path.write_text(text, encoding="utf-8")
     (tmp_path / "photo_ep.cmnd").write_bytes((INPUTS / "photo_ep.cmnd").read_bytes())
     config = load_config(path, machine_file=None, project="PhotoProduction")
     plan = builder.build(config, sweep.select(config, study="single"))
-    kinds = [sink["kind"] for sink in plan.groups[0].spec["sink"]]
+    kinds = [analyzer["kind"] for analyzer in plan.groups[0].spec["analyzer"]]
     assert kinds == ["rivet", "module", "store"]
     spec_module.check(plan.groups[0].spec)
 

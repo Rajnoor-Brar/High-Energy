@@ -87,7 +87,7 @@ ids      = [2212, 11]           # PDG ids [A, B]
 energies = [275, 18]            # GeV, lab frame; a single number is √s in the CM frame
 
 [rivet]
-# Fill this in before running: a config with no analysis, module sink or event store has nothing to
+# Fill this in before running: a config with no analysis, module analyzer or event store has nothing to
 # consume the events, and `hep plan` will say so.
 analyses = []                   # e.g. ["{project_lower}_analysis"]
 paths    = ["analyses/{project}"]

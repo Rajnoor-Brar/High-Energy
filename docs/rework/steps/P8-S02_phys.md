@@ -53,7 +53,7 @@ Never `#include`/import from `legacy/`; copy or adapt.
 - `utils/Phys.hh`, `utils/Phys/{Types,Pdg,Kinematics,Select,Jets}.hh`
 - `tests/cxx/test_phys.cc` (ctest `phys`)
 - `modules/Examples/ToyJets.cc` rewritten onto `Phys`
-- `Module::Base::threadSafe()`, `Sink::Modules::concurrency()`, `Run::Loop::decideMode()`
+- `Module::Base::threadSafe()`, `Analyzer::Modules::concurrency()`, `Run::Loop::decideMode()`
 
 ## Verification
 
@@ -104,18 +104,18 @@ Revert.
     over the same range ([−π, π]) in one branch-free step and gives NaN for a non-finite input. The
     test times the call, so the loop coming back hangs a 0.05 s test rather than a run.
   - **B36 — a module that clusters jets would have raced.** This step hands modules `Phys::cluster`,
-    and `Sink::Modules` is the one sink that shards; 00/B31 applies to a module exactly as it does to
+    and `Analyzer::Modules` is the one analyzer that shards; 00/B31 applies to a module exactly as it does to
     a Rivet analysis, and nothing detected a module doing the clustering by hand. `Module::Base`
-    gained `threadSafe()` (true by default) and the sink reports `Concurrency::Locked` when a module
+    gained `threadSafe()` (true by default) and the analyzer reports `Concurrency::Locked` when a module
     says false.
 
   **And a throughput bug that B36's fix exposed.** With `ToyJets` locked, `mode = "auto"` dropped the
-  *whole run* to serial — `decideMode` asked "can any sink be sharded?" when the question is "is
-  there anything to gain?". A `Locked` sink still lets the generator run on k threads and serialises
-  only the sink call. Measured at 4 threads, 2 000 → 20 000 events: **124 µs/event serial against
+  *whole run* to serial — `decideMode` asked "can any analyzer be sharded?" when the question is "is
+  there anything to gain?". A `Locked` analyzer still lets the generator run on k threads and serialises
+  only the analyzer call. Measured at 4 threads, 2 000 → 20 000 events: **124 µs/event serial against
   92 µs/event with the lock**, so the rule now counts anything that is not `Serial`. The blast radius
-  is exactly the new case: `Sink::Rivet` reports `Serial` plus a `serialReason` when it clusters, and
-  `Sink::Count` reports `Serial`, so neither changes.
+  is exactly the new case: `Analyzer::Rivet` reports `Serial` plus a `serialReason` when it clusters, and
+  `Analyzer::Count` reports `Serial`, so neither changes.
 
   **`Phys` has a user, not just a test.** `modules/Examples/ToyJets.cc` carried its own final-state
   loop, its own pT, and a hand-written pseudorapidity with a guard around a particle travelling down

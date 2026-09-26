@@ -7,7 +7,7 @@ Executing `docs/rework` step by step. Read order: `bots/BOT.md` → this file �
 
 Both rows measured. The equivalence is **exact**, not "to rounding": a replayed store gives a YODA
 identical to the generation's (1004 numbers, χ² = 0), because the same events go through the same
-sinks in the same order.
+analyzers in the same order.
 
 `hep events` shows a store, any HepMC3 file, or a config (which generates a few events into a scratch
 store first — one renderer, one data path). Tables with particle names, `--tree`, `--final`, `--hard`,
@@ -29,11 +29,11 @@ precision YODA writes** — 53 of 55 objects, `rtol = 0`. σ and sumW are exactl
   `photo_eic` runs kT, anti-kT and SISCone, so it always runs serially; `auto` refuses before the
   first event and says why, and an explicit `sharded` stops right after `init()` if a `FastJets`
   turns up. The equivalence had to be measured with a jet-free analysis instead.
-- **00/B32 — a sink exception would have called `std::terminate`.** `PythiaParallel` runs the
+- **00/B32 — an analyzer exception would have called `std::terminate`.** `PythiaParallel` runs the
   callback on its worker threads in *both* modes (`processAsync = off` only adds a mutex), so a
   Rivet error mid-run was unwinding through `std::thread`. Both sources now catch at that boundary.
 
-Also settled: **`fill` merges, `set` does not** — `MC_XS` is re-entrant and still has one object it
+Also static: **`fill` merges, `set` does not** — `MC_XS` is re-entrant and still has one object it
 `set()`s from the per-event running σ, which no merge can reconstruct. That is the rule P8-S01 has
 to follow for module results.
 
@@ -46,7 +46,7 @@ to end is what found it.
 in a point's file. That is right when one point holds several radii, and wrong the moment several
 points **share** one generation — the shared YODA then holds every variant and each point claimed
 all of them. Nothing had ever asked what came out of the far end: the planner grouped correctly, the
-sink booked both variants, and the page quietly doubled them.
+analyzer booked both variants, and the page quietly doubled them.
 
 Fixed by giving `PointFile` the point's own `analyses`; a point that declares one takes only that.
 The legend stopped repeating itself too ("R = 0.4 (R=0.4)" → "R = 0.4").
@@ -57,7 +57,7 @@ control); one point directory whose YODA carries both variant paths and one `/_E
 
 ## Just finished — P6-S03 (`hep bench`) — done. **Phase P6 is complete.**
 
-Four legs — generation only, generation + sinks serially, the same sharded, and a replay — then a
+Four legs — generation only, generation + analyzers serially, the same sharded, and a replay — then a
 recommendation. On PhotoProduction at 1 000 events:
 
 ```
@@ -66,7 +66,7 @@ recommendation. On PhotoProduction at 1 000 events:
   sharded     refused: photo_eic clusters jets, which cannot be done from several threads
   replay          0.52s        1916 ev/s
 
-  the sinks are 76% of a serial run's wall clock
+  the analyzers are 76% of a serial run's wall clock
   recommended: [run].mode = "serial"
 ```
 
@@ -148,7 +148,7 @@ anything. Only for *successful* producers, because a failed one already gives a 
 
 ## Just finished — P7-S04 (Whizard adapter) — done
 
-Both rows run against the real Whizard 3.1.8: a toy `e+e- → u ubar`, and the ep card D-Q7 settled on.
+Both rows run against the real Whizard 3.1.8: a toy `e+e- → u ubar`, and the ep card D-Q7 static on.
 A two-seed study compiles and integrates **once** — for Whizard that means not rebuilding the
 matrix-element library, the dominant cost.
 
@@ -156,7 +156,7 @@ matrix-element library, the dominant cost.
 
 1. **It writes no cross-section into HepMC3** — no `C` record at all, verified by reading the file.
    The run had been quietly producing a YODA normalised by **zero**. 04 §8 already said that must be
-   an error; nothing enforced it. `RunRecord` now carries `xsec_known` and `Sink::Rivet` refuses,
+   an error; nothing enforced it. `RunRecord` now carries `xsec_known` and `Analyzer::Rivet` refuses,
    naming the remedy.
 2. **Its EPA record has no scattered lepton**, so `photo_eic`'s `DISKinematics` aborts on it. Pythia's
    and Sherpa's EPA records keep the lepton — this is Whizard's alone.
@@ -202,7 +202,7 @@ pick it up expecting to start.
 ## Just finished — P7-S08 (external Delphes) — done. **Phase P7 is complete** bar the blocked S07.
 
 200 events → `delphes.root`, read back with uproot: 200 entries and the `Jet` branches. The Rivet
-sink still ran on the same events — the tee is a tee — and `delphes.json` beside the ROOT file names
+analyzer still ran on the same events — the tee is a tee — and `delphes.json` beside the ROOT file names
 the card, its sha256 and the point's identity.
 
 **The design assumed a FIFO and that cannot work.** `DelphesHepMC3` sizes its input and *skips
@@ -215,7 +215,7 @@ that seeks cannot be streamed to.
 bad card left a `delphes.root` that opened, contained nothing and looked like a result. Written as
 `.part` and renamed on success now (D22).
 
-## Just finished — P8-S01 (module API, YODA results layer, module sink) — done
+## Just finished — P8-S01 (module API, YODA results layer, module analyzer) — done
 
 A user C++ module is `dlopen`'d, books YODA per worker, and its objects land in the **same**
 `analysis.yoda` as Rivet's. All four rows measured:
@@ -251,13 +251,13 @@ comparison rather than a tautology. `jetDefinition("antikt:0.4")` matches a hand
   never terminates for ±∞, and `HepMC3::FourVector::delta_phi` has the same loop, guarding NaN but
   not ∞. `std::remainder` wraps over the same range in one step. The test times the call, so the
   loop coming back hangs a 0.05 s test rather than a run.
-- **B36** — this step hands modules `Phys::cluster`, and `Sink::Modules` is the one sink that
+- **B36** — this step hands modules `Phys::cluster`, and `Analyzer::Modules` is the one analyzer that
   shards, so 00/B31 applied to modules with nothing to detect it. `Module::Base::threadSafe()` (true
-  by default) lets a module opt out and the sink reports `Locked` rather than `Sharded`.
+  by default) lets a module opt out and the analyzer reports `Locked` rather than `Sharded`.
 
 **And a throughput bug B36's fix exposed.** With the module locked, `auto` dropped the *whole run*
-to serial: `decideMode` asked "can any sink be sharded?" when the question is "is there anything to
-gain?" — a `Locked` sink still lets the generator run on k threads. Measured **124 µs/event serial
+to serial: `decideMode` asked "can any analyzer be sharded?" when the question is "is there anything to
+gain?" — a `Locked` analyzer still lets the generator run on k threads. Measured **124 µs/event serial
 against 92 µs/event with the lock**, so the rule now counts anything that is not `Serial`. Only the
 new case changes: Rivet-with-jets and `Count` both report `Serial`.
 
@@ -293,7 +293,7 @@ with `build/onnx-compat/`, one symlink; the test builds a probe plugin through t
 takes a name and `Row::values()` refuses an incompletely filled row.
 
 **`sha256()` now goes somewhere.** 05 §6 said "into provenance" and nothing wrote it down.
-`Module::Base::provenance()` and `Sink::Sink::provenance()` feed a new `inputs` block in
+`Module::Base::provenance()` and `Analyzer::Analyzer::provenance()` feed a new `inputs` block in
 `run.summary.json` — `ToyJets.model` and `ToyJets.model_sha256`, asserted against the file's hash.
 
 `ToyJets` gained an **optional** model (off unless `model = "..."`), so the Goal is checked end to
@@ -406,7 +406,7 @@ of why some code is shaped as it is and remove no transitional behaviour.
 So the row was replaced with the question it means: **is there executable code outside `migrate`
 that still speaks v1?** An AST check parses every module and inspects literals and identifiers with
 docstrings excluded *by parsing*. Answer: **zero** — and proved to discriminate by reintroducing a
-`raw.get("rivpyth", …)` elsewhere and watching it fail. `sources/` is gone; `NtupleSink`/`RNTuple`
+`raw.get("rivpyth", …)` elsewhere and watching it fail. `sources/` is gone; `NtupleAnalyzer`/`RNTuple`
 appear nowhere in code.
 
 **`hep clean` is shaped by its second column.** 07 §6 says YODA files, `fits.json` and provenance
@@ -434,7 +434,7 @@ silently.
 - **`docs/MAP.md`** — where things live: the two halves and the narrow contract between them, the
   C++ layering, the `hekit` packages, a results directory, and a "finding your way in" table. It
   names the two invariants to know before opening the code (the scaling contract; concurrency is a
-  property of the sink).
+  property of the analyzer).
 - **The design is a record now, not a proposal.** `rework/README.md` says so and carries a table of
   the **eleven places building it changed it** — so a reader does not have to find them one at a
   time.

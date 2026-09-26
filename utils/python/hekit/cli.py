@@ -32,7 +32,7 @@ COMMANDS: dict[str, tuple[str, str, str]] = {
     "config":   ("hekit.config.cli:config",    "P1-S06", "init, validate, migrate, reference"),
     "pdf":      ("hekit.env.cli:pdf",          "P1-S07", "check, list and install LHAPDF sets"),
     "build":    ("hekit.env.cli:build",        "P2-S01", "build analyses, modules and hep-run (wraps cmake)"),
-    "bench":    ("hekit.run.cli:bench",        "P6-S03", "measure sink cost and recommend a concurrency mode"),
+    "bench":    ("hekit.run.cli:bench",        "P6-S03", "measure analyzer cost and recommend a concurrency mode"),
     "doctor":   ("hekit.env.cli:doctor",       "P1-S07", "toolchain versions, imports, capabilities, env sanity"),
     "clean":    ("hekit.results.cli:clean",    "P10-S01", "remove caches, old events, orphaned outputs"),
     "new":      ("hekit.env.cli:new",          "P10-S01", "scaffold an analysis, module or project"),

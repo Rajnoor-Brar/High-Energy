@@ -1,7 +1,7 @@
 #pragma once
 
 // ── Source/Types.hh ──────────────────────────────────────────────────────────
-// What a source reports, and the two pieces of arithmetic P2-S02 settled by measurement.
+// What a source reports, and the two pieces of arithmetic P2-S02 static by measurement.
 //
 // They live here, apart from `Source/Pythia.hh`, because they are decisions rather than plumbing and a
 // test should be able to check them without linking a generator:

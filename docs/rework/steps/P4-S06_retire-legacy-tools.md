@@ -117,7 +117,7 @@ Never `#include`/import from `legacy/`; copy or adapt.
     originals → `legacy/configs/PhotoProduction/`
   - `tests/golden/test_hotfixes.py` → `legacy/tests/`, frozen with the tools it guards and out of the
     suite (`tests/` may not import from `legacy/`); the behaviours that still matter are covered in
-    `test_rivet_sink.py`, `test_layout_skip_provenance.py` and `test_hep_run.py`
+    `test_rivet_analyzer.py`, `test_layout_skip_provenance.py` and `test_hep_run.py`
   - the five `~/HEP/*.moved` files are deleted. Two of them (`rivpyth`, `rivpyth_common.py`) were the
     **pre-hotfix** originals rather than copies of the archive, so before deleting they were located
     in git: both are recoverable from `73658d0:tools/…`.

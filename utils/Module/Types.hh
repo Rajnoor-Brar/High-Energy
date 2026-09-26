@@ -5,7 +5,7 @@
 //
 // Four verbs, in the order they happen, and each one is given exactly what it may use at that moment:
 //
-//   configure(Options)      — the `[[sinks.module]].options` from the config, before anything else;
+//   configure(Options)      — the `[[analyzers.module]].options` from the config, before anything else;
 //   book(Booker)            — declare the YODA objects, once, before the first event;
 //   process(View, Worker)   — fill *this worker's* clones, with raw weights;
 //   finalize(Final, Result) — after the merge, with σ and ΣW known: the only place scaling happens.
@@ -27,7 +27,7 @@
 #include "Results/Booker.hh"
 #include "Results/Merge.hh"
 #include "Results/Worker.hh"
-#include "Sink/Types.hh"
+#include "Analyzer/Types.hh"
 
 namespace Run {
     struct Result;
@@ -39,7 +39,7 @@ namespace Module {
       public:
         virtual ~Base() = default;
 
-        /// `[[sinks.module]].options`. Called once, before `book`.
+        /// `[[analyzers.module]].options`. Called once, before `book`.
         virtual void configure(const Core::Options& options) { (void)options; }
 
         /// Declare every object this module will fill. Once, before any event.
@@ -52,7 +52,7 @@ namespace Module {
         virtual void finalize(Results::Final& results) { (void)results; }
 
         /// What this module needs of an event. HepMC by default, which is what a replay can give.
-        virtual Sink::Needs needs() const { return Sink::Needs{/*pythia=*/false, /*hepmc=*/true}; }
+        virtual Analyzer::Needs needs() const { return Analyzer::Needs{/*pythia=*/false, /*hepmc=*/true}; }
 
         /// What this module wants recorded about the inputs it used: `(key, value)` pairs that
         /// land in `run.summary.json` under `inputs`.
@@ -66,13 +66,13 @@ namespace Module {
         /// May `process` be called from several worker threads at once?
         ///
         /// True by default, which is true of a module that only reads the event and fills its own
-        /// worker's clones — that is the whole reason the module sink is the one sink that shards.
+        /// worker's clones — that is the whole reason the module analyzer is the one analyzer that shards.
         ///
         /// **Say false if you cluster jets.** `Phys::cluster` and everything else built on FastJet
         /// keeps state in process-wide statics — SISCone its clustering cache and its RNG, and this
         /// FastJet is built without even limited thread safety (00/B31). A race there does not
         /// crash; it changes the jets. Say false too for anything else shared: a file, a network
-        /// handle, a lazily built lookup table. The sink then runs every module under one mutex
+        /// handle, a lazily built lookup table. The analyzer then runs every module under one mutex
         /// rather than forcing the whole run serial, so generation stays parallel.
         virtual bool threadSafe() const { return true; }
     };

@@ -43,7 +43,7 @@ Never `#include`/import from `legacy/`; copy or adapt.
 
 **Out (non-goals)**
 
-- Source/Sink/Run (S04+)
+- Source/Analyzer/Run (S04+)
 
 ## Design notes
 

@@ -1,15 +1,15 @@
 #pragma once
 
-// ── Sink/Delphes.hh ──────────────────────────────────────────────────────────
+// ── Analyzer/Delphes.hh ──────────────────────────────────────────────────────────
 // The tee that feeds an external Delphes (05 §5, P7-S08).
 //
-// Delphes runs as its own process, reading HepMC3 from a FIFO this sink writes. It is *not* run in
+// Delphes runs as its own process, reading HepMC3 from a FIFO this analyzer writes. It is *not* run in
 // process, and the reason is worth stating because it is the same reason this namespace is `Events`
 // and not `Event`: Delphes declares a global `class Event` (`DelphesClasses.h:46`), and it keeps ROOT
 // global state that a generator thread has no business sharing (13 §3). One process each keeps both
 // halves' globals to themselves.
 //
-// So this sink is deliberately the smallest thing that works:
+// So this analyzer is deliberately the smallest thing that works:
 //
 //   * **one writer, one path, no index.** A store (11) is sharded and indexed because it is meant to
 //     be replayed; this is a pipe to a program that is reading it *now*, so there is nothing to index
@@ -30,18 +30,18 @@
 
 #include "Core.hh"
 #include "Events.hh"
-#include "Sink/Types.hh"
+#include "Analyzer/Types.hh"
 #include "Status.hh"
 #include "Store/Compression.hh"
 #include "Store/Types.hh"
 
-namespace Sink {
+namespace Analyzer {
 
 #if defined(HEKIT_WITH_HEPMC)
 
-    class Delphes : public Sink {
+    class Delphes : public Analyzer {
       public:
-        Delphes(const Core::SinkSpec& spec, Status::Writer& status)
+        Delphes(const Core::AnalyzerSpec& spec, Status::Writer& status)
             : spec_(spec), status_(status) {}
 
         std::string name() const override { return "delphes"; }
@@ -58,7 +58,7 @@ namespace Sink {
         void prepare() override {
             if (spec_.dir.empty())
                 throw Core::Error{Core::Exit::Config,
-                                  "the delphes sink has no path to write to",
+                                  "the delphes analyzer has no path to write to",
                                   "`hep run` points it at the FIFO the Delphes stage reads"};
         }
 
@@ -71,7 +71,7 @@ namespace Sink {
             status_.log(Status::Level::Info, "delphes", "opening " + spec_.dir + " for Delphes");
             writer_ = ::Store::makeWriter(spec_.dir, "none");
             if (writer_->failed())
-                throw Core::Error{Core::Exit::Sink, "cannot write to " + spec_.dir,
+                throw Core::Error{Core::Exit::Analyzer, "cannot write to " + spec_.dir,
                                   "the Delphes stage should be reading it"};
         }
 
@@ -79,10 +79,10 @@ namespace Sink {
             HepMC3::GenEvent* genEvent = view.hepmcOrNull();
             if (genEvent == nullptr)
                 throw Core::Error{Core::Exit::Internal,
-                                  "the delphes sink was given an event with no HepMC record"};
+                                  "the delphes analyzer was given an event with no HepMC record"};
             writer_->write_event(*genEvent);
             if (writer_->failed())
-                throw Core::Error{Core::Exit::Sink,
+                throw Core::Error{Core::Exit::Analyzer,
                                   "writing to the Delphes pipe failed after " +
                                       std::to_string(written_) + " events",
                                   "Delphes exited early; its log says why"};
@@ -106,7 +106,7 @@ namespace Sink {
         long long written() const { return written_; }
 
       private:
-        Core::SinkSpec spec_;
+        Core::AnalyzerSpec spec_;
         Status::Writer& status_;
         std::unique_ptr<HepMC3::Writer> writer_;
         long long written_ = 0;
@@ -115,4 +115,4 @@ namespace Sink {
 
 #endif  // HEKIT_WITH_HEPMC
 
-}  // namespace Sink
+}  // namespace Analyzer

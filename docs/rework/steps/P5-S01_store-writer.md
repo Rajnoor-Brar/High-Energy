@@ -1,12 +1,12 @@
-# P5-S01 — Store namespace, store sink and store CLI
+# P5-S01 — Store namespace, store analyzer and store CLI
 
 | Field | Value |
 |---|---|
 | Status | done |
 | Kind | code |
 | Phase | P5 — HepMC3 event store and replay |
-| Depends on | [P2-S05](P2-S05_rivet-sink-results-writer.md) |
-| Blocks | [P5-S02](P5-S02_store-source-replay.md), [P8-S01](P8-S01_module-sink-yoda.md) |
+| Depends on | [P2-S05](P2-S05_rivet-analyzer-results-writer.md) |
+| Blocks | [P5-S02](P5-S02_store-source-replay.md), [P8-S01](P8-S01_module-analyzer-yoda.md) |
 | Effort | 1 d |
 | Findings / decisions | D13; Q9; 11 §1–3 |
 | Updated | 2026-09-19 |
@@ -34,7 +34,7 @@ Never `#include`/import from `legacy/`; copy or adapt.
 **In**
 
 - Spike: gz vs zstd on 10k events (size, write/read throughput) → D-STORE-COMP; also shard behaviour in serial mode
-- `Store/{Types,Writer,Compression}` + `Sink::Store` (Sharded)
+- `Store/{Types,Writer,Compression}` + `Analyzer::Store` (Sharded)
 - `events.index.json` + JSON Schema
 - `[store]` schema section
 - `hekit/store/*` + CLI
@@ -50,13 +50,13 @@ Never `#include`/import from `legacy/`; copy or adapt.
 ## Tasks
 
 - [x] Spike + decision
-- [x] Implement writer and sink
+- [x] Implement writer and analyzer
 - [x] Python index model + CLI
 - [x] Tests
 
 ## Outputs
 
-- `utils/Store*`, `utils/Sink/Store.hh`
+- `utils/Store*`, `utils/Analyzer/Store.hh`
 - `utils/python/hekit/store/*`
 - `tests/spikes/store_compression/*`
 
@@ -83,7 +83,7 @@ Revert.
 ## Log
 
 - 2026-09-17 — step file created (P0-S00).
-- 2026-09-18 — implemented `utils/Store/{Types,Compression,Writer}.hh`, `utils/Sink/Store.hh` and
+- 2026-09-18 — implemented `utils/Store/{Types,Compression,Writer}.hh`, `utils/Analyzer/Store.hh` and
   `hekit/store/{index,verify,cli}.py` with the committed JSON Schema (≈1 500 lines including tests).
   Suite: 15/15 ctest, 573 Python.
 
@@ -133,7 +133,7 @@ Revert.
      was hand-written and ran at ~15 ev/s (the project's card does 2 750), and `Pythia8ToHepMC`
      **reuses one `GenEvent`**, so holding `getEventPtr()` 10 000 times would have measured one event
      written 10 000 times. The events are copied now.
-  2. **`#include "Store.hh"` from `utils/Sink/Store.hh` included itself**: a quoted include looks in
+  2. **`#include "Store.hh"` from `utils/Analyzer/Store.hh` included itself**: a quoted include looks in
      its own directory first, so the facade was never read and `Store::` did not exist. It includes
      the three submodules directly, with a comment saying why.
   3. **`hekit.store` re-exported `verify` over its own module** — the same trap as `prov.stamp` in

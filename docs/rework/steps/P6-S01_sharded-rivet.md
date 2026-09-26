@@ -6,7 +6,7 @@
 | Kind | code |
 | Phase | P6 — Throughput |
 | Depends on | [P4-S05](P4-S05_photo-eic-reentrant.md), [P5-S02](P5-S02_store-source-replay.md) |
-| Blocks | [P6-S03](P6-S03_bench.md), [P8-S01](P8-S01_module-sink-yoda.md) |
+| Blocks | [P6-S03](P6-S03_bench.md), [P8-S01](P8-S01_module-analyzer-yoda.md) |
 | Effort | 1 d |
 | Findings / decisions | A4; 05 §3; risk: merge semantics |
 | Updated | 2026-09-19 |
@@ -33,7 +33,7 @@ Never `#include`/import from `legacy/`; copy or adapt.
 
 **In**
 
-- `Sink::Rivet` shards (construction + first-event init under a global lock)
+- `Analyzer::Rivet` shards (construction + first-event init under a global lock)
 - merge → σ → finalize
 - `Run` concurrency modes; checkpoint copies off by default
 
@@ -113,7 +113,7 @@ Force `serial` in `auto`.
 
   **A second defect, latent since P2-S04** (00/B32). `PythiaParallel` runs the callback on its
   **worker threads in both modes** — `processAsync = off` only wraps it in a mutex
-  (`PythiaParallel.cc:201-208`). So any sink exception was unwinding through `std::thread` into
+  (`PythiaParallel.cc:201-208`). So any analyzer exception was unwinding through `std::thread` into
   `std::terminate`: a Rivet error mid-run would have killed the process instead of producing an exit
   code and a message. Both sources now catch at that boundary and rethrow on the main thread.
 
@@ -134,15 +134,15 @@ Force `serial` in `auto`.
      generator and differ for a replay, where k consumers pop from one queue fed by n shards.
      Sharding the store on `slot` would silently re-shard a replayed store; sharding Rivet on
      `worker` would hand one handler to two threads. Hence two numbers, and a unit test for it.
-  2. **Sinks are prepared before the generator initialises.** The mode is decided from what the sinks
+  2. **Analyzers are prepared before the generator initialises.** The mode is decided from what the analyzers
      say about themselves, and a typo in an analysis name now costs a second rather than a Pythia
      `init()`.
-  3. **`Sink::Sink` gained `shards(int)` and `serialReason()`.** Shards are built on the main thread
+  3. **`Analyzer::Analyzer` gained `shards(int)` and `serialReason()`.** Shards are built on the main thread
      because Rivet's analysis loader is a process-wide registry; the reason is a sentence, because
      "sharding is off" without "because X" sends the reader to the source.
   4. **A sharded replay keeps the chunk boundary**: consumers run a chunk's worth and are joined, and
      only then does the main thread checkpoint and read the stop flag. Same shape as the generator
-     (D-Q2), and a checkpoint never runs while a sink is being called.
+     (D-Q2), and a checkpoint never runs while an analyzer is being called.
   5. **`Store::Writer` is now safe for concurrent writers** — the shard map is guarded while it
      grows, the total is atomic, and one lock per shard is held across the HepMC3 write. Uncontended
      for a generator (one worker per thread); it is what stops a replay's two consumers interleaving
@@ -156,7 +156,7 @@ Force `serial` in `auto`.
      so equivalence is measured with `MC_FSPARTICLES` + `MC_XS` and `photo_eic` gets its own two
      tests: that `auto` still runs it (serially, with a notice) and that an explicit `sharded`
      refuses it.
-  2. `Concurrency::Locked` exists in the enum but no sink uses it yet; the loop already routes
+  2. `Concurrency::Locked` exists in the enum but no analyzer uses it yet; the loop already routes
      anything that is not `Sharded` through one mutex, so it costs nothing to leave.
   3. `[run].mode` is a machine key (like `threads`): it changes the wall clock, not the events, and
      is deliberately not part of a point's identity.

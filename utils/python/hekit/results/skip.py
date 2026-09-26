@@ -131,7 +131,7 @@ def decide(directory: Path, *, name: str = "", wanted_hash: str = "",
         return Decision(State.INCOMPLETE, True, reason="the directory has no finished result")
     if stopped(directory):
         # Belt and braces: a summary that says "stopped" beside a final-named YODA should not happen
-        # (the sink writes one name or the other), but if it ever does, the summary is believed.
+        # (the analyzer writes one name or the other), but if it ever does, the summary is believed.
         return Decision(State.PARTIAL, True,
                         reason="the summary says the run was stopped", hint="rerunning it")
     return Decision(State.COMPLETE, False, reason="name, hash and a finished result all match",

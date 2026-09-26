@@ -86,7 +86,7 @@ Delete the `.v2` files; revert.
     quantity with no `setting`, a file that is already schema 2, or a file that is not a run config.
     - Quantities are renamed so that a name matches its type: v1 `cmnd.beams` held *energies* and becomes
       `energies`; the `Beams:idB` setting becomes `beams` with `side = "b"` (03 §3). Every reference
-      follows (`across`, `overlay`, `pin`, `[settle.use]`).
+      follows (`across`, `overlay`, `pin`, `[static.use]`).
     - **00/B12:** the PDF tags are renamed — `MSTW → MSTW08lo`, `NNLO → NNPDF23lo`,
       `NNNLO → NNPDF23nlo`, `LHC21 → PDF4LHC21` — and the old names are kept in the quantity's `note`
       and in the migration report, so old result names can still be traced.

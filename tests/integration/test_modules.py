@@ -63,12 +63,12 @@ def run_spec(directory: Path, *, mode: str, with_rivet: bool = False, dump_every
     import tomli_w
 
     directory.mkdir(parents=True, exist_ok=True)
-    sinks = []
+    analyzers = []
     if with_rivet:
-        sinks.append({"kind": "rivet", "analyses": ["photo_eic"], "paths": [str(PLUGIN)],
+        analyzers.append({"kind": "rivet", "analyses": ["photo_eic"], "paths": [str(PLUGIN)],
                       "xsec": "generator", "weights": "nominal", "dump_every": dump_every,
                       "check_beams": True})
-    sinks.append({"kind": "module", "name": "ToyJets", "paths": [str(MODULE.parent)],
+    analyzers.append({"kind": "module", "name": "ToyJets", "paths": [str(MODULE.parent)],
                   "options": {"pt_min": 0.5, "eta_max": 5.0}})
 
     spec = {
@@ -79,7 +79,7 @@ def run_spec(directory: Path, *, mode: str, with_rivet: bool = False, dump_every
         "source": {"kind": "pythia", "cards": cards(directory / "cards")},
         "output": {"dir": str(directory), "yoda": "analysis.yoda",
                    "summary": "run.summary.json"},
-        "sink": sinks,
+        "analyzer": analyzers,
         "status": {"fd": 3, "heartbeat_ms": 500},
     }
     path = directory / "run.toml"
@@ -202,7 +202,7 @@ def test_a_module_that_is_not_there_fails_the_preflight(tmp_path):
         "source": {"kind": "pythia", "cards": cards(directory / "cards")},
         "output": {"dir": str(directory), "yoda": "analysis.yoda",
                    "summary": "run.summary.json"},
-        "sink": [{"kind": "module", "name": "NoSuchModule", "paths": [str(MODULE.parent)]}],
+        "analyzer": [{"kind": "module", "name": "NoSuchModule", "paths": [str(MODULE.parent)]}],
         "status": {"fd": 3, "heartbeat_ms": 500},
     }
     path = directory / "run.toml"

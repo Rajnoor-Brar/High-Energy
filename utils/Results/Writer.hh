@@ -45,7 +45,7 @@ namespace Results {
             std::error_code code;
             std::filesystem::create_directories(directory_, code);
             if (code)
-                throw Core::Error{Core::Exit::Sink,
+                throw Core::Error{Core::Exit::Analyzer,
                                   "cannot create the output directory: " + directory_,
                                   code.message()};
         }
@@ -70,7 +70,7 @@ namespace Results {
                 YODA::write(temporary, objects);
             } catch (const std::exception& error) {
                 remove(temporary);
-                throw Core::Error{Core::Exit::Sink,
+                throw Core::Error{Core::Exit::Analyzer,
                                   "cannot write " + chosen + ": " + error.what()};
             }
             return commit(temporary, chosen, other(name, stopped));
@@ -81,10 +81,10 @@ namespace Results {
             {
                 std::ofstream out(temporary, std::ios::binary | std::ios::trunc);
                 if (!out)
-                    throw Core::Error{Core::Exit::Sink, "cannot write " + temporary};
+                    throw Core::Error{Core::Exit::Analyzer, "cannot write " + temporary};
                 out << text;
                 if (!out)
-                    throw Core::Error{Core::Exit::Sink, "cannot write " + temporary};
+                    throw Core::Error{Core::Exit::Analyzer, "cannot write " + temporary};
             }
             return commit(temporary, name, {});
         }
@@ -107,7 +107,7 @@ namespace Results {
             std::filesystem::rename(temporary, target, code);
             if (code) {
                 remove(temporary);
-                throw Core::Error{Core::Exit::Sink,
+                throw Core::Error{Core::Exit::Analyzer,
                                   "cannot move " + name + " into place", code.message()};
             }
             if (!stale.empty()) remove(path(stale));

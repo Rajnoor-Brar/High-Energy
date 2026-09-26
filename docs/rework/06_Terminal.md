@@ -79,7 +79,7 @@ One line per event of interest, rate-limited to one progress line per `plain_eve
 
 ```json
 {"t":1758103203.1,"k":"phase","phase":"init","detail":"reading 2 cards"}
-{"t":…,"k":"init","sqrt_s":28.64,"beam_ids":[2212,11],"beam_energies":[41,5],"threads":20,"mode":"sharded","sinks":["rivet","hepmc"]}
+{"t":…,"k":"init","sqrt_s":28.64,"beam_ids":[2212,11],"beam_energies":[41,5],"threads":20,"mode":"sharded","analyzers":["rivet","hepmc"]}
 {"t":…,"k":"progress","done":642113,"total":1000000,"rate":1180.4,"workers":[32110,31987,…]}
 {"t":…,"k":"xsec","value_pb":17900.0,"err_pb":95.0,"final":false}
 {"t":…,"k":"log","level":"warn","source":"pythia","msg":"SpaceShower::pT2nearThreshold: stuck in loop"}
@@ -106,7 +106,7 @@ One line per event of interest, rate-limited to one progress line per `plain_eve
 | 2 | usage | ✖ |
 | 3 | generator init failed | ✖ "init" (e.g. vanishing σ) |
 | 4 | source I/O (FIFO closed early, parse error) | ✖ "input" + the upstream stage's status |
-| 5 | sink error (Rivet finalize, write failed) | ✖ "output" |
+| 5 | analyzer error (Rivet finalize, write failed) | ✖ "output" |
 | 6 | stopped by signal, partial outputs finalised | ◐ "partial" |
 | 7 | stalled or timed out (set by the supervisor) | ✖ "stall" |
 | 70 | internal error | ✖ "bug" + a hint to report |
@@ -146,7 +146,7 @@ External tools only report 0 vs non-zero. The adapter maps known log patterns to
 This is the "presentability when going over events" part.
 
 **`hep events <config|point|store> [-n 3] [--from FILE]`:**
-- runs `hep-run --list 3` (Pythia, 3 events, sinks off); or reads a store ([11](11_EventStore.md), first shard) or any HepMC3 file (`.hepmc`, `.hepmc.gz`) with `pyHepMC3`;
+- runs `hep-run --list 3` (Pythia, 3 events, analyzers off); or reads a store ([11](11_EventStore.md), first shard) or any HepMC3 file (`.hepmc`, `.hepmc.gz`) with `pyHepMC3`;
 - renders each event as a **rich table**:
   - index, name (from `ParticleData`/PDG), status (colour-coded: beam / hard / shower / final);
   - mothers → daughters, pT, η, φ, m;

@@ -13,7 +13,7 @@
 
 ## Goal
 
-MadGraph matrix elements are generated, cached, and showered by `Source::Pythia` into the same sinks.
+MadGraph matrix elements are generated, cached, and showered by `Source::Pythia` into the same analyzers.
 
 ## Context
 

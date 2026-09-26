@@ -107,7 +107,7 @@ Never `#include`/import from `legacy/`; copy or adapt.
   **Applied:**
   | Finding | Change |
   |---|---|
-  | B2 | `validate_config` rejects a base seed with `threads > 1` and `seed_step < threads` (skipped when a seed quantity is scanned or `[settle.cmnd].seed` is set); both configs get `seed_step = 20` |
+  | B2 | `validate_config` rejects a base seed with `threads > 1` and `seed_step < threads` (skipped when a seed quantity is scanned or `[static.cmnd].seed` is set); both configs get `seed_step = 20` |
   | B3 | `.part.yoda` + count check + atomic rename; `skip_existing` (final name) reruns a partial point |
   | B4 | 27x920 label √s = 318.1 GeV (2·√(27.5 × 920)) |
   | B5 | `use_data = false` in `eic.toml`, with the reason in the file |

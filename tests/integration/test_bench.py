@@ -76,20 +76,20 @@ def test_it_finishes_inside_the_budget(report):
 # ── what it measured ─────────────────────────────────────────────────────────
 
 def test_generation_only_is_the_ceiling(report):
-    """Nothing can beat generating with no sinks at all, so this leg bounds the others."""
+    """Nothing can beat generating with no analyzers at all, so this leg bounds the others."""
     data, _, _ = report
     generation, serial = leg(data, "generation"), leg(data, "serial")
     assert generation["wall_s"] > 0 and serial["wall_s"] > 0
-    assert generation["wall_s"] <= serial["wall_s"], "adding sinks cannot make a run faster"
+    assert generation["wall_s"] <= serial["wall_s"], "adding analyzers cannot make a run faster"
     assert generation["events"] == serial["events"] == 600
 
 
-def test_the_sink_share_answers_assumption_a4(report):
+def test_the_analyzer_share_answers_assumption_a4(report):
     """01 A4 asked whether Rivet's per-event cost is comparable to Pythia's. It is larger."""
     data, _, _ = report
-    assert 0.0 < data["sink_share"] < 1.0
-    assert data["sink_share"] > 0.4, \
-        f"photo_eic runs three jet algorithms; it should dominate (got {data['sink_share']:.2f})"
+    assert 0.0 < data["analyzer_share"] < 1.0
+    assert data["analyzer_share"] > 0.4, \
+        f"photo_eic runs three jet algorithms; it should dominate (got {data['analyzer_share']:.2f})"
 
 
 def test_the_sharded_leg_is_refused_with_its_reason(report):

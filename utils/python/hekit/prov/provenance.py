@@ -134,11 +134,11 @@ def resources_of(spec: dict[str, Any], *, pdf_sets: list[str] | None = None,
     """
     found: dict[str, Any] = {"pdf_sets": sorted(set(pdf_sets or []))}
     analyses: dict[str, Any] = {}
-    for sink in spec.get("sink", []) or []:
-        if sink.get("kind") != "rivet":
+    for analyzer in spec.get("analyzer", []) or []:
+        if analyzer.get("kind") != "rivet":
             continue
-        search = [Path(entry) for entry in sink.get("paths", [])] + list(analysis_paths or [])
-        for entry in sink.get("analyses", []) or []:
+        search = [Path(entry) for entry in analyzer.get("paths", [])] + list(analysis_paths or [])
+        for entry in analyzer.get("analyses", []) or []:
             base = entry.split(":", 1)[0]
             analyses.setdefault(base, {"so_sha256": "", "path": ""})
             for directory in search:

@@ -2,7 +2,7 @@
 
 Date: 2026-09-17 · Status: Proposed · Steps: P5-S01…S03
 
-**Decision D13.** Stored events are **HepMC3 files**, not ROOT trees. A store replays into the same sinks as fresh events. This replaces the old `Probe` layer, which read the project's own TTrees. Replay is secondary (guideline 4): the store exists mainly because external generators already deliver HepMC, and because "generate once, analyse many" is useful for analysis-only sweeps.
+**Decision D13.** Stored events are **HepMC3 files**, not ROOT trees. A store replays into the same analyzers as fresh events. This replaces the old `Probe` layer, which read the project's own TTrees. Replay is secondary (guideline 4): the store exists mainly because external generators already deliver HepMC, and because "generate once, analyse many" is useful for analysis-only sweeps.
 
 ## 1. Layout
 
@@ -67,18 +67,18 @@ Annotated example; the real file is plain JSON with no comments. A JSON Schema i
 - The index is written only after every shard is closed and hashed. A directory without an index is incomplete, and `hep store verify` reports it.
 - Shards are streamed to `events.<k>.hepmc.gz.part` and renamed when they close.
 
-## 3. Writing (`Sink::Store`)
+## 3. Writing (`Analyzer::Store`)
 
-- **Mode:** a Sharded sink (05 §2). Each worker owns a `WriterGZ<WriterAscii>` and writes `Events::View::hepmc()`.
+- **Mode:** a Sharded analyzer (05 §2). Each worker owns a `WriterGZ<WriterAscii>` and writes `Events::View::hepmc()`.
 - **Run info:** written once per shard, carrying the weight names and tool list.
 - **At the end:** close the shards, then hash them, then write the index from `RunResult` (merged σ ± err, counts, seeds).
-- **As a tee:** a `Sink::Store` pointed at a FIFO (no index) feeds external Delphes (04 / 07).
+- **As a tee:** a `Analyzer::Store` pointed at a FIFO (no index) feeds external Delphes (04 / 07).
 
 ## 4. Replay (`Source::Store`)
 
 ```
 shard k ──► reader thread k ──┐
-shard …  ──► reader thread …  ├─► bounded queue ─► consumer workers (sinks; sharded if allowed)
+shard …  ──► reader thread …  ├─► bounded queue ─► consumer workers (analyzers; sharded if allowed)
 shard n ──► reader thread n ──┘
 ```
 
@@ -120,7 +120,7 @@ input = "eic_5x41_em_NNLO"    # point name, "sha256:…", or a path to an events
 
 - **Expected cost:** ASCII parsing dominates replay. Photoproduction events at EIC energies are small; heavy-ion events would feel it. Measure with `hep bench` (P6-S03).
 - **Parallelism:** it scales with the number of shards, so a 20-thread generation replays with up to 20 readers.
-- **Size:** gzip typically cuts ASCII 5–10×. zstd decompresses faster at similar size. Settled by D-STORE-COMP.
+- **Size:** gzip typically cuts ASCII 5–10×. zstd decompresses faster at similar size. Static by D-STORE-COMP.
 - **Later, if replay becomes central:** HepMC3-ROOT or Protobuf I/O (neither is built here, and ROOT storage conflicts with D13), or a binary format per shard. See 10 §4.
 
 ## 8. What the old Probe offered, and where it went

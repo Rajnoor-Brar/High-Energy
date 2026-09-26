@@ -1,11 +1,11 @@
 #pragma once
 
 // ── Events/Types.hh ──────────────────────────────────────────────────────────
-// What a sink sees of one event (05 §1).
+// What an analyzer sees of one event (05 §1).
 //
 // The view is a *handle*, not a copy: it holds whatever the source has — a live `Pythia8::Pythia*`, or
-// a `HepMC3::GenEvent` read from a store — and converts only when a sink actually asks. A run with no
-// HepMC-consuming sink therefore never builds a `GenEvent`, which is the difference between the old
+// a `HepMC3::GenEvent` read from a store — and converts only when an analyzer actually asks. A run with no
+// HepMC-consuming analyzer therefore never builds a `GenEvent`, which is the difference between the old
 // FIFO pipeline and running the analysis in process (D4).
 //
 // The namespace is `Events`, plural, because Delphes declares a global `class Event`
@@ -56,7 +56,7 @@ namespace Events {
         int worker() const { return worker_; }
 
         /// **Who is carrying it now**: the consumer index, 0-based and dense. Concurrency, so a
-        /// sharded sink can hold one instance per slot and never lock (05 §3).
+        /// sharded analyzer can hold one instance per slot and never lock (05 §3).
         ///
         /// They are the same number for a generator and differ for a replay, where k consumers pop
         /// from a queue fed by a different number of shards. Sharding the store on `slot` would

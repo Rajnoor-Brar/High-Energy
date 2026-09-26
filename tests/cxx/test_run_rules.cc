@@ -1,5 +1,5 @@
 // The decisions inside the run loop, checked without a generator: the chunk rule (D-Q2), the σ
-// combination (D-Q1) and the smallest sink.
+// combination (D-Q1) and the smallest analyzer.
 //
 // Why these and not the loop itself: everything else in `Run::Loop` is order — configure, init, start,
 // chunk, finish — and ordering is checked end to end by `tests/python/run/test_hep_run.py`, which runs
@@ -9,7 +9,7 @@
 #include <cmath>
 #include <cstdint>
 
-#include "Sink.hh"
+#include "Analyzer.hh"
 #include "Source/Types.hh"
 #include "check.hh"
 
@@ -82,30 +82,30 @@ void xsecCombination() {
     }
 }
 
-// The smallest sink, which is also the interface's documentation: it must count what the loop feeds it
+// The smallest analyzer, which is also the interface's documentation: it must count what the loop feeds it
 // and carry the event weight through.
-void countingSink() {
-    Sink::Count sink;
-    CHECK_EQ(sink.name(), std::string{"count"});
-    CHECK(!sink.needs().hepmc);          // a counting run must not pay for a GenEvent
-    CHECK(!sink.needs().pythia);
-    CHECK(sink.concurrency() == Sink::Concurrency::Serial);
-    CHECK_EQ(sink.events(), std::int64_t{0});
-    CHECK(sink.outputs().empty());
+void countingAnalyzer() {
+    Analyzer::Count analyzer;
+    CHECK_EQ(analyzer.name(), std::string{"count"});
+    CHECK(!analyzer.needs().hepmc);          // a counting run must not pay for a GenEvent
+    CHECK(!analyzer.needs().pythia);
+    CHECK(analyzer.concurrency() == Analyzer::Concurrency::Serial);
+    CHECK_EQ(analyzer.events(), std::int64_t{0});
+    CHECK(analyzer.outputs().empty());
 
     for (std::int64_t index = 0; index < 5; ++index) {
         Events::View view(nullptr, index, static_cast<int>(index % 2));
         view.weights().values.assign(1, 2.0);
-        sink.event(view);
+        analyzer.event(view);
     }
-    CHECK_EQ(sink.events(), std::int64_t{5});
-    CHECK_EQ(sink.weight(), 10.0);
+    CHECK_EQ(analyzer.events(), std::int64_t{5});
+    CHECK_EQ(analyzer.weight(), 10.0);
 
-    // The optional parts of the interface must be safe to call on a sink that implements none of them.
-    sink.start(Core::Beams{}, 5);
-    sink.checkpoint(5);
-    sink.finish(Core::RunRecord{});
-    CHECK_EQ(sink.events(), std::int64_t{5});
+    // The optional parts of the interface must be safe to call on an analyzer that implements none of them.
+    analyzer.start(Core::Beams{}, 5);
+    analyzer.checkpoint(5);
+    analyzer.finish(Core::RunRecord{});
+    CHECK_EQ(analyzer.events(), std::int64_t{5});
 }
 
 // A view with no Pythia behind it is legal (a store replay has none) and must not pretend otherwise.
@@ -159,7 +159,7 @@ void workerAndSlot() {
 int main() {
     chunkRule();
     xsecCombination();
-    countingSink();
+    countingAnalyzer();
     emptyView();
     workerAndSlot();
     return check::finish("run_rules");

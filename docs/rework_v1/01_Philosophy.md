@@ -9,7 +9,7 @@ The principles the framework follows. Each one is stated, then justified by what
 
 The split is **not** "physics in C++, tooling in Python". It is:
 
-> **C++** where an *event* is touched — generation, sinks, Rivet plugins, custom modules, inference.
+> **C++** where an *event* is touched — generation, analyzers, Rivet plugins, custom modules, inference.
 > **Python** where a *file, process or person* is touched — configs, native cards, subprocesses,
 > the terminal, plots, provenance.
 > **Shell** only where the *calling shell* must change — environment and `cd` helpers.
@@ -43,12 +43,12 @@ of the types.
 
 The same instinct elsewhere:
 
-- **Concurrency is a property of the sink**, not a global flag. A sink answers `Serial`, `Locked` or
-  `Sharded`; `Run::Loop` asks every sink and decides. You cannot configure a run into a race.
+- **Concurrency is a property of the analyzer**, not a global flag. An analyzer answers `Serial`, `Locked` or
+  `Sharded`; `Run::Loop` asks every analyzer and decides. You cannot configure a run into a race.
 - **Partial output has a different name.** An interrupted run writes `analysis.partial.yoda`, never
   a truncated `analysis.yoda`, so a partial result cannot be mistaken for a complete one (D22).
 - **Module identity is the filename.** `ToyJets.cc` → `libhekit_ToyJets.so` → `HEKIT_MODULE("ToyJets", …)`
-  → `[[sinks.module]].name = "ToyJets"`. The config and the build cannot drift.
+  → `[[analyzers.module]].name = "ToyJets"`. The config and the build cannot drift.
 
 **What it bought.** Three of the nine findings discovered during construction were *prevented from
 recurring* by a type change rather than a test.
@@ -87,7 +87,7 @@ kept the dependency graph honest: a feature that cannot be switched off is a fea
 leaked into the core.
 
 **Where it is not yet true.** The module build is guarded on `HEKIT_WITH_RIVET` and links
-`Rivet::Rivet`, though `Sink::Modules`, `utils/Module/` and `modules/` contain zero Rivet includes
+`Rivet::Rivet`, though `Analyzer::Modules`, `utils/Module/` and `modules/` contain zero Rivet includes
 and YODA is unconditionally required. The reasoning in the comment is right and the condition is
 wrong. Recorded here because a principle with one unnoticed exception is how principles die.
 
@@ -121,7 +121,7 @@ Every defect found is catalogued as `00/Bn` with three columns: **what**, **evid
 line), **what was done**. Thirty-nine of them. Nine were found by *building*, not by reading.
 
 They are cited from the code at the point they constrain it. `Phys::deltaPhi` carries `00/B35`;
-`Sink::Modules` carries `00/B31` and `00/B36`; the ONNX include path carries `00/B37`.
+`Analyzer::Modules` carries `00/B31` and `00/B36`; the ONNX include path carries `00/B37`.
 
 **What it bought.** When P10-S01's verification row said "the grep for finding citations should be
 empty", the row was recognised as wrong rather than satisfied — deleting the citations would have

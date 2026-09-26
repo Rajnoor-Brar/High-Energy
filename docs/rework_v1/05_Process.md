@@ -40,7 +40,7 @@ row with three columns:
 | **What was done** | Fixed in P8-S02: the table still keys on \|id\|, but `charge3(id)` carries the sign of the code given |
 
 **Findings are cited from the code at the point they constrain it**, permanently. `Phys::deltaPhi`
-carries `00/B35`; `Sink::Modules` carries `00/B31` and `00/B36`; the ONNX include path carries
+carries `00/B35`; `Analyzer::Modules` carries `00/B31` and `00/B36`; the ONNX include path carries
 `00/B37`. When a verification row later demanded that a grep for those citations be *empty*, the row
 was recognised as wrong — deleting them would delete the record of why the code has its shape.
 

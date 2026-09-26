@@ -1,7 +1,7 @@
 """External Delphes: a tee, a stage, and a sidecar (05 §5, P7-S08).
 
-Delphes is not a generator, so this is not a generator adapter — it is a *sink* with a process behind
-it. `Sink::Delphes` writes HepMC3 and `DelphesHepMC3` reads it, in its own process:
+Delphes is not a generator, so this is not a generator adapter — it is an *analyzer* with a process behind
+it. `Analyzer::Delphes` writes HepMC3 and `DelphesHepMC3` reads it, in its own process:
 
     hep-run ──▶ events.delphes.hepmc ──▶ DelphesHepMC3 <card> delphes.root <events>
 
@@ -86,8 +86,8 @@ def fifo_path(directory: Path) -> Path:
     return Path(directory) / FIFO_NAME
 
 
-def sink_document(directory: Path) -> dict[str, Any]:
-    """The `[[sink]]` entry that makes `hep-run` write the tee."""
+def analyzer_document(directory: Path) -> dict[str, Any]:
+    """The `[[analyzer]]` entry that makes `hep-run` write the tee."""
     return {"kind": NAME, "dir": str(fifo_path(directory))}
 
 

@@ -1,4 +1,4 @@
-# P8-S01 — Module API, YODA results layer and module sink
+# P8-S01 — Module API, YODA results layer and module analyzer
 
 | Field | Value |
 |---|---|
@@ -35,9 +35,9 @@ Never `#include`/import from `legacy/`; copy or adapt.
 
 - `Module/{Types,Registry,Loader}`, `HEKIT_MODULE`
 - `Results/{Booker,Worker,Merge}`
-- `Sink::Modules`
+- `Analyzer::Modules`
 - combined write
-- `[[sinks.module]]`
+- `[[analyzers.module]]`
 - `hekit` replica merge for module objects
 - `hep new module`; CMake `hekit_<name>` targets
 
@@ -86,7 +86,7 @@ Revert.
 
 - 2026-09-17 — step file created (P0-S00).
 - 2026-09-20 — implemented `Module/{Types,Registry,Loader}`, `Results/{Booker,Worker,Merge}`,
-  `Sink::Modules`, the toy module and the replica merge. New ctest tests `modules` (slow, 9 cases)
+  `Analyzer::Modules`, the toy module and the replica merge. New ctest tests `modules` (slow, 9 cases)
   and `results_objects` (32 checks), plus 12 unit tests for the merge.
 
   **Verification, every row measured**
@@ -120,12 +120,12 @@ Revert.
      fill costs an array lookup rather than a map lookup or a `dynamic_cast`.
   2. **Booking validates at declare time**: empty names, a `/` in a name, duplicates, zero bins and
      reversed edges. Two of those keep nothing at all and look fine until the plot.
-  3. **One `analysis.yoda`.** `Sink::Rivet` gained `alsoWrite`, and `hep-run` hands it the module
+  3. **One `analysis.yoda`.** `Analyzer::Rivet` gained `alsoWrite`, and `hep-run` hands it the module
      objects, so both land in one file under `/<module>/<name>` (07 §1) and `hep plot` and
-     `rivet-mkhtml` treat them alike. With no Rivet sink in the run, the module sink writes the file
+     `rivet-mkhtml` treat them alike. With no Rivet analyzer in the run, the module analyzer writes the file
      itself rather than dropping the objects.
   4. **The library is named after its file** — `modules/<project>/ToyJets.cc` → `libhekit_ToyJets.so`
-     → `[[sinks.module]].name = "ToyJets"` — so the config and the build cannot drift, and
+     → `[[analyzers.module]].name = "ToyJets"` — so the config and the build cannot drift, and
      `HEKIT_MODULE` uses the same name.
   5. **The loader never `dlclose`s.** A module's objects carry a vtable that lives in that library,
      and unloading it underneath them is a crash that names nobody.

@@ -18,7 +18,7 @@ from . import validate as vl
 from .fields import check
 
 #: Paths whose value is a list of tables rather than a leaf value.
-ARRAY_SECTIONS = {("sinks", "module"): sch.MODULE_SINK, ("proc", "fit"): sch.PROC_FIT,
+ARRAY_SECTIONS = {("analyzers", "module"): sch.MODULE_SINK, ("proc", "fit"): sch.PROC_FIT,
                   ("proc", "hist"): sch.PROC_HIST}
 
 
@@ -53,8 +53,8 @@ class Config:
     plot: Any
     terminal: Any
     sweep: Any
-    settle: Any
-    module_sinks: list[dict[str, Any]] = dataclass_field(default_factory=list)
+    static: Any
+    module_analyzers: list[dict[str, Any]] = dataclass_field(default_factory=list)
     proc_fits: list[dict[str, Any]] = dataclass_field(default_factory=list)
     proc_hists: list[dict[str, Any]] = dataclass_field(default_factory=list)
     proc_export: Any = None
@@ -181,8 +181,8 @@ def load_config(path: str | Path, *, sets: tuple[str, ...] = (), machine_file: P
         plot=_build_section(sch.PLOT, ("plot",), resolved),
         terminal=_build_section(sch.TERMINAL, ("terminal",), resolved),
         sweep=_build_section(sch.SWEEP, ("sweep",), resolved),
-        settle=_build_section(sch.SETTLE, ("settle",), resolved),
-        module_sinks=resolved.values.get(("sinks", "module"), []),
+        static=_build_section(sch.STATIC, ("static",), resolved),
+        module_analyzers=resolved.values.get(("analyzers", "module"), []),
         proc_fits=resolved.values.get(("proc", "fit"), []),
         proc_hists=resolved.values.get(("proc", "hist"), []),
         proc_export=_build_section(sch.PROC_EXPORT, ("proc", "export"), resolved),

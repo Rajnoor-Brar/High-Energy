@@ -1,7 +1,8 @@
 # Map of the implemented system
 
 Where things are and what owns what. For how to *use* it see [GUIDE.md](GUIDE.md); for why it is
-shaped this way see [rework/](rework/).
+shaped this way see [rework_v1/](rework_v1/), and for the words it uses
+[rework_v1/07_Glossary.md](rework_v1/07_Glossary.md).
 
 ---
 
@@ -20,7 +21,7 @@ be tested without the other, and why `hep-run` links no ROOT, no plotting and no
 ```
 hep  ──spec.toml──►  hep-run  ──status(fd 3)──►  hep
                         │
-                        └── source ──► sinks ──► files
+                        └── source ──► analyzers ──► files
 ```
 
 ---
@@ -31,7 +32,7 @@ One facade header per namespace, with submodules beside it (`Core.hh` + `Core/`)
 lower layer never links a higher one:
 
 ```
-Core ─► Status ─► Events ─► { Store, Results, ML, Phys } ─► { Source, Module } ─► Sink ─► Run ─► apps/
+Core ─► Status ─► Events ─► { Store, Results, ML, Phys } ─► { Source, Module } ─► Analyzer ─► Run ─► apps/
 ```
 
 | Namespace | What it owns |
@@ -45,8 +46,8 @@ Core ─► Status ─► Events ─► { Store, Results, ML, Phys } ─► { So
 | `Phys` | PDG data, kinematics on `FourVector`, `GenEvent` selectors, jet definitions |
 | `Source` | where events come from: Pythia, a store replay, a stream |
 | `Module` | the user-module interface and its `dlopen` loader |
-| `Sink` | where events go: Rivet, the store, modules, the Delphes tee |
-| `Run` | wires source to sinks; chunking, the concurrency mode, the summary |
+| `Analyzer` | where events go: Rivet, the store, modules, the Delphes tee |
+| `Run` | wires source to analyzers; chunking, the concurrency mode, the summary |
 
 `utils/apps/hep-run.cc` is the executable, and is short on purpose — everything it does is in the
 namespaces above.
@@ -56,7 +57,7 @@ namespaces above.
 - **The scaling contract.** Fills carry raw weights; scaling happens once, in `finalize`, when σ and
   Σw are known. `Results::Worker` has no `scale()` and `Results::Final` has no `fill()`, so the
   rule is the shape of the types rather than something to remember.
-- **Concurrency is a property of the sink.** `Sharded` sinks hold one instance per worker and take
+- **Concurrency is a property of the analyzer.** `Sharded` analyzers hold one instance per worker and take
   no lock; `Locked` ones share one; `Serial` ones want the callback thread. `Run::Loop` asks and
   then decides, and says why.
 

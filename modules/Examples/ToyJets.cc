@@ -21,8 +21,8 @@
 // `tests/integration/test_modules.py` re-measures.
 //
 // **It clusters jets, so it says `threadSafe() == false`.** FastJet keeps clustering state in
-// process-wide statics (00/B31), which is the same reason the Rivet sink refuses to shard. Saying so
-// costs one mutex around this sink; generation stays parallel, and the alternative is a race that
+// process-wide statics (00/B31), which is the same reason the Rivet analyzer refuses to shard. Saying so
+// costs one mutex around this analyzer; generation stays parallel, and the alternative is a race that
 // changes the jets rather than crashing.
 
 #include "ML.hh"
@@ -108,7 +108,7 @@ namespace {
             if (model_) {
                 // `scratch_` and `row_` are **one per module**, which is only safe because this
                 // module already declares `threadSafe() == false` for the clustering above, so the
-                // sink runs it under one lock. A module without that declaration would have to keep
+                // analyzer runs it under one lock. A module without that declaration would have to keep
                 // a `Scratch` per worker — which is exactly what `ML::Scratch` is for, and what
                 // `tests/cxx/test_ml.cc` runs 20 of.
                 for (const Phys::FourVector& jet : jets) {

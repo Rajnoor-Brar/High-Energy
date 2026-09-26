@@ -1,15 +1,15 @@
 #pragma once
 
-// ── Sink.hh ──────────────────────────────────────────────────────────────────
+// ── Analyzer.hh ──────────────────────────────────────────────────────────────────
 // Everything that consumes events (05 §2, 13 §2).
 
-#include "Sink/Types.hh"
-#include "Sink/Count.hh"
+#include "Analyzer/Types.hh"
+#include "Analyzer/Count.hh"
 #if defined(HEKIT_WITH_RIVET)
-#include "Sink/Modules.hh"
-#include "Sink/Rivet.hh"
+#include "Analyzer/Modules.hh"
+#include "Analyzer/Rivet.hh"
 #endif
 #if defined(HEKIT_WITH_HEPMC)
-#include "Sink/Delphes.hh"
-#include "Sink/Store.hh"
+#include "Analyzer/Delphes.hh"
+#include "Analyzer/Store.hh"
 #endif

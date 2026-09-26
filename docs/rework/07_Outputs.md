@@ -13,7 +13,7 @@ results/<project>/
     events/                            optional HepMC3 store: events.<k>.hepmc.gz + events.index.json (11)
     delphes.root                       optional (external Delphes stage; Delphes' own format)
     run.summary.json                   hep-run's run section (σ, counts, seeds, warnings) and
-                                       `inputs`: what the sinks *read* — a module's model file and
+                                       `inputs`: what the analyzers *read* — a module's model file and
                                        its sha256, so "the same model" is checkable (05 §6, P8-S03)
     provenance.json
     status.jsonl

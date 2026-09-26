@@ -3,9 +3,9 @@
 The rule is simple and the saving is large: an **analysis** option does not change the events, so
 scanning one must not generate the events again. `photo_eic:R=0.4` and `photo_eic:R=1.0` are two
 analyses of the same shower, so the radius study is *one* generation with both analyses booked in one
-Rivet sink, and the two curves are two object paths inside one YODA.
+Rivet analyzer, and the two curves are two object paths inside one YODA.
 
-Every layer of that has unit tests already — the sweep groups the points, the sink books both
+Every layer of that has unit tests already — the sweep groups the points, the analyzer books both
 variants, the plotter turns a variant into a curve. What had no test is the chain: that `hep run`
 followed by `hep plot` on a real study really does generate once and draw twice. That is what this
 file is, and it is the only place where the saving is actually observed rather than asserted about a

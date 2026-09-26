@@ -8,7 +8,7 @@
 # (legacy/lambda/configs/). It is one file now, and the parts that are missing are missing on
 # purpose — each one is something the framework owns rather than the analysis:
 #
-#   [threads]              → [run].threads. One number; the sinks decide their own concurrency.
+#   [threads]              → [run].threads. One number; the analyzers decide their own concurrency.
 #   [record.paths], serial → the results layout (07 §1). A point's directory is its identity.
 #   [monitor.*]            → the supervisor and the status stream (06). Not the analysis's business.
 #   [probe].input_file     → a store replay, if you want one: [store] + `hep run` on the store.
@@ -40,10 +40,10 @@ energies = 7000.0        # scalar = sqrt(s) in the CM frame; hep owns Beams:eCM,
 # under /Lamriv/... and /Lambda/... respectively (07 §1).
 #
 # Drop either one and the other still works: `[rivet]` alone is an ordinary Rivet run,
-# `[[sinks.module]]` alone is the module-only case where `Sink::Modules` writes its own file.
+# `[[analyzers.module]]` alone is the module-only case where `Analyzer::Modules` writes its own file.
 #
 # Rivet takes HepMC however it arrives — Pythia in process here, or an external generator's FIFO if
-# [generator].tool changes. `Sink::Rivet` is the same sink either way.
+# [generator].tool changes. `Analyzer::Rivet` is the same analyzer either way.
 
 [rivet]
 analyses = ["Lamriv"]
@@ -51,10 +51,10 @@ analyses = ["Lamriv"]
 [rivet.options]
 RESERVED = 2          # keep the two paths' cuts identical, or the comparison measures the cuts
 
-[[sinks.module]]
+[[analyzers.module]]
 name = "Lambda"
 
-[sinks.module.options]
+[analyzers.module.options]
 # ── the physics cuts (the legacy [lambda] block) ─────────────────────────────
 mass_tolerance      = 0.15   # |m(pπ) − m(Λ)| accepted, GeV        (legacy delta_mass_gev)
 cos_theta_tolerance = 0.0    # 0 = off; else |cosθ* + 1| tolerance (legacy delta_theta_rad, unused)
@@ -99,7 +99,7 @@ tag_style = "tag"
 # A `type = "option"` quantity targets a *Rivet analysis*: its values become `analysis:OPT=value`
 # and every value shares one generation, because one YODA holds every variant. A module is not like
 # that — `configure()` runs once per `hep-run`, so two cut values are two runs — and
-# `plan/spec.py` writes a module's options straight from `[sinks.module.options]`, so a swept one
+# `plan/spec.py` writes a module's options straight from `[analyzers.module.options]`, so a swept one
 # would never reach it. Declaring one would change the point *tags* and nothing else: three
 # directories with identical numbers. That is the 00/B5 shape, so it is not done.
 #
