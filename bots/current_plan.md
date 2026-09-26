@@ -1,5 +1,37 @@
 # Current plan
 
+## rework v2 — EXECUTING (ordered by the user 2026-09-26). Active: **P0 — Clean slate**
+
+The plan is `docs/rework_v2/`:
+read `README.md` (decisions V1–V20, traceability) → `00_Brief.md` (the user's design, verbatim) →
+`06_Roadmap.md` (5 phases, 13 steps, budget ~5.2k lines, risks R1–R7) → `01_Assessment.md` §7
+(the knowledge ledger L1–L26) → the phase file in `docs/rework_v2/phases/`.
+
+- Revised on the user's order "do not be afraid to overhaul everything and scrapping entire utils":
+  **P0 deletes all of `utils/`, CMake, `legacy/`, v1 tests and v1 design docs** (tag `rework/v1-final`
+  first). Nothing is ported as code; v1 is consulted with `git show rework/v1-final:<path>`.
+- The new C++ is `utils/Status.hh`, `utils/Module.hh`, App_Pythia, App_yd2rt and Paint. The Python
+  runner is a flat package in `utils/Env/runner/`. Modules are plain programs. Identity is per
+  point, with no shared generation. YODA plotting is `rivet-mkhtml`.
+- V21 (user): custom or module tools may request standard tools' rendered configs with
+  `<tool>_<export> = true` (`pythia_cmnd`, `rivet_analyses`, …). They get absolute paths under
+  `[standard.<key>]` in their config, which is what makes integrated in-process runs possible.
+  The mechanism lands in P1 S2; the other tools' exports come with each tool in P4.
+- Execution protocol: 06_Roadmap.md §2.
+- **P0 — Clean slate** (`docs/rework_v2/phases/P0_clean-slate.md`), in progress.
+  - Approvals (2026-09-26): the tag, local commits, rewriting the `configs/` TOMLs, the
+    `~/HEP/setup.sh` stub. Leave the root `generator_comparison.*` alone.
+  - The user's uncommitted edits are stashed (`stash@{0}`); `docs/Untitled-1.md` is in
+    `output/_v1/`.
+  - S1: commit the plan → tag `rework/v1-final` → 50k-event v1 baseline → moves → `git rm` v1 →
+    untracked leftovers to `output/_v1/`.
+  - S2: `flags.sh`, the `Makefile`, the trimmed `hep_env.sh`, `utils/Env/hep`, the runner stub,
+    `tests/runner`.
+
+---
+
+# v1 (finished) — the working plan as it stood at `rework/v1`
+
 Executing `docs/rework` step by step. Read order: `bots/BOT.md` → this file → `docs/rework/steps/README.md`
 → the step being executed. Design context: `docs/rework/README.md`; decisions in `10_Roadmap.md` §2 are final.
 
