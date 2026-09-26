@@ -9,4 +9,5 @@
   every document it links to (`docs/rework/`, `docs/post_rework/`, `GUIDE.md`, `MAP.md`, `legacy/`),
   are at the git tag **`rework/v1-final`**: `git show rework/v1-final:<path>`.
 
-A user guide (`GUIDE.md`) is written for v2 in phase P3, once there is something to use.
+- **[GUIDE.md](GUIDE.md)** — how to use v2: build, run, write a run TOML, tools, plots, and what
+  to do when a point fails.

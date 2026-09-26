@@ -1,0 +1,21 @@
+# utils/Env/yd2rt/tool.toml — YODA → ROOT: build/App_yd2rt.exe (05_Tools.md §6).
+# The ROOT file is a product (results/), non-temporary, as the brief asks (§Plotting).
+[tool]
+category = "visualisation"
+executable = "{repo}/build/App_yd2rt.exe"
+status     = "standard"
+
+[card]
+style = "none"
+
+[command]
+argv = ["{exe}", "{input}", "{partial:output}", "{select}"]
+
+[options]
+select = { kind = "list" }          # YODA path globs to convert (default: everything except /RAW, /TMP)
+
+[outputs]
+products = ["root"]
+
+[identity]
+files = ["{exe}"]

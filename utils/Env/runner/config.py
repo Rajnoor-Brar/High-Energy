@@ -38,7 +38,7 @@ TOOL_COMMON = {"tool": str, "baseconfig": (str, list), "input": (str, list), "ou
                "consumes_events": bool}
 PLOT_KEYS = {"backend": str, "formats": list, "objects": list, "ratio": bool, "y_gutter": (int, float),
              "x_gutter": (int, float), "logy": bool, "logx": bool, "auto_range": bool, "void_empty": bool,
-             "min_entries": int, "legend": str, "data": dict, "style": dict, "object": dict}
+             "min_entries": int, "range_pad": int, "legend": str, "data": dict, "style": dict, "object": dict}
 
 
 @dataclass

@@ -67,7 +67,7 @@ be declared for it (V21). `[exports.<name>]` is for everything else:
 | `[tool]` | category, executable, `streamable`, status mode, `consumes_events` / `produces_events` |
 | `[card]` | how a point card is made. `style` is one of: `"append"` (last wins: Pythia), `"prepend"` (the point card first, then include the base: Whizard, L13), `"merge"` (deep YAML merge written whole: Sherpa, L12), `"none"`, or `"render"` (call `render.py`) |
 | `[command]` | the argv template and environment |
-| `[options]` | a schema for the tool-specific keys, in the runner's field vocabulary: `kind`, `item`, `required`, `choices` |
+| `[options]` | a schema for the tool-specific keys, in the runner's field vocabulary: `kind`, `item`, `required`, `choices`. Every option is also an argv placeholder; `kind = "flag"` (with `flag = "-e"`, `default`) expands to the flag or to nothing |
 | `[outputs]` | which outputs are products, and how an event count is read back |
 | `[prepare]` | optional: a prepare step (integration, process build), its cache key, and its marker file |
 | `[exports.<name>]` | optional: configuration a custom tool may request as `<tool>_<name> = true` ([04 §7.3](04_Config.md#73-standard-configurations-for-custom-tools)): what it gives (`path`, `parts`, or named values), and `needs_prepare` |
@@ -102,7 +102,8 @@ look-alike (L26, the F1 lesson). A plugin imports only `errors`, `paths` and `qu
 | `custom` | any | `executable = …` | per table | per table | P1 |
 | `yd2rt` | visualisation | `build/App_yd2rt.exe` | no (file) | standard | P3 |
 | `paint` | visualisation | `build/Paint.exe` | — | standard | P3 (driven by `[plot]`) |
-| `yoda` | visualisation | `rivet-mkhtml` | — | none | P3 (driven by `[plot] backend = "yoda"`) |
+| `yoda` | visualisation | `rivet-mkhtml` | — | none | P3 (driven by `[plot] backend = "yoda"`): `utils/Env/yoda/backend.py`, no `tool.toml` |
+| `merge` | analysis application | `rivet-merge` | no (files) | none | P3, in `post`: one product of every point, `-e` unless `equivalent = false` |
 | `module` | analysis application | `build/<P>/<Name>.exe` | yes | standard | P4 |
 | `delphes` | detector simulator | `DelphesHepMC3` | **no** (L11) | filters | P4 |
 | `herwig` | event generator | `Herwig` (read, then run) | — (writes) | filters | P4 |
@@ -339,8 +340,9 @@ About 250 lines, `// requires: yoda root`.
 compiled as standalone program, and called to output based on config file"* (*Brief §Plotting*).
 It is about 900 lines, `// requires: root toml`.
 
-**Input.** One page config per page, written by the runner from `[plot]`
-(`output/…/plots/<page>.toml`):
+**Input.** One page config per page and object, written by the runner from `[plot]`
+(`output/…/plots/<page>/<object>.toml`). `raw` names the curve's `/RAW` twin, whose `__entries`
+App_yd2rt writes with `--keep-raw`, for `min_entries`:
 
 ```toml
 [page]
@@ -379,7 +381,10 @@ label  = "ZEUS 2012"
 4. **auto-range** over curves and data together;
 5. apply the gutters: y maximum = `y_gutter ×` the largest drawn value (the brief's definition),
    and `x_gutter` widens x symmetrically;
-6. draw the main pad, the legend and the optional ratio pad;
+6. draw the main pad, the legend and the optional ratio pad. The ratio pad divides each curve by
+   the data, or by the first curve when there are none; its range is at least 0.5–1.5, widened to
+   the ratios drawn, within 0–3. A curve whose every bin is voided stays in the legend as
+   "(no entries)";
 7. save each format.
 
 The algorithms of steps 2–4 are v1's `plot/transform.py` and `plot/data.py`, read in git and

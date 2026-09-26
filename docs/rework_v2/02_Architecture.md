@@ -86,14 +86,15 @@ module is the right unit.
 | 3 | `status.py` | read `$HEP_STATUS_FD` pipes; apply `filters.toml`; append to `status.jsonl` | 150 |
 | 3 | `record.py` | identity, seeds, skip, provenance, `points.json` | 150 |
 | 4 | `watch.py` | the live view (rich if available, plain otherwise); `hep watch` | 200 |
-| 4 | `plot.py` | page configs → Paint, or `rivet-mkhtml` for `backend = "yoda"` | 150 |
+| 4 | `plot.py` | page configs → Paint, or the backend in `utils/Env/<backend>/backend.py` | 150 |
+| 4 | `post.py` | the post stage, planned as one more point (04 §4.3) | 60 |
 | 5 | `cli.py` | `argparse`: `run`, `watch`; `--plan`, `--points`, `--set`, `--rerun`, `--only` | 100 |
 
 A module may import only from its own rank or a lower one, and the import graph has no cycles.
 `tests/runner/test_imports.py` checks both in about 40 lines. It is the one piece of v1's layering lesson worth its cost at this size.
 
-**A tool plugin** (`utils/Env/<tool>/render.py`) may import `errors`, `paths` and `quantities`
-only, and never another plugin.
+**A tool plugin** (`utils/Env/<tool>/render.py`, or a plot backend's `backend.py`) may import
+`errors`, `paths` and `quantities` only, and never another plugin.
 
 ### The C++
 

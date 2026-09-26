@@ -2,7 +2,7 @@
 
 | Status | Steps | Depends on | Ends with | Updated |
 |---|---|---|---|---|
-| **in progress** | 3 | P2 | YODA → ROOT conversion; ROOT pages from Paint; `rivet-mkhtml` when asked; `post` tools; a new GUIDE | 2026-09-26 |
+| **done** (S2's style review open) | 3 | P2 | YODA → ROOT conversion; ROOT pages from Paint; `rivet-mkhtml` when asked; `post` tools; a new GUIDE | 2026-09-26 |
 
 ## Goal
 
@@ -108,4 +108,85 @@ Revert the step commits.
 
 ## Log
 
-*(filled during execution)*
+### S1 — 2026-09-26 — done
+
+| Row | Result |
+|---|---|
+| 1 | App_yd2rt on the legacy reference YODA, read back with uproot and compared with YODA's own Python reading: **all 17 Estimate1D objects** have equal edges, and contents and errors equal to 1e-12 (`tests/integration/test_yd2rt.py`) |
+| 2 | `/photo_eic:R=0.4/d01-x01-y01` becomes `photo_eic__R-0.4/d01-x01-y01`, and the `paths` TTree maps it back |
+| 3 | Changing only yd2rt's `select`, then rerunning: the whole point reruns, **16.1 s instead of 0.2 s** (identity per point, V9). This is R5's cost, measured. |
+
+**Deviations:**
+- **Rivet 4 writes final histograms as `Estimate1D`**, with the unscaled fills as `Histo1D` under
+  `/RAW`. Both become `TH1D`. An Estimate's error is the average of its total down and up errors,
+  where 05 §6 had said `TGraphAsymmErrors`. Photo_eic's errors are symmetric, and a `TH1D` is what
+  Paint overlays and divides.
+- **Directories nest** as the YODA path does (`RAW/photo_eic/…`), and only `:`/`=` are mapped.
+- **Products take their final names per group**, after that group's count checks. Before, the rename
+  waited for the last group, so a later group could not read an earlier product (yd2rt reads rivet's
+  YODA). `.complete` is still written last.
+- **Tool options are placeholders**: every `[options]` key of a tool folder, empty when unset. yd2rt
+  takes its select globs as extra arguments.
+- **The reference-data conversion is left to S2**, where Paint needs it.
+- `yd2rt` is in every eic and zeus chain as a second group.
+
+### S2 — 2026-09-26 — done, except the style review (task 3)
+
+`utils/Apps/Paint/` is 636 lines (`Page.hh` 92, `Transform.hh` 175, `Draw.hh` 276, `main.cc` 93),
+against the 900 estimated. `plot.py` is 296.
+
+| Row | Result |
+|---|---|
+| 1 | `hep run PhotoProduction/eic energy_pdf` at 3k events (16 points, 1 min 37 s), then `--only plot`: **68 pages = 4 per object × 17, in pdf and png**, 12 s. `--plan` prints "4 page(s) per object". |
+| 2 | `y_gutter = 1.5`: y max = 1.5 × the largest drawn value to 1e-9, the largest checked against uproot's reading of the inputs; on a log axis the gutter is half the decades shown; `x_gutter = 1.2` widens x by 1.2, about its centre (`test_paint.py`) |
+| 3 | **Auto-range equals the legacy `auto_range.plot` for 17/17 objects**, and the **voided bins equal the legacy ydmrg output for 17/17** (min_entries = 10, pad 1, across both curves); v1's own vectors pass too: the void rules, pad 0/1, nothing filled, alignment to the longest run, unaligned data dropped (`test_paint.py`, 15 tests) |
+| 4 | energy_pdf at 27x920: `[data]` on d01–d12, none on d13–d17. Data whose edges line up nowhere are dropped (`data_bins = 0`). |
+| 5 | An unknown key in `[plot]`, `[plot.style]`, `[plot.data]` or `[plot.object."…"]` (v1's `LegendXPos`), an unknown backend, format or legend position, and a data file without a map: refused at plan time (`test_plot.py`, 9 cases) |
+
+**Deviations and additions:**
+- **`range_pad`** is a `[plot]` key (default 0, as in v1); the legacy plots used 1.
+- **The ratio pad follows the ratios.** At 18x275 every MC/ZEUS ratio is about 0.07, which a fixed
+  0.5–1.5 pad hid. The range is now at least 0.5–1.5, widened to the ratios drawn, within 0–3.
+- **A curve with every bin voided** (5x41 at 3k events: no jet passes the cuts) stays in the legend
+  as "(no entries)" instead of leaving a blank row.
+- **LaTeX → TLatex**: `\mathrm{…}`/`\text{…}` keep their group after `_`/`^` (`E_T^\text{jet}` →
+  `E_{T}^{jet}`); the title falls back to the `.plot`'s `LegendTitle`, since photo_eic's `Title` is empty.
+- **zeus_validation draws the ZEUS data.** `datasets/zeus_eic.yoda` has the same numbers as Rivet's
+  `ZEUS_2012_I1116258.yoda.gz` (only the titles differ), so its `[plot.data]` maps d01–d12 one to one.
+- A page that crashes is reported by its signal, not by ROOT's stack-trace banner. The first draw
+  crashed on exit, because the pads were freed twice (by the canvas and by the keep-alive list).
+- Tests: `test_paint.py` 15, `test_plot_stage.py` 6, `test_plot.py` 20; `make test` 124 (was 83).
+- **Open: task 3, the style review.** The defaults (legend rows, font size, gutter 1.5) are what the
+  first pages used. With 4 curves, a header and data, the top-right legend overlaps the data peak on
+  the η pages. They are adjusted once, after the user has looked at the pages.
+
+### S3 — 2026-09-26 — done
+
+| Row | Result |
+|---|---|
+| 1 | `energy_pdf` with `backend = "yoda"`: **68 pages in 4 mkhtml page sets** (17 per cell), the same pages as S2's, with Paint's ranges and voids; 17 s. A slow test draws the two-cell fixture of `test_plot_stage.py` the same way. |
+| 2 | eic `replicas` (3 seeds, 5k events each) with a `merge` post tool: **`merged.yoda` has 14,996 entries = 4,998 + 4,999 + 4,999**, and σ is their entry-weighted mean (73,232.03 pb); 21 s in all |
+| 3 | A custom post tool reading `{points}` and `{inputs}`: it gets every point's values, tags and product paths, in point order (`test_post.py`, 5 tests: also skipped when unchanged, rerun when a point changes, not run over a subset, may not overwrite the points' product) |
+
+- **`post.py`** (63 lines, rank 4) plans the post stage as one more point, named `post`, with no
+  quantities. Point products become `points` interfaces, one path per point. Its identity adds
+  every point's identity; the points' own identities are unchanged, so no complete point reran.
+- **`utils/Env/merge/`**: `rivet-merge` as a standard tool, with `RIVET_ANALYSIS_PATH` set (it
+  re-runs `finalize()`). This needed **`kind = "flag"` options** in tool folders: `equivalent`
+  becomes `-e` or nothing.
+- **`utils/Env/yoda/backend.py`** (142 lines against about 100): no `tool.toml`, loaded by `plot.py` for
+  `backend = "yoda"`. The first draw failed on 7 of 17 objects per cell. The ZEUS ET tables run to
+  95 GeV, past photo_eic's 76, and mkhtml's ratio needs every reference edge to be an MC edge. So
+  `--dump-ranges` now reports the aligned data span (`data_x`), and the reference is cut to it, as
+  v1's `align_to_edges` did.
+- **A product left by an earlier attempt is removed when a point starts.** Before, `_settle` would
+  have accepted a stale final product from a tool that wrote nothing.
+- The watch views label the post stage "── post (after every point)" instead of numbering it.
+- **`docs/GUIDE.md`**, written for v2, and linked from `docs/README.md`.
+- Tests: `test_post.py` 5, `test_plot.py` +10 (yoda backend), `test_plot_stage.py` +1 (slow);
+  `make test` 136; `make test-slow` 8, still passing after the stale-product change.
+- **Size at the end of P3** (06 §3; measured formally at P4 S3). The C++ apps are 1,248 lines
+  against 1,400, and the tool folders plus the master TOML 310 against 1,000. **The runner is 3,073
+  against 2,000 (1.54×), already over the 1.5× line.** `tools.py` is 820 lines against the 300
+  estimated: placeholders, exports (V21), the C9 `.info` check and the connection rules (C6) all
+  live there. Recorded as a finding for P4 S3, not smoothed over; P4 adds little to the runner.
