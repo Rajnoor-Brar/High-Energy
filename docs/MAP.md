@@ -1,161 +1,136 @@
-# Project Directory Map
+# Map of the implemented system
 
-Updated: 2026-06-12.
+Where things are and what owns what. For how to *use* it see [GUIDE.md](GUIDE.md); for why it is
+shaped this way see [rework_v1/](rework_v1/), and for the words it uses
+[rework_v1/07_Glossary.md](rework_v1/07_Glossary.md).
 
 ---
 
-## Top Level
+## 1. The two halves
+
+| | `hep` (Python, package `hekit`) | `hep-run` (one C++ executable) |
+|---|---|---|
+| Owns | configuration, judgement, orchestration, output | the event loop |
+| Decides | what to run, with what seeds, in what order, where it goes | nothing — it is told |
+| Speaks | TOML in, terminal and files out | a resolved spec in, JSON-lines status on fd 3 |
+
+The contract between them is deliberately narrow: `hep` writes a **resolved spec** (every value
+already decided) and reads a **status stream**. Nothing else crosses. That is what lets either side
+be tested without the other, and why `hep-run` links no ROOT, no plotting and no config parser.
 
 ```
-High-Energy/
-├── sources/Lambda/          Lambda drivers: data, parallel, reconstruction, test
-├── _Paint.cc                entry: standalone ROOT histogram renderer
-├── _ThreadBench.cc          entry: thread-count sweep benchmark
-├── Makefile
-├── configs/                 TOML config files + defaults/
-├── datasets/                input ROOT files (not tracked)
-├── docs/                    design and reference documents (archive/ = historical)
-├── modules/                 domain logic (Lambda)
-├── output/Lambda/           Lambda datasets, test artifacts, and driver binaries (gitignored)
-├── archive/                 retired code kept for reference (gitignored)
-├── aux/  bots/  _vs/        local tooling/editor scratch — not part of the build
-├── tests/                   unit + integration tests (run_all.sh)
-└── utils/                   reusable library (no domain logic)
+hep  ──spec.toml──►  hep-run  ──status(fd 3)──►  hep
+                        │
+                        └── source ──► analyzers ──► files
 ```
 
 ---
 
-## `utils/`
+## 2. `utils/` — the C++ side (~6.8k lines)
 
-### Wrappers (include everything in their namespace)
+One facade header per namespace, with submodules beside it (`Core.hh` + `Core/`). Layered, and a
+lower layer never links a higher one:
 
-| File | Aggregates |
+```
+Core ─► Status ─► Events ─► { Store, Results, ML, Phys } ─► { Source, Module } ─► Analyzer ─► Run ─► apps/
+```
+
+| Namespace | What it owns |
 |---|---|
-| `Physics.hh` | Physics/{Types,TypeAid,Kinematics,Properties} |
-| `Utility.hh` | Utility/{Number,RootTypes,Time} |
-| `Config.hh` | Config/{Types,TypeAid,LimitAid,Defaults,Reader} |
-| `Probe.hh` | Probe/{Types,BranchControl,ConfigAid,Readers,Parallel,ParallelIMT,Administration,Configuration,Methods,Directives} |
-| `Record.hh` | Record/{Types,Requests,Configs,Meta,Writer} |
-| `Monitor.hh` | Monitor/{Types,Logger,Methods,Render,Report,Administration,Directive,Configure,Timer} |
-| `Paint.hh` | Paint/{Types,Style,Apply,Save} |
+| `Core` | spec reading, hashing, clocks, signals, exit codes, provenance |
+| `Status` | the JSON-lines stream, heartbeats, progress |
+| `Events` | the per-event view: live Pythia or a lazy `GenEvent`, weights, worker and slot |
+| `Store` | sharded HepMC3 writing and reading, the index, the replay queue |
+| `Results` | YODA booking per worker, merging, the scaling contract, atomic writes |
+| `ML` | ONNX sessions with per-worker scratch; a named feature schema |
+| `Phys` | PDG data, kinematics on `FourVector`, `GenEvent` selectors, jet definitions |
+| `Source` | where events come from: Pythia, a store replay, a stream |
+| `Module` | the user-module interface and its `dlopen` loader |
+| `Analyzer` | where events go: Rivet, the store, modules, the Delphes tee |
+| `Run` | wires source to analyzers; chunking, the concurrency mode, the summary |
 
-`Config/Configure.hh` is intentionally excluded from `Config.hh` (depends on Probe/Record/Monitor — circular). Drivers include it explicitly.
+`utils/apps/hep-run.cc` is the executable, and is short on purpose — everything it does is in the
+namespaces above.
+
+### Two invariants worth knowing before reading the code
+
+- **The scaling contract.** Fills carry raw weights; scaling happens once, in `finalize`, when σ and
+  Σw are known. `Results::Worker` has no `scale()` and `Results::Final` has no `fill()`, so the
+  rule is the shape of the types rather than something to remember.
+- **Concurrency is a property of the analyzer.** `Sharded` analyzers hold one instance per worker and take
+  no lock; `Locked` ones share one; `Serial` ones want the callback thread. `Run::Loop` asks and
+  then decides, and says why.
 
 ---
 
-### `utils/Physics/`
+## 3. `utils/python/hekit/` — the `hep` side (~17k lines)
 
-| File | Summary |
+| Package | What it owns |
 |---|---|
-| `Types.hh` | `Lorentz` 4-vector alias; `ParticleProperty`/`EventProperty` enums with trait tables (name, extractor) |
-| `TypeAid.hh` | Enum↔string converters for `ParticleProperty`/`EventProperty` |
-| `Kinematics.hh` | Kinematic calculators: invariant mass, rapidity, pT, η; thin wrappers over `ROOT::Math` |
-| `Properties.hh` | `valueOf()` — dispatches a `Lorentz` vector to a `ParticleProperty` via trait table |
+| `config` | schema, loading, validation, migration from v1, the generated reference |
+| `sweep` | quantities, studies, selection (`--study`, `--pin`, `--across`, `--overlay`) |
+| `plan` | expansion to points, identity hashing, the resolved spec, stage chains |
+| `adapters` | the external generators (Sherpa, Whizard, MadGraph, Delphes) and the prepare cache |
+| `run` | the supervisor, transport, signals, the journal, `hep bench` |
+| `term` | the live dashboard, `hep watch`, `hep events` |
+| `results` | layout, manifests, comparison statistics, replica merging, `hep clean` |
+| `plot` | the page pipeline and two backends (`rivet-mkhtml`, matplotlib) |
+| `proc` | fits (Minuit2, RooFit, scipy) and derived histograms (RDataFrame, uproot) |
+| `store` | `hep store ls|info|verify` |
+| `prov` | provenance capture |
+| `env` | `hep doctor`, `hep build`, `hep pdf`, `hep new` |
+
+`cli.py` is the command tree and nothing else: subcommands are imported on demand, so `hep --help`
+stays fast.
 
 ---
 
-### `utils/Utility/`
+## 4. Where a run's files go
 
-| File | Summary |
-|---|---|
-| `RootTypes.hh` | `DataType` enum (Float/Double/Int32/…); `detectBranchType(TBranch*)` and `typeName()` introspectors |
-| `Number.hh` | `numberFormat()` — comma-separated, right-padded integer formatter |
-| `Time.hh` | Timestamp string, elapsed-time, ETA formatters; consumes `Config::uSeconds`/`Seconds` aliases |
+```
+results/<project>/
+  points/<point>/
+    analysis.yoda              results (analysis.partial.yoda if the run was stopped)
+    run.summary.json           counts, σ, seeds, mode, warnings, and `inputs` (what was read)
+    provenance.json            the resolved config, hashes, tool versions, host, git revision
+    events/                    optional HepMC3 store: shards + events.index.json
+    delphes.root               optional, from the detector stage
+    logs/                      one file per stage
+  studies/[NN_]<study>/
+    plots/<page>/              figures and an index
+    proc/                      fits.json, proc.yoda, proc.root (optional)
+  .cache/<tool>/<hash>/        prepare caches (Sherpa integration, MadGraph output)
+```
 
----
-
-### `utils/Config/`
-
-| File | Summary |
-|---|---|
-| `Types.hh` | Core config types: `Bounds`, `RangeSize`, `Watch`, `Register`, `Events`, `ParticleLimits`, `EventLimits`; imports `Probe::ProbeConfig` |
-| `TypeAid.hh` | `RangeSize`↔string; `Watch::recordEvent` inline |
-| `LimitAid.hh` | `resolveLimitsPath()` — bare name → `configs/*.toml` path |
-| `Limits.hh` | `parseBoundsArray`, `limitExtractor` — TOML helpers for defaults |
-| `Reader.hh` | `resolveThreadCount`, `readConfig` — full TOML parse into `Watch`/`Register`/`Events`; calls `parseProbeConfig` for `[probe.events.*]`/`[probe.feed.*]` |
-| `Configure.hh` | `configure<ProbePipeline>()`/`configure<PythiaPipeline>()` — single-call facade to configure Probe, Writer, and Monitor from a config path |
+The serial prefix (`01_`, `02_`) says "the Nth run", across every study.
 
 ---
 
-### `utils/Probe/`
+## 5. The rest of the repository
 
-| File | Summary |
+| Directory | What it is |
 |---|---|
-| `Types.hh` | `EventParticleSpec`, `EventNodeSpec`, `FeedParticleSpec`, `FeedNodeSpec`, `ProbeConfig`, `Event`, `Feed`, `QueuedFrame`, `ActiveMode`, `StreamMode`, `CallbackMode` |
-| `BranchControl.hh` | ROOT branch introspection; `KinBuf` (float/double branch binding); `probeFirstKey`, `scanFlatEventKeys`, `enableRootThreadSafety` |
-| `ConfigAid.hh` | `parseBranchPair`, `parseBranchList`, `parseProbeConfig` — TOML → `ProbeConfig` (Event + Feed buckets) |
-| `Readers.hh` | `EventReader`/`FeedReader` abstract bases; `FlatReader`, `VecReader`, `EventParticleReaderRowJoin`, `EventNodeReaderArray`; `FeedParticleReader`, `FeedNodeReader`; `EventStream`, `FeedStream` |
-| `Parallel.hh` | `ProbeParallel` — multi-threaded ROOT event reader; `streamEvents`, `streamFeed`, `stream` |
-| `ParallelIMT.hh` | `ProbeIMT` — ROOT IMT in-memory table reader; `run(callback)` |
-| `Lifecycle.hh` | `ProbeParallel`/`ProbeIMT` constructors, getters, `activeMode()`, partition helpers |
-| `Configuration.hh` | `ProbeParallel::configureProbe` (legacy `EventParticleSpec` and new `ProbeConfig` overloads); `ProbeIMT::configureProbe` |
-| `Methods.hh` | Reader ctor bodies, `EventStream`/`FeedStream` iteration; `FeedParticleReader`/`FeedNodeReader::readEntry`; ProbeIMT flush |
-| `Threading.hh` | `streamEvents`/`streamFeed`/`stream` implementations; `runWorkerThread`/`runCollectorThread` loop bodies |
+| `analyses/<project>/` | Rivet plugins, built by `hep build` |
+| `modules/<project>/` | user C++ modules, one shared library each |
+| `configs/<project>/` | the TOML configs and their native cards |
+| `tests/` | `python/` (unit), `integration/` (real binaries), `cxx/`, `golden/` (frozen fixtures), `e2e/` |
+| `legacy/` | the pre-rework code and docs, frozen and tracked, never imported from |
+| `docs/` | this map, the guide, and `rework/` |
+| `bots/` | working notes for agents: `BOT.md` and `current_plan.md` |
+| `output/scratch/` | where tests and dry runs write; never `results/` or `configs/` |
 
 ---
 
-### `utils/Record/`
+## 6. Finding your way in
 
-| File | Summary |
+| Question | Where to look |
 |---|---|
-| `Types.hh` | Record structs: `ParticleTH1`/`TH2`/`Graph`/`Profile`/`Tree` (master + clone vectors); `RecordKey` |
-| `Type_Methods.hh` | `RecordKey` hash, equality, `keyString`; `keyOf`/`requireEnumBasis` helpers |
-| `Requests.hh` | `ParticleRequest`, `Hist1DRequest`, `Hist2DRequest`, `GraphRequest`, `ProfileRequest`, `TreeRowRequest`; `FillRequest` variant |
-| `Configs.hh` | `Paths` (output TStrings) and `HistConfig` (bin count, scale, limits maps) |
-| `Meta.hh` | `Meta::Record` struct; `Writer::writeMeta` — saves run provenance to ROOT file |
-| `Writer.hh` | `Record::Writer` class declaration; aggregates all implementation fragments below |
-| `Declaration.hh` | `declareParticleGroup`, `declareTH1`/`TH2`/`Graph`/`Profile`/`Tree` method bodies |
-| `Recording.hh` | `fillParticleEvent`, `fillTH1`/`TH2`/`Graph`/`Profile`/`Tree`, `scaleAndWrite` |
-| `Threading.hh` | `pushFill`, worker loop, `applyParticleRequest` and per-type `applyXxxRequest` bodies |
-| `Cloning.hh` | `allocateAllClones`, `mergeAllClones`, and per-type `cloneXxxImpl`/`mergeXxxImpl` helpers |
-| `Lifecycle.hh` | `open`, `start`, `finalize`, `checkpoint`, `cleanup` — Writer lifecycle; binds to `Monitor::AsyncLogger` |
+| What does this config key mean? | `hep config reference`, or [rework/reference/config.md](rework/reference/config.md) |
+| What does this command do? | `hep <command> --help`, or [GUIDE.md](GUIDE.md) |
+| Why is it built this way? | the numbered documents in [rework/](rework/) |
+| What was decided, and what was not? | [rework/10_Roadmap.md](rework/10_Roadmap.md) §2, and the register in [rework/steps/README.md](rework/steps/README.md) |
+| What was wrong with the old code? | [rework/00_Audit.md](rework/00_Audit.md) — every finding, with where it was fixed |
+| What did this step actually measure? | the Log at the bottom of its file in [rework/steps/](rework/steps/) |
 
----
-
-### `utils/Monitor/`
-
-| File | Summary |
-|---|---|
-| `Types.hh` | `PacingInfo` (print/bar/check intervals, heartbeat, stall threshold); `RunSnapshot`; `PendingActions` |
-| `Logger.hh` | `AsyncLogger` class declaration — owns the heartbeat thread and log-message slot vector |
-| `Methods.hh` | `updatedETA`, `formatProgress`, `statusLine` — pure string builders |
-| `Render.hh` | `renderStatus`, `renderBar` — terminal progress rendering (ANSI, `ioctl` terminal width) |
-| `Report.hh` | `writeRunStat` — writes run-stat JSON/text to file; `flushLog` |
-| `Threading.hh` | `AsyncLogger` main-loop body, heartbeat dispatch, `mergePending` |
-| `Lifecycle.hh` | `AsyncLogger` constructor/destructor, `start`/`stop`, `bindWriter` |
-| `Configure.hh` | `configureMonitor` — reads TOML pacing/stall keys into `AsyncLogger` |
-| `ConfigAid.hh` | Compatibility shim → re-exports `Monitor/Configure.hh` |
-| `Snapshot.hh` | Reserved (empty; `#pragma once` only) |
-| `Timer.hh` | `BlockTimer` — RAII wall-clock scope timer; appends to `output/Lambda/timer.log` |
-
----
-
-### `utils/Paint/`
-
-| File | Summary |
-|---|---|
-| `Types.hh` | `PlotType`, `PadConfig`, `CanvasConfig`, `HistogramEntry`, `PaintConfig` |
-| `Style.hh` | `applyStyle` — ROOT style/color/marker/line setters |
-| `Apply.hh` | `applyPad`, `applyCanvas`, `drawEntries` — applies config to ROOT canvas/pad |
-| `Save.hh` | `savePlot` — renders and exports to PNG/PDF |
-| `Book.hh` | TOML → `PaintConfig` parser; reads plot definitions |
-| `Render.hh` | Low-level ROOT drawing helpers (TH1, TH2, TGraph overlays) |
-| `Resolve.hh` | ROOT object retrieval from TFile/TDirectory by path and type |
-| `Illustrator.hh` | `Illustrator` class — high-level driver: load book, resolve objects, render, save |
-
----
-
-## `modules/`
-
-### `modules/Lambda/`
-
-| File | Summary |
-|---|---|
-| `Types.hh` | `Lorentz`, `Candidates` struct, `HistogramSet` enum, mass constants |
-| `TypeAid.hh` | `kHistogramSetMap` attribute table (enum → label/display name) |
-| `Parameters.hh` | `Parameters` struct — mass window, cut values; TOML loader |
-| `Loaders.hh` | Pythia8 `.cmnd` script loader; Pythia event-loop helpers |
-| `Context.hh` | `AnalysisContext` — bundles `Parameters`, `Watch`, `Writer` for callback use |
-| `Declare.hh` | `declareHistograms()` — registers all Lambda histograms on `Record::Writer` |
-| `Reconstruction.hh` | `reconstructCandidates()` — proton×pion combinatorics, mass-window cut |
-| `Recording.hh` | `fillCandidates()` — fans out validated/unvalidated candidates into Writer fill requests |
+The step Logs are the most useful and least obvious of these: each records what was *measured*
+rather than what was intended, including the times the design turned out to be wrong.

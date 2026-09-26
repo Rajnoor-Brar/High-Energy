@@ -1,6 +1,9 @@
 # Build artifacts
 *.exe
 *.exe.d
+build/
+build-*/
+compile_commands.json
 
 # Run outputs
 output/*
@@ -10,6 +13,9 @@ logs/
 checkpoints/
 
 # Scratch / local-only
+__pycache__/
+.pytest_cache/
+*.pyc
 dump
 archive/*
 /.claude
@@ -23,3 +29,4 @@ tests/tmp_paint/
 
 literature/*
 datasets/*
+cross_machine/*

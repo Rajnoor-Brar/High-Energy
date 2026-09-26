@@ -13,20 +13,28 @@
 
 ### Directory Layout
 
-| Path        | Purpose                                                                     |
-| ----------- | --------------------------------------------------------------------------- |
-| `aux/`      | VSCode extensions and tooling for HEP UX                                    |
-| `bots/`     | Bot configuration, plans (`current_plan.md`, `intent.md`), and `lessons.md` |
-| `configs/`  | User configs for programs                                                   |
-| `datasets/` | Third-party datasets downloaded from the internet                           |
-| `docs/`     | Markdown files: file maps, documentation                                    |
-| `modules/`  | Project-specific objects and functions                                      |
-| `output/Lambda/` | Lambda processed datasets, test artifacts, and driver binaries      |
-| `sources/Lambda/` | Lambda driver source files                                          |
-| `results/`  | Presentable outputs (images, PDFs)                                          |
-| `utils/`    | Core logic not tied to a specific module                                    |
+| Path         | Purpose                                                                      |
+| ------------ | ---------------------------------------------------------------------------- |
+| `analyses/`  | Rivet analysis plugins per project (`analyses/<Project>/`), built by `hep build` |
+| `aux/`       | VSCode extensions and tooling for HEP UX                                     |
+| `bots/`      | Bot configuration, plans (`current_plan.md`, `intent.md`), and `lessons.md`   |
+| `cmake/`     | `Find*.cmake` modules for the `~/HEP` stack                                  |
+| `configs/`   | User configs per project (`configs/<Project>/`)                              |
+| `datasets/`  | Third-party datasets downloaded from the internet                            |
+| `docs/`      | `GUIDE.md` (use), `MAP.md` (layout), `rework/` (design and step Logs)        |
+| `env/`       | Versioned shell environment (`hep_env.sh`), sourced by the `~/HEP` stub      |
+| `legacy/`    | Frozen pre-rework code, tests, configs, docs and the retired tools — never included from outside |
+| `modules/`   | User C++ analysis modules (`modules/<Project>/`), one shared library each    |
+| `output/`    | Build artefacts and scratch (`output/scratch/` for tests and dry runs)       |
+| `results/`   | Presentable outputs (YODA, images, HTML pages)                               |
+| `tests/`     | `python/`, `integration/`, `cxx/`, `golden/` (frozen fixtures), `e2e/`       |
+| `utils/`     | The toolkit: C++ namespaces (`utils/<Namespace>.hh` + `<Namespace>/`) and the `hekit` Python package under `utils/python/` |
 
 - For any module or utility `Foo`, its submodules reside in `Foo/`.
+- `sources/` and `tools/` are gone: the drivers became `hep-run` and the analyses moved to
+  `analyses/`; the legacy tools were retired into `legacy/` in P4-S06.
+- `legacy/` is reference only: copy or adapt from it, never `#include` or import it
+  (see `legacy/PORTING.md`).
 - `BOT.md` contains directives for bots and agents (BOTs).
 - Additional rules given explicitly by the user may be appended to their dedicated file.
 - Bots may record frequent issues, pitfalls, and observed code style conventions
@@ -55,8 +63,16 @@ submodule directory (e.g. `Foo/` for namespace `Foo`).
 
 ## Testing
 
-- When running tests, redirect output paths from `output/Lambda/` to `output/Lambda/test/`.
-- Restore to `output/Lambda/` only after tests pass or are explicitly abandoned by the user.
+- Tests and dry runs never write into `results/` or `configs/`. Use the scratch root
+  `output/scratch/` (gitignored), or `HEKIT_RESULTS` once the new stack exists.
+  The legacy tools resolve paths relative to the CWD, so run them from a scratch CWD with
+  symlinks for `configs`, `output`, `datasets` and `sources` and its own `results/`
+  (see `output/scratch/legacy/`, built by `tests/golden/capture_legacy.py`).
+- Golden fixtures of the legacy tools live in `tests/golden/` and are captured from frozen
+  config copies in `tests/golden/inputs/`; recapture deliberately, and record every expected
+  difference in `tests/golden/legacy_plan/EXPECTED_DELTAS.md`.
 - If a test run is interrupted or fails, do not restore paths automatically —
   report the state to the user and wait for instruction.
 - Do not modify source or output paths permanently without user confirmation.
+- Never rely on the locale default encoding: reading a YODA file resets `LC_ALL` to `C`
+  (00/B29), so name `encoding="utf-8"` on every text read and write.

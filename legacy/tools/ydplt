@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+"""Render each sweep point's Rivet Yoda output on its own plot page."""
+
+import argparse
+import os
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+from rivpyth_common import (
+    ConfigError, apply_overrides, curve_legend, execution_plan, expand_points, plot_arguments,
+    plot_file_for, read_config, unify_yodas, void_bins, auto_range_plot,
+)
+
+
+def plotting_environment(plugin_dir: str) -> dict[str, str]:
+    environment = os.environ.copy()
+    inherited = environment.get("RIVET_ANALYSIS_PATH", "")
+    environment["RIVET_ANALYSIS_PATH"] = f"{plugin_dir}{os.pathsep}{inherited}" if inherited else plugin_dir
+    environment.setdefault("MPLCONFIGDIR", "/tmp/matplotlib-rivpyth")
+    environment["PYTHONUTF8"] = "1"   # rivet-mkhtml writes legend text into its HTML index
+    return environment
+
+
+def parse_arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog="ydplt", description="Plot each sweep point separately.")
+    parser.add_argument("config", type=Path, metavar="RUN.toml")
+    parser.add_argument("index", type=int, nargs="?", metavar="INDEX", help="plot only this one-based point")
+    parser.add_argument("--across", help="scanned groups, e.g. 'cmnd.beams+rivet.ymax,cmnd.pdf' "
+                        "('+' couples, ',' separates groups; overrides [sweep].across)")
+    parser.add_argument("--style", choices=("together", "grid"),
+                        help="for a flat --across list: together = one coupled group, grid = one group each")
+    parser.add_argument("--study", help="named scan from [study.<name>] (replaces [sweep].across/overlay, adds pins)")
+    parser.add_argument("--pin", action="append", metavar="QUANTITY=TAG", default=[],
+                        help="hold a quantity at a tag or one-based index while not scanned (repeatable)")
+    parser.add_argument("--overlay", help="quantity whose group is drawn as curves (overrides [sweep].overlay)")
+    arguments = parser.parse_args()
+    if arguments.index is not None and arguments.index < 1:
+        parser.error("INDEX must be a positive integer")
+    return arguments
+
+
+def main() -> int:
+    arguments = parse_arguments()
+    try:
+        config = read_config(arguments.config)
+        if config["path_literal"]:
+            raise ConfigError("ydplt requires path_literal = false")
+        apply_overrides(config, arguments.across, arguments.style, arguments.overlay,
+                        arguments.study, arguments.pin)
+        for point in expand_points(config, arguments.index):
+            plan = execution_plan(config, point)
+            input_yoda = Path(plan["yoda_file"])
+            if not input_yoda.is_file():
+                raise ConfigError(f"Yoda file not found: {input_yoda}")
+            analysis = config["plot_analysis"] or point.plugin
+            plot_file = plot_file_for(config, analysis)
+            output_dir = Path("results") / config["project"] / input_yoda.stem
+            output_dir.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.TemporaryDirectory(prefix="ydplt-") as workdir:
+                yodas = unify_yodas([point], [input_yoda], analysis, Path(workdir))
+                yodas = void_bins(config, yodas, Path(workdir))
+                inputs = plot_arguments(config, [(yodas[0], curve_legend(config, point))], analysis, Path(workdir))
+                ranges = auto_range_plot(config, analysis, [*yodas, *Path(workdir).glob("*_data.yoda")], Path(workdir))
+                status = subprocess.run([
+                    "rivet-mkhtml", "-o", str(output_dir),
+                    *(["-c", str(plot_file)] if plot_file else []),
+                    *(["-c", str(ranges)] if ranges else []), *inputs,
+                ], env=plotting_environment(plan["plugin_dir"])).returncode
+            if status:
+                return status
+        return 0
+    except ConfigError as error:
+        print(f"ydplt: {error}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
