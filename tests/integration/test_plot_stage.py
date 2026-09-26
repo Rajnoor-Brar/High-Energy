@@ -25,11 +25,12 @@ pytestmark = pytest.mark.skipif(not BUILT, reason="make utils/Apps/Paint.exe uti
 
 
 @pytest.fixture
-def stage(scratch):
-    data = raw(run__name="plotstage", run__one__sweeps=["lepton", "pdf"], run__one__plot_points=["lepton"],
+def stage(scratch, request):
+    backend = getattr(request, "param", "root")
+    data = raw(run__name=f"plotstage_{backend}", run__one__sweeps=["lepton", "pdf"], run__one__plot_points=["lepton"],
                quantities__lepton={"key": {"pythia": "Beams:idB"}, "values": [11, -11], "tags": ["em", "ep"]},
                quantities__pdf__labels=["MSTW 2008 LO", "NNPDF 2.3 LO"],
-               plot={"formats": ["png"], "ratio": True, "min_entries": 10, "range_pad": 1,
+               plot={"backend": backend, "formats": ["png"], "ratio": True, "min_entries": 10, "range_pad": 1,
                      "data": {"file": "./tests/reference/legacy_run/ydmrg/photo_eic_data.yoda", "legend": "legacy",
                               "map": {"d01-x01-y01": "/REF/photo_eic/d01-x01-y01"}},
                      "object": {"d04-*": {"logy": True, "y_gutter": 3.0, "title": "override"}}})
@@ -102,3 +103,22 @@ def test_inputs_are_converted_once(stage):
     before = {p: p.stat().st_mtime_ns for p in inputs.glob("*.root")}
     plot.pages(run, configuration, plans)
     assert {p: p.stat().st_mtime_ns for p in inputs.glob("*.root")} == before and len(before) == 4
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not shutil.which("rivet-mkhtml"), reason="load_hep: rivet-mkhtml")
+@pytest.mark.parametrize("stage", ["yoda"], indirect=True)
+def test_the_yoda_backend_draws_the_same_pages(stage):
+    """S3 row 1 in miniature: the pages of the ROOT backend, drawn by rivet-mkhtml, one set per cell."""
+    run, configuration, plans = stage
+    said = []
+    assert plot.draw(run, configuration, plans, said.append) == 0, said
+    plots = plans[0].res.parent / "plots"
+    for cell in ("em", "ep"):
+        assert len(list((plots / cell / "photo_eic").glob("*.pdf"))) == 17
+    work = plans[0].out.parent / "plots" / "em" / "yoda"
+    blocks = (work / "pages.plot").read_text()
+    assert blocks.count("# BEGIN PLOT") == 17 and "XMin=" in blocks and "LogY=1" in blocks
+    yoda = pytest.importorskip("yoda")
+    references = yoda.read(str(work / "reference.yoda"))
+    assert list(references) == ["/REF/photo_eic/d01-x01-y01"]                # only what the map names

@@ -1,6 +1,6 @@
 # Current plan
 
-## rework v2 — EXECUTING (ordered by the user 2026-09-26). Active: **P3 — Results and plots**
+## rework v2 — EXECUTING (ordered by the user 2026-09-26). Active: **P4 — Modules and the other tools**
 
 The plan is `docs/rework_v2/`:
 read `README.md` (decisions V1–V20, traceability) → `00_Brief.md` (the user's design, verbatim) →
@@ -26,12 +26,12 @@ read `README.md` (decisions V1–V20, traceability) → `00_Brief.md` (the user'
   hangs (SIGPIPE is never the cause), and the live view and `hep watch` work.
 - **P2 — Sweeps: done.** The counts gate passes for all 12 legacy cases; C9/C10 are in; reruns
   spawn 0 processes; eic and zeus are fully translated; points.json lists every point.
-- **P3 — Results and plots** (`docs/rework_v2/phases/P3_results-and-plots.md`), in progress:
-  - S1: App_yd2rt (C++) + the yd2rt tool folder + the reference-data conversion cache.
-  - S2: done (Paint + plot.py + `--only plot`; legacy ranges and voids 17/17). Open: the style
-    review of the first pages by the user (task 3).
-  - S3: the yoda backend (rivet-mkhtml), `post`, and a new docs/GUIDE.md.
-
+- **P3 — Results and plots: done.** yd2rt, Paint (legacy ranges and voids 17/17), plot.py with
+  `--only plot`, the yoda backend (mkhtml, same pages), `post` (replicas merged: 3 × the entries),
+  `docs/GUIDE.md`. Open: the user's style review of the first Paint pages (S2 task 3). Runner size
+  3,073 vs 2,000 budget (1.54×): a finding for P4 S3.
+- **P4 — Modules and the other tools** (`docs/rework_v2/phases/P4_modules-and-tools.md`), next:
+  S1 module kit + Lambda + InprocJets; S2 Delphes/Herwig/Sherpa; S3 Whizard/MadGraph, comparison, budget.
 ---
 
 # v1 (finished) — the working plan as it stood at `rework/v1`

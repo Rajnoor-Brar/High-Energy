@@ -67,7 +67,7 @@ be declared for it (V21). `[exports.<name>]` is for everything else:
 | `[tool]` | category, executable, `streamable`, status mode, `consumes_events` / `produces_events` |
 | `[card]` | how a point card is made. `style` is one of: `"append"` (last wins: Pythia), `"prepend"` (the point card first, then include the base: Whizard, L13), `"merge"` (deep YAML merge written whole: Sherpa, L12), `"none"`, or `"render"` (call `render.py`) |
 | `[command]` | the argv template and environment |
-| `[options]` | a schema for the tool-specific keys, in the runner's field vocabulary: `kind`, `item`, `required`, `choices` |
+| `[options]` | a schema for the tool-specific keys, in the runner's field vocabulary: `kind`, `item`, `required`, `choices`. Every option is also an argv placeholder; `kind = "flag"` (with `flag = "-e"`, `default`) expands to the flag or to nothing |
 | `[outputs]` | which outputs are products, and how an event count is read back |
 | `[prepare]` | optional: a prepare step (integration, process build), its cache key, and its marker file |
 | `[exports.<name>]` | optional: configuration a custom tool may request as `<tool>_<name> = true` ([04 §7.3](04_Config.md#73-standard-configurations-for-custom-tools)): what it gives (`path`, `parts`, or named values), and `needs_prepare` |
@@ -102,7 +102,8 @@ look-alike (L26, the F1 lesson). A plugin imports only `errors`, `paths` and `qu
 | `custom` | any | `executable = …` | per table | per table | P1 |
 | `yd2rt` | visualisation | `build/App_yd2rt.exe` | no (file) | standard | P3 |
 | `paint` | visualisation | `build/Paint.exe` | — | standard | P3 (driven by `[plot]`) |
-| `yoda` | visualisation | `rivet-mkhtml` | — | none | P3 (driven by `[plot] backend = "yoda"`) |
+| `yoda` | visualisation | `rivet-mkhtml` | — | none | P3 (driven by `[plot] backend = "yoda"`): `utils/Env/yoda/backend.py`, no `tool.toml` |
+| `merge` | analysis application | `rivet-merge` | no (files) | none | P3, in `post`: one product of every point, `-e` unless `equivalent = false` |
 | `module` | analysis application | `build/<P>/<Name>.exe` | yes | standard | P4 |
 | `delphes` | detector simulator | `DelphesHepMC3` | **no** (L11) | filters | P4 |
 | `herwig` | event generator | `Herwig` (read, then run) | — (writes) | filters | P4 |

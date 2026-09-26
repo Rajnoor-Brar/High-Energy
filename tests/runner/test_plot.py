@@ -70,3 +70,41 @@ def test_labels_come_from_the_rivet_plot_file_for_every_variant():
     plain, variant = plot.labels_of("/photo_eic/d01-x01-y01"), plot.labels_of("/photo_eic:R=0.7/d01-x01-y01")
     assert plain == variant
     assert plain["LogY"] == "1" and "E_T" in plain["XLabel"]
+
+
+# ── the yoda backend (utils/Env/yoda/backend.py) ──────────────────────────────────────────────
+
+@pytest.fixture(scope="module")
+def yoda_backend():
+    return plot.backend("yoda")
+
+
+@pytest.mark.parametrize("root, latex", [
+    ("MSTW 2008 LO", "MSTW 2008 LO"),
+    ("5x41 GeV (#sqrt{s} = 28.6 GeV)", r"5x41 GeV $(\sqrt{s}$ = 28.6 GeV)"),
+    ("p_{T0}^{ref} = 3.0 GeV", "$p_{T0}^{ref}$ = 3.0 GeV"),
+    ("#hat{p}_{T} > 2 GeV", r"$\hat{p}_{T}$ > 2 GeV"),
+    ("R: 0.4", "R  0.4"),                                                 # ':' separates mkhtml's options
+])
+def test_tlatex_becomes_latex_for_mkhtml(yoda_backend, root, latex):
+    assert yoda_backend.latex(root) == latex
+
+
+def test_the_yoda_backend_refuses_what_mkhtml_cannot_do(scratch):
+    validated(scratch, backend="yoda", style={"canvas": [900, 600]})
+    for key, value in (("font_size", 13), ("palette", ["kRed"])):
+        with pytest.raises(HepError, match=key):
+            validated(scratch, backend="yoda", style={key: value})
+
+
+def test_references_are_cut_to_the_aligned_run_and_renamed(yoda_backend):
+    yoda = pytest.importorskip("yoda")
+    from types import SimpleNamespace
+    page = SimpleNamespace(object="/photo_eic:R=0.7/d01-x01-y01", ranges={"data_x": [17, 47]},
+                           data=(REPO / "datasets" / "zeus_eic.yoda", "/REF/ZEUS_2012_I1116258/d01-x01-y01"))
+    ref = yoda_backend._reference(yoda, page)
+    whole = yoda.read(str(page.data[0]))[page.data[1]]
+    assert ref.path() == "/REF/photo_eic/d01-x01-y01"
+    assert list(ref.xEdges()) == [17, 21, 25, 29, 35, 41, 47] and len(whole.xEdges()) > 7
+    assert [ref.bin(i).val() for i in range(1, 7)] == [whole.bin(i).val() for i in range(1, 7)]
+    assert ref.bin(1).errDownUp("stat") == whole.bin(1).errDownUp("stat")

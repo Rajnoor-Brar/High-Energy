@@ -2,7 +2,7 @@
 
 | Status | Steps | Depends on | Ends with | Updated |
 |---|---|---|---|---|
-| **in progress** | 3 | P2 | YODA → ROOT conversion; ROOT pages from Paint; `rivet-mkhtml` when asked; `post` tools; a new GUIDE | 2026-09-26 |
+| **done** (S2's style review open) | 3 | P2 | YODA → ROOT conversion; ROOT pages from Paint; `rivet-mkhtml` when asked; `post` tools; a new GUIDE | 2026-09-26 |
 
 ## Goal
 
@@ -159,3 +159,34 @@ against the 900 estimated. `plot.py` is 296.
 - **Open: task 3, the style review.** The defaults (legend rows, font size, gutter 1.5) are what the
   first pages used. With 4 curves, a header and data, the top-right legend overlaps the data peak on
   the η pages. They are adjusted once, after the user has looked at the pages.
+
+### S3 — 2026-09-26 — done
+
+| Row | Result |
+|---|---|
+| 1 | `energy_pdf` with `backend = "yoda"`: **68 pages in 4 mkhtml page sets** (17 per cell), the same pages as S2's, with Paint's ranges and voids; 17 s. A slow test draws the two-cell fixture of `test_plot_stage.py` the same way. |
+| 2 | eic `replicas` (3 seeds, 5k events each) with a `merge` post tool: **`merged.yoda` has 14,996 entries = 4,998 + 4,999 + 4,999**, and σ is their entry-weighted mean (73,232.03 pb); 21 s in all |
+| 3 | A custom post tool reading `{points}` and `{inputs}`: it gets every point's values, tags and product paths, in point order (`test_post.py`, 5 tests: also skipped when unchanged, rerun when a point changes, not run over a subset, may not overwrite the points' product) |
+
+- **`post.py`** (63 lines, rank 4) plans the post stage as one more point, named `post`, with no
+  quantities. Point products become `points` interfaces, one path per point. Its identity adds
+  every point's identity; the points' own identities are unchanged, so no complete point reran.
+- **`utils/Env/merge/`**: `rivet-merge` as a standard tool, with `RIVET_ANALYSIS_PATH` set (it
+  re-runs `finalize()`). This needed **`kind = "flag"` options** in tool folders: `equivalent`
+  becomes `-e` or nothing.
+- **`utils/Env/yoda/backend.py`** (142 lines against about 100): no `tool.toml`, loaded by `plot.py` for
+  `backend = "yoda"`. The first draw failed on 7 of 17 objects per cell. The ZEUS ET tables run to
+  95 GeV, past photo_eic's 76, and mkhtml's ratio needs every reference edge to be an MC edge. So
+  `--dump-ranges` now reports the aligned data span (`data_x`), and the reference is cut to it, as
+  v1's `align_to_edges` did.
+- **A product left by an earlier attempt is removed when a point starts.** Before, `_settle` would
+  have accepted a stale final product from a tool that wrote nothing.
+- The watch views label the post stage "── post (after every point)" instead of numbering it.
+- **`docs/GUIDE.md`**, written for v2, and linked from `docs/README.md`.
+- Tests: `test_post.py` 5, `test_plot.py` +10 (yoda backend), `test_plot_stage.py` +1 (slow);
+  `make test` 136; `make test-slow` 8, still passing after the stale-product change.
+- **Size at the end of P3** (06 §3; measured formally at P4 S3). The C++ apps are 1,248 lines
+  against 1,400, and the tool folders plus the master TOML 310 against 1,000. **The runner is 3,073
+  against 2,000 (1.54×), already over the 1.5× line.** `tools.py` is 820 lines against the 300
+  estimated: placeholders, exports (V21), the C9 `.info` check and the connection rules (C6) all
+  live there. Recorded as a finding for P4 S3, not smoothed over; P4 adds little to the runner.

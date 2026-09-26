@@ -18,15 +18,17 @@ from __future__ import annotations
 import fnmatch
 import functools
 import hashlib
+import importlib.util
+import json
 import re
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import tomli_w
 
 from .errors import HepError, did_you_mean
-from .paths import build_root, output_root, resolve
+from .paths import build_root, output_root, repo_root, resolve
 from .record import is_complete
 from .sweep import axes, label_of, tag_of
 
@@ -41,9 +43,28 @@ COUNTERS = ("/_XSEC", "/_EVTCOUNT")
 
 @dataclass
 class Page:
-    name: str            # "<page>/<object>", or "<object>" with no plot_points
+    name: str            # "<cell>/<object>", or "<object>" with no plot_points
     config: Path         # the Paint config
     output: Path         # without extension
+    cell: str = ""       # the plot_points tags, "" with no plot_points
+    object: str = ""     # the YODA path
+    document: dict = field(default_factory=dict)    # the Paint config, as written
+    sources: list = field(default_factory=list)     # each curve's YODA
+    data: tuple | None = None                       # (reference YODA, its object path)
+    overrides: set = field(default_factory=set)     # [plot.object] keys that applied
+    ranges: dict = field(default_factory=dict)      # Paint --dump-ranges, for other backends
+
+
+def backend(name: str):
+    """A backend other than Paint: utils/Env/<name>/backend.py, with validate(settings) and
+    draw(cells, settings, say) -> failed pages."""
+    path = repo_root() / "utils" / "Env" / name / "backend.py"
+    if not path.is_file():
+        raise HepError(f"no plot backend '{name}'", hint=f"expected {path}")
+    spec = importlib.util.spec_from_file_location(f"hep_backend_{name}", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def validate(run) -> None:
@@ -71,6 +92,8 @@ def validate(run) -> None:
         only(table, OBJECT_KEYS, f'object."{glob}"')
         if "legend" in table:
             one_of(table["legend"], LEGENDS, f'object."{glob}".legend')
+    if settings.get("backend", "root") != "root":
+        backend(settings["backend"]).validate(settings)
     data = settings.get("data", {})
     if data and not data.get("map"):
         raise HepError("[plot.data] names a file but no map", where=f"{where}.data",
@@ -200,7 +223,7 @@ def pages(run, configuration, plans) -> list[Page]:
     inputs = {p.point.name: convert(yoda_of(p), out_dir / "inputs" / f"{p.point.name}.root") for p in complete}
 
     data = settings.get("data", {})
-    data_file = None
+    data_file = source = None
     if data:
         source = resolve(data["file"], "data", project=run.project, where=f"{run.path}: [plot.data].file")
         if not source.is_file():
@@ -253,7 +276,9 @@ def pages(run, configuration, plans) -> list[Page]:
             config = out_dir / f"{rel}.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(tomli_w.dumps(document), encoding="utf-8")
-            made.append(Page(rel, config, res_dir / rel))
+            made.append(Page(rel, config, res_dir / rel, cell=key, object=path, document=document,
+                             sources=[yoda_of(plan) for plan in members],
+                             data=(source, reference) if reference else None, overrides=set(override)))
     return made
 
 
@@ -276,8 +301,6 @@ def draw(run, configuration, plans, say) -> int:
     """The plot stage: Paint on every page. Returns the number of pages that failed."""
     if not run.plot:
         return 0
-    if run.plot.get("backend", "root") == "yoda":
-        raise HepError('backend = "yoda" arrives in P3 S3', where=f"{run.path}: [plot].backend")
     paint = build_root() / "Paint.exe"
     if not paint.exists():
         raise HepError("build/Paint.exe is not built", hint="hep build")
@@ -285,6 +308,16 @@ def draw(run, configuration, plans, say) -> int:
     if not todo:
         say("plot: no complete point has a YODA product to draw")
         return 0
+    name = run.plot.get("backend", "root")
+    if name != "root":                   # the same pages; Paint computes the ranges and voids for it
+        cells: dict[str, list[Page]] = {}
+        for page in todo:
+            done = subprocess.run([str(paint), str(page.config), "--dump-ranges"], capture_output=True, text=True)
+            if done.returncode != 0:
+                raise HepError(f"plot: {page.name}: {_why(done)}", where=str(page.config))
+            page.ranges = json.loads(done.stdout)
+            cells.setdefault(page.cell, []).append(page)
+        return backend(name).draw(cells, run.plot, say)
     failed = 0
     for page in todo:
         done = subprocess.run([str(paint), str(page.config)], capture_output=True, text=True)

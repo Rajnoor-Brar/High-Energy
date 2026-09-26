@@ -90,6 +90,13 @@ sweeps      = ["radius"]
 tools       = [["pythia", "rivet"], "yd2rt"]
 static      = { energies = "18x275" }
 
+[run.replicas]
+serial      = 10
+description = "Three seed replicas at the static point, merged after them by rivet-merge (post)"
+sweeps      = ["replica"]
+tools       = [["pythia", "rivet"]]
+post        = ["merge"]
+
 [prelim]
 fifo = ["events.hepmc"]
 
@@ -115,6 +122,11 @@ output_file = "photo.yoda"
 tool        = "yd2rt"
 input       = "photo.yoda"
 output_file = "photo.root"
+
+[tools.merge]                 # post: photo.yoda of every point → one YODA with their statistics
+tool        = "merge"
+input       = "photo.yoda"
+output_file = "merged.yoda"
 
 [quantities.energies]
 values = [[41, 5], [100, 10], [275, 18], [920, 27.5]]     # [E_p, E_e]: beam A is the proton
@@ -163,6 +175,12 @@ key    = "R"
 values = [0.4, 0.7, 1.0]
 tags   = ["r04", "r07", "r10"]
 labels = ["R = 0.4", "R = 0.7", "R = 1.0"]
+
+[quantities.replica]
+target = "pythia/seed"        # enters the generator's identity, so its seed block; renders nothing
+values = [1, 2, 3]
+tags   = ["s1", "s2", "s3"]
+labels = ["seed 1", "seed 2", "seed 3"]
 
 [quantities.etmin]
 target = "rivet/photo_eic"

@@ -65,9 +65,16 @@ class PlainView:
     def end(self) -> None:
         pass
 
-    def point_started(self, plan) -> None:
+    def heading(self, plan, bold: bool = False) -> str:
+        """'── point 3/16: <name>', or '── post' for the post stage (index 0)."""
+        if plan.point.index == 0:
+            return "── post (after every point)"
         self.number += 1
-        self.say(f"── point {self.number}/{self.total}: {plan.point.name}")
+        name = f"[bold]{plan.point.name}[/bold]" if bold else plan.point.name
+        return f"── point {self.number}/{self.total}: {name}"
+
+    def point_started(self, plan) -> None:
+        self.say(self.heading(plan))
 
     def tool_started(self, state) -> None:
         pass
@@ -97,8 +104,7 @@ class PlainView:
             self.say(f"   FAILED{blame}: {result.message}")
 
     def skipped(self, plan) -> None:
-        self.number += 1
-        self.say(f"── point {self.number}/{self.total}: {plan.point.name}: complete, skipped (--rerun to run it again)")
+        self.say(f"{self.heading(plan)}: complete, skipped (--rerun to run it again)")
 
 
 class LiveView(PlainView):
@@ -130,10 +136,9 @@ class LiveView(PlainView):
         self.live.stop()
 
     def point_started(self, plan) -> None:
-        self.number += 1
         self.point_name = plan.point.name
         self.states = []
-        self.say(f"── point {self.number}/{self.total}: [bold]{plan.point.name}[/bold]")
+        self.say(self.heading(plan, bold=True))
 
     def tool_started(self, state) -> None:
         self.states.append(state)

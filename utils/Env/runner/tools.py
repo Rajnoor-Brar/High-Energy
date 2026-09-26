@@ -214,10 +214,11 @@ def version_of(folder: Folder) -> str:
 class Interface:
     name: str
     path: Path
-    kind: str                          # fifo | file | product
+    kind: str                          # fifo | file | product | points (post: that product of every point)
     producer: str = ""                 # tag
     readers: list[str] = field(default_factory=list)
     group: int = -1
+    paths: list[Path] = field(default_factory=list)   # kind points: one per point, in point order
 
 
 @dataclass
@@ -264,6 +265,8 @@ class PointPlan:
     threads: int = 1
     events: int = 0
     writes: dict[Path, str] = field(default_factory=dict)
+    context: dict[str, Any] = field(default_factory=dict)   # post: {points}, the manifest
+    upstream: list[str] = field(default_factory=list)       # post: the identities of the points
 
 
 def location(serial: int | None, name: str) -> str:
@@ -285,7 +288,7 @@ def _check_options(tool, folder: Folder, where: str) -> None:
                            hint=did_you_mean(key, schema) or (f"{folder.name} takes: {', '.join(schema)}"
                                                               if schema else f"{folder.name} takes no extra keys"))
         kind = schema[key].get("kind")
-        types = {"list": list, "table": dict, "str": str, "int": int, "float": (int, float), "bool": bool}
+        types = {"list": list, "table": dict, "str": str, "int": int, "float": (int, float), "bool": bool, "flag": bool}
         if kind in types and not isinstance(value, types[kind]):
             raise HepError(f"'{key}' must be a {kind}", where=f"{where}.{key}")
     for key, rule in schema.items():
@@ -355,7 +358,9 @@ def _resolve_chain(run, configuration, point) -> list[list[str]]:
     return groups
 
 
-def plan_point(run, configuration, point, master: dict) -> PointPlan:
+def plan_point(run, configuration, point, master: dict, *, post: dict | None = None) -> PointPlan:
+    """The plan of one point. With `post` ({"manifest": Path, "products": {name: [Path]}}) it is the
+    post stage's: no quantities, and an `input` naming a product of the points reads all of them."""
     out, res = point_dirs(run, configuration, point)
     groups_tags = _resolve_chain(run, configuration, point)
     chain = [tag for group in groups_tags for tag in group]
@@ -370,7 +375,7 @@ def plan_point(run, configuration, point, master: dict) -> PointPlan:
 
     # quantities: swept, then static where not swept; who consumes each (C7)
     values = dict(point.choice)
-    for name, index in qmod.static_values(run, configuration).items():
+    for name, index in ({} if post else qmod.static_values(run, configuration)).items():
         values.setdefault(name, index)
     consumers = qmod.consumer_table(run, master, list(values), rendered_tags)
 
@@ -385,6 +390,10 @@ def plan_point(run, configuration, point, master: dict) -> PointPlan:
                 raise HepError(f"'{name}' is declared twice in [prelim]", where="[prelim]")
             plan.interfaces[name] = Interface(name, resolve(name, "prelim", root=out, where="[prelim]"),
                                               "fifo" if kind == "fifo" else "file")
+    if post:
+        plan.context["points"] = str(post["manifest"])
+        for name, paths in post["products"].items():
+            plan.interfaces[name] = Interface(name, paths[0], "points", paths=list(paths))
 
     group_of = {tag: g for g, group in enumerate(groups_tags) for tag in group}
     for tag in rendered_tags:
@@ -422,6 +431,9 @@ def plan_point(run, configuration, point, master: dict) -> PointPlan:
 
 def _outputs(plan: PointPlan, step: Step, run) -> None:
     for name in step.tool.output_file:
+        if name in plan.interfaces and plan.interfaces[name].kind == "points":
+            raise HepError(f"'{name}' is the name of the points' product", where=f"[tools.{step.tag}].output_file",
+                           hint="a post tool writes a new file; it reads the points' products with input = \"" + name + "\"")
         if name in plan.interfaces and plan.interfaces[name].producer:
             raise HepError(f"'{name}' is written by both {plan.interfaces[name].producer} and {step.tag}",
                            where=f"[tools.{step.tag}].output_file", hint="every output has exactly one writer (C6)")
@@ -456,6 +468,8 @@ def _check_connections(plan: PointPlan, run) -> None:
     for interface in plan.interfaces.values():
         where = f"[prelim] / [tools.*]: '{interface.name}'"
         readers = [plan.rendered[r] for r in interface.readers if r in plan.rendered]
+        if interface.kind == "points":                 # post: the points are complete before it runs
+            continue
         if interface.kind == "fifo":
             if not interface.producer:
                 raise HepError(f"FIFO '{interface.name}' has no writer", where=where,
@@ -671,6 +685,7 @@ def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
         "repo": str(repo_root()), "out": str(plan.out), "res": str(plan.res), "exe": str(step.exe),
         "threads": plan.threads, "events": plan.events,
         "input": str(step.inputs[0].path) if step.inputs else "",
+        "inputs": [str(p) for i in step.inputs for p in (i.paths if i.kind == "points" else [i.path])],
         "output": str(step.outputs[0].path) if step.outputs else "",
         "outputs": ",".join(str(o.path) for o in step.outputs),
         "partial:": {"output": str(step.products[0][1]) if step.products else ""},
@@ -680,12 +695,17 @@ def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
         "cards": [str(p) for p in step.card_base] + ([str(step.card_point)] if step.card_point else []),
         "card": str(step.card_combined or ""),
         "analyses": [x for a in step.identity_parts.get("analyses", []) for x in ("-a", a)],
+        **plan.context,
     }
     # every option the tool folder declares is a placeholder too: its value, or empty when unset
     for key, rule in folder.spec.get("options", {}).items():
-        if key not in context:
-            value = tool.extra.get(key, [] if rule.get("kind") == "list" else "")
-            context[key] = [str(v) for v in value] if isinstance(value, list) else str(value)
+        if key in context:
+            continue
+        if rule.get("kind") == "flag":                 # { kind = "flag", flag = "-e", default = true }
+            context[key] = [rule["flag"]] if tool.extra.get(key, rule.get("default", False)) else []
+            continue
+        value = tool.extra.get(key, [] if rule.get("kind") == "list" else "")
+        context[key] = [str(v) for v in value] if isinstance(value, list) else str(value)
     # standard configurations handed to a custom/module tool (V21, 04 §7.3)
     standard: dict[str, dict] = {}
     for key, tag in requests.items():
@@ -789,7 +809,9 @@ def describe(plan: PointPlan, run) -> list[str]:
         for step in group:
             lines.append(f"    {step.tag}: {' '.join(step.argv)}")
             for interface in step.inputs:
-                lines.append(f"      reads  {interface.kind:7s} {interface.path}")
+                where = (f"{interface.name} of {len(interface.paths)} point(s)" if interface.kind == "points"
+                         else interface.path)
+                lines.append(f"      reads  {interface.kind:7s} {where}")
             for interface in step.outputs:
                 lines.append(f"      writes {interface.kind:7s} {interface.path}")
     export_only = [t for t, s in plan.rendered.items() if s.group < 0]

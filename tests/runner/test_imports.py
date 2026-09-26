@@ -1,7 +1,8 @@
 """The runner's import rank (docs/rework_v2/02_Architecture.md §3), enforced.
 
 A module may import only from its own rank or a lower one, and the import graph has no cycles.
-A module missing from RANKS fails, so a new module has to be given its place. Tool plugins (utils/Env/<tool>/render.py) may import only
+A module missing from RANKS fails, so a new module has to be given its place. Tool plugins (utils/Env/<tool>/render.py,
+backend.py) may import only
 errors, paths and quantities, and never another plugin.
 """
 
@@ -19,7 +20,7 @@ RANKS = {
     "config": 1, "quantities": 1, "sweep": 1,
     "tools": 2,
     "execute": 3, "status": 3, "record": 3,
-    "watch": 4, "plot": 4,
+    "watch": 4, "plot": 4, "post": 4,
     "cli": 5,
 }
 PLUGIN_MAY_IMPORT = {"errors", "paths", "quantities"}
@@ -65,7 +66,7 @@ def test_no_module_imports_upward():
 
 def test_plugins_import_only_the_allowed_modules():
     violations = []
-    for render in sorted(ENV.glob("*/render.py")):
+    for render in sorted([*ENV.glob("*/render.py"), *ENV.glob("*/backend.py")]):
         extra = runner_imports(render) - PLUGIN_MAY_IMPORT
         if extra:
             violations.append(f"{render.relative_to(REPO)} imports {sorted(extra)}")

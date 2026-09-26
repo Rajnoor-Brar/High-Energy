@@ -36,6 +36,8 @@ def identity(plan: PointPlan) -> str:
         "groups": [[s.tag for s in group] for group in plan.groups],
         "prelim": plan.prelim,
     }
+    if plan.upstream:                    # post: it changes when any point does
+        parts["upstream"] = plan.upstream
     text = json.dumps(parts, sort_keys=True, default=str)
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 

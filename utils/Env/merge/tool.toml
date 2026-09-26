@@ -1,0 +1,24 @@
+# utils/Env/merge/tool.toml — rivet-merge, in `post`: one YODA product of every point, merged
+# (05_Tools.md §9). `input` names the points' product; {inputs} is that product of every point.
+[tool]
+category   = "analysis-application"
+executable = "rivet-merge"
+status     = "none"
+
+[card]
+style = "none"
+
+[command]
+argv = ["{exe}", "{equivalent}", "-o", "{partial:output}", "{inputs}"]
+env  = { RIVET_ANALYSIS_PATH = "{repo}/build/Rivet" }   # it re-runs the analyses' finalize()
+
+[options]
+# Seed replicas are statistically independent runs of one process (-e): their statistics add and the
+# cross section is averaged. false merges different processes into their sum.
+equivalent = { kind = "flag", flag = "-e", default = true }
+
+[outputs]
+products = ["yoda"]
+
+[identity]
+version = ["rivet", "--version"]

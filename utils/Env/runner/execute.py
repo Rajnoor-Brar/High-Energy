@@ -95,6 +95,10 @@ def prepare(plan: PointPlan) -> None:
         marker.unlink()                  # an attempt is under way: whatever was complete no longer is
     for path, text in plan.writes.items():
         write_atomic(path, text)
+    for step in plan.rendered.values():  # a product left by an earlier attempt must not pass for this one's
+        for final, partial in step.products:
+            final.unlink(missing_ok=True)
+            partial.unlink(missing_ok=True)
     for interface in plan.interfaces.values():
         if interface.kind == "fifo":
             if interface.path.exists() or interface.path.is_symlink():

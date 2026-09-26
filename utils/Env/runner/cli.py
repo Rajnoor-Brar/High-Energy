@@ -15,7 +15,7 @@ import signal
 import sys
 
 from . import config as configmod
-from . import execute, plot, record, sweep, tools
+from . import execute, plot, post, record, sweep, tools
 from .errors import HepError
 from .paths import output_root
 from .quantities import load_master
@@ -60,10 +60,10 @@ def build_plans(args):
     for plan in plans:
         tools.finalise(plan, plan.seed)
     plot.validate(run)
-    return run, configuration, plans, [p for p in plans if p.point.index in chosen]
+    return run, configuration, plans, [p for p in plans if p.point.index in chosen], post.plan(run, configuration, master, plans)
 
 
-def print_plan(run, configuration, plans) -> None:
+def print_plan(run, configuration, plans, post_plan=None) -> None:
     print(f"run {run.name} ({run.path}) · configuration {configuration.key}: {len(plans)} point(s), "
           f"{configuration.event_count} events, {configuration.threads} threads")
     for plan in plans:
@@ -71,6 +71,12 @@ def print_plan(run, configuration, plans) -> None:
         for line in tools.describe(plan, run):
             print(line)
         print(f"  output  {plan.out}\n  results {plan.res}   ({state})")
+    if post_plan is not None:
+        lines = tools.describe(post_plan, run)
+        print(f"post (after every point)   identity {post_plan.identity[:12]}")
+        for line in lines[1:]:
+            print(line)
+        print(f"  results {post_plan.res}   ({'complete' if record.is_complete(post_plan) else 'to run'})")
     if run.plot and plans:
         count = len(sweep.pages(configuration, [p.point for p in plans]))
         print(f"plot ({run.plot.get('backend', 'root')}): {count} page(s) per object, "
@@ -78,14 +84,14 @@ def print_plan(run, configuration, plans) -> None:
 
 
 def cmd_run(args) -> int:
-    run, configuration, every, plans = build_plans(args)
-    if args.only == "post":
-        raise HepError("--only post arrives with the post stage (P3 S3)")
+    run, configuration, every, plans, post_plan = build_plans(args)
     if args.plan:
-        print_plan(run, configuration, plans)
+        print_plan(run, configuration, plans, post_plan)
         return 0
     if args.only == "plot":
         return 1 if plot.draw(run, configuration, every, print) else 0
+    if args.only == "post" and post_plan is None:
+        raise HepError(f"configuration '{configuration.key}' has no post tools", where=f"{run.path}: [run.{configuration.key}].post")
 
     shown = view(args.plain)
     stopper = execute.Stopper()
@@ -112,7 +118,7 @@ def cmd_run(args) -> int:
     failed = done = 0
     verdict = "stopped"
     try:
-        for plan in plans:
+        for plan in plans if args.only != "post" else []:
             if not args.rerun and record.is_complete(plan):
                 shown.skipped(plan)
                 continue
@@ -121,8 +127,18 @@ def cmd_run(args) -> int:
                 return 6
             failed += not result.ok
             done += result.ok
-        verdict = f"{done} done, {failed} failed, {len(plans) - done - failed} skipped"
-        failed += plot.draw(run, configuration, every, shown.say) > 0
+        verdict = f"{done} done, {failed} failed, {len(plans) - done - failed} skipped" if args.only != "post" else ""
+        manifest()                           # post tools read it: it must say which points are complete
+        if not post.run(post_plan, every, run, configuration, sink=shown, journal=journal, stopper=stopper,
+                        rerun=args.rerun or args.only == "post", say=shown.say):
+            if stopper.requested:
+                return 6
+            failed += 1
+            verdict = ", ".join(v for v in (verdict, "post failed") if v)
+        elif post_plan is not None and args.only == "post":
+            verdict = "post done"
+        if args.only != "post":
+            failed += plot.draw(run, configuration, every, shown.say) > 0
     finally:
         shown.end()
         manifest()
