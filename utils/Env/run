@@ -1,0 +1,16 @@
+#!/usr/bin/env python3
+"""utils/Env/run — the runner's entry point (docs/rework_v2/02_Architecture.md §3).
+
+`hep run …` and `hep watch …` land here. Everything else is in the `runner` package beside this
+file, and in the tool folders `utils/Env/<tool>/`.
+"""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from runner.cli import main  # noqa: E402
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

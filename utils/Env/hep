@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# utils/Env/hep — the `hep` command (docs/rework_v2/03_Layout_Build.md §6).
+#
+#   hep run <config> [<configuration>] [options]   the runner (utils/Env/run)
+#   hep watch [<config>]                           attach the live view
+#   hep build [targets…] [--tests] [--clean] [--configure] [-j N]    make, from the repo root
+set -euo pipefail
+
+here=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
+root=${HEKIT_ROOT:-$(cd "$here/../.." && pwd)}
+
+usage() {
+    cat <<EOF
+usage: hep <command> [options]
+
+  run <config> [<configuration>]   plan and run a configuration          (hep run --help)
+  watch [<config>]                 attach the live view to a running job (hep watch --help)
+  build [targets…]                 compile module programs, apps and Rivet plugins (make all)
+        --tests                    also build the C++ tests
+        --clean                    empty build/ first
+        --configure                probe the toolchain again (rewrite build/flags.mk)
+        -j N                       parallel jobs (default: all cores)
+
+  make <path>/<X>.exe | <path>/<x>.so   compile one source (docs/rework_v2/03_Layout_Build.md §5)
+EOF
+}
+
+cmd=${1-}
+[ $# -gt 0 ] && shift
+case "$cmd" in
+    run|watch)
+        exec python3 "$here/run" "$cmd" "$@"
+        ;;
+    build)
+        goals=(all)
+        jobs=(-j "$(nproc)")
+        while [ $# -gt 0 ]; do
+            case "$1" in
+                --tests)     goals+=(tests) ;;
+                --clean)     make -C "$root" --no-print-directory clean ;;
+                --configure) make -C "$root" --no-print-directory configure ;;
+                -j)          jobs=(-j "$2"); shift ;;
+                -j*)         jobs=("$1") ;;
+                -h|--help)   usage; exit 0 ;;
+                -*)          echo "hep build: unknown option '$1'" >&2; exit 2 ;;
+                *)           [ "${goals[0]}" = all ] && goals=(); goals+=("$1") ;;
+            esac
+            shift
+        done
+        exec make -C "$root" --no-print-directory "${jobs[@]}" "${goals[@]}"
+        ;;
+    ""|-h|--help|help)
+        usage
+        ;;
+    *)
+        echo "hep: unknown command '$cmd'" >&2
+        usage >&2
+        exit 2
+        ;;
+esac

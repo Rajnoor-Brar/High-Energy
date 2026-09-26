@@ -1,6 +1,6 @@
 # Current plan
 
-## rework v2 — EXECUTING (ordered by the user 2026-09-26). Active: **P0 — Clean slate**
+## rework v2 — EXECUTING (ordered by the user 2026-09-26). Active: **P1 — One chain, end to end**
 
 The plan is `docs/rework_v2/`:
 read `README.md` (decisions V1–V20, traceability) → `00_Brief.md` (the user's design, verbatim) →
@@ -18,15 +18,14 @@ read `README.md` (decisions V1–V20, traceability) → `00_Brief.md` (the user'
   `[standard.<key>]` in their config, which is what makes integrated in-process runs possible.
   The mechanism lands in P1 S2; the other tools' exports come with each tool in P4.
 - Execution protocol: 06_Roadmap.md §2.
-- **P0 — Clean slate** (`docs/rework_v2/phases/P0_clean-slate.md`), in progress.
-  - Approvals (2026-09-26): the tag, local commits, rewriting the `configs/` TOMLs, the
-    `~/HEP/setup.sh` stub. Leave the root `generator_comparison.*` alone.
-  - The user's uncommitted edits are stashed (`stash@{0}`); `docs/Untitled-1.md` is in
-    `output/_v1/`.
-  - S1: commit the plan → tag `rework/v1-final` → 50k-event v1 baseline → moves → `git rm` v1 →
-    untracked leftovers to `output/_v1/`.
-  - S2: `flags.sh`, the `Makefile`, the trimmed `hep_env.sh`, `utils/Env/hep`, the runner stub,
-    `tests/runner`.
+- **P0 — Clean slate: done** (`8daff46` plan, tag `rework/v1-final`, `0c3df8f` S1, then S2).
+  The v1 baseline is 1,455 events/s (50k events, 20 threads). The user's edits are in `stash@{0}`;
+  untracked leftovers are in `output/_v1/`.
+- **P1 — One chain** (`docs/rework_v2/phases/P1_one-chain.md`), in progress:
+  - S1: `Status.hh` + App_Pythia; the reference gate (bin for bin vs `tests/reference/legacy_run`)
+    and the σ gate (threads = 4).
+  - S2: the runner core for one point (config, tools, execute, status, record, `--plan`, exports).
+  - S3: the watch view.
 
 ---
 

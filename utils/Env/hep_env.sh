@@ -1,13 +1,15 @@
 #!/bin/bash
-# env/hep_env.sh — HEP shell environment (versioned; rework P0-S02, docs/rework/08_CLI.md §3).
+# utils/Env/hep_env.sh — the HEP shell environment (rework v2; docs/rework_v2/03_Layout_Build.md §1).
 #
 # Sourced by the stub ~/HEP/setup.sh (alias `load_hep`), which sets HEP, HEP_INSTALL and HEKIT_ROOT.
+# It puts the ~/HEP stack and utils/Env (the `hep` command) on PATH, activates the venv, and defines
+# the shell helpers below.
 # Safe to source repeatedly: path variables are only ever prepended once, and never get empty elements
 # (an empty element means the CWD). `quit` removes exactly what was added here.
 
 : "${HEP:=$HOME/HEP}"
 : "${HEP_INSTALL:=$HEP/install}"
-: "${HEKIT_ROOT:=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+: "${HEKIT_ROOT:=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 export HEP HEP_INSTALL HEKIT_ROOT
 # The file that sourced this one (the ~/HEP/setup.sh stub), re-sourced by hep_refresh
 export HEP_SETUP="${BASH_SOURCE[1]:-${BASH_SOURCE[0]}}"
@@ -121,36 +123,25 @@ hep_refresh() {
     quit >/dev/null
     source "$setup"
 }
-# hep_status is now hep doctor --brief; the shell function stays as the familiar name (08 §3).
-hep_status() {
-    if [[ "$1" == "--check" ]]; then
-        shift
-        if command -v hep >/dev/null 2>&1; then
-            hep doctor --brief "$@"
-        else
-            echo "hep: command not found" >&2
-            return 127
-        fi
-    else
-        _hep_status_probe "$@"
-    fi
-}
+# hep_status: the installed tool versions.
+hep_status() { _hep_status_probe "$@"; }
 
 hep_src()     { cd "$HEP/src"; }
 hep_build()   { cd "$HEP/build"; }
 hep_install() { cd "$HEP/install"; }
-# hep_cd PROJECT [configs|results|output|sources] — cd into a project directory of the repo.
+# hep_cd PROJECT [configs|modules|results|output] — cd into a project directory of the repo.
 hep_cd() {
-    [ -n "${1-}" ] || { echo "usage: hep_cd PROJECT [configs|results|output|sources]"; return 2; }
+    [ -n "${1-}" ] || { echo "usage: hep_cd PROJECT [configs|modules|results|output]"; return 2; }
     cd "$HEKIT_ROOT/${2:-configs}/$1"
 }
 hep_help() {
     cat << HLP
+hep run | watch | build   the framework (hep --help)
 HEP environment commands:
-  hep_status             tool versions and environment health (hep doctor --brief)
+  hep_status             installed tool versions
   hep_refresh            reload the environment from scratch
   quit                   leave the HEP environment (restores paths, deactivates venv)
-  hep_cd PROJECT [DIR]   cd to \$HEKIT_ROOT/DIR/PROJECT (DIR: configs|results|output|sources)
+  hep_cd PROJECT [DIR]   cd to \$HEKIT_ROOT/DIR/PROJECT (DIR: configs|modules|results|output)
   hep_src                cd to \$HEP/src
   hep_build              cd to \$HEP/build
   hep_install            cd to \$HEP/install
@@ -168,10 +159,6 @@ fi
 # Activate the Python venv
 source "$HEP/.venv/bin/activate"
 
-# The legacy tools (rivpyth, ydplt, ydmrg) were retired in P4-S06 and live in legacy/tools/,
-# kept readable but off PATH: `hep run` and `hep plot` replace them, and the equivalence gates
-# proved they agree (P2-S06, P4-S02, P4-S06).
-
 _hep_pyver=$("$HEP/.venv/bin/python" -c 'import sys; print("%d.%d" % sys.version_info[:2])')
 for pkg in $_HEP_PACKAGES; do
     _hep_prepend PATH              "$HEP_INSTALL/$pkg/bin"
@@ -185,6 +172,9 @@ done
 _hep_prepend PYTHONPATH "$HEP_INSTALL/root/lib"
 _hep_prepend PYTHONPATH "$HEP_INSTALL/pythia8/lib"
 unset pkg _hep_pyver
+# utils/Env last, so it sits in front of everything, including the venv's bin/: the `hep` command
+# is utils/Env/hep. The venv still holds v1's editable `hekit` install and its dead `hep` entry point.
+_hep_prepend PATH "$HEKIT_ROOT/utils/Env"
 
 for _hep_var in $_HEP_SCALARS; do
     export "_HEP_SAVED_$_hep_var=${!_hep_var-}"
@@ -192,22 +182,9 @@ done
 unset _hep_var
 export LHAPDF_DATA_PATH="$HEP_INSTALL/LHAPDF/share/LHAPDF"
 export ONNXRUNTIME_DIR="$HEP_INSTALL/onnxruntime"
-# RIVET_ANALYSIS_PATH is deliberately not set: the tools prepend their plugin directory per run.
+# RIVET_ANALYSIS_PATH is deliberately not set: the rivet tool sets build/Rivet per run.
 export HEP_ENV_LOADED=1
 hash -r
-
-# hep completion, cached: generating it costs a Python start-up, so it is only regenerated when the
-# entry point is newer than the cache. Interactive shells only.
-_hep_load_completion() {
-    local hep_bin cache="${XDG_CACHE_HOME:-$HOME/.cache}/hekit/hep-complete.bash"
-    hep_bin=$(command -v hep 2>/dev/null) || return 0
-    if [ ! -s "$cache" ] || [ "$hep_bin" -nt "$cache" ]; then
-        mkdir -p "$(dirname "$cache")"
-        _HEP_COMPLETE=bash_source hep > "$cache" 2>/dev/null || { rm -f "$cache"; return 0; }
-    fi
-    source "$cache" 2>/dev/null
-}
-[[ $- == *i* ]] && _hep_load_completion
 
 [[ $- == *i* ]] && echo "HEP env loaded — $HEP (hep_status for versions, hep_help for commands)"
 return 0
