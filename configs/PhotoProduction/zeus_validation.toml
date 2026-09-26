@@ -1,124 +1,67 @@
-# zeus_validation.toml — the ZEUS validation run (schema 2).
+# zeus_validation.toml — HERA validation of the photoproduction card against ZEUS 2012
+# (rework v2 schema, docs/rework_v2/04_Config.md).
 #
-#   hep run  configs/PhotoProduction/zeus_validation.toml --study <name>
-#   hep plot configs/PhotoProduction/zeus_validation.toml --study <name>
+#   hep run PhotoProduction/zeus_validation          PDF comparison at HERA kinematics
 #
-# Migrated from the schema-1 file by `hep config migrate` (P1-S06) and promoted to this
-# name when the old tools were retired (P4-S06); the original is in
-# legacy/configs/PhotoProduction/zeus_validation.toml.
-#
-# Review it before use: the migration reports what it changed, and the notes below are that report.
-#   - [rivpyth].serial dropped: results are directories now, not serial-prefixed files (07 §1)
-#   - [rivpyth].generator dropped: hep-run replaces the per-project generator binary
-#   - [rivpyth].path_literal dropped: paths are resolved by hep (00/B18)
-#   - [sweep].seed_step dropped: seeds come from a point's identity now (03 §5, D21)
-#   - [static.cmnd].beams held energies; it becomes [beams].energies
-#   - [beams].ids = [2212, 11] was implicit in the base card; schema 2 states it (check it against your card)
-#   - [sweep.cmnd.beams] held energies; it becomes type = "energies" named 'energies' (03 §3)
-#   - [sweep.cmnd.lepton] set Beams:idB; it is now a beams quantity with side = "b" (03 §3)
-#   - [quantity.pdf] tags renamed (00/B12): MSTW → MSTW08lo, NNLO → NNPDF23lo, NNNLO → NNPDF23nlo, LHC21 → PDF4LHC21
-#   - [quantity.radius] dropped: analysis 'ZEUS_2012_I1116258' does not declare 'R' (00/B14)
-#   - [quantity.etmin] dropped: analysis 'ZEUS_2012_I1116258' does not declare 'ETMIN' (00/B14)
-
-schema = 2
+# Translated from the v1 schema-2 file (git show rework/v1-final:configs/PhotoProduction/
+# zeus_validation.toml). v1 fixed the beams in [beams] (ids [2212, 11], energies [920, 27.5]) and
+# pinned the lepton to e+ through [static.use] beams = "ep"; here both are static quantities.
 
 [run]
-name = "zeus"
-events = 1000000
-seed = 270403
-threads = 20
+name          = "zeus"
+project       = "PhotoProduction"
+configuration = "default"
+event_count   = 1_000_000
+threads       = 20
 
-[generator]
-tool = "pythia"
-card = "photo_ep.cmnd"
+[run.default]
+description = "Proton-PDF comparison at 27.5x920 GeV e+p against ZEUS 2012 (built-in Rivet analysis)"
+sweeps      = ["pdf"]
+tools       = [["pythia", "rivet"]]
 
-[beams]
-ids = [2212, 11]
-energies = [920, 27.5]
+[run.single]
+description = "One run at the static point"
+sweeps      = []
+tools       = [["pythia", "rivet"]]
 
-[rivet]
-analyses = ["ZEUS_2012_I1116258"]
-paths = ["."]
+[prelim]
+fifo = ["events.hepmc"]
+
+[static]
+energies = "27x920"
+lepton   = "ep"
+
+[tools.pythia]
+tool        = "pythia"
+baseconfig  = "photo_ep.cmnd"
+output_file = "events.hepmc"
+
+[tools.rivet]
+tool        = "rivet"
+input       = "events.hepmc"
+analyses    = ["ZEUS_2012_I1116258"]
+output_file = "zeus.yoda"
+
+[quantities.energies]
+values = [[41, 5], [100, 10], [275, 18], [920, 27.5]]
+tags   = ["5x41", "10x100", "18x275", "27x920"]
+labels = ["5x41 GeV (#sqrt{s} = 28.6 GeV)", "10x100 GeV (#sqrt{s} = 63.2 GeV)",
+          "18x275 GeV (#sqrt{s} = 140.7 GeV)", "27.5x920 GeV (#sqrt{s} = 318.1 GeV)"]
+
+[quantities.lepton]
+key    = { pythia = "Beams:idB" }
+values = [11, -11]
+tags   = ["em", "ep"]
+labels = ["e^{-}", "e^{+}"]
+
+[quantities.pdf]
+values = ["MSTW2008lo68cl", "NNPDF23_lo_as_0130_qed", "NNPDF23_nlo_as_0119_qed", "PDF4LHC21_40"]
+tags   = ["MSTW08lo", "NNPDF23lo", "NNPDF23nlo", "PDF4LHC21"]
+labels = ["MSTW 2008 LO", "NNPDF 2.3 QCD+QED LO", "NNPDF 2.3 QCD+QED NLO", "PDF4LHC21"]
 
 [plot]
-merge = "overlay"
-void_empty = true
+void_empty  = true
 min_entries = 10
-auto_range = true
-range_pad = 1
-legends = "label"
-
-[plot.data]
-rivet_refs = true
-
-[output]
-tag_style = "tag"
-
-[static.use]
-beams = "ep"
-
-[quantity.energies]
-type = "energies"
-values = [[41, 5], [100, 10], [275, 18]]
-labels = [
-    "5x41 GeV ($\\sqrt{s}$ = 28.6 GeV)",
-    "10x100 GeV ($\\sqrt{s}$ = 63.2 GeV)",
-    "18x275 GeV ($\\sqrt{s}$ = 140.7 GeV)",
-]
-tags = ["5x41", "10x100", "18x275"]
-
-[quantity.beams]
-type = "beams"
-side = "b"
-values = [11, -11]
-labels = ["$e^-$", "$e^+$"]
-tags = ["em", "ep"]
-
-[quantity.pdf]
-type = "setting"
-key = "PDF:pSet"
-values = [
-    "LHAPDF6:MSTW2008lo68cl",
-    "LHAPDF6:NNPDF23_lo_as_0130_qed",
-    "LHAPDF6:NNPDF23_nlo_as_0119_qed",
-    "LHAPDF6:PDF4LHC21_40",
-]
-labels = ["MSTW 2008 LO", "NNPDF 2.3 QCD+QED LO", "NNPDF 2.3 QCD+QED NLO", "PDF4 LHC21.40"]
-note = "tags renamed in the schema-2 migration: MSTW08lo was MSTW, NNPDF23lo was NNLO, NNPDF23nlo was NNNLO, PDF4LHC21 was LHC21"
-tags = ["MSTW08lo", "NNPDF23lo", "NNPDF23nlo", "PDF4LHC21"]
-
-[quantity.pt0ref]
-type = "setting"
-key = "MultipartonInteractions:pT0Ref"
-values = [3.0, 3.2, 3.4]
-labels = ["pT0Ref = 3.0 GeV", "pT0Ref = 3.2 GeV", "pT0Ref = 3.4 GeV"]
-tags = ["pt30", "pt32", "pt34"]
-
-[quantity.mpi]
-type = "setting"
-key = "PartonLevel:MPI"
-values = [true, false]
-labels = ["MPI on", "MPI off"]
-tags = ["mpi", "nompi"]
-
-[quantity.pthatmin]
-type = "setting"
-key = "PhaseSpace:pTHatMin"
-values = [2.0, 3.0, 4.0, 6.0]
-labels = [
-    "$\\hat{p}_T > 2$ GeV",
-    "$\\hat{p}_T > 3$ GeV",
-    "$\\hat{p}_T > 4$ GeV",
-    "$\\hat{p}_T > 6$ GeV",
-]
-tags = ["pth2", "pth3", "pth4", "pth6"]
-
-[quantity.process]
-type = "setting"
-key = "Photon:ProcessType"
-values = [0, 1]
-labels = ["resolved + direct", "resolved"]
-tags = ["allproc", "resolved"]
-
-[sweep]
-across = ["pdf"]
+auto_range  = true
+# v1 drew Rivet's own ZEUS reference data (rivet_refs = true); in v2 that is a [plot.data] entry,
+# written when the plot stage lands (P3).

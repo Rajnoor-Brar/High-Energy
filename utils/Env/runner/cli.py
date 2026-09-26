@@ -49,7 +49,8 @@ def build_plans(args):
     run = configmod.load(args.config, sets=args.set)
     configuration = run.configuration(args.configuration)
     master = load_master(run.project, run.master_toml)
-    points = sweep.select_points(run, configuration, sweep.points(run, configuration), args.points)
+    points = sweep.points(run, configuration)
+    chosen = {p.index for p in sweep.select_points(run, configuration, points, args.points)}
     plans = []
     for point in points:
         plan = tools.plan_point(run, configuration, point, master)
@@ -58,7 +59,7 @@ def build_plans(args):
     record.assign_seeds(plans)
     for plan in plans:
         tools.finalise(plan, plan.seed)
-    return run, configuration, plans
+    return run, configuration, plans, [p for p in plans if p.point.index in chosen]
 
 
 def print_plan(run, configuration, plans) -> None:
@@ -72,7 +73,7 @@ def print_plan(run, configuration, plans) -> None:
 
 
 def cmd_run(args) -> int:
-    run, configuration, plans = build_plans(args)
+    run, configuration, every, plans = build_plans(args)
     if args.only:
         raise HepError(f"--only {args.only} arrives with the plot and post stages (P3)")
     if args.plan:
@@ -96,11 +97,11 @@ def cmd_run(args) -> int:
     shown.begin(len(plans), title)
     if journal:
         journal.write("", "", {"k": "run", "state": "started", "points": len(plans), "title": title})
-    if base:
-        record.write_atomic(base / "plan.json", json.dumps({
-            "run": run.name, "configuration": configuration.key, "config_file": str(run.path),
-            "points": [{"name": p.point.name, "identity": p.identity, "seed": p.seed, "results": str(p.res)}
-                       for p in plans]}, indent=1) + "\n")
+    def manifest() -> None:
+        if base:
+            record.write_atomic(base / "points.json",
+                                json.dumps(record.points_manifest(every, run, configuration), indent=1, default=str) + "\n")
+    manifest()
     failed = done = 0
     verdict = "stopped"
     try:
@@ -116,6 +117,7 @@ def cmd_run(args) -> int:
         verdict = f"{done} done, {failed} failed, {len(plans) - done - failed} skipped"
     finally:
         shown.end()
+        manifest()
         if journal:
             journal.write("", "", {"k": "run", "state": "finished", "verdict": verdict})
             journal.close()

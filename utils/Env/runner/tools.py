@@ -39,6 +39,7 @@ FOLDER_SECTIONS = {
     "exports": None,
     "identity": {"files", "version"},
     "prepare": None,
+    "checks": {"info_dirs", "info_dirs_command"},
 }
 CARD_STYLES = ("append", "prepend", "merge", "none", "render")
 EXPORT = re.compile(r"^(?P<tool>[a-z0-9]+)_(?P<export>[a-z0-9_]+)$")
@@ -495,7 +496,9 @@ def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
         step.identity_parts["exe_sha256"] = sha256_file(step.exe)
     style = folder.card_style
     bools = folder.get("card", "bools", ["true", "false"])
+    base_values = _base_values(tool, run, folder) if style == "append" else {}
     lines: list[str] = []
+    redundant: list[str] = []          # overrides equal to the base card: rendered, not in the identity
     owners: dict[str, str] = {}
     flags: list[str] = []
     options: dict[str, dict[str, str]] = {}
@@ -507,9 +510,14 @@ def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
             raise HepError(f"'{key}' is set by both {owners[normal]} and {origin}", where=f"[tools.{step.tag}]",
                            hint="one source per native key (C8): pin it in one place")
         owners[normal] = origin
-        lines.append(f"{key} = {native(value, bools, fmt)}")
+        line = f"{key} = {native(value, bools, fmt)}"
+        lines.append(line)
+        if base_values.get(normal) is not None and _same(base_values[normal], native(value, bools, fmt)):
+            redundant.append(line)
 
     def apply(mapping, value: Any, origin: str) -> None:
+        if mapping.check:
+            qmod.check_provider(mapping.check, value, origin)
         if mapping.form == "key":
             claim(mapping.key, value, origin, mapping.format)
         elif mapping.form == "keys":
@@ -555,7 +563,7 @@ def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
         step.card_point = plan.out / "cards" / f"{step.tag}.point.{ext}"
         step.card_combined = plan.out / "cards" / f"{step.tag}.{ext}"
         step.identity_parts["base_sha256"] = [sha256_file(b) for b in step.card_base]
-        step.identity_parts["card"] = step.card_lines
+        step.identity_parts["card"] = [line for line in step.card_lines if line not in redundant]
     elif style in ("prepend", "merge", "render"):
         raise HepError(f"card style '{style}' arrives with the {folder.name} tool folder (P4)", where=folder.name)
     elif lines:
@@ -576,6 +584,7 @@ def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
         if unknown:
             raise HepError(f"options target analyses not run by {step.tag}: {', '.join(sorted(unknown))}",
                            where=f"[tools.{step.tag}]")
+        _check_declared_options(step, rendered)
         step.identity_parts["analyses"] = rendered
         step.config_data = {"analyses": rendered}
         for pattern in folder.get("identity", "files", []):
@@ -585,6 +594,75 @@ def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
                 if path.is_file():
                     step.identity_parts.setdefault("files_sha256", {})[str(path)] = sha256_file(path)
     step.identity_parts["_flags"] = flags
+
+
+def _base_values(tool, run, folder: Folder) -> dict[str, str]:
+    """The base cards' `Key = value` settings (last wins), for spotting redundant overrides."""
+    comment = folder.get("card", "comment", "#")
+    values: dict[str, str] = {}
+    for base in tool.baseconfig:
+        path = resolve(base, "baseconfig", project=run.project, where=f"[tools.{tool.tag}].baseconfig")
+        if not path.is_file():
+            continue
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            line = raw.split(comment, 1)[0].strip()
+            if "=" in line:
+                key, _, value = line.partition("=")
+                values["".join(key.split()).lower()] = value.strip()
+    return values
+
+
+def _same(a: str, b: str) -> bool:
+    words = {"on": "1", "true": "1", "yes": "1", "off": "0", "false": "0", "no": "0"}
+    a, b = words.get(a.lower(), a.lower()), words.get(b.lower(), b.lower())
+    try:
+        return float(a) == float(b)
+    except ValueError:
+        return a == b
+
+
+def _info_dirs(folder: Folder) -> list[Path]:
+    dirs = [Path(expand(d, {"repo": str(repo_root())}, folder.name)) for d in folder.get("checks", "info_dirs", [])]
+    command = folder.get("checks", "info_dirs_command")
+    if command:
+        key = " ".join(command)
+        if key not in _VERSIONS:
+            try:
+                _VERSIONS[key] = subprocess.run(command, capture_output=True, text=True, timeout=30).stdout.strip()
+            except (OSError, subprocess.SubprocessError):
+                _VERSIONS[key] = ""
+        dirs += [Path(d) for d in _VERSIONS[key].split(":") if d]
+    return dirs
+
+
+def _check_declared_options(step: Step, rendered: list[str]) -> None:
+    """C9 (L19): each analysis has a .info, and every option it is given is declared there."""
+    dirs = _info_dirs(step.folder)
+    if not dirs:
+        return
+    for analysis in rendered:
+        name, *options = analysis.split(":")
+        info = next((d / f"{name}.info" for d in dirs if (d / f"{name}.info").is_file()), None)
+        if info is None:
+            raise HepError(f"no analysis '{name}' (no {name}.info)", where=f"[tools.{step.tag}].analyses",
+                           hint=f"searched {', '.join(str(d) for d in dirs)}; a project plugin needs `hep build`")
+        declared, inside = set(), False
+        for raw in info.read_text(encoding="utf-8", errors="replace").splitlines():
+            if re.match(r"^Options:", raw):
+                inside = True
+                continue
+            if inside:
+                match = re.match(r"^\s*-\s*([A-Za-z0-9_]+)=", raw)
+                if match:
+                    declared.add(match.group(1))
+                elif raw.strip() and not raw.startswith((" ", "\t", "-")):
+                    break
+        for option in options:
+            key = option.split("=")[0]
+            if key not in declared:
+                raise HepError(f"'{name}' does not declare the option {key}", where=f"[tools.{step.tag}]",
+                               hint=(f"declared: {', '.join(sorted(declared)) or 'none'} (in {info}). Rivet ignores "
+                                     "an undeclared option silently, so the curves would be identical (L19)"))
 
 
 def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
