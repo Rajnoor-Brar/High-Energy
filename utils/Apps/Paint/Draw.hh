@@ -1,10 +1,11 @@
 #pragma once
 // utils/Apps/Paint/Draw.hh — loading series from ROOT files, and drawing a page with ROOT.
 //
-// Curves are step histograms, drawn per run of non-void bins, so a voided bin is a gap rather than a
-// drop to zero. Data are points with x bars. The optional ratio pad divides each curve by the
-// reference: the data when there are any, otherwise the first curve. Curves are rebinned onto the
-// reference bins, which the alignment guarantees are MC edges.
+// The look is the page's style (Style.hh; utils/Apps/Paint/base.toml is rivet-mkhtml's). Curves are steps, drawn per run of non-void
+// bins, so a voided bin is a gap rather than a drop to zero. Data are points with x bars. The
+// optional ratio pad divides each curve by the reference: the data when there are any, otherwise
+// the first curve. Curves are rebinned onto the reference bins, which the alignment guarantees are
+// MC edges.
 
 #include "Page.hh"
 #include "Transform.hh"
@@ -16,13 +17,15 @@
 #include "TH1.h"
 #include "TH1D.h"
 #include "TLatex.h"
-#include "TLegend.h"
+#include "TMarker.h"
 #include "TLine.h"
 #include "TPad.h"
 #include "TROOT.h"
 #include "TStyle.h"
 #include "TSystem.h"
 
+#include <algorithm>
+#include <cmath>
 #include <limits>
 #include <map>
 #include <memory>
@@ -123,114 +126,206 @@ namespace Paint {
         return out;
     }
 
-    inline TGraphAsymmErrors* points(const Series& s, Keep& keep, double scale = 1.0, const Series* per = nullptr) {
+    // Points at the bin centres, x bars optional; `per` divides by a series on the same bins.
+    inline TGraphAsymmErrors* points(const Series& s, Keep& keep, bool xbars, const Series* per = nullptr) {
         auto* g = keep.hold(new TGraphAsymmErrors());
         int n = 0;
         for (size_t i = 0; i < s.size(); ++i) {
             double y = s.y[i], e = s.err[i];
             if (per) {
                 if (!(per->y[i] != 0.0) || !std::isfinite(per->y[i])) continue;
-                y /= per->y[i], e /= per->y[i];
+                y /= per->y[i], e /= std::fabs(per->y[i]);
             }
             if (!std::isfinite(y)) continue;
             const double x = 0.5 * (s.lo[i] + s.hi[i]);
-            g->SetPoint(n, x, y * scale);
-            g->SetPointError(n, x - s.lo[i], s.hi[i] - x, e * scale, e * scale);
+            g->SetPoint(n, x, y);
+            g->SetPointError(n, xbars ? x - s.lo[i] : 0.0, xbars ? s.hi[i] - x : 0.0, e, e);
             ++n;
         }
         return g;
     }
 
-    inline void legendBox(const std::string& where, double& x1, double& y1, double& x2, double& y2, size_t entries) {
-        const double h = std::min(0.06 * static_cast<double>(entries) + 0.02, 0.45);
-        if (where == "top-left") x1 = 0.16, x2 = 0.52, y2 = 0.88, y1 = y2 - h;
-        else if (where == "bottom-right") x1 = 0.55, x2 = 0.9, y1 = 0.15, y2 = y1 + h;
-        else if (where == "bottom-left") x1 = 0.16, x2 = 0.52, y1 = 0.15, y2 = y1 + h;
-        else if (where == "top-right") x1 = 0.55, x2 = 0.9, y2 = 0.88, y1 = y2 - h;
-        else throw std::runtime_error("legend must be top-right, top-left, bottom-right or bottom-left, not '" + where + "'");
+    // ── the look: utils/Apps/Paint/base.toml (rivet-mkhtml's), as merged for the page ─────────
+    //
+    // Sizes in the style are points of the page (size, in inches); here they become pixels at the
+    // style's dpi. Text is sized in pixels (ROOT's precision 3), so both pads share one text size.
+
+    struct Look {
+        const Style& s;
+        double px, title, labels, legend, header, tick;   // pixels per point; the rest in pixels
+        int width, font;
+        explicit Look(const Style& style)
+            : s(style), px(style.px()), title(style.title * px), labels(style.labels * px), legend(style.legend * px),
+              header(style.header * px), tick(style.tick * px),
+              width(std::max(1, static_cast<int>(std::lround(style.lineWidth * px)))), font(style.fontCode()) {}
+        float marker() const { return static_cast<float>(s.markerSize * px / 8.0); }   // ROOT's size 1 is 8 px
+    };
+
+    struct Frame {                                        // a pad in pixels, its margins in NDC
+        double w, h, l, r, b, t;
+        double fw() const { return w * (1 - l - r); }
+        double fh() const { return h * (1 - b - t); }
+    };
+
+    inline void style(TH1F* frame, const Look& look, const Frame& f, bool xText) {
+        TAxis* ax = frame->GetXaxis();
+        TAxis* ay = frame->GetYaxis();
+        for (TAxis* a : {ax, ay}) {
+            a->SetTitleFont(look.font), a->SetLabelFont(look.font);
+            a->SetTitleSize(look.title), a->SetLabelSize(look.labels);
+            a->CenterTitle(!look.s.atEnds);
+        }
+        ax->SetTickLength(look.tick / f.fh()), ay->SetTickLength(look.tick / f.fw());
+        ax->SetLabelOffset(look.s.labelOffset * look.px / f.h), ay->SetLabelOffset(look.s.labelOffset * look.px / f.w);
+        ax->SetTitleOffset(look.s.titleOffsetX), ay->SetTitleOffset(look.s.titleOffsetY);
+        if (!xText) ax->SetLabelSize(0), ax->SetTitleSize(0);
+    }
+
+    // Steps per run of finite bins, with their errors as bars at the centres, a band, or nothing.
+    inline void curve(const Series& s, int colourIndex, const Look& look, Keep& keep, const std::string& id) {
+        for (TH1D* h : segments(s, keep, id)) {
+            h->SetLineColor(colourIndex), h->SetLineWidth(look.width);
+            h->Draw("HIST ][ SAME");                    // ][: a run does not drop to the axis at its ends
+            if (look.s.errors == "band") {
+                auto* band = static_cast<TH1D*>(keep.hold(h->Clone()));
+                band->SetFillColorAlpha(colourIndex, 0.25), band->SetLineWidth(0), band->SetMarkerSize(0);
+                band->Draw("E2 SAME");
+            }
+        }
+        if (look.s.errors != "bars") return;
+        auto* bars = points(s, keep, false);
+        bars->SetLineColor(colourIndex), bars->SetLineWidth(look.width), bars->SetMarkerSize(0);
+        bars->Draw("PZ");
+    }
+
+    inline void dataPoints(const Series& s, const Look& look, Keep& keep, const Series* per = nullptr) {
+        const int c = colour(look.s.dataColour);
+        auto* g = points(s, keep, look.s.xBars, per);
+        g->SetLineColor(c), g->SetLineWidth(look.width);
+        g->SetMarkerStyle(look.s.marker), g->SetMarkerColor(c), g->SetMarkerSize(look.marker());
+        g->Draw("PZ");
+    }
+
+    struct Entry {
+        std::string label;
+        int colour;
+        bool data, drawn;
+    };
+
+    // mkhtml's legend: no frame, the title as its header, and a "+" beside each entry — on the right
+    // of right-aligned text, on the left of left-aligned text. Data come first, as in mkhtml. A
+    // corner is inset from the frame's; [x, y] places the top-right corner in fractions of the frame.
+    inline void legend(const std::string& title, const std::vector<Entry>& entries, const Look& look, const Frame& f,
+                       Keep& keep) {
+        const Style& s = look.s;
+        const bool right = s.corner.find("right") != std::string::npos, top = s.corner.find("top") != std::string::npos;
+        const double dy = s.spacing * look.legend / f.h, sw = s.symbol * look.px / f.w, gap = s.gap * look.px / f.w;
+        const double ix = s.insetX * look.px / f.w, iy = s.insetY * look.px / f.h;
+        const double first = title.empty() ? 0.0 : s.spacing * look.header / f.h;       // the header's pitch
+        const double height = first + static_cast<double>(entries.size()) * dy;
+        double x0, yTop;                                                                // the outer edge, the top
+        if (s.placed) {
+            x0 = f.l + s.atX * (1 - f.l - f.r), yTop = f.b + s.atY * (1 - f.b - f.t);
+        } else {
+            x0 = right ? 1 - f.r - ix : f.l + ix;
+            yTop = top ? 1 - f.t - iy : f.b + iy + height;
+        }
+        auto text = [&](double x, double at, const std::string& t, int align, double size) {
+            auto* l = keep.hold(new TLatex(x, at, t.c_str()));
+            l->SetNDC(), l->SetTextFont(look.font), l->SetTextSize(size), l->SetTextAlign(align), l->Draw();
+        };
+        auto line = [&](double x1, double y1, double x2, double y2, int colourIndex) {
+            auto* l = keep.hold(new TLine(x1, y1, x2, y2));
+            l->SetNDC(), l->SetLineColor(colourIndex), l->SetLineWidth(look.width), l->Draw();
+        };
+        if (!title.empty()) text(x0, yTop - 0.5 * first, title, right ? 32 : 12, look.header);
+        double y = yTop - first - 0.5 * dy;
+        for (const auto& e : entries) {
+            const double s1 = right ? x0 - sw : x0, s2 = right ? x0 : x0 + sw, xc = 0.5 * (s1 + s2);
+            if (e.drawn) {
+                line(s1, y, s2, y, e.colour);
+                line(xc, y - 0.4 * dy, xc, y + 0.4 * dy, e.colour);
+                if (e.data) {
+                    auto* m = keep.hold(new TMarker(xc, y, s.marker));
+                    m->SetNDC(), m->SetMarkerColor(e.colour), m->SetMarkerSize(look.marker()), m->Draw();
+                }
+            }
+            text(right ? s1 - gap : s2 + gap, y, e.label, right ? 32 : 12, look.legend);
+            y -= dy;
+        }
     }
 
     struct RatioRange {
         double lo, hi;
     };
 
-    // The ratio pad shows at least 0.5–1.5, widened to the ratios drawn, within 0–3: a curve far from
-    // the reference (another beam energy against the data) is on the pad, one wild bin cannot flatten it.
-    inline RatioRange ratioRange(const std::vector<std::pair<size_t, Series>>& ratios, Range x) {
-        double lo = 0.5, hi = 1.5;
-        for (const auto& [c, s] : ratios)
-            for (size_t i = 0; i < s.size(); ++i)
-                if (std::isfinite(s.y[i]) && s.hi[i] > x.lo && s.lo[i] < x.hi)
-                    lo = std::min(lo, 0.9 * (s.y[i] - s.err[i])), hi = std::max(hi, 1.1 * (s.y[i] + s.err[i]));
-        return {std::max(lo, 0.0), std::min(hi, 3.0)};
+    // The ratio pad shows at least the style's range, widened to the ratios drawn, within its limits:
+    // a curve far from the reference (another beam energy against the data) is on the pad, one wild
+    // bin cannot flatten it.
+    inline RatioRange ratioRange(const std::vector<std::pair<size_t, Series>>& ratios, Range x, const Style& s) {
+        double lo = s.rangeLo, hi = s.rangeHi;
+        for (const auto& [c, r] : ratios)
+            for (size_t i = 0; i < r.size(); ++i)
+                if (std::isfinite(r.y[i]) && r.hi[i] > x.lo && r.lo[i] < x.hi)
+                    lo = std::min(lo, 0.9 * (r.y[i] - r.err[i])), hi = std::max(hi, 1.1 * (r.y[i] + r.err[i]));
+        return {std::max(lo, s.limitLo), std::min(hi, s.limitHi)};
     }
 
     inline void draw(const Page& page, std::vector<Series>& curves, Series* data, Range x, YRange y) {
+        const Style& st = page.style;
         gROOT->SetBatch(kTRUE);
-        gStyle->SetOptStat(0);
-        gStyle->SetOptTitle(0);
+        gStyle->SetOptStat(0), gStyle->SetOptTitle(0), gStyle->SetEndErrorSize(0), gStyle->SetFrameLineWidth(1);
+        gStyle->SetPaperSize(static_cast<float>(st.width * 2.54), static_cast<float>(st.height * 2.54));   // cm
+        const Look look(st);
         Keep keep;
-        const double textSize = page.fontSize / static_cast<double>(page.height) * 1.9;
-        TCanvas canvas("paint", page.name.c_str(), page.width, page.height);
+        const int W = st.pixelsWide(), H = st.pixelsHigh();
+        TCanvas canvas("paint", page.name.c_str(), W, H);
+        canvas.SetCanvasSize(W, H);
+
+        // with a ratio, the axes between the margins split by ratio.heights, with no gap
+        Frame ft{double(W), double(H), st.left, st.right, st.bottom, st.top}, fb{};
         TPad* top = &canvas;
         TPad* bottom = nullptr;
         if (page.ratio) {
-            top = new TPad("top", "", 0, 0.3, 1, 1);           // the canvas owns its pads
-            bottom = new TPad("bottom", "", 0, 0, 1, 0.3);
-            top->SetBottomMargin(0.02);
-            bottom->SetTopMargin(0.03);
-            bottom->SetBottomMargin(0.32);
-            for (TPad* p : {top, bottom}) p->SetLeftMargin(0.13), p->SetRightMargin(0.04), p->Draw();
-        } else {
-            canvas.SetLeftMargin(0.13), canvas.SetRightMargin(0.04), canvas.SetBottomMargin(0.12);
+            const double split = st.bottom + (1 - st.top - st.bottom) * st.ratioHeight / (st.mainHeight + st.ratioHeight);
+            top = new TPad("top", "", 0, split, 1, 1);                         // the canvas owns its pads
+            bottom = new TPad("bottom", "", 0, 0, 1, split);
+            ft = {double(W), H * (1 - split), st.left, st.right, 0.0, st.top / (1 - split)};
+            fb = {double(W), H * split, st.left, st.right, st.bottom / split, 0.0};
+            bottom->SetMargin(fb.l, fb.r, fb.b, fb.t);
+            for (TPad* p : {top, bottom}) p->SetFillStyle(0), p->SetBorderMode(0), p->Draw();
         }
+        top->SetMargin(ft.l, ft.r, ft.b, ft.t);
+        for (TPad* p : {top, bottom})
+            if (p) p->SetTickx(st.allSides), p->SetTicky(st.allSides), p->SetLogx(page.logx);
 
         top->cd();
-        top->SetLogx(page.logx);
         top->SetLogy(page.logy);
         TH1F* frame = top->DrawFrame(x.lo, y.lo, x.hi, y.hi);
+        style(frame, look, ft, !page.ratio);
         frame->GetYaxis()->SetTitle(page.yLabel.c_str());
         frame->GetXaxis()->SetTitle(page.ratio ? "" : page.xLabel.c_str());
-        frame->GetYaxis()->SetTitleSize(textSize), frame->GetYaxis()->SetLabelSize(textSize * 0.85);
-        frame->GetXaxis()->SetTitleSize(textSize), frame->GetXaxis()->SetLabelSize(page.ratio ? 0 : textSize * 0.85);
-        frame->GetYaxis()->SetTitleOffset(1.1);
+        if (page.ratio && !page.logy && y.lo == 0.0) frame->GetYaxis()->ChangeLabel(1, -1, 0);   // the joint's "0"
 
-        double lx1, ly1, lx2, ly2;
-        legendBox(page.legend, lx1, ly1, lx2, ly2, curves.size() + (data ? 1 : 0) + (page.title.empty() ? 0 : 1));
-        auto* legend = keep.hold(new TLegend(lx1, ly1, lx2, ly2));
-        legend->SetBorderSize(0), legend->SetFillStyle(0), legend->SetTextSize(textSize * 0.8);
-        if (!page.title.empty()) legend->SetHeader(page.title.c_str());
-
-        for (size_t c = 0; c < curves.size(); ++c) {
-            const int colourIndex = colour(page.palette[c % page.palette.size()]);
-            bool first = true;
-            for (TH1D* h : segments(curves[c], keep, "c" + std::to_string(c))) {
-                h->SetLineColor(colourIndex), h->SetLineWidth(2), h->SetMarkerSize(0);
-                h->Draw("HIST SAME");
-                auto* errors = static_cast<TH1D*>(keep.hold(h->Clone()));
-                errors->SetFillColorAlpha(colourIndex, 0.25), errors->SetLineWidth(0);
-                errors->Draw("E2 SAME");
-                if (first) legend->AddEntry(h, curves[c].label.c_str(), "l"), first = false;
-            }
-            if (first)                                 // every bin voided: listed, not drawn
-                legend->AddEntry(static_cast<TObject*>(nullptr), (curves[c].label + " (no entries)").c_str(), "");
-        }
+        std::vector<Entry> entries;
         if (data) {
-            auto* g = points(*data, keep);
-            g->SetMarkerStyle(20), g->SetMarkerSize(0.9), g->SetLineColor(kBlack);
-            g->Draw("P SAME");
-            legend->AddEntry(g, data->label.c_str(), "pe");
+            dataPoints(*data, look, keep);
+            entries.push_back({data->label, colour(st.dataColour), true, true});
         }
-        legend->Draw();
+        for (size_t c = 0; c < curves.size(); ++c) {
+            const int colourIndex = colour(st.palette[c % st.palette.size()]);
+            curve(curves[c], colourIndex, look, keep, "c" + std::to_string(c));
+            const bool drawn = std::any_of(curves[c].y.begin(), curves[c].y.end(), [](double v) { return std::isfinite(v); });
+            entries.push_back({drawn ? curves[c].label : curves[c].label + " (no entries)", colourIndex, false, drawn});
+        }
+        legend(page.title, entries, look, ft, keep);
         top->RedrawAxis();
 
         if (bottom) {
             bottom->cd();
-            bottom->SetLogx(page.logx);
             const Series& reference = data ? *data : curves.front();
             std::vector<std::pair<size_t, Series>> ratios;     // each curve over the reference, on its bins
             for (size_t c = 0; c < curves.size(); ++c) {
-                if (!data && c == 0) continue;
                 Series ratio = reference;
                 for (size_t i = 0; i < reference.size(); ++i) {
                     const auto [value, error] = rebinned(curves[c], reference.lo[i], reference.hi[i]);
@@ -240,27 +335,15 @@ namespace Paint {
                 }
                 ratios.emplace_back(c, ratio);
             }
-            const RatioRange r = ratioRange(ratios, x);
-            TH1F* rframe = bottom->DrawFrame(x.lo, r.lo, x.hi, r.hi);
+            const RatioRange r = ratioRange(ratios, x, st);
+            TH1F* rframe = bottom->DrawFrame(x.lo, r.lo, x.hi, r.hi - 5e-3 * (r.hi - r.lo));   // no label at the joint
+            style(rframe, look, fb, true);
             rframe->GetXaxis()->SetTitle(page.xLabel.c_str());
             rframe->GetYaxis()->SetTitle(page.ratioLabel.c_str());
-            const double rsize = textSize * 0.7 / 0.3;
-            rframe->GetXaxis()->SetTitleSize(rsize), rframe->GetXaxis()->SetLabelSize(rsize * 0.85);
-            rframe->GetYaxis()->SetTitleSize(rsize), rframe->GetYaxis()->SetLabelSize(rsize * 0.85);
-            rframe->GetYaxis()->SetTitleOffset(0.45), rframe->GetYaxis()->SetNdivisions(505);
-            if (data) {                                // the reference's own error, as a band
-                auto* band = points(reference, keep, 1.0, &reference);
-                band->SetFillColor(kGray), band->Draw("2 SAME");
-            }
-            auto* one = keep.hold(new TLine(x.lo, 1, x.hi, 1));
-            one->SetLineStyle(2), one->Draw();
-            for (auto& [c, ratio] : ratios) {
-                auto* g = points(ratio, keep);
-                const int colourIndex = colour(page.palette[c % page.palette.size()]);
-                g->SetLineColor(colourIndex), g->SetMarkerColor(colourIndex), g->SetMarkerStyle(20 + static_cast<int>(c) % 4),
-                    g->SetMarkerSize(0.6);
-                g->Draw("P SAME");
-            }
+            rframe->GetYaxis()->SetNdivisions(st.divisions), rframe->GetYaxis()->SetDecimals(st.decimals);
+            if (data) dataPoints(reference, look, keep, &reference);          // the data at 1, with their errors
+            for (auto& [c, ratio] : ratios)
+                curve(ratio, colour(st.palette[c % st.palette.size()]), look, keep, "r" + std::to_string(c));
             bottom->RedrawAxis();
         }
 

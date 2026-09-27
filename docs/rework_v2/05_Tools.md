@@ -102,7 +102,8 @@ look-alike (L26, the F1 lesson). A plugin imports only `errors`, `paths` and `qu
 | `pythia` | event generator | `build/App_Pythia.exe` | — (writes) | standard | P1 |
 | `rivet` | analysis application | `rivet` | yes | filters | P1 |
 | `custom` | any | `executable = …` | per table | per table | P1 |
-| `yd2rt` | visualisation | `build/App_yd2rt.exe` | no (file) | standard | P3 |
+| `yd2rt` | visualisation | `build/App_yd2rt.exe` | no (file) | standard | P3; `--merge OUT NAME=IN.yoda …` puts a sweep in one ROOT (a directory per point) or YODA (a path prefix per point) file (P5) |
+| `plotmerge` | visualisation | `build/App_yd2rt.exe --merge` | no (files) | standard | P5, in `post`: `input` = a product of every point, `{named_inputs}` |
 | `paint` | visualisation | `build/Paint.exe` | — | standard | P3 (driven by `[plot]`) |
 | `yoda` | visualisation | `rivet-mkhtml` | — | none | P3 (driven by `[plot] backend = "yoda"`): `utils/Env/yoda/backend.py`, no `tool.toml` |
 | `merge` | analysis application | `rivet-merge` | no (files) | none | P3, in `post`: one product of every point, `-e` unless `equivalent = false` |
@@ -410,7 +411,12 @@ label  = "ZEUS 2012"
 
 The algorithms of steps 2–4 are v1's `plot/transform.py` and `plot/data.py`, read in git and
 written again in C++. The config-driven style layer (canvas, palette, draw options, scales) follows
-`legacy/utils/Paint/`, also read in git. The overlays across files, the ratio pad, the reference
+`legacy/utils/Paint/`, also read in git. As there, a default style file sits under the user's
+overrides, merged table by table: `utils/Apps/Paint/base.toml`, found beside `build/` (else
+under `$HEKIT_ROOT`), with the page's `[style]` over it (`Style.hh`). Unknown keys and values of
+another type are errors. Its defaults copy rivet-mkhtml's `default.mplstyle`: the same page
+(4.67 in, 10:9), palette, text sizes in points, tick lengths and margins, so a ROOT page and a
+`backend = "yoda"` page of the same object look alike. `--dump-style` prints the merged style. The overlays across files, the ratio pad, the reference
 data and the gutters are new.
 
 **`Paint --dump-ranges PAGE.toml`** prints the final axis ranges as JSON, which is how the gutter

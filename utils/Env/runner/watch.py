@@ -47,12 +47,24 @@ def progress_text(state) -> str:
 
 
 class PlainView:
+    """One block per point, printed when it ends: its heading with the verdict and wall time, then
+    only what needs saying (a failed tool, a prepare step) and where the results are:
+
+        ── point 2/4: NNPDF23lo ── ok after 71.8 s
+           done → results/PhotoProduction/zeus/default/NNPDF23lo
+
+    While a point runs, a progress line every few seconds (the live view draws a table instead)."""
+
     def __init__(self, stream=None, every: float = 5.0):
         self.stream = stream or sys.stdout
         self.every = every
         self.last = 0.0
         self.total = 0
         self.number = 0
+        self._heading = ""
+        self._started = time.monotonic()
+        self._notes: list[str] = []
+        self._failed: list[str] = []
 
     def say(self, text: str) -> None:
         print(text, file=self.stream, flush=True)
@@ -66,18 +78,26 @@ class PlainView:
         pass
 
     def heading(self, plan, bold: bool = False) -> str:
-        """'── point 3/16: <name>', or '── post' for the post stage (index 0)."""
+        """'── point 3/16: <name>', or '── post (after every point)' for the post stage (index 0)."""
         if plan.point.index == 0:
             return "── post (after every point)"
+        if plan.point.index < 0:
+            return "── pre (before every point)"
         self.number += 1
         name = f"[bold]{plan.point.name}[/bold]" if bold else plan.point.name
         return f"── point {self.number}/{self.total}: {name}"
 
     def point_started(self, plan) -> None:
-        self.say(self.heading(plan))
+        self._heading = self.heading(plan, bold=isinstance(self, LiveView))
+        self._started = time.monotonic()
+        self._notes, self._failed = [], []
 
     def tool_started(self, state) -> None:
         pass
+
+    def note(self, text: str) -> None:
+        """A line for the point's block (a prepare step's verdict), printed when it ends."""
+        self._notes.append(text)
 
     def tick(self, states) -> None:
         now = time.monotonic()
@@ -87,28 +107,39 @@ class PlainView:
         line = " | ".join(progress_text(s) if (s.phase or s.done is not None) else f"{s.tag} … {s.last_line[:60]}"
                           for s in states if s.running)
         if line:
-            self.say(f"   {line}")
+            point = next((s.point for s in states if s.running), "")
+            self.say(f"   [{point}] {line}" if point else f"   {line}")
 
     def tool_finished(self, state, result) -> None:
         verdict = "ok" if result.exit == 0 else f"exit {result.exit}"
-        extra = f"  ({state.error})" if state.error and result.exit else ""
-        self.say(f"   {state.tag}: {verdict} after {result.seconds:.1f} s{extra}")
+        if state.tag.endswith(":prepare"):
+            self.note(f"   {state.tag}: {verdict} after {result.seconds:.1f} s")
+        elif result.exit != 0:
+            extra = f"  ({state.error})" if state.error else ""
+            self._failed.append(f"   {state.tag}: {verdict} after {result.seconds:.1f} s{extra}")
+
+    def block(self, heading: str, verdict: str, seconds: float, lines: list[str]) -> None:
+        self.say(f"{heading} ── {verdict} after {seconds:.1f} s")
+        for line in lines:
+            self.say(line)
 
     def point_finished(self, plan, result) -> None:
+        seconds = time.monotonic() - self._started
         if result.ok:
-            self.say(f"   done → {plan.res}")
+            self.block(self._heading, "ok", seconds, [*self._notes, f"   done → {plan.res}"])
         elif result.stopped:
-            self.say("   stopped: partial outputs keep their .partial names")
+            self.block(self._heading, "stopped", seconds,
+                       [*self._notes, *self._failed, "   partial outputs keep their .partial names"])
         else:
             blame = f" [{result.cause}]" if result.cause else ""
-            self.say(f"   FAILED{blame}: {result.message}")
+            self.block(self._heading, f"FAILED{blame}", seconds, [*self._notes, *self._failed, f"   {result.message}"])
 
     def skipped(self, plan) -> None:
         self.say(f"{self.heading(plan)}: complete, skipped (--rerun to run it again)")
 
 
 class LiveView(PlainView):
-    """The rich version: the same events, and a live table of the running tools."""
+    """The rich version: the same blocks, and a live table of the running tools."""
 
     SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
@@ -136,9 +167,15 @@ class LiveView(PlainView):
         self.live.stop()
 
     def point_started(self, plan) -> None:
+        super().point_started(plan)
         self.point_name = plan.point.name
         self.states = []
-        self.say(self.heading(plan, bold=True))
+
+    def block(self, heading: str, verdict: str, seconds: float, lines: list[str]) -> None:
+        colour = "green" if verdict == "ok" else "yellow" if verdict == "stopped" else "red"
+        self.say(f"{heading} ── [{colour}]{verdict}[/{colour}] after {seconds:.1f} s")
+        for line in lines:
+            self.say(line)
 
     def tool_started(self, state) -> None:
         self.states.append(state)
@@ -169,24 +206,9 @@ class LiveView(PlainView):
             table.add_row(f"[cyan]{s.point}[/cyan]", f"[bold]{s.tag}[/bold]", s.phase or "", bar, count,
                           f"{rate} {_eta(s)}".strip(), note)
         elapsed = time.monotonic() - self.started
-        table.add_row("", f"[dim]point {self.number}/{self.total} · {int(elapsed // 60)}:{int(elapsed % 60):02d}[/dim]",
+        table.add_row("", f"[dim]{self._heading.replace('── ', '')} · {int(elapsed // 60)}:{int(elapsed % 60):02d}[/dim]",
                       "", "", "", "", "")
         return table
-
-    def tool_finished(self, state, result) -> None:
-        colour = "green" if result.exit == 0 else "red"
-        extra = f"  ({state.error})" if state.error and result.exit else ""
-        self.say(f"   [{colour}]{state.tag}[/{colour}]: {'ok' if result.exit == 0 else f'exit {result.exit}'} "
-                 f"after {result.seconds:.1f} s{extra}")
-
-    def point_finished(self, plan, result) -> None:
-        if result.ok:
-            self.say(f"   [green]done[/green] → {plan.res}")
-        elif result.stopped:
-            self.say("   [yellow]stopped[/yellow]: partial outputs keep their .partial names")
-        else:
-            blame = f" [{result.cause}]" if result.cause else ""
-            self.say(f"   [red]FAILED{blame}[/red]: {result.message}")
 
 
 def view(plain: bool = False) -> PlainView:
@@ -217,6 +239,7 @@ def follow(journal: Path, *, plain: bool = False, idle_exit: float = 0.0) -> int
     """Tail a run's status.jsonl until the run says it finished (or `idle_exit` seconds of silence)."""
     shown = view(plain)
     states: dict[tuple[str, str], ToolState] = {}
+    blocks: dict[str, list] = {}                    # point → [heading, started, lines]
     offset = _latest_run(journal)
     title_done = False
     last = time.monotonic()
@@ -248,16 +271,25 @@ def follow(journal: Path, *, plain: bool = False, idle_exit: float = 0.0) -> int
                         title_done = True
                     if kind == "point":
                         if message.get("state") == "started":
-                            shown.number += 1
-                            shown.say(f"── point {message.get('index', shown.number)}: {point}")
+                            index = message.get("index", 0)
+                            heading = ("── post (after every point)" if index == 0 else "── pre (before every point)"
+                                       if index < 0 else f"── point {index}/{shown.total or '?'}: {point}")
+                            blocks[point] = [heading, message.get("t", time.time()), []]
                         else:
-                            shown.say(f"   {point}: {message.get('state')} {message.get('msg') or ''}".rstrip())
+                            heading, started, lines = blocks.pop(point, [f"── {point}", message.get("t", time.time()), []])
+                            verdict = {"done": "ok"}.get(message.get("state"), message.get("state", "?"))
+                            if verdict == "failed" and message.get("cause"):
+                                verdict = f"FAILED [{message['cause']}]"
+                            extra = [f"   {message['msg']}"] if message.get("msg") and verdict != "ok" else []
+                            shown.block(heading, verdict, message.get("t", time.time()) - started, lines + extra)
                         continue
                     state = states.setdefault((point, tag), ToolState(point=point, tag=tag))
                     if kind == "exit":
                         state.running, state.exit = False, message.get("code")
                         verdict = "ok" if message.get("code") == 0 else f"exit {message.get('code')}"
-                        shown.say(f"   {tag}: {verdict} after {message.get('seconds', 0):.1f} s")
+                        if message.get("code") != 0 or tag.endswith(":prepare"):
+                            blocks.get(point, [None, None, []])[2].append(
+                                f"   {tag}: {verdict} after {message.get('seconds', 0):.1f} s")
                         continue
                     apply(state, message)
             shown.tick([s for s in states.values() if s.running])

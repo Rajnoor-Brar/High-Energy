@@ -24,7 +24,7 @@ TOP_LEVEL = ("master", "run", "prelim", "static", "tools", "quantities", "plot")
 RUN_KEYS = {"serial": int, "name": str, "project": str, "configuration": str, "event_count": int,
             "threads": int, "description": str}
 CONFIGURATION_KEYS = {"serial": int, "name": str, "description": str, "event_count": int, "threads": int,
-                      "sweeps": list, "plot_points": list, "tools": list, "post": list, "static": dict,
+                      "sweeps": list, "plot_points": list, "tools": list, "pre": list, "post": list, "static": dict,
                       "prelim": dict}
 PRELIM_KEYS = {"fifo": list, "files": list, "commands": list}
 MASTER_KEYS = {"master_toml": str}
@@ -36,9 +36,9 @@ TOOL_COMMON = {"tool": str, "baseconfig": (str, list), "input": (str, list), "ou
                "timeout": (int, float), "stall_after": (int, float), "status": str, "executable": str,
                "arguments": list, "consumes": list, "config": dict, "streamable": bool,
                "consumes_events": bool}
-PLOT_KEYS = {"backend": str, "formats": list, "objects": list, "ratio": bool, "y_gutter": (int, float),
-             "x_gutter": (int, float), "logy": bool, "logx": bool, "auto_range": bool, "void_empty": bool,
-             "min_entries": int, "range_pad": int, "legend": str, "data": dict, "style": dict, "object": dict}
+PLOT_KEYS = {"backend": (str, list), "formats": list, "objects": list, "ratio": bool, "y_gutter": (int, float, str),
+             "x_gutter": (int, float, str), "logy": bool, "logx": bool, "auto_range": bool, "void_empty": bool,
+             "min_entries": int, "range_pad": int, "root_style": str, "data": dict, "style": dict, "object": dict}
 
 
 @dataclass
@@ -86,6 +86,7 @@ class Configuration:
     post: list[list[str]]
     static: dict
     prelim: dict
+    pre: list[list[str]] = field(default_factory=list)   # tools run once before every point
 
 
 @dataclass
@@ -337,6 +338,7 @@ def parse(raw: dict, path: Path) -> RunConfig:
             sweeps=sweeps, plot_points=list(plot_points),
             tools=_groups(table["tools"], f"{at}.tools", tools),
             post=_groups(table.get("post", []), f"{at}.post", tools),
+            pre=_groups(table.get("pre", []), f"{at}.pre", tools),
             static={**static, **local_static},
             prelim=local_prelim if local_prelim is not None else prelim)
 
@@ -347,6 +349,9 @@ def parse(raw: dict, path: Path) -> RunConfig:
                        or f"configurations: {', '.join(configurations) or '(none)'}")
 
     plot = raw.get("plot", {})
+    if "legend" in plot:
+        raise HepError("[plot].legend is now part of the style", where=f"{where}: [plot].legend",
+                       hint=f'[plot.style] legend.position = "{plot["legend"]}" (or in the root_style file)')
     _check(plot, PLOT_KEYS, f"{where}: [plot]")
 
     return RunConfig(path=path, project=project, name=run["name"], serial=run.get("serial"),

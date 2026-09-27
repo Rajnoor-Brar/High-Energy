@@ -33,7 +33,9 @@ def stage(scratch, request):
                plot={"backend": backend, "formats": ["png"], "ratio": True, "min_entries": 10, "range_pad": 1,
                      "data": {"file": "./tests/reference/legacy_run/ydmrg/photo_eic_data.yoda", "legend": "legacy",
                               "map": {"d01-x01-y01": "/REF/photo_eic/d01-x01-y01"}},
-                     "object": {"d04-*": {"logy": True, "y_gutter": 3.0, "title": "override"}}})
+                     "style": {"page": {"dpi": 100}},
+                     "object": {"d04-*": {"logy": True, "y_gutter": 3.0, "title": "override",
+                                          "style": {"legend": {"position": "top-left"}}}}})
     run = parse(data, scratch)
     configuration = run.configuration(None)
     master = quantities.load_master(run.project, run.master_toml)
@@ -44,10 +46,12 @@ def stage(scratch, request):
         plans.append(plan)
     for plan in plans:
         shutil.rmtree(plan.res, ignore_errors=True)
+        shutil.rmtree(plan.out, ignore_errors=True)
         source = LEGACY / ("mini_27x920_ep_MSTW.yoda" if "MSTW" in plan.point.name else "mini_27x920_ep_NNLO.yoda")
         product = plot.yoda_of(plan)
         product.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(source, product)
+        record.complete_marker(plan).parent.mkdir(parents=True, exist_ok=True)
         record.complete_marker(plan).write_text(plan.identity + "\n")
     shutil.rmtree(plans[0].res.parent / "plots", ignore_errors=True)
     return run, configuration, plans
@@ -74,10 +78,20 @@ def test_object_overrides_and_rivet_labels(stage):
     pages = {p.name: tomllib.loads(p.config.read_text())["page"] for p in plot.pages(run, configuration, plans)}
     assert pages["em/d04-x01-y01"]["logy"] is True and pages["em/d04-x01-y01"]["y_gutter"] == 3.0
     assert pages["em/d04-x01-y01"]["title"] == "override"
-    assert pages["em/d02-x01-y01"]["y_gutter"] == 1.5
+    assert pages["em/d02-x01-y01"]["y_gutter"] == 0.5 and pages["em/d02-x01-y01"]["x_gutter"] == "default"
     if (REPO / "build" / "Rivet" / "photo_eic.plot").exists():
-        assert pages["em/d01-x01-y01"]["x_label"] == "E_{T} [GeV]"
+        assert pages["em/d01-x01-y01"]["x_label"] == "#it{E}_{#it{T}} [GeV]"
         assert pages["em/d02-x01-y01"]["logy"] is False
+
+
+def test_a_page_carries_only_the_style_it_changes(stage):
+    run, configuration, plans = stage
+    by = {p.name: p for p in plot.pages(run, configuration, plans)}
+    assert tomllib.loads(by["em/d04-x01-y01"].config.read_text())["style"] == {
+        "page": {"dpi": 100}, "legend": {"position": "top-left"}}
+    assert tomllib.loads(by["em/d02-x01-y01"].config.read_text())["style"] == {"page": {"dpi": 100}}
+    assert by["em/d02-x01-y01"].style["legend"]["position"] == "top-right"     # base.toml's
+    assert by["em/d02-x01-y01"].style["page"]["size"] == [4.67, 4.21]
 
 
 def test_incomplete_points_are_not_drawn(stage):
@@ -91,18 +105,23 @@ def test_draw_writes_every_page(stage):
     run, configuration, plans = stage
     said = []
     assert plot.draw(run, configuration, plans, said.append) == 0
-    drawn = sorted((plans[0].res.parent / "plots").rglob("*.png"))
+    drawn = sorted((plans[0].res.parent / "plots" / "root").rglob("*.png"))
     assert len(drawn) == 34, said
     assert "34 of 34" in said[-1]
 
 
-def test_inputs_are_converted_once(stage):
+def test_the_sweep_is_merged_once_into_the_file_the_pages_read(stage):
     run, configuration, plans = stage
+    pages = plot.pages(run, configuration, plans)
+    merged = plans[0].res.parent / "plots" / "root" / f"{configuration.name}.root"
+    assert {c["file"] for p in pages for c in tomllib.loads(p.config.read_text())["curve"]} == {str(merged)}
+    before = merged.stat().st_mtime_ns
     plot.pages(run, configuration, plans)
-    inputs = plans[0].out.parent / "plots" / "inputs"
-    before = {p: p.stat().st_mtime_ns for p in inputs.glob("*.root")}
-    plot.pages(run, configuration, plans)
-    assert {p: p.stat().st_mtime_ns for p in inputs.glob("*.root")} == before and len(before) == 4
+    assert merged.stat().st_mtime_ns == before                         # nothing changed: not rebuilt
+    uproot = pytest.importorskip("uproot")
+    with uproot.open(merged) as f:
+        assert {k.split("/")[0] for k in f.keys() if "/" in k} == {p.point.name for p in plans}
+        assert "points.json" in {k.split(";")[0] for k in f.keys()} or not (plans[0].out.parent / "points.json").exists()
 
 
 @pytest.mark.slow
@@ -113,7 +132,7 @@ def test_the_yoda_backend_draws_the_same_pages(stage):
     run, configuration, plans = stage
     said = []
     assert plot.draw(run, configuration, plans, said.append) == 0, said
-    plots = plans[0].res.parent / "plots"
+    plots = plans[0].res.parent / "plots" / "yoda"                          # the yoda backend's own tree
     for cell in ("em", "ep"):
         assert len(list((plots / cell / "photo_eic").glob("*.pdf"))) == 17
     work = plans[0].out.parent / "plots" / "em" / "yoda"
@@ -122,6 +141,29 @@ def test_the_yoda_backend_draws_the_same_pages(stage):
     yoda = pytest.importorskip("yoda")
     references = yoda.read(str(work / "reference.yoda"))
     assert list(references) == ["/REF/photo_eic/d01-x01-y01"]                # only what the map names
+
+
+def test_pages_are_paints_and_another_backend_moves_only_the_output(stage):
+    run, configuration, plans = stage
+    page = plot.pages(run, configuration, plans)[0]
+    plots = plans[0].res.parent / "plots"
+    assert page.output == plots / "root" / page.name
+    assert tomllib.loads(page.config.read_text())["page"]["output"] == str(page.output)   # Paint's
+    assert plot.for_backend(page, "yoda").output == plots / "yoda" / page.name
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not shutil.which("rivet-mkhtml"), reason="load_hep: rivet-mkhtml")
+@pytest.mark.parametrize("stage", ["both"], indirect=True)
+def test_both_backends_draw_both_trees(stage):
+    run, configuration, plans = stage
+    said = []
+    assert plot.draw(run, configuration, plans, said.append) == 0, said
+    plots = plans[0].res.parent / "plots"
+    for cell in ("em", "ep"):
+        assert len(list((plots / "root" / cell).glob("*.png"))) == 17
+        assert len(list((plots / "yoda" / cell / "photo_eic").glob("*.pdf"))) == 17
+    assert said[0].startswith("plot: 34 of 34") and said[-1].startswith("plot (yoda): 34 of 34")
 
 
 def test_a_swept_analysis_option_is_a_curve_not_a_page(scratch):
@@ -140,16 +182,18 @@ def test_a_swept_analysis_option_is_a_curve_not_a_page(scratch):
         plans.append(plan)
     for plan, r in zip(plans, ("0.4", "0.7")):
         shutil.rmtree(plan.res, ignore_errors=True)
+        shutil.rmtree(plan.out, ignore_errors=True)
         text = (LEGACY / "mini_27x920_ep_MSTW.yoda").read_text()
         text = text.replace("/photo_eic/", f"/photo_eic:R={r}/")
         product = plot.yoda_of(plan)
         product.parent.mkdir(parents=True, exist_ok=True)
         product.write_text(text)
+        record.complete_marker(plan).parent.mkdir(parents=True, exist_ok=True)
         record.complete_marker(plan).write_text(plan.identity + "\n")
     pages = plot.pages(run, configuration, plans)
     assert len(pages) == 17 and {p.name for p in pages} == {f"d{n:02d}-x01-y01" for n in range(1, 18)}
     first = tomllib.loads(pages[0].config.read_text())
-    assert [c["object"] for c in first["curve"]] == ["photo_eic__R-0.4/" + pages[0].name, "photo_eic__R-0.7/" + pages[0].name]
-    assert [c["raw"] for c in first["curve"]] == ["RAW/" + c["object"] for c in first["curve"]]
+    assert [c["object"] for c in first["curve"]] == ["r04/photo_eic__R-0.4/" + pages[0].name, "r07/photo_eic__R-0.7/" + pages[0].name]
+    assert [c["raw"] for c in first["curve"]] == [c["object"].replace("/", "/RAW/", 1) for c in first["curve"]]
     said = []
     assert plot.draw(run, configuration, plans, said.append) == 0, said

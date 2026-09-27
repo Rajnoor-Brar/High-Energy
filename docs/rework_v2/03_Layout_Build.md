@@ -34,7 +34,7 @@ High-Energy/
 ├── output/
 │   ├── <Project>/…             technical files: cards, logs, FIFOs, status, caches (§3)
 │   └── tests/                  everything tests write
-├── results/<Project>/…         products: YODA, ROOT, plots, provenance (§3)
+├── results/<Project>/…         products: YODA, ROOT, plots (§3); provenance and .complete are in output/
 ├── tests/                      runner/ cxx/ integration/ reference/
 └── docs/
 ```
@@ -104,17 +104,19 @@ output/<Project>/<run>/<configuration>/
     config/<tag>.toml       a custom tool's extracted [tools.<tag>.config]
     events.hepmc            [prelim] entries: FIFOs and agreed files
     logs/<tag>.log          stdout+stderr of each tool
-    identity/<tag>          the step identity, written with the completion marker
-  plots/<page>.toml         the Paint (or YODA) configuration generated per page
+    provenance.json         (V14)
+    .complete               written last; its absence means the point is not done
+  pre/, post/               the same, for the pre and post stages
+  plots/[<cell>/]<object>.toml   the Paint configuration generated per page
 output/<Project>/.cache/<tool>/<hash>/   prepare caches (Sherpa/Whizard integration, MadGraph process dirs)
 
 results/<Project>/<run>/<configuration>/
   <point>/
-    <products>              photo.yoda, photo.root, delphes.root, …
-    provenance.json         (V14)
-    .complete               written last; its absence means the point is not done
-  post/                     products of post tools
-  plots/<page>.{pdf,png,svg}
+    <products>              photo.yoda, photo.root, delphes.root, … (the products only)
+  pre/, post/               products of the pre and post tools
+  plots/root/<configuration>.root        the sweep in one file: a directory per point, points.json inside
+  plots/root/[<cell>/]<object>.{pdf,png,svg}   the ROOT pages, drawn from it
+  plots/yoda/[<cell>/]…     the pages of backend = "yoda" (rivet-mkhtml)
 ```
 
 **Directory names:**

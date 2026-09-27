@@ -110,6 +110,7 @@ threads     = 20
 sweeps      = ["energies", "pdf"]               # grid: 4 energies × 4 PDFs = 16 points
 plot_points = ["energies"]                      # 4 pages; the PDFs are the curves on each
 tools       = [["pythia", "rivet"], "yd2rt"]    # group 1 together (FIFO), then group 2
+pre         = []                                # tools run once before all points (P5)
 post        = []                                # tools run once after all points (V15)
 static      = { lepton = "ep" }                 # this configuration's own static values
 ```
@@ -581,9 +582,6 @@ legend = "ZEUS 2012"
 "d02-x01-y01" = "/REF/ZEUS_2012_I1116258/d02-x01-y01"
 "d09-x01-y01" = "/REF/ZEUS_2012_I1116258/d09-x01-y01"
 
-[plot.style]
-font_size = 13
-canvas    = [900, 600]
 ```
 
 What this shows:
@@ -794,18 +792,18 @@ Primary graphics are ROOT, through the Paint app, *"unless explictly told to use
 
 ```toml
 [plot]
-backend     = "root"             # "root" (Paint, default) | "yoda" (rivet-mkhtml / matplotlib)
+backend     = "root"             # "root" (Paint, default) | "yoda" (rivet-mkhtml) | ["root", "yoda"] or "both"
 formats     = ["pdf", "png", "svg"]
 objects     = ["/photo_eic/*"]   # which histograms get pages; default every 1D object
 ratio       = true               # ratio panel against the first curve, or the data
-y_gutter    = 1.5                # y axis to 1.5 × the largest y drawn: room for legend and labels
-x_gutter    = 1.0                # the same for x (1.0 = none)
+y_gutter    = 0.5                # y axis to (1 + 0.5) × the largest y drawn (default 0.5); 0 or "default": the tool's own range
+x_gutter    = "default"          # widens x by this fraction of its span; 0 or "default" (the default): none
 logy        = false
 auto_range  = true               # trim empty edges, as v1's auto_range
 void_empty  = false
 min_entries = 1                  # void a bin fewer raw entries went into, in any curve (across the page)
 range_pad   = 0                  # auto_range keeps this many whole bins either side of the filled ones
-legend      = "top-right"
+root_style  = "talk.toml"        # optional: a style file over utils/Apps/Paint/base.toml (configs/<P>/…)
 
 [plot.data]                      # reference data, optional
 file   = "rivet:ZEUS_2012_I1116258"   # Rivet's own reference data; a bare name is under datasets/
@@ -813,18 +811,41 @@ legend = "ZEUS 2012"
 [plot.data.map]                  # MC object → reference object; explicit only (00/B5)
 "d01-x01-y01" = "/REF/ZEUS_2012_I1116258/d01-x01-y01"
 
-[plot.style]
-canvas    = [900, 600]
-font_size = 13
-palette   = ["kBlue+1", "kRed+1", "kGreen+2", "kOrange+7"]
+[plot.style]                     # optional: over root_style, in base.toml's tables
+page.dpi        = 300            # PNG resolution
+text.title      = 11             # points
+legend.position = "top-left"     # or [x, y], its top-right corner in fractions of the frame
 
 [plot.object."d04-x01-y01"]      # per-object overrides, by name or glob
 logy     = true
 y_gutter = 3.0
+style.legend.position = "bottom-left"   # the style again, for these objects only
 ```
 
 - Titles and axis labels come from the Rivet `.plot` file, as in v1 (D9): one label source.
   `[plot.object.<name>]` may override them.
+  Math letters come out italic, as LaTeX sets them (`$E_T$` → `#it{E}_{#it{T}}`).
+- **The style** of Paint's pages starts from `utils/Apps/Paint/base.toml`, which Paint reads
+  itself. Its defaults are rivet-mkhtml's look:
+  - the page is mkhtml's size and palette, in a serif font;
+  - ticks point inwards on all four sides, and the axis titles sit at the axis ends;
+  - the legend is frameless, with a "+" beside each entry;
+  - MC curves are steps with error bars at the bin centres, and data are black points;
+  - the ratio pad is a third of the height, with no gap.
+
+  Edit base.toml to change every page. Its tables are `[page]` (size, dpi, font, margins), `[text]`
+  (sizes in points), `[curves]` (palette, width, errors: bars | band | none), `[data]`, `[axes]`,
+  `[legend]` (position, inset, spacing, symbol, gap) and `[ratio]` (heights, range, limits,
+  divisions, decimals). Over it, key by key, go:
+  1. the `[plot].root_style` file: a bare name is under `configs/<Project>/`, `.toml` optional;
+  2. `[plot.style]`;
+  3. `[plot.object."<glob>"].style`, for the objects it matches.
+
+  Each layer names only what it changes. Every layer is checked against base.toml at plan time: a
+  key it lacks is an error with the nearest spelling, and so is a value of another kind. A page's
+  config holds only what the layers changed; `Paint.exe PAGE.toml --dump-style` prints the whole
+  style. `hep plot FILE… --style talk.toml` applies a style file to files. `[plot].legend` moved to
+  `legend.position`; the old key says so.
 - With `backend = "root"`, `[plot]` becomes one Paint config per page:
   `output/…/plots/<page>/<object>.toml`, run by `build/Paint.exe`
   ([05_Tools.md §7](05_Tools.md#7-paint)), drawn to `results/…/plots/<page>/<object>.<fmt>`. The page
@@ -837,8 +858,12 @@ y_gutter = 3.0
   one page set per cell, with Paint's ranges and voids (`Paint --dump-ranges`). The voided bins
   are blanked in copies of the YODAs, the mapped data are cut to their aligned run and renamed
   `/REF/<analysis>/<object>` (mkhtml's own reference lookup is off), and labels go TLatex → LaTeX.
-  mkhtml always writes PDF and PNG. `[plot.style].font_size` and `palette` have no counterpart and
-  are refused.
+  mkhtml always writes PDF and PNG. Of the style it honours only a `legend.position` corner:
+  `root_style` and every other style key are refused.
+- With `backend = ["root", "yoda"]` (or `"both"`), one run writes both page sets from the same page
+  configs, ranges and voids: `results/…/plots/root/` and `results/…/plots/yoda/`. Paint honours the
+  style, so style keys are allowed. A legend placed at `[x, y]` is still refused, because the two
+  sets would then disagree about where the legend is.
 - Keys a backend cannot honour are **errors**, not silently ignored: v1's `LegendXPos` was parsed
   and dropped.
 

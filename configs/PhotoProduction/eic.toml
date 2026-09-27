@@ -232,11 +232,10 @@ labels = ["E_{T} > 4 GeV", "E_{T} > 5 GeV", "E_{T} > 6 GeV"]
 backend     = "root"
 formats     = ["pdf", "png"]
 ratio       = true
-y_gutter    = 1.5
+y_gutter    = 0.5
 auto_range  = true
 void_empty  = false
 min_entries = 1
-legend      = "top-right"
 
 [plot.data]
 file   = "rivet:ZEUS_2012_I1116258"     # Rivet's own ZEUS 2012 tables (the same numbers as datasets/zeus_eic.yoda)
@@ -261,6 +260,3 @@ legend = "ZEUS 2012"
 "d11-x01-y01" = "/REF/ZEUS_2012_I1116258/d11-x01-y01"   # eta, anti-kT
 "d12-x01-y01" = "/REF/ZEUS_2012_I1116258/d12-x01-y01"   # eta, SISCone
 
-[plot.style]
-font_size = 13
-canvas    = [900, 600]

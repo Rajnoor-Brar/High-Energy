@@ -1,0 +1,59 @@
+# utils/Apps/Paint/base.toml — Paint's base style: rivet-mkhtml's look (its default.mplstyle).
+#
+# Every ROOT page starts from this file; edit it to change them all. Over it, key by key, go:
+#   1. [plot].root_style = "file.toml"   a style file of the run (configs/<Project>/…, ./… from the repo root)
+#   2. [plot.style]                       inline in the run TOML
+#   3. [plot.object."<glob>".style]       for the objects the glob matches
+# Each layer names only the keys it changes, in the same tables as here. A key that is not in this
+# file is an error. `Paint.exe PAGE.toml --dump-style` prints a page's style after the merge.
+# Sizes are points (1/72 in) of the page unless said otherwise.
+
+[page]
+size = [4.67, 4.21]          # inches: the PDF's page; the PNG is size × dpi pixels
+dpi  = 150                   # PNG resolution: 150 → 700 × 632 pixels
+font = "serif"               # serif | sans | mono (ROOT's Times, Helvetica, Courier)
+
+[page.margins]               # fractions of the page, around the axes
+left   = 0.16
+right  = 0.032
+top    = 0.066
+bottom = 0.11
+
+[text]                       # sizes in points
+title  = 10.0                # axis titles
+labels = 8.0                 # tick labels
+legend = 10.0                # legend entries
+header = 10.0                # the legend's first line: the page title
+
+[curves]                     # the MC
+palette = ["#EE3311", "#3366FF", "#109618", "#FF9900", "#990099"]   # #rrggbb, ROOT names (kBlue+1) or numbers
+width   = 1.0                # points: the steps and their error bars
+errors  = "bars"             # bars (at the bin centres) | band | none
+
+[data]                       # the reference data
+colour      = "kBlack"
+marker      = 20             # ROOT's marker style
+marker_size = 2.0            # points
+x_bars      = true           # the bin width as a horizontal bar
+
+[axes]
+tick_length     = 6.0        # points; minor ticks are half as long
+ticks_all_sides = true       # ticks on the top and right edges too
+titles_at_ends  = true       # the x title at the right end, the y title at the top; false centres them
+title_offset    = [1.0, 1.55]   # x, y: ROOT's title offsets (larger is further from the axis)
+label_offset    = 2.5        # points between an axis and its tick labels
+
+[legend]
+position = "top-right"       # top-right | top-left | bottom-right | bottom-left, or [x, y]: its
+                             # top-right corner in fractions of the frame (then right-aligned)
+inset    = [5.0, 5.0]        # points from the frame's corner (x, y), for a named position
+spacing  = 1.2               # line pitch, × the legend's text size
+symbol   = 16.0              # points: the width of the "+" beside each entry
+gap      = 5.0               # points between the "+" and its text
+
+[ratio]
+heights   = [2.0, 1.0]       # the main pad to the ratio pad (mkhtml's 6:3)
+range     = [0.5, 1.5]       # always shown; widened to the ratios drawn …
+limits    = [0.0, 3.0]       # … but never past these
+divisions = 508              # ROOT's axis divisions: 8 primary, 5 secondary
+decimals  = true             # labels 1.0, 1.2, … rather than 1, 1.2, …

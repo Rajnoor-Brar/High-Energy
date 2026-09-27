@@ -318,7 +318,7 @@ def run_point(plan: PointPlan, run, configuration, *, sink=None, journal: Journa
     _cleanup(plan)
     record = provenance(plan, run, configuration, started, now(),
                         {tag: {"exit": r.exit, "seconds": round(r.seconds, 3), "note": r.message} for tag, r in results.items()})
-    write_atomic(plan.res / "provenance.json", json.dumps(record, indent=1, default=str) + "\n")
+    write_atomic(plan.out / "provenance.json", json.dumps(record, indent=1, default=str) + "\n")
     write_atomic(complete_marker(plan), plan.identity + "\n")
     result = PointResult(True, tools=results)
     _finished(plan, result, sink, journal)
@@ -337,8 +337,8 @@ def run_prepares(plan: PointPlan, *, sink, journal: Journal | None, stopper: Sto
         stamp = step.prepare_dir / ".prepared"
         if stamp.exists():
             results[tag] = ToolResult(tag, exit=0, message=f"cache hit {step.prepare_dir.name}")
-            if hasattr(sink, "say"):
-                sink.say(f"   {tag}: cached ({step.prepare_dir})")
+            if hasattr(sink, "note"):
+                sink.note(f"   {tag}: cached ({step.prepare_dir})")
             continue
         step.prepare_dir.mkdir(parents=True, exist_ok=True)
         job = replace(step, tag=tag, argv=step.prepare_argv, cwd=step.prepare_dir, inputs=[], outputs=[], products=[],

@@ -4,13 +4,18 @@ docs/rework_v2/04_Config.md §9, 05_Tools.md §7. After the points, from the com
 
 * the objects are the 1D objects of the points' YODA product (not /RAW, /TMP or the run counters),
   narrowed by [plot].objects globs;
-* each point's YODA is converted once, raw entries included, into output/…/plots/inputs/, keyed by
-  its sha256, so Paint can void by min_entries;
+* the sweep is merged into one ROOT file, results/…/plots/root/<configuration>.root: a directory
+  per point, raw entries included (so Paint can void by min_entries) and points.json inside. It is
+  rebuilt only when a point's YODA changes, and it is what the pages read;
 * titles and axis labels come from the analysis's Rivet .plot file (one label source, v1's D9), its
   LaTeX translated to TLatex (V11), under [plot.object."<glob>"] overrides;
 * reference data are drawn only through the explicit [plot.data].map (L18);
-* one Paint config per page, output/…/plots/[<page>/]<object>.toml, drawn to the same place under
-  results/.
+* one Paint config per page, output/…/plots/[<page>/]<object>.toml, drawn to
+  results/…/plots/root/[<page>/]<object>.<fmt>; the yoda backend writes results/…/plots/yoda/, and
+  backend = ["root", "yoda"] (or "both") writes both from the same pages;
+* the style is utils/Apps/Paint/base.toml, which Paint reads itself; a page's [style] holds only
+  what the run changes: the [plot].root_style file, then [plot.style], then the matching
+  [plot.object."<glob>"].style, each checked against base.toml's keys and types.
 """
 
 from __future__ import annotations
@@ -22,13 +27,14 @@ import importlib.util
 import json
 import re
 import subprocess
-from dataclasses import dataclass, field
+import tomllib
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import tomli_w
 
 from .errors import HepError, did_you_mean
-from .paths import build_root, output_root, repo_root, resolve
+from .paths import build_root, output_root, repo_root, resolve, results_root
 from .record import is_complete
 from .sweep import axes, label_of, tag_of
 
@@ -36,8 +42,9 @@ BACKENDS = ("root", "yoda")
 FORMATS = ("pdf", "png", "svg", "eps")
 LEGENDS = ("top-right", "top-left", "bottom-right", "bottom-left")
 DATA_KEYS = ("file", "legend", "map")
-STYLE_KEYS = ("canvas", "font_size", "palette")
-OBJECT_KEYS = ("title", "x_label", "y_label", "logx", "logy", "y_gutter", "x_gutter", "ratio", "legend")
+OBJECT_KEYS = ("title", "x_label", "y_label", "logx", "logy", "y_gutter", "x_gutter", "ratio", "style")
+STYLE_CHOICES = {"page.font": ("serif", "sans", "mono"), "curves.errors": ("bars", "band", "none"),
+                 "legend.position": LEGENDS}
 COUNTERS = ("/_XSEC", "/_EVTCOUNT")
 
 
@@ -54,6 +61,8 @@ class Page:
     data: tuple | None = None                       # (reference YODA, its object path)
     overrides: set = field(default_factory=set)     # [plot.object] keys that applied
     ranges: dict = field(default_factory=dict)      # Paint --dump-ranges, for other backends
+    style: dict = field(default_factory=dict)       # base.toml with the page's [style] over it
+    plots: Path | None = None                        # results/…/plots: a backend draws into plots/<its name>/
 
 
 def backend(name: str):
@@ -66,6 +75,22 @@ def backend(name: str):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def backends(settings: dict) -> list[str]:
+    """[plot].backend: a name, a list of names, or "both" (every backend). Paint's first when drawn."""
+    value = settings.get("backend", "root")
+    names = list(BACKENDS) if value == "both" else [value] if isinstance(value, str) else list(value)
+    return sorted(dict.fromkeys(names), key=lambda n: n != "root")
+
+
+def check_gutter(value, where: str) -> None:
+    """y_gutter / x_gutter: g ≥ 0 puts the axis end at (1 + g) × the largest value (x: widens by g of
+    the span); 0 or "default" sets nothing, and the drawing tool picks its own range."""
+    if value == "default" or (_number(value) and value >= 0):
+        return
+    raise HepError(f"a gutter must be a number >= 0 or \"default\", not {value!r}", where=where,
+                   hint='y_gutter = 0.5 puts the top of the axis at 1.5 × the largest value; "default" leaves it to the tool')
 
 
 def validate(run) -> None:
@@ -83,18 +108,24 @@ def validate(run) -> None:
                 raise HepError(f"[plot.{name}] has no key '{key}'", where=f"{where}.{name}",
                                hint=did_you_mean(key, allowed) or f"its keys: {', '.join(allowed)}")
 
-    one_of(settings.get("backend", "root"), BACKENDS, "backend")
-    one_of(settings.get("legend", "top-right"), LEGENDS, "legend")
+    for key in ("y_gutter", "x_gutter"):
+        check_gutter(settings.get(key, 0), f"{where}.{key}")
+    names = backends(settings)
+    if not names:
+        raise HepError("[plot].backend names no backend", where=f"{where}.backend", hint='"root", "yoda" or "both"')
+    for name in names:
+        one_of(name, BACKENDS, "backend")
     for fmt in settings.get("formats", []):
         one_of(fmt, FORMATS, "formats")
     only(settings.get("data", {}), DATA_KEYS, "data")
-    only(settings.get("style", {}), STYLE_KEYS, "style")
+    run_style(run)
     for glob, table in settings.get("object", {}).items():
         only(table, OBJECT_KEYS, f'object."{glob}"')
-        if "legend" in table:
-            one_of(table["legend"], LEGENDS, f'object."{glob}".legend')
-    if settings.get("backend", "root") != "root":
-        backend(settings["backend"]).validate(settings)
+        for key in ("y_gutter", "x_gutter"):
+            check_gutter(table.get(key, 0), f'{where}.object."{glob}".{key}')
+        check_style(table.get("style", {}), f'{where}.object."{glob}".style')
+    for name in names[1:] if names[0] == "root" else names:
+        backend(name).validate(settings, beside_root=names[0] == "root")
     data = settings.get("data", {})
     if data and not data.get("map"):
         raise HepError("[plot.data] names a file but no map", where=f"{where}.data",
@@ -103,22 +134,107 @@ def validate(run) -> None:
         raise HepError("[plot.data] has a map but no file", where=f"{where}.data")
 
 
+# ── the style: utils/Apps/Paint/base.toml and the layers over it ─────────────────────────────
+
+def base_style() -> dict:
+    """utils/Apps/Paint/base.toml: every style key, with its default. Paint reads the same file."""
+    path = repo_root() / "utils" / "Apps" / "Paint" / "base.toml"
+    try:
+        return tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as error:
+        raise HepError(f"cannot read the base style: {error}", where=str(path)) from None
+
+
+def _number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def check_style(layer: dict, where: str, base: dict | None = None, at: str = "") -> None:
+    """A style layer names only keys base.toml has, each a value of the same kind: a number for a
+    number, a pair for a pair, a list for the palette. legend.position is a corner or [x, y]."""
+    base = base_style() if base is None else base
+    for key, value in layer.items():
+        name = f"{at}.{key}" if at else key
+        if key not in base:
+            raise HepError(f"the style has no key '{name}'", where=where,
+                           hint=did_you_mean(key, list(base)) or f"utils/Apps/Paint/base.toml has: {', '.join(base)}")
+        mine = base[key]
+        if isinstance(mine, dict) or isinstance(value, dict):
+            if not (isinstance(mine, dict) and isinstance(value, dict)):
+                raise HepError(f"style '{name}' must be {'a table' if isinstance(mine, dict) else 'a value'}", where=where)
+            check_style(value, where, mine, name)
+            continue
+        if name == "legend.position" and isinstance(value, list):
+            ok = len(value) == 2 and all(_number(v) for v in value)
+        elif _number(mine):
+            ok = _number(value)
+        elif isinstance(mine, list):
+            ok = isinstance(value, list) and bool(value) and (
+                len(value) == len(mine) and all(_number(v) for v in value) if all(_number(v) for v in mine)
+                else all(isinstance(v, (str, int)) and not isinstance(v, bool) for v in value))
+        else:
+            ok = type(value) is type(mine)
+        if not ok:
+            raise HepError(f"style '{name}' = {value!r} is not of the kind base.toml gives it ({mine!r})", where=where)
+        if name in STYLE_CHOICES and isinstance(value, str) and value not in STYLE_CHOICES[name]:
+            raise HepError(f"style '{name}' must be one of {', '.join(STYLE_CHOICES[name])}, not '{value}'", where=where)
+
+
+def merge_style(*layers: dict) -> dict:
+    """Later layers win, key by key, into nested tables."""
+    out: dict = {}
+    for layer in layers:
+        for key, value in layer.items():
+            out[key] = merge_style(out.get(key, {}), value) if isinstance(value, dict) else value
+    return out
+
+
+def style_file(value: str, project: str = "", where: str = "") -> dict:
+    """A style layer from a file: [plot].root_style (configs/<Project>/…), or `hep plot --style`."""
+    path = resolve(value, "root_style", project=project, where=where) if project else Path(value).resolve()
+    if path.suffix != ".toml":
+        path = path.with_name(path.name + ".toml")
+    try:
+        layer = tomllib.loads(path.read_text(encoding="utf-8"))
+    except OSError:
+        raise HepError(f"no style file {path}", where=where or str(path)) from None
+    except tomllib.TOMLDecodeError as error:
+        raise HepError(f"cannot parse the style file: {error}", where=str(path)) from None
+    check_style(layer, str(path))
+    return layer
+
+
+def run_style(run) -> dict:
+    """What a run changes of the base style: its root_style file, then [plot.style]."""
+    settings = run.plot
+    where = f"{run.path}: [plot]"
+    layer = style_file(settings["root_style"], run.project, f"{where}.root_style") if "root_style" in settings else {}
+    check_style(settings.get("style", {}), f"{where}.style")
+    return merge_style(layer, settings.get("style", {}))
+
+
 # ── LaTeX ($…$ in Rivet .plot files) → ROOT TLatex (V11) ──────────────────────────────────────
 
 _COMMANDS = {"text": "", "mathrm": "", "rm": "", "mathit": "", "textrm": "", "mathbf": "#bf",
              "left": "", "right": "", "le": "#leq", "ge": "#geq", "to": "#rightarrow", "ell": "l"}
 
 
+def _italic(math: str) -> str:
+    """Letters in math are italic, as LaTeX sets them: E_T → #it{E}_#it{T}; commands and upright groups are not."""
+    upright = r"\\(?:mathrm|text|textrm|operatorname|mbox|mathbf)\s*\{[^{}]*\}"
+    return re.sub(upright + r"|\\[A-Za-z]+|([A-Za-z]+)", lambda m: f"#it{{{m[1]}}}" if m[1] else m[0], math)
+
+
 def tlatex(text: str) -> str:
-    """`$\\mathrm{d}\\sigma/\\mathrm{d}E_T$ [pb/GeV]` → `d#sigma/dE_{T} [pb/GeV]`."""
-    out = text.replace("$", "")
+    """`$\\mathrm{d}\\sigma/\\mathrm{d}E_T$ [pb/GeV]` → `d#sigma/d#it{E}_{#it{T}} [pb/GeV]`."""
+    out = "".join(_italic(part) if i % 2 else part for i, part in enumerate(text.split("$")))
     out = re.sub(r"\\[,;:! ]", " ", out)
     upright = r"\\(?:mathrm|text|textrm|mathit|operatorname|mbox)\s*\{([^{}]*)\}"
     out = re.sub(r"(?<=[_^])" + upright, r"{\1}", out)                 # E_T^\text{jet} keeps its group
     out = re.sub(upright, r"\1", out)
     out = re.sub(r"\\mathbf\s*\{([^{}]*)\}", r"#bf{\1}", out)
     out = re.sub(r"\\([A-Za-z]+)", lambda m: _COMMANDS.get(m.group(1), "#" + m.group(1)), out)
-    out = re.sub(r"([_^])(#[A-Za-z]+|[A-Za-z0-9+*-])", r"\1{\2}", out)   # p_\perp → p_{#perp}, \pi^- → #pi^{-}
+    out = re.sub(r"([_^])(#[A-Za-z]+(?:\{[^{}]*\})?|[A-Za-z0-9+*-])", r"\1{\2}", out)   # p_\perp → p_{#perp}, \pi^- → #pi^{-}
     out = re.sub(r"\{\s+", "{", out)
     return re.sub(r"\s+", " ", out).strip()
 
@@ -233,6 +349,29 @@ def data_source(name: str, run) -> Path:
     return source
 
 
+def merge(sources: dict[str, Path], target: Path, stamp: Path, points: Path | None = None) -> Path:
+    """App_yd2rt --merge: every point's YODA into one ROOT file, a directory per point. Rebuilt only
+    when a point's YODA changed (the stamp holds each name and sha256)."""
+    digest = "\n".join(f"{name} {_sha(path)}" for name, path in sources.items())
+    if target.exists() and stamp.exists() and stamp.read_text(encoding="utf-8") == digest:
+        return target
+    app = build_root() / "App_yd2rt.exe"
+    if not app.exists():
+        raise HepError("build/App_yd2rt.exe is not built", hint="hep build")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    partial = target.with_name(target.stem + ".partial" + target.suffix)
+    argv = [str(app), "--merge", str(partial), *(f"{name}={path}" for name, path in sources.items()), "--keep-raw"]
+    if points is not None and points.is_file():
+        argv += ["--points", str(points)]
+    done = subprocess.run(argv, capture_output=True, text=True)
+    if done.returncode != 0:
+        raise HepError(f"merging the sweep failed: {done.stderr.strip()[-300:]}", where=str(target))
+    partial.replace(target)
+    stamp.parent.mkdir(parents=True, exist_ok=True)
+    stamp.write_text(digest, encoding="utf-8")
+    return target
+
+
 def yoda_of(plan) -> Path | None:
     for interface in plan.interfaces.values():
         if interface.kind == "product" and interface.path.suffix == ".yoda":
@@ -266,8 +405,11 @@ def pages(run, configuration, plans) -> list[Page]:
             raise HepError(f"[plot].objects {wanted} match no object of the points' YODAs",
                            where=f"{run.path}: [plot].objects")
 
-    out_dir, res_dir = complete[0].out.parent / "plots", complete[0].res.parent / "plots"
-    inputs = {p.point.name: convert(yoda_of(p), out_dir / "inputs" / f"{p.point.name}.root") for p in complete}
+    out_dir = complete[0].out.parent / "plots"
+    res_dir = complete[0].res.parent / "plots" / "root"          # Paint's; another backend's: for_backend
+    merged = merge({p.point.name: yoda_of(p) for p in complete},
+                   complete[0].res.parent / "plots" / "root" / f"{configuration.name}.root", out_dir / "merged.sha256",
+                   complete[0].out.parent / "points.json")
 
     data = settings.get("data", {})
     data_file = source = None
@@ -280,42 +422,20 @@ def pages(run, configuration, plans) -> list[Page]:
         key = "_".join(tag_of(run.quantities[g[0]], plan.point.choice[g[0]]) for g in page_groups)
         by_page.setdefault(key, []).append(plan)
 
-    style = settings.get("style", {})
+    style, base = run_style(run), base_style()
     made = []
     for key, members in by_page.items():
         for path in objects:
             short = path.rsplit("/", 1)[-1]
             rel = f"{key}/{short}" if key else short
-            labels = labels_of(path)
-            override: dict = {}
-            for glob, table in settings.get("object", {}).items():
-                if fnmatch.fnmatch(short, glob) or fnmatch.fnmatch(path, glob):
-                    override.update(table)
-
-            def pick(name, default):
-                return override.get(name, settings.get(name, default))
-
             reference = data.get("map", {}).get(short) if data else None
-            page = {
-                "name": rel, "output": str(res_dir / rel), "formats": settings.get("formats", ["pdf"]),
-                "title": override.get("title", tlatex(labels.get("Title") or labels.get("LegendTitle", ""))),
-                "x_label": override.get("x_label", tlatex(labels.get("XLabel", ""))),
-                "y_label": override.get("y_label", tlatex(labels.get("YLabel", ""))),
-                "logx": bool(pick("logx", labels.get("LogX") == "1")),
-                "logy": bool(pick("logy", labels.get("LogY") == "1")),
-                "y_gutter": float(pick("y_gutter", 1.5)), "x_gutter": float(pick("x_gutter", 1.0)),
-                "ratio": bool(pick("ratio", False)), "legend": pick("legend", "top-right"),
-                "ratio_label": "MC/Data" if reference else "Ratio",
-                "void_empty": bool(settings.get("void_empty", False)),
-                "min_entries": int(settings.get("min_entries", 0)),
-                "auto_range": bool(settings.get("auto_range", True)),
-                "range_pad": int(settings.get("range_pad", 0)),
-            }
+            page, override = page_settings(settings, path, rel, res_dir / rel, reference is not None)
             curves = [(plan, full) for plan in members for full in variants.get(plan.point.name, {}).get(path, [])]
             several = {plan.point.name for plan, _ in curves if len(variants[plan.point.name][path]) > 1}
-            document = {"page": page, "style": dict(style), "curve": [
-                {"file": str(inputs[plan.point.name]), "object": root_name(full),
-                 **({"raw": "RAW/" + root_name(full)} if "/RAW" + full in raws[plan.point.name] else {}),
+            layer = merge_style(style, override.get("style", {}))
+            document = {"page": page, "style": layer, "curve": [
+                {"file": str(merged), "object": f"{plan.point.name}/{root_name(full)}",
+                 **({"raw": f"{plan.point.name}/RAW/{root_name(full)}"} if "/RAW" + full in raws[plan.point.name] else {}),
                  "label": _curve_label(run, plan, curve_groups)
                           + (f" [{full.strip('/').split('/')[0].partition(':')[2]}]" if plan.point.name in several else "")}
                 for plan, full in curves]}
@@ -327,8 +447,44 @@ def pages(run, configuration, plans) -> list[Page]:
             config.write_text(tomli_w.dumps(document), encoding="utf-8")
             made.append(Page(rel, config, res_dir / rel, cell=key, object=path, document=document,
                              sources=[yoda_of(plan) for plan, _ in curves], variants=[full for _, full in curves],
-                             data=(source, reference) if reference else None, overrides=set(override)))
+                             data=(source, reference) if reference else None, overrides=set(override),
+                             style=merge_style(base, layer), plots=res_dir.parent))
     return made
+
+
+def page_settings(settings: dict, path: str, rel: str, output: Path, with_data: bool) -> tuple[dict, dict]:
+    """A page's [page] table: labels from the analysis's .plot (TLatex), [plot.object] overrides,
+    and the [plot] values. Returns it and the overrides that applied."""
+    short = path.rsplit("/", 1)[-1]
+    labels = labels_of(path)
+    override: dict = {}
+    for glob, table in settings.get("object", {}).items():
+        if fnmatch.fnmatch(short, glob) or fnmatch.fnmatch(path, glob):
+            override.update(table)
+
+    def pick(name, default):
+        return override.get(name, settings.get(name, default))
+
+    page = {
+        "name": rel, "output": str(output), "formats": settings.get("formats", ["pdf"]),
+        "title": override.get("title", tlatex(labels.get("Title") or labels.get("LegendTitle", ""))),
+        "x_label": override.get("x_label", tlatex(labels.get("XLabel", ""))),
+        "y_label": override.get("y_label", tlatex(labels.get("YLabel", ""))),
+        "logx": bool(pick("logx", labels.get("LogX") == "1")),
+        "logy": bool(pick("logy", labels.get("LogY") == "1")),
+        "y_gutter": _gutter(pick("y_gutter", 0.5)), "x_gutter": _gutter(pick("x_gutter", "default")),
+        "ratio": bool(pick("ratio", False)),
+        "ratio_label": "MC/Data" if with_data else "Ratio",
+        "void_empty": bool(settings.get("void_empty", False)),
+        "min_entries": int(settings.get("min_entries", 0)),
+        "auto_range": bool(settings.get("auto_range", True)),
+        "range_pad": int(settings.get("range_pad", 0)),
+    }
+    return page, override
+
+
+def _gutter(value):
+    return value if value == "default" else float(value)
 
 
 def _curve_label(run, plan, curve_groups) -> str:
@@ -346,8 +502,14 @@ def _why(done: subprocess.CompletedProcess) -> str:
     return f"exit {done.returncode}"
 
 
+def for_backend(page: Page, name: str) -> Page:
+    """The page as another backend draws it: into results/…/plots/<name>/ instead of Paint's root/."""
+    return replace(page, output=page.plots / name / page.name) if page.plots else page
+
+
 def draw(run, configuration, plans, say) -> int:
-    """The plot stage: Paint on every page. Returns the number of pages that failed."""
+    """The plot stage: Paint on every page, then any other backend on the same pages. Returns the
+    number of pages that failed, summed over the backends."""
     if not run.plot:
         return 0
     paint = build_root() / "Paint.exe"
@@ -357,22 +519,134 @@ def draw(run, configuration, plans, say) -> int:
     if not todo:
         say("plot: no complete point has a YODA product to draw")
         return 0
-    name = run.plot.get("backend", "root")
-    if name != "root":                   # the same pages; Paint computes the ranges and voids for it
-        cells: dict[str, list[Page]] = {}
+    names = backends(run.plot)
+    failed = 0
+    if "root" in names:
+        for page in todo:
+            done = subprocess.run([str(paint), str(page.config)], capture_output=True, text=True)
+            if done.returncode != 0:
+                failed += 1
+                say(f"plot: {page.name} failed: {_why(done)}")
+        where = todo[0].config.parent if "/" not in todo[0].name else todo[0].config.parent.parent
+        say(f"plot: {len(todo) - failed} of {len(todo)} page(s) drawn; configs in {where}")
+    others = [n for n in names if n != "root"]
+    if others:                           # the same pages; Paint computes the ranges and voids for them
         for page in todo:
             done = subprocess.run([str(paint), str(page.config), "--dump-ranges"], capture_output=True, text=True)
             if done.returncode != 0:
                 raise HepError(f"plot: {page.name}: {_why(done)}", where=str(page.config))
             page.ranges = json.loads(done.stdout)
-            cells.setdefault(page.cell, []).append(page)
-        return backend(name).draw(cells, run.plot, say)
+    for name in others:
+        cells: dict[str, list[Page]] = {}
+        for page in todo:
+            cells.setdefault(page.cell, []).append(for_backend(page, name))
+        failed += backend(name).draw(cells, run.plot, say)
+    return failed
+
+
+# ── hep plot FILE…: pages from any YODA or ROOT files, no run TOML ────────────────────────────
+
+def _is_plot_file(path: str) -> bool:
+    return path.endswith((".yoda", ".yoda.gz", ".root"))
+
+
+def _root_curves(path: Path, label: str | None) -> list[tuple[str, Path, dict[str, tuple[str, str | None]]]]:
+    """The curves a ROOT file holds: one per point of a merged sweep (its paths tree has a point
+    column), else one. Each: (label, file, {yoda path: (object, raw object or None)})."""
+    import json
+
+    import uproot
+    with uproot.open(path) as file:
+        keys = {k.split(";")[0] for k in file.keys()}
+        if "paths" not in keys:                         # not App_yd2rt's: every 1D object, by its path
+            found = {"/" + k: (k, None) for k in keys
+                     if not k.startswith("RAW/") and "/RAW/" not in k and not k.endswith("__entries")
+                     and file[k].classname.startswith(("TH1", "TGraph"))}
+            return [(label or path.stem, path, found)]
+        table = file["paths"].arrays(library="np")
+        names = {}
+        if "points.json" in keys:                        # a sweep: the legend is the swept values
+            try:
+                for entry in json.loads(file["points.json"].member("fTitle"))["points"]:
+                    swept = [v["label"] for v in entry["values"].values() if v.get("swept")]
+                    names[entry["name"]] = ", ".join(swept) or entry["name"]
+            except (ValueError, KeyError, TypeError):
+                pass
+    points = table["point"] if "point" in table else [""] * len(table["root_path"])
+    curves: dict[str, dict] = {}
+    for point, rpath, ypath in zip(points, table["root_path"], table["yoda_path"]):
+        ypath, rpath = str(ypath), str(rpath)
+        if ypath.startswith(("/RAW/", "/TMP/")) or ypath in COUNTERS or ypath.endswith("]"):
+            continue
+        raw_path = f"{point}/RAW/{rpath[len(point) + 1:]}" if point else f"RAW/{rpath}"
+        raw = raw_path if raw_path in keys and f"{raw_path}__entries" in keys else None
+        curves.setdefault(str(point), {})[ypath] = (rpath, raw)
+    if len(curves) == 1 and "" in curves:
+        return [(label or path.stem, path, curves[""])]
+    return [(names.get(p, p), path, objects) for p, objects in curves.items()]
+
+
+def files(targets: list[str], outdir: Path | None, *, labels: list[str] | None = None, objects: list[str] = (),
+          formats: list[str] = ("pdf", "png"), ratio: bool = False, style: str | None = None, say=print) -> int:
+    """Overlay YODA and ROOT files through Paint: one page per object any of them holds, one curve
+    per file (per point, for a merged sweep). YODA files are merged into one ROOT file first.
+    `style` is a style file over base.toml, as [plot].root_style is for a run."""
+    paths = [Path(t).resolve() for t in targets]
+    missing = [str(p) for p in paths if not p.is_file()]
+    if missing:
+        raise HepError(f"no such file: {', '.join(missing)}")
+    if labels and len(labels) != len(paths):
+        raise HepError(f"--labels gives {len(labels)} names for {len(paths)} files")
+    paint = build_root() / "Paint.exe"
+    if not paint.exists():
+        raise HepError("build/Paint.exe is not built", hint="hep build")
+    key = hashlib.sha256("\n".join(map(str, paths)).encode()).hexdigest()[:12]
+    work = output_root() / "plots" / key
+    outdir = (outdir or (results_root() / "plots" / paths[0].name.split(".")[0])).resolve()
+
+    yodas = [(i, p) for i, p in enumerate(paths) if p.name.endswith((".yoda", ".yoda.gz"))]
+    curves: list[tuple[str, Path, dict]] = [None] * len(paths)       # in the order given
+    if yodas:
+        tags = {i: f"f{i}" for i, _ in yodas}
+        merged = merge({tags[i]: p for i, p in yodas}, work / "files.root", work / "files.sha256")
+        for i, p in yodas:
+            raws = raws_of(p) if not p.name.endswith(".gz") else set()
+            found = {o: (f"{tags[i]}/{root_name(o)}",
+                         f"{tags[i]}/RAW/{root_name(o)}" if "/RAW" + o in raws else None)
+                     for o in (objects_of(p) if not p.name.endswith(".gz") else _gz_objects(p))}
+            curves[i] = [(labels[i] if labels else p.name.split(".")[0], merged, found)]
+    for i, p in enumerate(paths):
+        if curves[i] is None:
+            curves[i] = _root_curves(p, labels[i] if labels else None)
+    curves = [c for group in curves for c in group]
+
+    pages_of = list(dict.fromkeys(o for _, _, found in curves for o in found))
+    if objects:
+        pages_of = [o for o in pages_of if any(fnmatch.fnmatch(o, g) for g in objects)]
+    if not pages_of:
+        raise HepError("no 1D object to draw" + (f" matches {list(objects)}" if objects else ""))
+    settings = {"formats": list(formats), "ratio": ratio, "auto_range": True}
+    layer = style_file(style) if style else {}
     failed = 0
-    for page in todo:
-        done = subprocess.run([str(paint), str(page.config)], capture_output=True, text=True)
+    for path in pages_of:
+        rel = path.strip("/").replace(":", "__")
+        page, _ = page_settings(settings, path, rel, outdir / rel, False)
+        document = {"page": page, "style": layer, "curve": [
+            {"file": str(file), "object": found[path][0], **({"raw": found[path][1]} if found[path][1] else {}),
+             "label": label} for label, file, found in curves if path in found]}
+        config = work / f"{rel}.toml"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        config.write_text(tomli_w.dumps(document), encoding="utf-8")
+        done = subprocess.run([str(paint), str(config)], capture_output=True, text=True)
         if done.returncode != 0:
             failed += 1
-            say(f"plot: {page.name} failed: {_why(done)}")
-    where = todo[0].config.parent if "/" not in todo[0].name else todo[0].config.parent.parent
-    say(f"plot: {len(todo) - failed} of {len(todo)} page(s) drawn; configs in {where}")
+            say(f"plot: {rel} failed: {_why(done)}")
+    say(f"plot: {len(pages_of) - failed} of {len(pages_of)} page(s), {len(curves)} curve(s) → {outdir}")
     return failed
+
+
+def _gz_objects(path: Path) -> list[str]:
+    import gzip
+    text = gzip.open(path, "rt", encoding="utf-8", errors="replace").read()
+    found = re.findall(r"^BEGIN YODA_(?:ESTIMATE1D|HISTO1D|SCATTER2D)_V\d+ (\S+)$", text, re.M)
+    return [p for p in found if not p.startswith(("/RAW/", "/TMP/")) and p not in COUNTERS and not p.endswith("]")]

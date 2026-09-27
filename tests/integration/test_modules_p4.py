@@ -59,7 +59,10 @@ def test_inproc_equals_the_chain_at_one_thread(scratch):
         hep_run(scratch, "PhotoProduction/eic", configuration, "--set", "run.event_count=2000", "--set", "run.threads=1")
     base = scratch / "results" / "PhotoProduction" / "03_eic"
     chain, inproc = base / "single" / "point", base / "11_inproc" / "point"
-    assert json.loads((chain / "provenance.json").read_text(encoding="utf-8", errors="replace"))["seed"] == json.loads((inproc / "provenance.json").read_text(encoding="utf-8", errors="replace"))["seed"]
+    technical = scratch / "output" / "PhotoProduction" / "03_eic"
+    seeds = [json.loads((technical / c / "point" / "provenance.json").read_text(encoding="utf-8"))["seed"]
+             for c in ("single", "11_inproc")]
+    assert seeds[0] == seeds[1]
     a, b = yoda.read(str(chain / "photo.yoda")), yoda.read(str(inproc / "photo.yoda"))
     finals = [p for p in a if not p.startswith("/RAW") and "Estimate1D" in a[p].type()]
     assert len(finals) == 17

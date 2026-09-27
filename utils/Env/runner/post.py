@@ -1,4 +1,4 @@
-"""The post stage: tools that need every point, run once after them (rank 4).
+"""The pre and post stages: tools run once, before every point or after them (rank 4).
 
 docs/rework_v2/02_Architecture.md §6, 04_Config.md §4.3 (V15). `[run.<cfg>].post` has the form of
 `tools`. It is planned as one more point, named "post", in the configuration's directory:
@@ -23,6 +23,33 @@ from .errors import HepError
 from .sweep import Point
 
 NAME = "post"
+PRE = "pre"
+
+
+def plan_pre(run, configuration, master: dict, points: list) -> tools.PointPlan | None:
+    """The pre stage: once, before every point, in <cfg>/pre/. No quantities; `{points}` is the
+    manifest. Its products are inputs every point may name, and its identity is in theirs."""
+    if not configuration.pre:
+        return None
+    if any(point.name == PRE for point in points):
+        raise HepError(f"a point is named '{PRE}', which is where the pre stage lives",
+                       where=f"{run.path}: [run.{configuration.key}]", hint="give that value another tag")
+    stage = replace(configuration, tools=configuration.pre, static={}, prelim={})
+    manifest = tools.point_dirs(run, configuration, Point(index=-1, name=PRE))[0].parent / "points.json"
+    pre = tools.plan_point(run, stage, Point(index=-1, name=PRE), master, post={"manifest": manifest, "products": {}})
+    pre.identity = record.identity(pre)
+    tools.finalise(pre, record.seed_of(pre.identity, pre.threads))
+    return pre
+
+
+def run_pre(pre: tools.PointPlan | None, run_config, configuration, *, sink, journal, stopper, rerun: bool) -> bool:
+    """True unless the pre stage ran and failed (the points then do not run)."""
+    if pre is None:
+        return True
+    if not rerun and record.is_complete(pre):
+        sink.skipped(pre)
+        return True
+    return execute.run_point(pre, run_config, configuration, sink=sink, journal=journal, stopper=stopper).ok
 
 
 def plan(run, configuration, master: dict, plans: list) -> tools.PointPlan | None:
@@ -31,11 +58,11 @@ def plan(run, configuration, master: dict, plans: list) -> tools.PointPlan | Non
     if any(p.point.name == NAME for p in plans):
         raise HepError(f"a point is named '{NAME}', which is where the post stage lives",
                        where=f"{run.path}: [run.{configuration.key}]", hint="give that value another tag")
-    products: dict[str, list] = {}
+    products: dict[str, list] = {}                  # name → [(point, path)], in point order
     for p in plans:
         for interface in p.interfaces.values():
             if interface.kind == "product":
-                products.setdefault(interface.name, []).append(interface.path)
+                products.setdefault(interface.name, []).append((p.point.name, interface.path))
     stage = replace(configuration, tools=configuration.post, static={}, prelim={})
     manifest = plans[0].out.parent / "points.json"
     post = tools.plan_point(run, stage, Point(index=0, name=NAME), master,

@@ -2,6 +2,7 @@
 # utils/Env/hep — the `hep` command (docs/rework_v2/03_Layout_Build.md §6).
 #
 #   hep run <config> [<configuration>] [options]   the runner (utils/Env/run)
+#   hep plot <config> [<configuration>] | FILE…     pages: a configuration's, or any YODA/ROOT files
 #   hep watch [<config>]                           attach the live view
 #   hep build [targets…] [--tests] [--clean] [--configure] [-j N]    make, from the repo root
 set -euo pipefail
@@ -14,6 +15,7 @@ usage() {
 usage: hep <command> [options]
 
   run <config> [<configuration>]   plan and run a configuration          (hep run --help)
+  plot <config> | FILE…            draw a configuration's pages, or overlay files (hep plot --help)
   watch [<config>]                 attach the live view to a running job (hep watch --help)
   build [targets…]                 compile module programs, apps and Rivet plugins (make all)
         --tests                    also build the C++ tests
@@ -28,7 +30,7 @@ EOF
 cmd=${1-}
 [ $# -gt 0 ] && shift
 case "$cmd" in
-    run|watch)
+    run|watch|plot)
         exec python3 "$here/run" "$cmd" "$@"
         ;;
     build)

@@ -61,6 +61,7 @@ def complete(plans, run, configuration):
         product = next(i.path for i in plan.interfaces.values() if i.kind == "product")
         product.parent.mkdir(parents=True, exist_ok=True)
         product.write_text(f"yoda of {plan.point.name}\n")
+        record.complete_marker(plan).parent.mkdir(parents=True, exist_ok=True)
         record.complete_marker(plan).write_text(plan.identity + "\n")
     base = plans[0].out.parent
     base.mkdir(parents=True, exist_ok=True)
@@ -119,3 +120,95 @@ def test_a_post_tool_may_not_overwrite_the_points_product(scratch):
 def test_no_post_tools_no_post_plan(scratch):
     run, configuration, master, plans = stage(scratch, run__one__post=[])
     assert post.plan(run, configuration, master, plans) is None
+
+
+# ── the pre stage ─────────────────────────────────────────────────────────────────────────────
+
+PRE_SCRIPT = """
+import sys
+open(sys.argv[1], "w").write("made before every point\\n")
+"""
+
+
+def pre_stage(scratch, marker="first"):
+    script = scratch / "pre.py"
+    script.write_text(PRE_SCRIPT)
+    data = raw(run__name="prestage", run__one__sweeps=["pdf"], run__one__pre=["fetch"],
+               run__one__tools=[["pythia", "rivet"], "use"],
+               tools__fetch={"tool": "custom", "executable": sys.executable, "output_file": "shared.txt",
+                             "arguments": [str(script), "{partial:output}", marker]},
+               tools__use={"tool": "custom", "executable": sys.executable, "input": "shared.txt",
+                           "arguments": ["-c", "pass", "{input}"]})
+    run = parse(data, scratch)
+    configuration = run.configuration(None)
+    master = quantities.load_master(run.project, run.master_toml)
+    points = sweep.points(run, configuration)
+    pre = post.plan_pre(run, configuration, master, points)
+    plans = [tools.plan_point(run, configuration, point, master, pre=pre) for point in points]
+    for plan in plans:
+        plan.identity = record.identity(plan)
+    return run, configuration, pre, plans
+
+
+def test_a_pre_product_is_an_input_every_point_may_name(scratch):
+    run, configuration, pre, plans = pre_stage(scratch)
+    shared = pre.interfaces["shared.txt"].path
+    assert shared == pre.res / "shared.txt" and pre.res.name == "pre" and pre.point.index == -1
+    for plan in plans:
+        assert plan.rendered["use"].argv[-1] == str(shared) and plan.upstream == [pre.identity]
+    other = pre_stage(scratch, marker="second")[3]
+    assert other[0].identity != plans[0].identity                     # a changed pre reruns the points
+    shutil.rmtree(pre.res, ignore_errors=True)
+    shutil.rmtree(pre.out, ignore_errors=True)
+    ok = post.run_pre(pre, run, configuration, sink=PlainView(stream=io.StringIO()), journal=None,
+                      stopper=execute.Stopper(), rerun=False)
+    assert ok and shared.read_text() == "made before every point\n" and record.is_complete(pre)
+
+
+def test_a_failing_pre_stops_the_run(scratch):
+    run, configuration, pre, plans = pre_stage(scratch)
+    pre.rendered["fetch"].argv = [sys.executable, "-c", "raise SystemExit(3)"]
+    shutil.rmtree(pre.out, ignore_errors=True)
+    out = io.StringIO()
+    assert not post.run_pre(pre, run, configuration, sink=PlainView(stream=out), journal=None,
+                            stopper=execute.Stopper(), rerun=True)
+    assert "── pre (before every point) ── FAILED [fetch]" in out.getvalue()
+
+
+def test_a_point_may_not_be_named_pre(scratch):
+    data = raw(run__one__sweeps=["pdf"], run__one__pre=["fetch"], quantities__pdf__tags=["pre", "x"],
+               tools__fetch={"tool": "custom", "executable": sys.executable, "arguments": ["-c", "pass"]})
+    run = parse(data, scratch)
+    configuration = run.configuration(None)
+    with pytest.raises(HepError, match="named 'pre'"):
+        post.plan_pre(run, configuration, quantities.load_master(run.project, run.master_toml),
+                      sweep.points(run, configuration))
+
+
+# ── plotmerge: one file for a sweep ───────────────────────────────────────────────────────────
+
+LEGACY = REPO / "tests" / "reference" / "legacy_run"
+
+
+@pytest.mark.skipif(not (REPO / "build" / "App_yd2rt.exe").exists(), reason="make utils/App_yd2rt.exe")
+@pytest.mark.parametrize("target", ["sweep.root", "sweep.yoda"])
+def test_plotmerge_puts_every_point_in_one_file(scratch, target):
+    run, configuration, master, plans = stage(scratch, name=f"plotmerge_{target.split('.')[1]}", run__one__post=["bundle"],
+                                              tools__bundle={"tool": "plotmerge", "input": "photo.yoda", "output_file": target})
+    complete(plans, run, configuration)
+    for plan, name in zip(plans, ("mini_27x920_ep_MSTW.yoda", "mini_27x920_ep_NNLO.yoda")):
+        shutil.copy(LEGACY / name, next(i.path for i in plan.interfaces.values() if i.kind == "product"))
+    post_plan = post.plan(run, configuration, master, plans)
+    assert post_plan.rendered["bundle"].argv[3:5] == [f"{p.point.name}={next(i.path for i in p.interfaces.values() if i.kind == 'product')}"
+                                                     for p in plans]
+    ok, said = run_post(post_plan, plans, run, configuration)
+    assert ok, said
+    merged = post_plan.res / target
+    if target.endswith(".root"):
+        uproot = pytest.importorskip("uproot")
+        with uproot.open(merged) as f:
+            assert {k.split("/")[0] for k in f.keys() if "/" in k} == {"MSTW08lo", "NNPDF23lo"}
+            assert f["MSTW08lo/photo_eic/d01-x01-y01"].values().sum() > 0 and "points.json;1" in f.keys()
+    else:
+        text = merged.read_text()
+        assert "/MSTW08lo/photo_eic/d01-x01-y01" in text and "/NNPDF23lo/photo_eic/d01-x01-y01" in text

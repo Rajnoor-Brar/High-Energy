@@ -1,17 +1,22 @@
 """utils/Env/yoda/backend.py — `[plot] backend = "yoda"`: the same pages drawn by rivet-mkhtml.
 
 docs/rework_v2/04_Config.md §9, V10/V11. The runner hands over the pages it wrote for Paint, with
-Paint's --dump-ranges of each: the x and y ranges (auto_range, gutters) and the voided bins. Per
+Paint's --dump-ranges of each: the x and y ranges (auto_range, gutters; none where no gutter leaves
+them to the tool) and the voided bins. Per
 plot_points cell this writes
 
 * the curves' YODAs with the voided bins blanked (value NaN, no errors), as v1 did;
 * reference.yoda: the mapped reference objects, renamed /REF/<analysis>/<object> so that mkhtml
   pairs them with the MC (its own reference lookup is off: explicit only, L18);
-* pages.plot: per object the ranges, log axes, legend corner, and the [plot.object] label
+* pages.plot: per object the ranges, log axes, legend corner (style legend.position), and the [plot.object] label
   overrides in LaTeX; the rest of the labels mkhtml reads from the analysis's own .plot;
 
 and runs rivet-mkhtml into results/…/plots/<cell>/. mkhtml always writes PDF and PNG; svg and eps
-are added. [plot.style] font_size and palette have no mkhtml counterpart and are refused.
+are added. Of the style (utils/Apps/Paint/base.toml) mkhtml can honour only a legend corner: any
+other [plot.style] or [plot.object."<glob>"].style key, and [plot].root_style, are refused. Beside
+the root backend (backend = ["root", "yoda"]) they are Paint's to honour and are allowed, except a
+legend placed at [x, y]: the two page sets would then disagree about where the legend is, not
+only about its look.
 """
 
 from __future__ import annotations
@@ -31,12 +36,20 @@ LEGEND = {"top-right": {"LegendAlign": "r"}, "top-left": {"LegendAlign": "l", "L
 _MATH = {"bf": "mathbf", "it": "mathit", "LT": "<", "GT": ">"}
 
 
-def validate(settings: dict) -> None:
-    style = settings.get("style", {})
-    for key in ("font_size", "palette"):
-        if key in style:
-            raise HepError(f'[plot.style].{key} cannot be honoured by backend = "yoda"', where="[plot.style]",
-                           hint="rivet-mkhtml has its own fonts and colours; drop the key, or use backend = \"root\"")
+def validate(settings: dict, beside_root: bool = False) -> None:
+    hint = 'rivet-mkhtml has its own look; drop the key, or use backend = "root"'
+    if "root_style" in settings and not beside_root:
+        raise HepError('[plot].root_style cannot be honoured by backend = "yoda"', where="[plot].root_style", hint=hint)
+    layers = [("[plot.style]", settings.get("style", {}))] + [
+        (f'[plot.object."{glob}"].style', table.get("style", {})) for glob, table in settings.get("object", {}).items()]
+    for where, layer in layers:
+        for table, keys in layer.items():
+            for key, value in keys.items() if isinstance(keys, dict) else [(None, keys)]:
+                placed = (table, key) == ("legend", "position") and not isinstance(value, str)
+                if placed or (not beside_root and (table, key) != ("legend", "position")):
+                    name = f"{table}.{key}" if key else table
+                    raise HepError(f'{where} {name} cannot be honoured by backend = "yoda"', where=where,
+                                   hint=hint + " (only a legend.position corner carries over)")
 
 
 def latex(text: str) -> str:
@@ -98,12 +111,15 @@ def _plot_block(page) -> str:
     (xlo, xhi), (ylo, yhi) = page.ranges["x"], page.ranges["y"]
     keys = {"XMin": f"{xlo:.10g}", "XMax": f"{xhi:.10g}", "YMin": f"{ylo:.10g}", "YMax": f"{yhi:.10g}",
             "LogX": str(int(settings["logx"])), "LogY": str(int(settings["logy"])),
-            "RatioPlot": str(int(settings["ratio"])), **LEGEND[settings["legend"]]}
+            "RatioPlot": str(int(settings["ratio"])), **LEGEND[page.style["legend"]["position"]]}
     for key, native in (("title", "Title"), ("x_label", "XLabel"), ("y_label", "YLabel")):
         if key in page.overrides:
             keys[native] = latex(settings[key])
     if settings["logy"] and not ylo > 0:
         del keys["YMin"]
+    for axis in ("x", "y"):                  # no gutter: the range is mkhtml's to choose, as it is ROOT's for Paint
+        if page.ranges.get(f"{axis}_tool"):
+            keys.pop(f"{axis.upper()}Min", None), keys.pop(f"{axis.upper()}Max", None)
     body = "".join(f"{k}={v}\n" for k, v in keys.items() if not (isinstance(v, str) and v in ("nan", "inf")))
     return f"# BEGIN PLOT {_base(page.object)}\n{body}# END PLOT\n"
 
