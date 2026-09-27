@@ -24,7 +24,7 @@ TOP_LEVEL = ("master", "run", "prelim", "static", "tools", "quantities", "plot")
 RUN_KEYS = {"serial": int, "name": str, "project": str, "configuration": str, "event_count": int,
             "threads": int, "description": str}
 CONFIGURATION_KEYS = {"serial": int, "name": str, "description": str, "event_count": int, "threads": int,
-                      "sweeps": list, "plot_points": list, "tools": list, "post": list, "static": dict,
+                      "sweeps": list, "plot_points": list, "tools": list, "pre": list, "post": list, "static": dict,
                       "prelim": dict}
 PRELIM_KEYS = {"fifo": list, "files": list, "commands": list}
 MASTER_KEYS = {"master_toml": str}
@@ -86,6 +86,7 @@ class Configuration:
     post: list[list[str]]
     static: dict
     prelim: dict
+    pre: list[list[str]] = field(default_factory=list)   # tools run once before every point
 
 
 @dataclass
@@ -337,6 +338,7 @@ def parse(raw: dict, path: Path) -> RunConfig:
             sweeps=sweeps, plot_points=list(plot_points),
             tools=_groups(table["tools"], f"{at}.tools", tools),
             post=_groups(table.get("post", []), f"{at}.post", tools),
+            pre=_groups(table.get("pre", []), f"{at}.pre", tools),
             static={**static, **local_static},
             prelim=local_prelim if local_prelim is not None else prelim)
 

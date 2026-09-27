@@ -11,7 +11,7 @@ docs/rework_v2/02_Architecture.md §7 and §10.
   chain's point and an integrated program's (P4 S1). Without a seeded step it is the point's
   identity. Blocks are checked for overlap across the whole plan, and a clash moves up by
   `threads` (L4), so two points of one plan never share events (V9).
-* A point is complete when results/…/<point>/.complete holds its identity. It is written last,
+* A point is complete when output/…/<point>/.complete holds its identity. It is written last,
   after the count checks, so a half-written point is never skipped.
 """
 
@@ -82,7 +82,7 @@ def assign_seeds(plans: list[PointPlan]) -> None:
 
 
 def complete_marker(plan: PointPlan) -> Path:
-    return plan.res / ".complete"
+    return plan.out / ".complete"             # technical: beside the cards and logs, not the products
 
 
 def is_complete(plan: PointPlan) -> bool:

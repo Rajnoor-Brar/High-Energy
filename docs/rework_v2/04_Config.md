@@ -110,6 +110,7 @@ threads     = 20
 sweeps      = ["energies", "pdf"]               # grid: 4 energies × 4 PDFs = 16 points
 plot_points = ["energies"]                      # 4 pages; the PDFs are the curves on each
 tools       = [["pythia", "rivet"], "yd2rt"]    # group 1 together (FIFO), then group 2
+pre         = []                                # tools run once before all points (P5)
 post        = []                                # tools run once after all points (V15)
 static      = { lepton = "ep" }                 # this configuration's own static values
 ```

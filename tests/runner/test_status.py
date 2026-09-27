@@ -61,10 +61,10 @@ def test_watch_follows_the_latest_run_and_stops_when_it_finishes(scratch, monkey
         {"point": "", "tool": "", "k": "run", "state": "started", "points": 1, "title": "old"},
         {"point": "", "tool": "", "k": "run", "state": "finished", "verdict": "old verdict"},
         {"point": "", "tool": "", "k": "run", "state": "started", "points": 1, "title": "new"},
-        {"point": "a", "tool": "", "k": "point", "state": "started", "index": 1},
+        {"point": "a", "tool": "", "k": "point", "state": "started", "index": 1, "t": 100.0},
         {"point": "a", "tool": "pythia", "k": "progress", "done": 3, "total": 4},
         {"point": "a", "tool": "pythia", "k": "exit", "code": 0, "seconds": 1.5},
-        {"point": "a", "tool": "", "k": "point", "state": "done"},
+        {"point": "a", "tool": "", "k": "point", "state": "done", "t": 171.8},
         {"point": "", "tool": "", "k": "run", "state": "finished", "verdict": "1 done"},
     ]
     journal.write_text("".join(json.dumps(line) + "\n" for line in lines), encoding="utf-8")
@@ -73,4 +73,28 @@ def test_watch_follows_the_latest_run_and_stops_when_it_finishes(scratch, monkey
     assert follow(journal, plain=True) == 0
     text = captured.getvalue()
     assert "watching new" in text and "old" not in text
-    assert "pythia: ok after 1.5 s" in text and "run finished: 1 done" in text
+    assert "── point 1/1: a ── ok after 71.8 s" in text and "run finished: 1 done" in text
+    assert "pythia: ok" not in text                                     # a tool that did its job says nothing
+
+
+def test_a_point_is_one_block_when_it_ends():
+    """── point 2/4: NNPDF23lo ── ok after 71.8 s, then where the results are (the user's layout)."""
+    from types import SimpleNamespace
+    from runner.execute import PointResult, ToolResult
+    out = io.StringIO()
+    view = PlainView(stream=out)
+    view.begin(4)
+    view.number = 1
+    plan = SimpleNamespace(point=SimpleNamespace(index=2, name="NNPDF23lo"), res="results/x/NNPDF23lo")
+    view.point_started(plan)
+    view.tool_finished(SimpleNamespace(tag="pythia", error=""), ToolResult("pythia", exit=0, seconds=71.6))
+    view.tool_finished(SimpleNamespace(tag="sherpa:prepare", error=""), ToolResult("sherpa:prepare", exit=0, seconds=3.0))
+    view.point_finished(plan, PointResult(True))
+    lines = out.getvalue().splitlines()
+    assert lines[0].startswith("── point 2/4: NNPDF23lo ── ok after ") and lines[0].endswith(" s")
+    assert lines[1:] == ["   sherpa:prepare: ok after 3.0 s", "   done → results/x/NNPDF23lo"]
+    view.point_started(plan)
+    view.tool_finished(SimpleNamespace(tag="rivet", error="boom"), ToolResult("rivet", exit=1, seconds=2.0))
+    view.point_finished(plan, PointResult(False, cause="rivet", message="rivet exited 1"))
+    tail = out.getvalue().splitlines()[3:]
+    assert "── FAILED [rivet] after" in tail[0] and tail[1:] == ["   rivet: exit 1 after 2.0 s  (boom)", "   rivet exited 1"]

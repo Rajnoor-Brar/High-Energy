@@ -183,7 +183,8 @@ have nothing to check.
 |---|---|---|
 | **per run** (once) | load, expand, plan, provider checks | `[run]`, `[master]` |
 | **per point** | the `[prelim]` actions, then the `tools` groups | `[run.<cfg>].tools`, `[prelim]` |
-| **post** (once, after all points) | seed-replica merges (`rivet-merge`), fits, any statistics | `[run.<cfg>].post` (V15) |
+| **pre** (once, before all points) | a download, a shared build: products every point may name; its identity is in theirs | `[run.<cfg>].pre` (P5) |
+| **post** (once, after all points) | seed-replica merges (`rivet-merge`), the sweep in one file (`plotmerge`), fits, any statistics | `[run.<cfg>].post` (V15) |
 | **plot** (once, last) | one page per `plot_points` cell and histogram | `[plot]` |
 
 A post tool gets `points.json`: every point's quantity values, tags and product paths. It never has

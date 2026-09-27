@@ -91,7 +91,7 @@ def test_the_producer_killed_mid_stream_fails_the_point_and_keeps_partial(scratc
     assert runner.returncode == 1, text
     assert time.monotonic() - killed < 30
     assert "FAILED [pythia]" in text and "SIGKILL" in text
-    assert not (res / ".complete").exists() and not (res / "photo.yoda").exists()
+    assert not (out / ".complete").exists() and not (res / "photo.yoda").exists()
 
 
 def test_init_failure_with_the_reader_blocked_at_open_does_not_hang(scratch):
@@ -103,8 +103,8 @@ def test_init_failure_with_the_reader_blocked_at_open_does_not_hang(scratch):
     assert runner.returncode == 1, text
     assert "FAILED [pythia]" in text and "exit code 3" in text
     assert time.monotonic() - started < 60                     # init + grace + SIGTERM, never "for ever"
-    _, res = point_dirs(scratch)
-    assert not (res / ".complete").exists()
+    out, res = point_dirs(scratch)
+    assert not (out / ".complete").exists()
 
 
 def test_the_consumer_killed_is_blamed_not_the_producer(scratch):
@@ -115,7 +115,7 @@ def test_the_consumer_killed_is_blamed_not_the_producer(scratch):
     text, _ = runner.communicate(timeout=120)
     assert runner.returncode == 1, text
     assert "FAILED [rivet]" in text
-    assert not (res / ".complete").exists()
+    assert not (out / ".complete").exists()
 
 
 def test_ctrl_c_stops_with_6_and_the_next_run_resumes(scratch):
@@ -127,4 +127,4 @@ def test_ctrl_c_stops_with_6_and_the_next_run_resumes(scratch):
     text, _ = runner.communicate(timeout=120)
     assert runner.returncode == 6, text
     assert "stopped" in text
-    assert not (res / ".complete").exists() and not (res / "photo.yoda").exists()
+    assert not (out / ".complete").exists() and not (res / "photo.yoda").exists()

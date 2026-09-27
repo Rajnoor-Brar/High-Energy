@@ -34,9 +34,11 @@ zlib onnx delphes). A Geant4 simulation is such a program: `// requires: geant4`
 | `configs/<P>/` | run TOMLs and native base cards (`photo_ep.cmnd`, …) |
 | `modules/<P>/` | your C++: programs, and Rivet analyses under `Rivet/` or as `Rivet_*.cc` |
 | `datasets/` | your own reference data (not in git); Rivet's are named `rivet:<Analysis>` |
-| `output/<P>/<run>/<cfg>/<point>/` | technical files: `cards/`, `config/`, `logs/<tool>.log`, FIFOs |
-| `results/<P>/<run>/<cfg>/<point>/` | products (`photo.yoda`, `photo.root`), `provenance.json`, `.complete` |
-| `results/<P>/<run>/<cfg>/plots/`, `…/post/` | pages, and the products of the post tools |
+| `output/<P>/<run>/<cfg>/<point>/` | technical files: `cards/`, `config/`, `logs/<tool>.log`, FIFOs, `provenance.json`, `.complete` |
+| `results/<P>/<run>/<cfg>/<point>/` | the products only (`photo.yoda`, `photo.root`) |
+| `results/<P>/<run>/<cfg>/plots/root/` | the ROOT pages (`<cell>/<object>.pdf`) and `<cfg>.root`, the whole sweep in one file |
+| `results/<P>/<run>/<cfg>/plots/yoda/` | the pages of `backend = "yoda"` (rivet-mkhtml) |
+| `results/<P>/<run>/<cfg>/pre/`, `…/post/` | the products of the pre and post tools |
 | `build/` | everything compiled |
 | `utils/Env/` | the `hep` command, the runner, and one folder per standard tool |
 
@@ -50,7 +52,18 @@ hep run PhotoProduction/eic                      # the configuration named in [r
 hep run PhotoProduction/eic energy_pdf --plan    # points, cards, argv and connections; runs nothing
 hep run PhotoProduction/eic energy_pdf           # run it
 hep watch                                        # from another terminal: the live view of the latest job
+hep plot PhotoProduction/eic energy_pdf          # redraw its pages (as after a run)
+hep plot a.yoda b.yoda --labels A,B --ratio      # overlay any YODA/ROOT files, no run TOML
 ```
+
+Each point prints one block when it ends:
+
+```
+── point 2/4: NNPDF23lo ── ok after 71.8 s
+   done → results/PhotoProduction/zeus/default/NNPDF23lo
+```
+
+A failed point's block names the tool to blame, with its exit and message.
 
 | Option | Does |
 |---|---|
@@ -58,7 +71,7 @@ hep watch                                        # from another terminal: the li
 | `--points 27x920_MSTW08lo,pdf=NNPDF23lo,3` | run a subset: point names, `quantity=tag` or indices |
 | `--set run.event_count=50000` | override one value for this invocation (dotted keys, repeatable) |
 | `--rerun` | run complete points again |
-| `--only plot` / `--only post` | redraw the pages, or rerun the post tools, and nothing else |
+| `--only plot` / `--only pre` / `--only post` | redraw the pages, or rerun the pre or post tools, and nothing else |
 | `--plain` | plain lines instead of the live view |
 
 A point that is complete with the same identity is skipped, so a second `hep run` does nothing.
@@ -83,6 +96,7 @@ threads       = 20
 sweeps      = ["pdf"]             # a string is an axis; ["a", "b"] move together (value i with value i)
 plot_points = []                  # quantities that split pages; the other swept ones become curves
 tools       = [["pythia", "rivet"], "yd2rt"]   # an inner list runs together (FIFO); groups run in order
+pre         = []                  # tools run once, before every point (their products: inputs of every point)
 post        = []                  # tools run once, after every point
 static      = { energies = "18x275" }          # this configuration's fixed values
 
@@ -136,6 +150,7 @@ The complete schema, the validation rules, and translated examples are in
 | `rivet` | `rivet` reading HepMC | `analyses`, `options`; its YODA's event count is checked against Pythia's |
 | `yd2rt` | `build/App_yd2rt.exe`: YODA → ROOT | `select = ["/photo_eic/*"]`; the ROOT file is a product |
 | `merge` | `rivet-merge` over one product of every point | post only: `input = "photo.yoda"`; `equivalent = false` sums different processes |
+| `plotmerge` | one file for the sweep: every point's YODA, each in its own directory | post only: `input = "photo.yoda"`, `output_file = "sweep.root"` (or `.yoda`) |
 | `module` | a `utils/Module.hh` program, `build/<P>/<X>.exe` | its `[config]`, `--input`/`--output`; count-checked from its report |
 | `delphes` | `DelphesHepMC3` with a Tcl card | reads a **file** from an earlier group (never a FIFO); counted from the `Delphes` tree |
 | `sherpa` | Sherpa 3 with a YAML card | the integration is cached per card (`output/<P>/.cache/sherpa/`) |
@@ -153,10 +168,14 @@ A **custom tool** gets `output/…/config/<tag>.toml` as its first argument. It 
 - `{out}` and `{res}`, the point's directories;
 - `{q:<quantity>}`;
 - `{std:<tool>_<export>}`;
-- in `post`, `{points}`, the path of `points.json`.
+- in `pre` and `post`, `{points}`, the path of `points.json`; in `post`, `{named_inputs}` (`point=path`).
 
 A tool that writes `output_file` as a product should write it to `{partial:output}`. The runner
 renames it after the checks pass.
+
+**Pre tools** run once, before the first point (a download, a shared build). What they write is an
+input every point may name (`input = "shared.lhe"`), and a changed pre stage reruns the points. A
+failed pre stage stops the run.
 
 **Post tools** run once, after every point is complete. An `input` naming a product of the points
 (`input = "photo.yoda"`) reads that product from every point, and `{inputs}` splices those paths
@@ -164,8 +183,15 @@ into argv. `points.json` has every point's values, tags, labels and product path
 
 ## 6. Plots
 
-Pages are drawn after the points, one per `plot_points` cell and histogram. They go to
-`results/…/plots/<cell>/<object>.pdf`, or `plots/<object>.pdf` when nothing splits the pages.
+Pages are drawn after the points, one per `plot_points` cell and histogram. The sweep is first
+merged into one ROOT file, `results/…/plots/root/<cfg>.root` (a directory per point, the raw entries
+and `points.json` inside), and the pages are drawn from it to `results/…/plots/root/<cell>/<object>.pdf`
+(no `<cell>/` when nothing splits the pages).
+
+`hep plot FILE…` draws the same kind of pages from any files: YODA files (one curve each), ROOT files
+from `yd2rt`, or a merged sweep (one curve per point, labelled by its swept values). Options:
+`-o DIR` (default `results/plots/<first file>`), `--labels A,B`, `--objects GLOB…`, `--formats`,
+`--ratio`.
 
 ```toml
 [plot]
@@ -188,7 +214,8 @@ logy = true
 Titles and axis labels come from the analysis's Rivet `.plot` file, translated to ROOT's TLatex.
 The default backend is ROOT, drawn by `build/Paint.exe` from one page config per page, which you can
 find in `output/…/plots/`. `backend = "yoda"` draws the same pages with the same ranges using
-`rivet-mkhtml`, one HTML page set per cell. A key a backend cannot honour is an error, not ignored.
+`rivet-mkhtml`, one HTML page set per cell, in `results/…/plots/yoda/`. A key a backend cannot
+honour is an error, not ignored.
 
 ## 7. When a point fails
 
@@ -196,7 +223,7 @@ The run goes on to the next point, and the summary names the tool to blame. Then
 
 1. Read `output/…/<point>/logs/<tool>.log`, and the verdict line of the run.
 2. A product that did not pass its checks keeps its `.partial` name, and the point has no
-   `.complete`, so it will run again.
+   `output/…/<point>/.complete`, so it will run again.
 3. "rivet analysed N events; the producer wrote M" means the chain broke mid-stream. Look at the
    generator's log first.
 4. Fix it, then `hep run … --points <that point>`. The complete points are skipped anyway.

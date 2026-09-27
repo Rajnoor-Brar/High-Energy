@@ -19,6 +19,7 @@ builds the brief directly.
 | [P2](phases/P2_sweeps.md) | Sweeps | 2 | every eic and zeus configuration plans and runs, with skip-unchanged | point and page counts equal `point_counts.toml`; a rerun spawns 0 processes | **done** |
 | [P3](phases/P3_results-and-plots.md) | Results and plots | 3 | YODA → ROOT, Paint pages, `rivet-mkhtml` when asked, `post`, and a new GUIDE | `energy_pdf` draws 4 pages per histogram; the gutter arithmetic is exact | **done** (style review open) |
 | [P4](phases/P4_modules-and-tools.md) | Modules and the other tools | 3 | Lambda as a program; Delphes, Herwig, Sherpa, Whizard, MadGraph; the generator comparison; budget measured | each tool produces a point and passes the count check; line counts within budget | **done** |
+| [P5](phases/P5_after-the-rework.md) | After the rework (the user's additions) | 1 | markers in output/, plots/root and plots/yoda, one line per point, `pre`, `plotmerge`, `hep plot` | the rows of P5 | **done** |
 
 ```
 P0 ──► P1 ──► P2 ──► P3 ──► P4

@@ -44,10 +44,12 @@ def stage(scratch, request):
         plans.append(plan)
     for plan in plans:
         shutil.rmtree(plan.res, ignore_errors=True)
+        shutil.rmtree(plan.out, ignore_errors=True)
         source = LEGACY / ("mini_27x920_ep_MSTW.yoda" if "MSTW" in plan.point.name else "mini_27x920_ep_NNLO.yoda")
         product = plot.yoda_of(plan)
         product.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(source, product)
+        record.complete_marker(plan).parent.mkdir(parents=True, exist_ok=True)
         record.complete_marker(plan).write_text(plan.identity + "\n")
     shutil.rmtree(plans[0].res.parent / "plots", ignore_errors=True)
     return run, configuration, plans
@@ -91,18 +93,23 @@ def test_draw_writes_every_page(stage):
     run, configuration, plans = stage
     said = []
     assert plot.draw(run, configuration, plans, said.append) == 0
-    drawn = sorted((plans[0].res.parent / "plots").rglob("*.png"))
+    drawn = sorted((plans[0].res.parent / "plots" / "root").rglob("*.png"))
     assert len(drawn) == 34, said
     assert "34 of 34" in said[-1]
 
 
-def test_inputs_are_converted_once(stage):
+def test_the_sweep_is_merged_once_into_the_file_the_pages_read(stage):
     run, configuration, plans = stage
+    pages = plot.pages(run, configuration, plans)
+    merged = plans[0].res.parent / "plots" / "root" / f"{configuration.name}.root"
+    assert {c["file"] for p in pages for c in tomllib.loads(p.config.read_text())["curve"]} == {str(merged)}
+    before = merged.stat().st_mtime_ns
     plot.pages(run, configuration, plans)
-    inputs = plans[0].out.parent / "plots" / "inputs"
-    before = {p: p.stat().st_mtime_ns for p in inputs.glob("*.root")}
-    plot.pages(run, configuration, plans)
-    assert {p: p.stat().st_mtime_ns for p in inputs.glob("*.root")} == before and len(before) == 4
+    assert merged.stat().st_mtime_ns == before                         # nothing changed: not rebuilt
+    uproot = pytest.importorskip("uproot")
+    with uproot.open(merged) as f:
+        assert {k.split("/")[0] for k in f.keys() if "/" in k} == {p.point.name for p in plans}
+        assert "points.json" in {k.split(";")[0] for k in f.keys()} or not (plans[0].out.parent / "points.json").exists()
 
 
 @pytest.mark.slow
@@ -113,7 +120,7 @@ def test_the_yoda_backend_draws_the_same_pages(stage):
     run, configuration, plans = stage
     said = []
     assert plot.draw(run, configuration, plans, said.append) == 0, said
-    plots = plans[0].res.parent / "plots"
+    plots = plans[0].res.parent / "plots" / "yoda"                          # the yoda backend's own tree
     for cell in ("em", "ep"):
         assert len(list((plots / cell / "photo_eic").glob("*.pdf"))) == 17
     work = plans[0].out.parent / "plots" / "em" / "yoda"
@@ -140,16 +147,18 @@ def test_a_swept_analysis_option_is_a_curve_not_a_page(scratch):
         plans.append(plan)
     for plan, r in zip(plans, ("0.4", "0.7")):
         shutil.rmtree(plan.res, ignore_errors=True)
+        shutil.rmtree(plan.out, ignore_errors=True)
         text = (LEGACY / "mini_27x920_ep_MSTW.yoda").read_text()
         text = text.replace("/photo_eic/", f"/photo_eic:R={r}/")
         product = plot.yoda_of(plan)
         product.parent.mkdir(parents=True, exist_ok=True)
         product.write_text(text)
+        record.complete_marker(plan).parent.mkdir(parents=True, exist_ok=True)
         record.complete_marker(plan).write_text(plan.identity + "\n")
     pages = plot.pages(run, configuration, plans)
     assert len(pages) == 17 and {p.name for p in pages} == {f"d{n:02d}-x01-y01" for n in range(1, 18)}
     first = tomllib.loads(pages[0].config.read_text())
-    assert [c["object"] for c in first["curve"]] == ["photo_eic__R-0.4/" + pages[0].name, "photo_eic__R-0.7/" + pages[0].name]
-    assert [c["raw"] for c in first["curve"]] == ["RAW/" + c["object"] for c in first["curve"]]
+    assert [c["object"] for c in first["curve"]] == ["r04/photo_eic__R-0.4/" + pages[0].name, "r07/photo_eic__R-0.7/" + pages[0].name]
+    assert [c["raw"] for c in first["curve"]] == [c["object"].replace("/", "/RAW/", 1) for c in first["curve"]]
     said = []
     assert plot.draw(run, configuration, plans, said.append) == 0, said

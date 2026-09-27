@@ -1,0 +1,22 @@
+# utils/Env/plotmerge/tool.toml — one file for a sweep, in `post`: one product of every point,
+# merged by App_yd2rt --merge. Not a statistical merge (that is `merge`, rivet-merge): each point
+# keeps its own histograms.
+#
+#     [tools.bundle]
+#     tool        = "plotmerge"
+#     input       = "photo.yoda"          # that product of every point
+#     output_file = "sweep.root"          # a directory per point, the paths tree, points.json inside
+#                                         # (or sweep.yoda: one YODA file, the point as a path prefix)
+[tool]
+category   = "visualisation"
+executable = "{repo}/build/App_yd2rt.exe"
+status     = "standard"
+
+[card]
+style = "none"
+
+[command]
+argv = ["{exe}", "--merge", "{partial:output}", "{named_inputs}", "--keep-raw", "--points", "{points}"]
+
+[outputs]
+products = ["root", "yoda"]

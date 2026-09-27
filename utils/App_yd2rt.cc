@@ -1,7 +1,8 @@
-// utils/App_yd2rt.cc — YODA → ROOT (docs/rework_v2/05_Tools.md §6).
+// utils/App_yd2rt.cc — YODA → ROOT, and a sweep's YODAs into one file (docs/rework_v2/05_Tools.md §6).
 // requires: yoda root
 //
-//     App_yd2rt.exe IN.yoda OUT.root [GLOB …] [--keep-raw]      (GLOB: YODA paths to convert)
+//     App_yd2rt.exe IN.yoda OUT.root [GLOB …] [--keep-raw]                    (GLOB: YODA paths to convert)
+//     App_yd2rt.exe --merge OUT.root|OUT.yoda NAME=IN.yoda … [--keep-raw] [--select GLOB] [--points FILE]
 //
 // One TDirectory per analysis, one ROOT object per YODA object:
 //     Histo1D, Estimate1D   → TH1D   (Estimate errors: the average of the down/up total errors)
@@ -11,8 +12,13 @@
 // Rivet 4 writes its finalised histograms as Estimate1D and the unscaled fills under /RAW. /RAW and
 // /TMP are skipped unless --keep-raw, which also writes <name>__entries (per-bin raw entry counts)
 // beside each /RAW histogram. A variant path (/photo_eic:R=0.4/d01-x01-y01) becomes the
-// directory photo_eic__R-0.4 (directories nest as the path does). Every object's title is its original YODA path, and the `paths` TTree
-// maps each ROOT path back to it.
+// directory photo_eic__R-0.4 (directories nest as the path does). Every object's title is its
+// original YODA path, and the `paths` TTree maps each ROOT path back to it.
+//
+// --merge (plotmerge, `hep plot`): each input's objects go under a directory named for it, its point
+// (27x920_MSTW08lo/photo_eic/d01-x01-y01); the `paths` tree says which point, and --points stores
+// the sweep's points.json in the file as the TNamed "points.json". Into a .yoda file the name becomes
+// a path prefix instead (/27x920_MSTW08lo/photo_eic/d01-x01-y01): one YODA file for the sweep.
 //
 // The output is the non-temporary ROOT file of the brief (§Plotting): a product in results/.
 // Exit codes (02 §9): 0 ok, 2 usage, 4 input, 5 output.
@@ -31,12 +37,15 @@
 #include "TGraphAsymmErrors.h"
 #include "TH1D.h"
 #include "TH2D.h"
+#include "TNamed.h"
 #include "TTree.h"
 
 #include <array>
 #include <cmath>
 #include <cstdio>
 #include <fnmatch.h>
+#include <fstream>
+#include <sstream>
 #include <map>
 #include <string>
 #include <vector>
@@ -155,103 +164,177 @@ namespace {
         return h;
     }
 
+    bool selected(const std::string& path, bool keepRaw, const std::vector<std::string>& select) {
+        if (!keepRaw && (path.rfind("/RAW/", 0) == 0 || path.rfind("/TMP/", 0) == 0)) return false;
+        if (select.empty()) return true;
+        for (const auto& glob : select)
+            if (fnmatch(glob.c_str(), path.c_str(), 0) == 0) return true;
+        return false;
+    }
+
+    // Every selected object of one YODA file into `file`, under `prefix/` (empty: at the top).
+    struct Counts { long written = 0, skipped = 0; };
+    Counts convert(const std::vector<YODA::AnalysisObject*>& objects, TFile& file, const std::string& prefix,
+                   bool keepRaw, const std::vector<std::string>& select, TTree& paths, std::string& point,
+                   std::string& rootPath, std::string& yodaPath, Status::Reporter& status) {
+        Counts n;
+        for (auto* ao : objects) {
+            const std::string path = ao->path();
+            if (!selected(path, keepRaw, select)) { ++n.skipped; continue; }
+            auto [dir, name] = split(path);
+            if (!prefix.empty()) dir = dir.empty() ? prefix : prefix + "/" + dir;
+            TObject* made = nullptr;
+            if (auto* e = dynamic_cast<YODA::Estimate1D*>(ao)) made = fromEstimate1D(*e, name);
+            else if (auto* h = dynamic_cast<YODA::Histo1D*>(ao)) made = fromHisto1D(*h, name);
+            else if (auto* e2 = dynamic_cast<YODA::Estimate2D*>(ao)) made = from2D(*e2, name, true);
+            else if (auto* h2 = dynamic_cast<YODA::Histo2D*>(ao)) made = from2D(*h2, name, false);
+            else if (auto* sc = dynamic_cast<YODA::Scatter2D*>(ao)) made = fromScatter2D(*sc, name);
+            else if (auto* c = dynamic_cast<YODA::Counter*>(ao)) made = oneBin(name, path, c->sumW(), std::sqrt(std::fabs(c->sumW2())), c->numEntries());
+            else if (auto* e0 = dynamic_cast<YODA::Estimate0D*>(ao)) made = oneBin(name, path, e0->val(), estimateError(*e0), 1);
+            else {
+                status.log("warn", "skipped " + path + ": no ROOT form for a " + ao->type());
+                ++n.skipped;
+                continue;
+            }
+            TDirectory* target = directory(file, dir);
+            target->cd();
+            if (auto* h = dynamic_cast<TH1*>(made)) h->SetDirectory(target);
+            made->Write(nullptr, TObject::kOverwrite);
+            // A raw fill histogram also gets its per-bin entry counts, which a TH1D cannot carry: Paint's
+            // min_entries voiding reads them (docs/rework_v2/05_Tools.md §7).
+            if (auto* raw = dynamic_cast<YODA::Histo1D*>(ao); raw && path.rfind("/RAW/", 0) == 0) {
+                TH1D* entries = fromHisto1D(*raw, name + "__entries");
+                for (size_t i = 0; i < raw->edges<0>().size() + 1; ++i) {
+                    entries->SetBinContent(static_cast<int>(i), raw->bin(i).numEntries());
+                    entries->SetBinError(static_cast<int>(i), 0.0);
+                }
+                entries->SetDirectory(target);
+                entries->Write(nullptr, TObject::kOverwrite);
+                delete entries;
+            }
+            rootPath = dir.empty() ? name : dir + "/" + name;
+            yodaPath = path;
+            point = prefix;
+            file.cd();
+            paths.Fill();
+            ++n.written;
+            delete made;
+        }
+        return n;
+    }
+
+    int usage() {
+        std::fputs("usage: App_yd2rt.exe IN.yoda OUT.root [GLOB …] [--keep-raw]\n"
+                   "       App_yd2rt.exe --merge OUT.root|OUT.yoda NAME=IN.yoda … [--keep-raw] [--select GLOB] [--points FILE]\n",
+                   stderr);
+        return Usage;
+    }
+
 }  // namespace
 
 int main(int argc, char** argv) {
     std::vector<std::string> positional, select;
-    bool keepRaw = false, bad = false;
+    std::string pointsFile;
+    bool keepRaw = false, merge = false, bad = false;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--keep-raw") keepRaw = true;
+        else if (arg == "--merge") merge = true;
         else if (arg == "--select" && i + 1 < argc) select.push_back(argv[++i]);
-        else if (positional.size() >= 2 && arg.rfind("-", 0) != 0) select.push_back(arg);
+        else if (arg == "--points" && i + 1 < argc) pointsFile = argv[++i];
+        else if (!merge && positional.size() >= 2 && arg.rfind("-", 0) != 0) select.push_back(arg);
         else if (arg.rfind("-", 0) == 0) bad = true;
         else positional.push_back(arg);
     }
-    if (bad || positional.size() != 2) {
-        std::fputs("usage: App_yd2rt.exe IN.yoda OUT.root [GLOB …] [--keep-raw]\n", stderr);
-        return Usage;
-    }
-    const std::string in = positional[0], out = positional[1];
+    if (bad || (!merge && positional.size() != 2) || (merge && positional.size() < 2)) return usage();
     Status::Reporter status;
 
-    std::vector<YODA::AnalysisObject*> objects;
-    try {
-        objects = YODA::read(in);
-    } catch (const std::exception& error) {
-        status.log("error", "cannot read " + in + ": " + error.what());
-        return Input;
+    // the inputs: (name, path); a plain conversion has one, with no name
+    std::vector<std::pair<std::string, std::string>> inputs;
+    std::string out;
+    if (merge) {
+        out = positional[0];
+        for (size_t i = 1; i < positional.size(); ++i) {
+            const auto eq = positional[i].find('=');
+            if (eq == std::string::npos || eq == 0) {
+                status.log("error", "--merge takes NAME=IN.yoda, not " + positional[i]);
+                return Usage;
+            }
+            inputs.emplace_back(positional[i].substr(0, eq), positional[i].substr(eq + 1));
+        }
+    } else {
+        inputs.emplace_back("", positional[0]);
+        out = positional[1];
     }
-    if (objects.empty()) {
-        status.log("error", in + " holds no objects");
-        return Input;
+
+    std::vector<std::vector<YODA::AnalysisObject*>> read(inputs.size());
+    for (size_t i = 0; i < inputs.size(); ++i) {
+        try {
+            read[i] = YODA::read(inputs[i].second);
+        } catch (const std::exception& error) {
+            status.log("error", "cannot read " + inputs[i].second + ": " + error.what());
+            return Input;
+        }
+        if (read[i].empty()) {
+            status.log("error", inputs[i].second + " holds no objects");
+            return Input;
+        }
+    }
+    auto release = [&] { for (auto& list : read) for (auto* ao : list) delete ao; };
+
+    const bool toYoda = out.size() > 5 && out.compare(out.size() - 5, 5, ".yoda") == 0;
+    if (toYoda) {                                  // one YODA file, the point as a path prefix
+        if (!merge) { release(); return usage(); }
+        std::vector<const YODA::AnalysisObject*> kept;
+        long skipped = 0;
+        for (size_t i = 0; i < inputs.size(); ++i)
+            for (auto* ao : read[i]) {
+                if (!selected(ao->path(), keepRaw, select)) { ++skipped; continue; }
+                ao->setPath("/" + inputs[i].first + ao->path());
+                kept.push_back(ao);
+            }
+        try {
+            YODA::write(out, kept.begin(), kept.end());
+        } catch (const std::exception& error) {
+            status.log("error", "cannot write " + out + ": " + error.what());
+            release();
+            return Output;
+        }
+        status.summary("\"written\": " + std::to_string(kept.size()) + ", \"skipped\": " + std::to_string(skipped) +
+                       ", \"inputs\": " + std::to_string(inputs.size()) + ", \"output\": " + Status::quote(out));
+        release();
+        return kept.empty() ? Input : Ok;
     }
 
     TFile file(out.c_str(), "RECREATE");
     if (file.IsZombie()) {
         status.log("error", "cannot write " + out);
+        release();
         return Output;
     }
-    std::string rootPath, yodaPath;
+    std::string point, rootPath, yodaPath;
     TTree paths("paths", "ROOT path -> YODA path");
+    if (merge) paths.Branch("point", &point);
     paths.Branch("root_path", &rootPath);
     paths.Branch("yoda_path", &yodaPath);
 
-    long written = 0, skipped = 0;
-    std::map<std::string, long> kinds;
-    for (auto* ao : objects) {
-        const std::string path = ao->path();
-        if (!keepRaw && (path.rfind("/RAW/", 0) == 0 || path.rfind("/TMP/", 0) == 0)) { ++skipped; continue; }
-        if (!select.empty()) {
-            bool wanted = false;
-            for (const auto& glob : select) wanted |= fnmatch(glob.c_str(), path.c_str(), 0) == 0;
-            if (!wanted) { ++skipped; continue; }
-        }
-        const auto [dir, name] = split(path);
-        TObject* made = nullptr;
-        if (auto* e = dynamic_cast<YODA::Estimate1D*>(ao)) made = fromEstimate1D(*e, name);
-        else if (auto* h = dynamic_cast<YODA::Histo1D*>(ao)) made = fromHisto1D(*h, name);
-        else if (auto* e2 = dynamic_cast<YODA::Estimate2D*>(ao)) made = from2D(*e2, name, true);
-        else if (auto* h2 = dynamic_cast<YODA::Histo2D*>(ao)) made = from2D(*h2, name, false);
-        else if (auto* s = dynamic_cast<YODA::Scatter2D*>(ao)) made = fromScatter2D(*s, name);
-        else if (auto* c = dynamic_cast<YODA::Counter*>(ao)) made = oneBin(name, path, c->sumW(), std::sqrt(std::fabs(c->sumW2())), c->numEntries());
-        else if (auto* e0 = dynamic_cast<YODA::Estimate0D*>(ao)) made = oneBin(name, path, e0->val(), estimateError(*e0), 1);
-        else {
-            status.log("warn", "skipped " + path + ": no ROOT form for a " + ao->type());
-            ++skipped;
-            continue;
-        }
-        TDirectory* target = directory(file, dir);
-        target->cd();
-        if (auto* h = dynamic_cast<TH1*>(made)) h->SetDirectory(target);
-        made->Write(nullptr, TObject::kOverwrite);
-        // A raw fill histogram also gets its per-bin entry counts, which a TH1D cannot carry: Paint's
-        // min_entries voiding reads them (docs/rework_v2/05_Tools.md §7).
-        if (auto* raw = dynamic_cast<YODA::Histo1D*>(ao); raw && path.rfind("/RAW/", 0) == 0) {
-            TH1D* entries = fromHisto1D(*raw, name + "__entries");
-            for (size_t i = 0; i < raw->edges<0>().size() + 1; ++i) {
-                entries->SetBinContent(static_cast<int>(i), raw->bin(i).numEntries());
-                entries->SetBinError(static_cast<int>(i), 0.0);
-            }
-            entries->SetDirectory(target);
-            entries->Write(nullptr, TObject::kOverwrite);
-            delete entries;
-        }
-        rootPath = dir.empty() ? name : dir + "/" + name;
-        yodaPath = path;
-        file.cd();
-        paths.Fill();
-        ++written;
-        ++kinds[ao->type()];
-        delete made;
+    Counts total;
+    for (size_t i = 0; i < inputs.size(); ++i) {
+        const Counts n = convert(read[i], file, inputs[i].first, keepRaw, select, paths, point, rootPath, yodaPath, status);
+        total.written += n.written, total.skipped += n.skipped;
     }
     file.cd();
     paths.Write();
+    if (!pointsFile.empty()) {                     // the sweep's points.json, so the file describes itself
+        std::ifstream in(pointsFile);
+        std::stringstream text;
+        text << in.rdbuf();
+        TNamed("points.json", text.str().c_str()).Write();
+    }
     file.Close();
-    for (auto* ao : objects) delete ao;
+    release();
 
-    std::string summary = "\"written\": " + std::to_string(written) + ", \"skipped\": " + std::to_string(skipped) +
-                          ", \"output\": " + Status::quote(out);
-    status.summary(summary);
-    return written ? Ok : Input;
+    status.summary("\"written\": " + std::to_string(total.written) + ", \"skipped\": " + std::to_string(total.skipped) +
+                   ", \"inputs\": " + std::to_string(inputs.size()) + ", \"output\": " + Status::quote(out));
+    return total.written ? Ok : Input;
 }

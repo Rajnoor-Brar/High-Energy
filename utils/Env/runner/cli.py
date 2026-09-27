@@ -1,4 +1,4 @@
-"""`hep run` and `hep watch` (rank 5): argument parsing and the order of events.
+"""`hep run`, `hep plot` and `hep watch` (rank 5): argument parsing and the order of events.
 
 docs/rework_v2/03_Layout_Build.md §6. `hep build` is handled by the shell dispatcher
 (utils/Env/hep), which runs make.
@@ -35,8 +35,18 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--set", metavar="KEY=VALUE", action="append", default=[],
                      help="override one value for this invocation (repeatable)")
     run.add_argument("--rerun", action="store_true", help="ignore skip-unchanged")
-    run.add_argument("--only", choices=["post", "plot"], help="rerun only the post tools or plots")
+    run.add_argument("--only", choices=["pre", "post", "plot"], help="rerun only the pre tools, the post tools or the plots")
     run.add_argument("--plain", action="store_true", help="plain lines instead of the live view")
+
+    draw = commands.add_parser("plot", help="draw pages: a configuration's, or any YODA/ROOT files")
+    draw.add_argument("targets", nargs="+", metavar="TARGET",
+                      help="CONFIG [CONFIGURATION] (its pages, as after a run), or FILE… (YODA/ROOT files to overlay)")
+    draw.add_argument("--set", metavar="KEY=VALUE", action="append", default=[], help="as for hep run (config mode)")
+    draw.add_argument("-o", "--output", help="files: where the pages go (default results/plots/<first file>)")
+    draw.add_argument("--labels", help="files: legend labels, comma-separated, one per file")
+    draw.add_argument("--objects", nargs="+", default=[], metavar="GLOB", help="files: only these YODA paths")
+    draw.add_argument("--formats", default="pdf,png", help="files: pdf, png, svg, eps (default pdf,png)")
+    draw.add_argument("--ratio", action="store_true", help="files: a ratio panel against the first curve")
 
     watch = commands.add_parser("watch", help="attach the live view to a running job")
     watch.add_argument("config", nargs="?", help="the run config whose job to watch (default: the latest job)")
@@ -51,32 +61,39 @@ def build_plans(args):
     master = load_master(run.project, run.master_toml)
     points = sweep.points(run, configuration)
     chosen = {p.index for p in sweep.select_points(run, configuration, points, args.points)}
+    pre_plan = post.plan_pre(run, configuration, master, points)
     plans = []
     for point in points:
-        plan = tools.plan_point(run, configuration, point, master)
+        plan = tools.plan_point(run, configuration, point, master, pre=pre_plan)
         plan.identity = record.identity(plan)
         plans.append(plan)
     record.assign_seeds(plans)
     for plan in plans:
         tools.finalise(plan, plan.seed)
     plot.validate(run)
-    return run, configuration, plans, [p for p in plans if p.point.index in chosen], post.plan(run, configuration, master, plans)
+    return (run, configuration, plans, [p for p in plans if p.point.index in chosen],
+            post.plan(run, configuration, master, plans), pre_plan)
 
 
-def print_plan(run, configuration, plans, post_plan=None) -> None:
+def _print_stage(title: str, stage, run) -> None:
+    print(f"{title}   identity {stage.identity[:12]}")
+    for line in tools.describe(stage, run)[1:]:
+        print(line)
+    print(f"  results {stage.res}   ({'complete' if record.is_complete(stage) else 'to run'})")
+
+
+def print_plan(run, configuration, plans, post_plan=None, pre_plan=None) -> None:
     print(f"run {run.name} ({run.path}) · configuration {configuration.key}: {len(plans)} point(s), "
           f"{configuration.event_count} events, {configuration.threads} threads")
+    if pre_plan is not None:
+        _print_stage("pre (before every point)", pre_plan, run)
     for plan in plans:
         state = "complete" if record.is_complete(plan) else "to run"
         for line in tools.describe(plan, run):
             print(line)
         print(f"  output  {plan.out}\n  results {plan.res}   ({state})")
     if post_plan is not None:
-        lines = tools.describe(post_plan, run)
-        print(f"post (after every point)   identity {post_plan.identity[:12]}")
-        for line in lines[1:]:
-            print(line)
-        print(f"  results {post_plan.res}   ({'complete' if record.is_complete(post_plan) else 'to run'})")
+        _print_stage("post (after every point)", post_plan, run)
     if run.plot and plans:
         count = len(sweep.pages(configuration, [p.point for p in plans]))
         print(f"plot ({run.plot.get('backend', 'root')}): {count} page(s) per object, "
@@ -84,14 +101,16 @@ def print_plan(run, configuration, plans, post_plan=None) -> None:
 
 
 def cmd_run(args) -> int:
-    run, configuration, every, plans, post_plan = build_plans(args)
+    run, configuration, every, plans, post_plan, pre_plan = build_plans(args)
     if args.plan:
-        print_plan(run, configuration, plans, post_plan)
+        print_plan(run, configuration, plans, post_plan, pre_plan)
         return 0
     if args.only == "plot":
         return 1 if plot.draw(run, configuration, every, print) else 0
     if args.only == "post" and post_plan is None:
         raise HepError(f"configuration '{configuration.key}' has no post tools", where=f"{run.path}: [run.{configuration.key}].post")
+    if args.only == "pre" and pre_plan is None:
+        raise HepError(f"configuration '{configuration.key}' has no pre tools", where=f"{run.path}: [run.{configuration.key}].pre")
 
     shown = view(args.plain)
     stopper = execute.Stopper()
@@ -118,6 +137,14 @@ def cmd_run(args) -> int:
     failed = done = 0
     verdict = "stopped"
     try:
+        if args.only in (None, "pre"):
+            if not post.run_pre(pre_plan, run, configuration, sink=shown, journal=journal, stopper=stopper,
+                                rerun=args.rerun or args.only == "pre"):
+                verdict = "pre failed: no point ran"
+                return 6 if stopper.requested else 1
+            if args.only == "pre":
+                verdict = "pre done"
+                return 0
         for plan in plans if args.only != "post" else []:
             if not args.rerun and record.is_complete(plan):
                 shown.skipped(plan)
@@ -149,6 +176,28 @@ def cmd_run(args) -> int:
     return 1 if failed else 0
 
 
+def cmd_plot(args) -> int:
+    """`hep plot CONFIG [CONFIGURATION]`: the configuration's pages from its complete points (what
+    `hep run … --only plot` does). `hep plot FILE…`: any YODA/ROOT files overlaid through Paint."""
+    if all(plot._is_plot_file(t) for t in args.targets):
+        from pathlib import Path
+        formats = [f.strip() for f in args.formats.split(",") if f.strip()]
+        bad = [f for f in formats if f not in plot.FORMATS]
+        if bad:
+            raise HepError(f"format '{bad[0]}' is not one of {', '.join(plot.FORMATS)}")
+        labels = [x.strip() for x in args.labels.split(",")] if args.labels else None
+        return 1 if plot.files(args.targets, Path(args.output) if args.output else None, labels=labels,
+                               objects=args.objects, formats=formats, ratio=args.ratio) else 0
+    if len(args.targets) > 2:
+        raise HepError("hep plot takes CONFIG [CONFIGURATION], or files ending .yoda/.yoda.gz/.root")
+    args.config, args.configuration = args.targets[0], (args.targets[1] if len(args.targets) > 1 else None)
+    args.points = None
+    run, configuration, every, _, _, _ = build_plans(args)
+    if not run.plot:
+        raise HepError(f"{run.path} has no [plot] table", hint="add [plot], or give the files: hep plot FILE…")
+    return 1 if plot.draw(run, configuration, every, print) else 0
+
+
 def cmd_watch(args) -> int:
     """Follow a job from another terminal: its status.jsonl, or the most recent one under output/."""
     if args.config:
@@ -172,6 +221,8 @@ def main(argv: list[str]) -> int:
     try:
         if args.command == "run":
             return cmd_run(args)
+        if args.command == "plot":
+            return cmd_plot(args)
         return cmd_watch(args)
     except HepError as error:
         print(error.render(), file=sys.stderr)

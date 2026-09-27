@@ -35,6 +35,10 @@ read `README.md` (decisions V1–V20, traceability) → `00_Brief.md` (the user'
   @generator comparison (configs/Comparison), the budget (code 6,470 lines = 1.24× budget, 0.26×
   v1; runner, headers and tests over 1.5×, causes in 06 §3), Geant4 made buildable
   (`// requires: geant4`) after the user asked to check ~/HEP/install.
+- **P5 — the user's additions (2026-09-27): done.** `.complete`/`provenance.json` in output/,
+  plots/root and plots/yoda, one block per finished point, a `pre` stage, the sweep merged into
+  plots/root/<cfg>.root (App_yd2rt --merge; the `plotmerge` post tool), `hep plot` (a
+  configuration, or any YODA/ROOT files).
 - **Rework v2 is executed.** Open with the user: the Paint style review (P3 S2), and whether to
   write a Geant4 simulation module.
 ---

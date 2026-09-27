@@ -46,7 +46,7 @@ class Journal:
         self.handle = open(path, "a", encoding="utf-8")
 
     def write(self, point: str, tag: str, message: dict) -> None:
-        self.handle.write(json.dumps({"point": point, "tool": tag, **message}) + "\n")
+        self.handle.write(json.dumps({"point": point, "tool": tag, "t": round(time.time(), 3), **message}) + "\n")
         self.handle.flush()
 
     def close(self) -> None:

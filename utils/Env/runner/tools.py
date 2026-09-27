@@ -231,6 +231,7 @@ class Interface:
     readers: list[str] = field(default_factory=list)
     group: int = -1
     paths: list[Path] = field(default_factory=list)   # kind points: one per point, in point order
+    names: list[str] = field(default_factory=list)    # … and the points' names
 
 
 @dataclass
@@ -377,9 +378,12 @@ def _resolve_chain(run, configuration, point) -> list[list[str]]:
     return groups
 
 
-def plan_point(run, configuration, point, master: dict, *, post: dict | None = None) -> PointPlan:
-    """The plan of one point. With `post` ({"manifest": Path, "products": {name: [Path]}}) it is the
-    post stage's: no quantities, and an `input` naming a product of the points reads all of them."""
+def plan_point(run, configuration, point, master: dict, *, post: dict | None = None,
+               pre: "PointPlan | None" = None) -> PointPlan:
+    """The plan of one point. With `post` ({"manifest": Path, "products": {name: [Path]}}) it is a
+    stage's (pre or post): no quantities, and an `input` naming a product of the points reads all of
+    them. With `pre`, the pre stage's products are inputs the point may name, and its identity is
+    part of the point's."""
     out, res = point_dirs(run, configuration, point)
     groups_tags = _resolve_chain(run, configuration, point)
     chain = [tag for group in groups_tags for tag in group]
@@ -413,10 +417,16 @@ def plan_point(run, configuration, point, master: dict, *, post: dict | None = N
                 raise HepError(f"'{name}' is declared twice in [prelim]", where="[prelim]")
             plan.interfaces[name] = Interface(name, resolve(name, "prelim", root=out, where="[prelim]"),
                                               "fifo" if kind == "fifo" else "file")
+    if pre is not None:                               # what the pre stage made, for every point
+        plan.upstream = [pre.identity]
+        for interface in pre.interfaces.values():
+            if interface.kind == "product":
+                plan.interfaces[interface.name] = Interface(interface.name, interface.path, "pre", producer="")
     if post:
         plan.context["points"] = str(post["manifest"])
-        for name, paths in post["products"].items():
-            plan.interfaces[name] = Interface(name, paths[0], "points", paths=list(paths))
+        for name, pairs in post["products"].items():
+            plan.interfaces[name] = Interface(name, pairs[0][1], "points", paths=[p for _, p in pairs],
+                                              names=[n for n, _ in pairs])
 
     group_of = {tag: g for g, group in enumerate(groups_tags) for tag in group}
     for tag in rendered_tags:
@@ -499,7 +509,7 @@ def _check_connections(plan: PointPlan, run) -> None:
     for interface in plan.interfaces.values():
         where = f"[prelim] / [tools.*]: '{interface.name}'"
         readers = [plan.rendered[r] for r in interface.readers if r in plan.rendered]
-        if interface.kind == "points":                 # post: the points are complete before it runs
+        if interface.kind in ("points", "pre"):        # made before the point starts: pre, or every point
             continue
         if interface.kind == "fifo":
             if not interface.producer:
@@ -774,6 +784,7 @@ def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
         "threads": plan.threads, "events": plan.events,
         "input": str(step.inputs[0].path) if step.inputs else "",
         "inputs": [str(p) for i in step.inputs for p in (i.paths if i.kind == "points" else [i.path])],
+        "named_inputs": [f"{n}={p}" for i in step.inputs if i.kind == "points" for n, p in zip(i.names, i.paths)],
         "input_sidecar": _upstream_sidecar(plan, step),
         "output_name": step.outputs[0].path.name if step.outputs else "",
         "prepared": str(step.prepare_dir or ""),
