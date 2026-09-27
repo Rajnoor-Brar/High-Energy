@@ -110,16 +110,22 @@ _COMMANDS = {"text": "", "mathrm": "", "rm": "", "mathit": "", "textrm": "", "ma
              "left": "", "right": "", "le": "#leq", "ge": "#geq", "to": "#rightarrow", "ell": "l"}
 
 
+def _italic(math: str) -> str:
+    """Letters in math are italic, as LaTeX sets them: E_T → #it{E}_#it{T}; commands and upright groups are not."""
+    upright = r"\\(?:mathrm|text|textrm|operatorname|mbox|mathbf)\s*\{[^{}]*\}"
+    return re.sub(upright + r"|\\[A-Za-z]+|([A-Za-z]+)", lambda m: f"#it{{{m[1]}}}" if m[1] else m[0], math)
+
+
 def tlatex(text: str) -> str:
-    """`$\\mathrm{d}\\sigma/\\mathrm{d}E_T$ [pb/GeV]` → `d#sigma/dE_{T} [pb/GeV]`."""
-    out = text.replace("$", "")
+    """`$\\mathrm{d}\\sigma/\\mathrm{d}E_T$ [pb/GeV]` → `d#sigma/d#it{E}_{#it{T}} [pb/GeV]`."""
+    out = "".join(_italic(part) if i % 2 else part for i, part in enumerate(text.split("$")))
     out = re.sub(r"\\[,;:! ]", " ", out)
     upright = r"\\(?:mathrm|text|textrm|mathit|operatorname|mbox)\s*\{([^{}]*)\}"
     out = re.sub(r"(?<=[_^])" + upright, r"{\1}", out)                 # E_T^\text{jet} keeps its group
     out = re.sub(upright, r"\1", out)
     out = re.sub(r"\\mathbf\s*\{([^{}]*)\}", r"#bf{\1}", out)
     out = re.sub(r"\\([A-Za-z]+)", lambda m: _COMMANDS.get(m.group(1), "#" + m.group(1)), out)
-    out = re.sub(r"([_^])(#[A-Za-z]+|[A-Za-z0-9+*-])", r"\1{\2}", out)   # p_\perp → p_{#perp}, \pi^- → #pi^{-}
+    out = re.sub(r"([_^])(#[A-Za-z]+(?:\{[^{}]*\})?|[A-Za-z0-9+*-])", r"\1{\2}", out)   # p_\perp → p_{#perp}, \pi^- → #pi^{-}
     out = re.sub(r"\{\s+", "{", out)
     return re.sub(r"\s+", " ", out).strip()
 

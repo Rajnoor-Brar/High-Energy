@@ -53,3 +53,26 @@ The user's requests after P4 (2026-09-27):
   nothing reads now: they run once more (the seed rule of P4 S1 had already changed their identity).
 - Tests: `test_hep_plot.py` 4, `test_post.py` +5 (pre 3, plotmerge 2), `test_status.py` +1 (the block);
   `make test` 170, `make test-slow` 18.
+
+### S2 — 2026-09-27 — done: the ROOT pages look like the YODA ones
+
+The user asked for this ("configure root style to look more like yoda plots"). It closes the style
+review left open in P3 S2 task 3. The reference was the same zeus page drawn by both backends
+(`plots/root/d06-x01-y01` and `plots/yoda/ZEUS_2012_I1116258/d06-x01-y01`).
+
+| mkhtml (`default.mplstyle`) | Paint now | Paint before |
+|---|---|---|
+| a 4.67 × 4.21 in page | the PDF at that size, the PNG 700 × 630 | 900 × 600 px |
+| Palatino, 10 pt; ticks 8 pt | Times (ROOT 133, sized in pixels, one size in both pads), `font_size` in points | Helvetica, sized per pad |
+| colours EE3311, 3366FF, 109618, FF9900, 990099 | the same | kBlue+1, kRed+1, … |
+| ticks inside, on all four sides, minor ticks | the same | left and bottom only |
+| MC: steps, with bars at the bin centres | the same; a run of bins does not drop to the axis at its ends (`HIST ][`) | steps over a 25% band |
+| data: black points, drawn under the MC | the same | black points on top |
+| legend: no frame, data first, a "+" beside each entry, the title as its header | the same (drawn by hand: TLegend puts its symbols on the left only) | TLegend, symbols on the left |
+| ratio: a third of the axes, no gap, the data at 1 with their errors, labels 0.6 … 1.4 | the same; the range still widens past 0.5–1.5 when a curve needs it | a grey band, a dashed line at 1 |
+| math in italics | `tlatex` sets math letters as `#it{…}` | upright |
+
+- The labels at the pad joint (the main pad's "0", the ratio's top label) are dropped, as in mkhtml.
+- `configs/PhotoProduction/eic.toml` dropped its `[plot.style]` (900 × 600, font 13), which would
+  have undone the new defaults.
+- Tests: the tlatex expectations are now italic (`test_plot.py`, `test_plot_stage.py`).

@@ -78,7 +78,7 @@ def test_object_overrides_and_rivet_labels(stage):
     assert pages["em/d04-x01-y01"]["title"] == "override"
     assert pages["em/d02-x01-y01"]["y_gutter"] == 1.5
     if (REPO / "build" / "Rivet" / "photo_eic.plot").exists():
-        assert pages["em/d01-x01-y01"]["x_label"] == "E_{T} [GeV]"
+        assert pages["em/d01-x01-y01"]["x_label"] == "#it{E}_{#it{T}} [GeV]"
         assert pages["em/d02-x01-y01"]["logy"] is False
 
 

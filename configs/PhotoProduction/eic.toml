@@ -261,6 +261,3 @@ legend = "ZEUS 2012"
 "d11-x01-y01" = "/REF/ZEUS_2012_I1116258/d11-x01-y01"   # eta, anti-kT
 "d12-x01-y01" = "/REF/ZEUS_2012_I1116258/d12-x01-y01"   # eta, SISCone
 
-[plot.style]
-font_size = 13
-canvas    = [900, 600]

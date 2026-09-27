@@ -17,7 +17,7 @@ builds the brief directly.
 | [P0](phases/P0_clean-slate.md) | Clean slate | 2 | v1 deleted; the v2 tree and Makefile in place; Rivet plugins build | `make` builds both plugins; 0 files left under `utils/` from v1 | **done** |
 | [P1](phases/P1_one-chain.md) | One chain, end to end | 3 | `hep run PhotoProduction/eic single` generates, analyses, watches and records one point | legacy reference YODA reproduced bin for bin; σ at threads = 4 within 1e-6; failure injection never hangs | **done** |
 | [P2](phases/P2_sweeps.md) | Sweeps | 2 | every eic and zeus configuration plans and runs, with skip-unchanged | point and page counts equal `point_counts.toml`; a rerun spawns 0 processes | **done** |
-| [P3](phases/P3_results-and-plots.md) | Results and plots | 3 | YODA → ROOT, Paint pages, `rivet-mkhtml` when asked, `post`, and a new GUIDE | `energy_pdf` draws 4 pages per histogram; the gutter arithmetic is exact | **done** (style review open) |
+| [P3](phases/P3_results-and-plots.md) | Results and plots | 3 | YODA → ROOT, Paint pages, `rivet-mkhtml` when asked, `post`, and a new GUIDE | `energy_pdf` draws 4 pages per histogram; the gutter arithmetic is exact | **done** (style: P5 S2) |
 | [P4](phases/P4_modules-and-tools.md) | Modules and the other tools | 3 | Lambda as a program; Delphes, Herwig, Sherpa, Whizard, MadGraph; the generator comparison; budget measured | each tool produces a point and passes the count check; line counts within budget | **done** |
 | [P5](phases/P5_after-the-rework.md) | After the rework (the user's additions) | 1 | markers in output/, plots/root and plots/yoda, one line per point, `pre`, `plotmerge`, `hep plot` | the rows of P5 | **done** |
 
@@ -137,7 +137,7 @@ Nothing blocks P0: V1–V20 are in the README. The only choices left to executio
 |---|---|
 | σ stamping vs `rivet -x` re-finalisation (R1) | P1 S1: whichever passes the threads = 4 gate. Stamping is tried first. |
 | The watch view's refresh rate and layout | P1 S3: whatever reads well on the eic single point |
-| Paint's default style (fonts, palette, canvas) | P3 S2: the user looks at the first pages and adjusts `[plot.style]` defaults |
+| Paint's default style (fonts, palette, canvas) | P5 S2: the user asked for rivet-mkhtml's look; the defaults copy its `default.mplstyle` |
 | Whether `Phys`-style helpers come back from git | P4 S1: only if the Lambda rewrite needs more than ~50 lines of kinematics |
 
 Each becomes a V-row when decided.

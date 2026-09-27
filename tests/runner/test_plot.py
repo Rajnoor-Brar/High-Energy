@@ -43,13 +43,13 @@ def test_keys_no_backend_honours_are_errors(scratch, table, message):
 
 
 @pytest.mark.parametrize("latex, root", [
-    (r"$\mathrm{d}\sigma / \mathrm{d}E_T$ [pb/GeV]", "d#sigma / dE_{T} [pb/GeV]"),
-    (r"$-3.5 < \eta < 3.5, k_T$ alg ", "-3.5 < #eta < 3.5, k_{T} alg"),
-    (r"$E_T^\text{jet}$ [GeV]", "E_{T}^{jet} [GeV]"),
-    (r"$x_\gamma^\mathrm{obs}$", "x_{#gamma}^{obs}"),
-    (r"$\frac{1}{N}\,\mathrm{d}N/\mathrm{d}p_\perp$", "#frac{1}{N} dN/dp_{#perp}"),
-    (r"$Q^2 \le 1$ GeV$^2$", "Q^{2} #leq 1 GeV^{2}"),
-    (r"$m(p\pi^-)$ [GeV]", "m(p#pi^{-}) [GeV]"),
+    (r"$\mathrm{d}\sigma / \mathrm{d}E_T$ [pb/GeV]", "d#sigma / d#it{E}_{#it{T}} [pb/GeV]"),
+    (r"$-3.5 < \eta < 3.5, k_T$ alg ", "-3.5 < #eta < 3.5, #it{k}_{#it{T}} alg"),
+    (r"$E_T^\text{jet}$ [GeV]", "#it{E}_{#it{T}}^{jet} [GeV]"),
+    (r"$x_\gamma^\mathrm{obs}$", "#it{x}_{#gamma}^{obs}"),
+    (r"$\frac{1}{N}\,\mathrm{d}N/\mathrm{d}p_\perp$", "#frac{1}{#it{N}} d#it{N}/d#it{p}_{#perp}"),
+    (r"$Q^2 \le 1$ GeV$^2$", "#it{Q}^{2} #leq 1 GeV^{2}"),
+    (r"$m(p\pi^-)$ [GeV]", "#it{m}(#it{p}#pi^{-}) [GeV]"),
     ("plain text", "plain text"),
 ])
 def test_latex_becomes_tlatex(latex, root):

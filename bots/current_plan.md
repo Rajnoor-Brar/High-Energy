@@ -28,7 +28,7 @@ read `README.md` (decisions V1–V20, traceability) → `00_Brief.md` (the user'
   spawn 0 processes; eic and zeus are fully translated; points.json lists every point.
 - **P3 — Results and plots: done.** yd2rt, Paint (legacy ranges and voids 17/17), plot.py with
   `--only plot`, the yoda backend (mkhtml, same pages), `post` (replicas merged: 3 × the entries),
-  `docs/GUIDE.md`. Open: the user's style review of the first Paint pages (S2 task 3). Runner size
+  `docs/GUIDE.md`. The style review (S2 task 3) became P5 S2: mkhtml's look. Runner size
   3,073 vs 2,000 budget (1.54×): a finding for P4 S3.
 - **P4 — Modules and the other tools: done.** S1 module kit + Lambda + InprocJets (seeds follow
   the generator); S2 Delphes/Sherpa/Herwig with cached [prepare] steps; S3 Whizard, MadGraph, the
@@ -38,9 +38,8 @@ read `README.md` (decisions V1–V20, traceability) → `00_Brief.md` (the user'
 - **P5 — the user's additions (2026-09-27): done.** `.complete`/`provenance.json` in output/,
   plots/root and plots/yoda, one block per finished point, a `pre` stage, the sweep merged into
   plots/root/<cfg>.root (App_yd2rt --merge; the `plotmerge` post tool), `hep plot` (a
-  configuration, or any YODA/ROOT files).
-- **Rework v2 is executed.** Open with the user: the Paint style review (P3 S2), and whether to
-  write a Geant4 simulation module.
+  configuration, or any YODA/ROOT files). S2: Paint's pages look like rivet-mkhtml's.
+- **Rework v2 is executed.** Open with the user: whether to write a Geant4 simulation module.
 ---
 
 # v1 (finished) — the working plan as it stood at `rework/v1`

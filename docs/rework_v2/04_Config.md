@@ -582,9 +582,6 @@ legend = "ZEUS 2012"
 "d02-x01-y01" = "/REF/ZEUS_2012_I1116258/d02-x01-y01"
 "d09-x01-y01" = "/REF/ZEUS_2012_I1116258/d09-x01-y01"
 
-[plot.style]
-font_size = 13
-canvas    = [900, 600]
 ```
 
 What this shows:
@@ -814,10 +811,10 @@ legend = "ZEUS 2012"
 [plot.data.map]                  # MC object → reference object; explicit only (00/B5)
 "d01-x01-y01" = "/REF/ZEUS_2012_I1116258/d01-x01-y01"
 
-[plot.style]
-canvas    = [900, 600]
-font_size = 13
-palette   = ["kBlue+1", "kRed+1", "kGreen+2", "kOrange+7"]
+[plot.style]                     # optional; the defaults are rivet-mkhtml's look
+canvas    = [700, 630]           # PNG pixels; the PDF is mkhtml's 4.67 in page whatever this is
+font_size = 10                   # points on that page
+palette   = ["#EE3311", "#3366FF", "#109618", "#FF9900", "#990099"]
 
 [plot.object."d04-x01-y01"]      # per-object overrides, by name or glob
 logy     = true
@@ -826,6 +823,14 @@ y_gutter = 3.0
 
 - Titles and axis labels come from the Rivet `.plot` file, as in v1 (D9): one label source.
   `[plot.object.<name>]` may override them.
+  Math letters come out italic, as LaTeX sets them (`$E_T$` → `#it{E}_{#it{T}}`).
+- Paint's pages look like rivet-mkhtml's by default:
+  - the page is mkhtml's size and palette, in a serif font;
+  - ticks point inwards on all four sides, and the axis titles sit at the axis ends;
+  - the legend is frameless, with a "+" beside each entry;
+  - MC curves are steps with error bars at the bin centres, and data are black points;
+  - the ratio pad is a third of the height, with no gap.
+  `[plot.style]` changes only the canvas, the font size and the palette.
 - With `backend = "root"`, `[plot]` becomes one Paint config per page:
   `output/…/plots/<page>/<object>.toml`, run by `build/Paint.exe`
   ([05_Tools.md §7](05_Tools.md#7-paint)), drawn to `results/…/plots/<page>/<object>.<fmt>`. The page

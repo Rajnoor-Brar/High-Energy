@@ -4,7 +4,8 @@
 //     [page]    name, output (path without extension), formats, title, x_label, y_label, logx, logy,
 //               y_gutter, x_gutter, ratio, ratio_label, legend, void_empty, min_entries, auto_range,
 //               range_pad
-//     [style]   canvas = [w, h], font_size, palette = ["kBlue+1", "#aa3377", …]
+//     [style]   canvas = [w, h] in pixels (PNG), font_size in points of mkhtml's 4.67 in page,
+//               palette = ["kBlue+1", "#aa3377", …]; the defaults are rivet-mkhtml's
 //     [[curve]] file, object, raw (optional: the /RAW twin, for min_entries), label
 //     [data]    file, object, label                       (optional: reference data)
 
@@ -26,8 +27,9 @@ namespace Paint {
         bool logx = false, logy = false, ratio = false, voidEmpty = false, autoRange = true;
         double yGutter = 1.5, xGutter = 1.0;
         int minEntries = 0, rangePad = 0;
-        int width = 900, height = 600, fontSize = 13;
-        std::vector<std::string> palette{"kBlue+1", "kRed+1", "kGreen+2", "kOrange+7", "kMagenta+1", "kCyan+2", "kGray+2"};
+        int width = 700, height = 630;                     // mkhtml's 10:9, at 150 dpi
+        double fontSize = 10;
+        std::vector<std::string> palette{"#EE3311", "#3366FF", "#109618", "#FF9900", "#990099"};
         std::vector<Source> curves;
         bool hasData = false;
         Source data;
@@ -65,10 +67,10 @@ namespace Paint {
         page.rangePad = p["range_pad"].value_or(0);
         const auto& s = doc["style"];
         if (auto* canvas = s["canvas"].as_array(); canvas && canvas->size() == 2) {
-            page.width = (*canvas)[0].value_or(900);
-            page.height = (*canvas)[1].value_or(600);
+            page.width = (*canvas)[0].value_or(page.width);
+            page.height = (*canvas)[1].value_or(page.height);
         }
-        page.fontSize = s["font_size"].value_or(13);
+        page.fontSize = s["font_size"].value_or(page.fontSize);
         if (auto* palette = s["palette"].as_array()) {
             page.palette.clear();
             for (auto& c : *palette) page.palette.push_back(c.value_or(std::string("kBlack")));
