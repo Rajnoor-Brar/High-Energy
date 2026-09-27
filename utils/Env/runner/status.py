@@ -1,6 +1,6 @@
 """Status from running tools: the standard protocol and the stdout filter rules (rank 3).
 
-docs/rework_v2/05_Tools.md §3 and 02_Architecture.md §8.
+docs/05_Tools_Reference.md §19 and docs/02_Architecture.md §10.
 
 * A tool with status = "standard" writes JSON lines to $HEP_STATUS_FD (utils/Status.hh). The runner
   reads a pipe per process and keeps unknown kinds, ignored.

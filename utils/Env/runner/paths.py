@@ -1,6 +1,6 @@
 """Where things are, and how a name in a config becomes a path (rank 0).
 
-docs/rework_v2/03_Layout_Build.md §2. Every key that takes a path has exactly one convention root:
+docs/04_Config_Reference.md §2. Every key that takes a path has exactly one convention root:
 there is no search path and no fallback, because a lookup that tries several places is how v1's
 00/B18 happened.
 
@@ -62,7 +62,7 @@ def build_root() -> Path:
     return repo_root() / "build"
 
 
-#: The convention root of each path-taking key, as a function of the project (03 §2).
+#: The convention root of each path-taking key, as a function of the project (04 §2).
 ROOTS = {
     "config":     lambda project: repo_root() / "configs",
     "master":     lambda project: repo_root() / "configs" / project,

@@ -1,4 +1,4 @@
-// utils/App_Pythia.cc — the standard Pythia tool (docs/rework_v2/05_Tools.md §4).
+// utils/App_Pythia.cc — the standard Pythia tool (docs/05_Tools_Reference.md §15).
 // requires: pythia8 hepmc3 zstd zlib
 //
 //     App_Pythia.exe [--threads N] [--events N] [--seeds S1,S2,…] [--sidecar FILE]
@@ -9,7 +9,7 @@
 // <first OUTPUT>.json by default, holding what a consumer needs to check it got everything:
 // requested, attempted, accepted and written counts, and the combined cross-section.
 //
-// What it must get right, each learned by v1 (ledger, docs/rework_v2/01_Assessment.md §7):
+// What it must get right, each learned by v1 (ledger, docs/07_Record.md §3):
 //   L1  PythiaParallel exposes σ per instance and no error for the run. The combination is the
 //       ΣW-weighted mean, with errors in quadrature.
 //   L2  A CLI Rivet normalises to the σ in the LAST event it reads, and the converter stamps each
@@ -26,7 +26,7 @@
 //       within a chunk.
 //   L25 zstd for kept event files.
 // The output is opened only after init() succeeds, so a card that fails leaves no half-open FIFO.
-// Exit codes (02 §9): 0 ok, 1 card/config, 2 usage, 3 init, 5 output, 6 stopped, 70 internal.
+// Exit codes (02 §11): 0 ok, 1 card/config, 2 usage, 3 init, 5 output, 6 stopped, 70 internal.
 
 #define HEPMC3_USE_COMPRESSION 1
 #define HEPMC3_Z_SUPPORT 1

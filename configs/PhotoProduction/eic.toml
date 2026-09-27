@@ -1,4 +1,4 @@
-# eic.toml — the EIC photoproduction studies (rework v2 schema, docs/rework_v2/04_Config.md).
+# eic.toml — the EIC photoproduction studies (rework v2 schema, docs/04_Config_Reference.md).
 #
 #   hep run PhotoProduction/eic                 the configuration named in [run] (pdf)
 #   hep run PhotoProduction/eic energy_pdf      another one
@@ -99,7 +99,7 @@ prelim      = {}              # no FIFO: the events never leave the process
 
 [run.delphes]
 serial      = 12
-description = "Detector level: the events to a file, Delphes (ATLAS card), then a jet count (04 §8.4)"
+description = "Detector level: the events to a file, Delphes (ATLAS card), then a jet count (03 §4.10)"
 sweeps      = []
 tools       = ["pythia_file", "delphes", "jets_reco"]
 prelim      = { files = ["showered.hepmc"] }       # a file: Delphes cannot read a FIFO (L11)

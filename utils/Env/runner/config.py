@@ -1,6 +1,6 @@
 """The run TOML: load it, check it strictly, and hand back a typed model (rank 1).
 
-docs/rework_v2/04_Config.md. The checks here are the ones that need only the file (rules C1, C2,
+docs/04_Config_Reference.md. The checks here are the ones that need only the file (rules C1, C2,
 C3, C5 and the shape of every key). The ones that need the tool folders, the master TOML or the
 point are in `quantities`, `tools` and `execute`.
 
@@ -31,7 +31,7 @@ MASTER_KEYS = {"master_toml": str}
 QUANTITY_KEYS = {"values": list, "tags": list, "labels": list, "key": (str, dict), "target": (str, list),
                  "format": str, "description": str}
 #: Keys any tool table may carry; the rest are tool-specific, checked in `tools` against the tool
-#: folder's [options], or are standard-configuration requests (<tool>_<export>, 04 §7.3).
+#: folder's [options], or are standard-configuration requests (<tool>_<export>, 04 §9.4).
 TOOL_COMMON = {"tool": str, "baseconfig": (str, list), "input": (str, list), "output_file": (str, list),
                "timeout": (int, float), "stall_after": (int, float), "status": str, "executable": str,
                "arguments": list, "consumes": list, "config": dict, "streamable": bool,
@@ -151,7 +151,7 @@ def _as_list(value) -> list:
 
 
 def _groups(entries: list, where: str, tools: dict) -> list[list[str]]:
-    """`tools = [A, [B, C], D]` → [[A], [B, C], [D]] (04 §4.3, C5)."""
+    """`tools = [A, [B, C], D]` → [[A], [B, C], [D]] (04 §5.4, C5)."""
     groups = []
     for entry in entries:
         members = entry if isinstance(entry, list) else [entry]
@@ -319,7 +319,7 @@ def parse(raw: dict, path: Path) -> RunConfig:
         for name in plot_points:
             if name not in swept:
                 raise HepError(f"plot_points names '{name}', which is not swept here", where=f"{at}.plot_points",
-                               hint="pages are cells of the grid of swept quantities (04 §4.2)")
+                               hint="pages are cells of the grid of swept quantities (04 §5.2)")
         local_static = table.get("static", {})
         for name in local_static:
             if name not in quantities:

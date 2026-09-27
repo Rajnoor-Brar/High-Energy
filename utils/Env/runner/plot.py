@@ -1,6 +1,6 @@
 """The plot stage: one page per `plot_points` cell and object, drawn by Paint (rank 4).
 
-docs/rework_v2/04_Config.md §9, 05_Tools.md §7. After the points, from the complete ones:
+docs/04_Config_Reference.md §11, docs/05_Tools_Reference.md §17. After the points, from the complete ones:
 
 * the objects are the 1D objects of the points' YODA product (not /RAW, /TMP or the run counters),
   narrowed by [plot].objects globs;

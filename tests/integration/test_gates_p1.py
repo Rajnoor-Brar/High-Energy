@@ -1,4 +1,4 @@
-"""P1's physics gates, kept runnable (docs/rework_v2/phases/P1_one-chain.md, S1 rows 2–4).
+"""P1's physics gates, kept runnable (docs/07_Record.md §8, S1 rows 2–4).
 
 * The reference gate: the legacy pipeline's cards → App_Pythia → FIFO → rivet reproduce the legacy
   reference YODAs byte for byte. It uses photo_eic as it was when the reference was captured

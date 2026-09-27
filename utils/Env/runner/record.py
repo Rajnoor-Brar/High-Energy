@@ -1,6 +1,6 @@
 """Identity, seeds, skip-unchanged and provenance (rank 3).
 
-docs/rework_v2/02_Architecture.md §7 and §10.
+docs/02_Architecture.md §8 and §12.
 
 * The identity of a point hashes everything that decides its result: each tool's binary, cards
   (before seeds), argv, extracted config, analyses and files, plus threads and events. It is
@@ -143,7 +143,7 @@ def write_atomic(path: Path, text: str) -> None:
 
 
 def points_manifest(plans: list[PointPlan], run, configuration) -> dict:
-    """points.json (02 §6): every point's values, page, products and state, for plot and post tools."""
+    """points.json (02 §7): every point's values, page, products and state, for plot and post tools."""
     from .sweep import label_of, tag_of
     page_names = [name for entry in configuration.sweeps for name in (entry if isinstance(entry, list) else [entry])
                   if (set(entry) if isinstance(entry, list) else {entry}) & set(configuration.plot_points)]

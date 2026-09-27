@@ -1,4 +1,4 @@
-# utils/Env/pythia/tool.toml — the standard Pythia tool: build/App_Pythia.exe (05_Tools.md §4).
+# utils/Env/pythia/tool.toml — the standard Pythia tool: build/App_Pythia.exe (docs/05_Tools_Reference.md §15).
 [tool]
 category        = "event-generator"
 executable      = "{repo}/build/App_Pythia.exe"
@@ -10,7 +10,7 @@ style   = "append"                  # the point card is read after the base card
 ext     = "cmnd"
 comment = "!"
 bools   = ["on", "off"]
-# Seeds from the point's identity (02 §7). Random:seed is always written, so a serial Pythia in an
+# Seeds from the point's identity (02 §8). Random:seed is always written, so a serial Pythia in an
 # integrated program is seeded too; PythiaParallel reads Parallelism:seeds (L4).
 seed          = ["Random:setSeed = on", "Random:seed = {seed}"]
 seed_parallel = ["Parallelism:seeds = {{{seeds}}}"]

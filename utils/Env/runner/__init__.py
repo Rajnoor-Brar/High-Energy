@@ -1,4 +1,4 @@
-"""The v2 runner (docs/rework_v2/02_Architecture.md §3).
+"""The v2 runner (docs/02_Architecture.md §3).
 
 One flat package. A module imports only from its own rank or a lower one, with no cycles;
 tests/runner/test_imports.py holds the table and enforces both.

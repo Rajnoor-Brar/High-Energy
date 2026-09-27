@@ -1,4 +1,4 @@
-"""The run TOML's own checks (04_Config.md §10): one bad file per rule, each with where and hint."""
+"""The run TOML's own checks (docs/04_Config_Reference.md §13): one bad file per rule, each with where and hint."""
 
 from __future__ import annotations
 

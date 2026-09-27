@@ -1,6 +1,6 @@
 """utils/Env/yoda/backend.py — `[plot] backend = "yoda"`: the same pages drawn by rivet-mkhtml.
 
-docs/rework_v2/04_Config.md §9, V10/V11. The runner hands over the pages it wrote for Paint, with
+docs/04_Config_Reference.md §11, V10/V11. The runner hands over the pages it wrote for Paint, with
 Paint's --dump-ranges of each: the x and y ranges (auto_range, gutters; none where no gutter leaves
 them to the tool) and the voided bins. Per
 plot_points cell this writes

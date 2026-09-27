@@ -1,6 +1,6 @@
 """`hep run`, `hep plot` and `hep watch` (rank 5): argument parsing and the order of events.
 
-docs/rework_v2/03_Layout_Build.md §6. `hep build` is handled by the shell dispatcher
+docs/04_Config_Reference.md §14. `hep build` is handled by the shell dispatcher
 (utils/Env/hep), which runs make.
 
 Exit codes: 0 every point done (or skipped), 1 a point failed, 2 a config error before anything ran,

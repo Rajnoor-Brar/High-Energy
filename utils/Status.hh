@@ -1,5 +1,5 @@
 #pragma once
-// utils/Status.hh — the standard status protocol (docs/rework_v2/05_Tools.md §3.1).
+// utils/Status.hh — the standard status protocol (docs/05_Tools_Reference.md §19).
 //
 // A tool writes JSON lines to the file descriptor named in $HEP_STATUS_FD:
 //

@@ -1,4 +1,4 @@
-"""Path resolution (docs/rework_v2/03_Layout_Build.md §2)."""
+"""Path resolution (docs/04_Config_Reference.md §2)."""
 
 from __future__ import annotations
 

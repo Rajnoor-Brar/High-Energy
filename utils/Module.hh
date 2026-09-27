@@ -1,5 +1,5 @@
 #pragma once
-// utils/Module.hh — the module kit (docs/rework_v2/05_Tools.md §5).
+// utils/Module.hh — the module kit (docs/05_Tools_Reference.md §18).
 //
 // A module is a plain program. This header removes the boilerplate and nothing else:
 //
@@ -19,7 +19,7 @@
 // once, after the loop. RootOut::scale refuses a second call. A histogram drawn beside Rivet's is
 // a density: scale with "width" as well (L21).
 //
-// Exit codes (02 §9): 0 ok, 1 config, 2 usage, 3 init, 4 input, 5 output, 6 stopped, 70 internal.
+// Exit codes (02 §11): 0 ok, 1 config, 2 usage, 3 init, 4 input, 5 output, 6 stopped, 70 internal.
 // A module runs single-threaded.
 
 #include "Status.hh"
@@ -178,7 +178,7 @@ namespace Module {
         bool stopping() const { return detail::stop; }
         Status::Reporter& status() { return detail::status(); }
 
-        // ── standard configurations (V21, 04 §7.3) ──────────────────────────────────────────
+        // ── standard configurations (V21, 04 §9.4) ──────────────────────────────────────────
         std::string standard(const std::string& key) const { return requested(key).get("path", ""); }
         std::vector<std::string> standardParts(const std::string& key) const { return requested(key).list("parts"); }
         Values standardValues(const std::string& key) const { return requested(key); }

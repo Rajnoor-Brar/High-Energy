@@ -1,5 +1,5 @@
 #pragma once
-// utils/Apps/Paint/Page.hh — one page's config, as the runner writes it (docs/rework_v2/05_Tools.md §7).
+// utils/Apps/Paint/Page.hh — one page's config, as the runner writes it (docs/05_Tools_Reference.md §17).
 //
 //     [page]    name, output (path without extension), formats, title, x_label, y_label, logx, logy,
 //               y_gutter, x_gutter, ratio, ratio_label, void_empty, min_entries, auto_range, range_pad

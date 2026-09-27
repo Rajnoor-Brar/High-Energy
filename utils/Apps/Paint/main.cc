@@ -1,4 +1,4 @@
-// utils/Apps/Paint/main.cc — the ROOT plotting app (docs/rework_v2/05_Tools.md §7).
+// utils/Apps/Paint/main.cc — the ROOT plotting app (docs/05_Tools_Reference.md §17).
 // requires: root toml
 //
 //     Paint.exe PAGE.toml [--dump-ranges]
@@ -9,7 +9,7 @@
 // draws nothing, which is how the arithmetic is tested without looking at pixels. `--dump-style`
 // prints the page's style — utils/Apps/Paint/base.toml with the page's [style] over it — as TOML;
 // with no page, base.toml's.
-// Exit codes (02 §9): 0 ok, 1 page config, 2 usage, 4 input, 5 output.
+// Exit codes (02 §11): 0 ok, 1 page config, 2 usage, 4 input, 5 output.
 
 #include "Status.hh"
 

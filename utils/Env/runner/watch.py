@@ -1,6 +1,6 @@
 """What the user sees while points run (rank 4).
 
-docs/rework_v2/02_Architecture.md §8. The views are fed only by status: ToolState objects that
+docs/02_Architecture.md §10. The views are fed only by status: ToolState objects that
 `execute` updates from the tools' status pipes and log filters. They never look at a process, so
 `hep watch` can drive the same views from output/…/status.jsonl in another terminal.
 
