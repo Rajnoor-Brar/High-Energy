@@ -143,6 +143,29 @@ def test_the_yoda_backend_draws_the_same_pages(stage):
     assert list(references) == ["/REF/photo_eic/d01-x01-y01"]                # only what the map names
 
 
+def test_pages_are_paints_and_another_backend_moves_only_the_output(stage):
+    run, configuration, plans = stage
+    page = plot.pages(run, configuration, plans)[0]
+    plots = plans[0].res.parent / "plots"
+    assert page.output == plots / "root" / page.name
+    assert tomllib.loads(page.config.read_text())["page"]["output"] == str(page.output)   # Paint's
+    assert plot.for_backend(page, "yoda").output == plots / "yoda" / page.name
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not shutil.which("rivet-mkhtml"), reason="load_hep: rivet-mkhtml")
+@pytest.mark.parametrize("stage", ["both"], indirect=True)
+def test_both_backends_draw_both_trees(stage):
+    run, configuration, plans = stage
+    said = []
+    assert plot.draw(run, configuration, plans, said.append) == 0, said
+    plots = plans[0].res.parent / "plots"
+    for cell in ("em", "ep"):
+        assert len(list((plots / "root" / cell).glob("*.png"))) == 17
+        assert len(list((plots / "yoda" / cell / "photo_eic").glob("*.pdf"))) == 17
+    assert said[0].startswith("plot: 34 of 34") and said[-1].startswith("plot (yoda): 34 of 34")
+
+
 def test_a_swept_analysis_option_is_a_curve_not_a_page(scratch):
     """Each point's YODA holds its own variant (/photo_eic:R=0.4/…): one page per object, one curve
     per point, each read from its own path (found by the Lambda masswindow run, P4 S1)."""

@@ -220,8 +220,9 @@ style.legend.position = "bottom-left"
 Titles and axis labels come from the analysis's Rivet `.plot` file, translated to ROOT's TLatex.
 The default backend is ROOT, drawn by `build/Paint.exe` from one page config per page, which you can
 find in `output/…/plots/`. `backend = "yoda"` draws the same pages with the same ranges using
-`rivet-mkhtml`, one HTML page set per cell, in `results/…/plots/yoda/`. A key a backend cannot
-honour is an error, not ignored.
+`rivet-mkhtml`, one HTML page set per cell, in `results/…/plots/yoda/`. `backend = "both"` (or
+`["root", "yoda"]`) draws both sets in one run. A key a backend cannot honour is an error, not
+ignored.
 
 **The style.** Every ROOT page starts from `utils/Apps/Paint/base.toml`: rivet-mkhtml's look, with
 every key commented. Edit it to change all pages:

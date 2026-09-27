@@ -792,7 +792,7 @@ Primary graphics are ROOT, through the Paint app, *"unless explictly told to use
 
 ```toml
 [plot]
-backend     = "root"             # "root" (Paint, default) | "yoda" (rivet-mkhtml / matplotlib)
+backend     = "root"             # "root" (Paint, default) | "yoda" (rivet-mkhtml) | ["root", "yoda"] or "both"
 formats     = ["pdf", "png", "svg"]
 objects     = ["/photo_eic/*"]   # which histograms get pages; default every 1D object
 ratio       = true               # ratio panel against the first curve, or the data
@@ -860,6 +860,10 @@ style.legend.position = "bottom-left"   # the style again, for these objects onl
   `/REF/<analysis>/<object>` (mkhtml's own reference lookup is off), and labels go TLatex → LaTeX.
   mkhtml always writes PDF and PNG. Of the style it honours only a `legend.position` corner:
   `root_style` and every other style key are refused.
+- With `backend = ["root", "yoda"]` (or `"both"`), one run writes both page sets from the same page
+  configs, ranges and voids: `results/…/plots/root/` and `results/…/plots/yoda/`. Paint honours the
+  style, so style keys are allowed. A legend placed at `[x, y]` is still refused, because the two
+  sets would then disagree about where the legend is.
 - Keys a backend cannot honour are **errors**, not silently ignored: v1's `LegendXPos` was parsed
   and dropped.
 

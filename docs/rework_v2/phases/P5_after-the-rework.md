@@ -123,3 +123,18 @@ The tables:
   - `test_plot.py`: +8 refusals, 2 layer tests, and the yoda refusals;
   - `test_plot_stage.py`: +1, only the changed keys reach a page;
   - `test_paint.py`: +2, `--dump-style` equals base.toml, the merge, and dpi 100 → 467 × 421 px.
+
+### S4 — 2026-09-27 — done: both backends in one run
+
+The user asked for this (`plot.backend = "both"?`, then "go on").
+
+- `[plot].backend` takes a name, a list of names (`["root", "yoda"]`), or `"both"`.
+  `plot.backends()` normalises it: duplicates are dropped and Paint goes first.
+- One set of page configs serves every backend. Their `[page].output` is always Paint's
+  (`plots/root/…`); `plot.for_backend(page, name)` moves only a page's output, to
+  `plots/<name>/…`. Paint's `--dump-ranges` runs once, whatever the number of other backends.
+- The yoda backend's `validate(settings, beside_root=…)`: beside Paint, `root_style` and the style
+  keys are Paint's to honour and are allowed. A legend at `[x, y]` is refused either way, because
+  the two page sets would disagree about where it is.
+- Tests: `test_plot.py` +1 (normalising, what is allowed beside Paint, the refusals);
+  `test_plot_stage.py` +2 (a page's output per backend; slow: both trees, 34 pages each).

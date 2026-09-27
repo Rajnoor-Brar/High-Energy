@@ -12,7 +12,10 @@ plot_points cell this writes
 
 and runs rivet-mkhtml into results/…/plots/<cell>/. mkhtml always writes PDF and PNG; svg and eps
 are added. Of the style (utils/Apps/Paint/base.toml) mkhtml can honour only a legend corner: any
-other [plot.style] or [plot.object."<glob>"].style key, and [plot].root_style, are refused.
+other [plot.style] or [plot.object."<glob>"].style key, and [plot].root_style, are refused. Beside
+the root backend (backend = ["root", "yoda"]) they are Paint's to honour and are allowed, except a
+legend placed at [x, y]: the two page sets would then disagree about where the legend is, not
+only about its look.
 """
 
 from __future__ import annotations
@@ -32,16 +35,17 @@ LEGEND = {"top-right": {"LegendAlign": "r"}, "top-left": {"LegendAlign": "l", "L
 _MATH = {"bf": "mathbf", "it": "mathit", "LT": "<", "GT": ">"}
 
 
-def validate(settings: dict) -> None:
+def validate(settings: dict, beside_root: bool = False) -> None:
     hint = 'rivet-mkhtml has its own look; drop the key, or use backend = "root"'
-    if "root_style" in settings:
+    if "root_style" in settings and not beside_root:
         raise HepError('[plot].root_style cannot be honoured by backend = "yoda"', where="[plot].root_style", hint=hint)
     layers = [("[plot.style]", settings.get("style", {}))] + [
         (f'[plot.object."{glob}"].style', table.get("style", {})) for glob, table in settings.get("object", {}).items()]
     for where, layer in layers:
         for table, keys in layer.items():
             for key, value in keys.items() if isinstance(keys, dict) else [(None, keys)]:
-                if (table, key) != ("legend", "position") or not isinstance(value, str):
+                placed = (table, key) == ("legend", "position") and not isinstance(value, str)
+                if placed or (not beside_root and (table, key) != ("legend", "position")):
                     name = f"{table}.{key}" if key else table
                     raise HepError(f'{where} {name} cannot be honoured by backend = "yoda"', where=where,
                                    hint=hint + " (only a legend.position corner carries over)")

@@ -109,6 +109,19 @@ def test_the_yoda_backend_refuses_what_mkhtml_cannot_do(scratch):
         validated(scratch, backend="yoda", root_style="/x.toml")
 
 
+def test_both_backends_draw_the_same_pages_and_the_style_is_paints(scratch):
+    assert plot.backends({}) == ["root"] and plot.backends({"backend": "yoda"}) == ["yoda"]
+    assert plot.backends({"backend": "both"}) == plot.backends({"backend": ["yoda", "root", "yoda"]}) == ["root", "yoda"]
+    (scratch / "talk.toml").write_text("[text]\ntitle = 12\n")
+    validated(scratch, backend="both", root_style=str(scratch / "talk.toml"),       # Paint honours these
+              style={"text": {"legend": 9}, "legend": {"position": "top-left"}})
+    with pytest.raises(HepError, match="legend.position"):                         # the pages would disagree
+        validated(scratch, backend=["root", "yoda"], style={"legend": {"position": [0.5, 0.9]}})
+    for bad, message in (([], "names no backend"), (["root", "matplotlib"], "backend")):
+        with pytest.raises(HepError, match=message):
+            validated(scratch, backend=bad)
+
+
 # ── the style layers ──────────────────────────────────────────────────────────────────────────
 
 def test_a_root_style_file_goes_under_the_inline_style(scratch):

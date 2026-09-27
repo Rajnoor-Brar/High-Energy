@@ -11,7 +11,8 @@ docs/rework_v2/04_Config.md §9, 05_Tools.md §7. After the points, from the com
   LaTeX translated to TLatex (V11), under [plot.object."<glob>"] overrides;
 * reference data are drawn only through the explicit [plot.data].map (L18);
 * one Paint config per page, output/…/plots/[<page>/]<object>.toml, drawn to
-  results/…/plots/root/[<page>/]<object>.<fmt>; the yoda backend writes results/…/plots/yoda/;
+  results/…/plots/root/[<page>/]<object>.<fmt>; the yoda backend writes results/…/plots/yoda/, and
+  backend = ["root", "yoda"] (or "both") writes both from the same pages;
 * the style is utils/Apps/Paint/base.toml, which Paint reads itself; a page's [style] holds only
   what the run changes: the [plot].root_style file, then [plot.style], then the matching
   [plot.object."<glob>"].style, each checked against base.toml's keys and types.
@@ -27,7 +28,7 @@ import json
 import re
 import subprocess
 import tomllib
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import tomli_w
@@ -61,6 +62,7 @@ class Page:
     overrides: set = field(default_factory=set)     # [plot.object] keys that applied
     ranges: dict = field(default_factory=dict)      # Paint --dump-ranges, for other backends
     style: dict = field(default_factory=dict)       # base.toml with the page's [style] over it
+    plots: Path | None = None                        # results/…/plots: a backend draws into plots/<its name>/
 
 
 def backend(name: str):
@@ -73,6 +75,13 @@ def backend(name: str):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def backends(settings: dict) -> list[str]:
+    """[plot].backend: a name, a list of names, or "both" (every backend). Paint's first when drawn."""
+    value = settings.get("backend", "root")
+    names = list(BACKENDS) if value == "both" else [value] if isinstance(value, str) else list(value)
+    return sorted(dict.fromkeys(names), key=lambda n: n != "root")
 
 
 def validate(run) -> None:
@@ -90,7 +99,11 @@ def validate(run) -> None:
                 raise HepError(f"[plot.{name}] has no key '{key}'", where=f"{where}.{name}",
                                hint=did_you_mean(key, allowed) or f"its keys: {', '.join(allowed)}")
 
-    one_of(settings.get("backend", "root"), BACKENDS, "backend")
+    names = backends(settings)
+    if not names:
+        raise HepError("[plot].backend names no backend", where=f"{where}.backend", hint='"root", "yoda" or "both"')
+    for name in names:
+        one_of(name, BACKENDS, "backend")
     for fmt in settings.get("formats", []):
         one_of(fmt, FORMATS, "formats")
     only(settings.get("data", {}), DATA_KEYS, "data")
@@ -98,8 +111,8 @@ def validate(run) -> None:
     for glob, table in settings.get("object", {}).items():
         only(table, OBJECT_KEYS, f'object."{glob}"')
         check_style(table.get("style", {}), f'{where}.object."{glob}".style')
-    if settings.get("backend", "root") != "root":
-        backend(settings["backend"]).validate(settings)
+    for name in names[1:] if names[0] == "root" else names:
+        backend(name).validate(settings, beside_root=names[0] == "root")
     data = settings.get("data", {})
     if data and not data.get("map"):
         raise HepError("[plot.data] names a file but no map", where=f"{where}.data",
@@ -380,7 +393,7 @@ def pages(run, configuration, plans) -> list[Page]:
                            where=f"{run.path}: [plot].objects")
 
     out_dir = complete[0].out.parent / "plots"
-    res_dir = complete[0].res.parent / "plots" / ("yoda" if settings.get("backend", "root") == "yoda" else "root")
+    res_dir = complete[0].res.parent / "plots" / "root"          # Paint's; another backend's: for_backend
     merged = merge({p.point.name: yoda_of(p) for p in complete},
                    complete[0].res.parent / "plots" / "root" / f"{configuration.name}.root", out_dir / "merged.sha256",
                    complete[0].out.parent / "points.json")
@@ -422,7 +435,7 @@ def pages(run, configuration, plans) -> list[Page]:
             made.append(Page(rel, config, res_dir / rel, cell=key, object=path, document=document,
                              sources=[yoda_of(plan) for plan, _ in curves], variants=[full for _, full in curves],
                              data=(source, reference) if reference else None, overrides=set(override),
-                             style=merge_style(base, layer)))
+                             style=merge_style(base, layer), plots=res_dir.parent))
     return made
 
 
@@ -472,8 +485,14 @@ def _why(done: subprocess.CompletedProcess) -> str:
     return f"exit {done.returncode}"
 
 
+def for_backend(page: Page, name: str) -> Page:
+    """The page as another backend draws it: into results/…/plots/<name>/ instead of Paint's root/."""
+    return replace(page, output=page.plots / name / page.name) if page.plots else page
+
+
 def draw(run, configuration, plans, say) -> int:
-    """The plot stage: Paint on every page. Returns the number of pages that failed."""
+    """The plot stage: Paint on every page, then any other backend on the same pages. Returns the
+    number of pages that failed, summed over the backends."""
     if not run.plot:
         return 0
     paint = build_root() / "Paint.exe"
@@ -483,24 +502,28 @@ def draw(run, configuration, plans, say) -> int:
     if not todo:
         say("plot: no complete point has a YODA product to draw")
         return 0
-    name = run.plot.get("backend", "root")
-    if name != "root":                   # the same pages; Paint computes the ranges and voids for it
-        cells: dict[str, list[Page]] = {}
+    names = backends(run.plot)
+    failed = 0
+    if "root" in names:
+        for page in todo:
+            done = subprocess.run([str(paint), str(page.config)], capture_output=True, text=True)
+            if done.returncode != 0:
+                failed += 1
+                say(f"plot: {page.name} failed: {_why(done)}")
+        where = todo[0].config.parent if "/" not in todo[0].name else todo[0].config.parent.parent
+        say(f"plot: {len(todo) - failed} of {len(todo)} page(s) drawn; configs in {where}")
+    others = [n for n in names if n != "root"]
+    if others:                           # the same pages; Paint computes the ranges and voids for them
         for page in todo:
             done = subprocess.run([str(paint), str(page.config), "--dump-ranges"], capture_output=True, text=True)
             if done.returncode != 0:
                 raise HepError(f"plot: {page.name}: {_why(done)}", where=str(page.config))
             page.ranges = json.loads(done.stdout)
-            cells.setdefault(page.cell, []).append(page)
-        return backend(name).draw(cells, run.plot, say)
-    failed = 0
-    for page in todo:
-        done = subprocess.run([str(paint), str(page.config)], capture_output=True, text=True)
-        if done.returncode != 0:
-            failed += 1
-            say(f"plot: {page.name} failed: {_why(done)}")
-    where = todo[0].config.parent if "/" not in todo[0].name else todo[0].config.parent.parent
-    say(f"plot: {len(todo) - failed} of {len(todo)} page(s) drawn; configs in {where}")
+    for name in others:
+        cells: dict[str, list[Page]] = {}
+        for page in todo:
+            cells.setdefault(page.cell, []).append(for_backend(page, name))
+        failed += backend(name).draw(cells, run.plot, say)
     return failed
 
 
