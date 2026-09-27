@@ -1,4 +1,4 @@
-# Makefile — the v2 build (docs/rework_v2/03_Layout_Build.md §5). `hep build` is `make all`.
+# Makefile — the v2 build (docs/06_Developer_Guide.md §2). `hep build` is `make all`.
 #
 #   make                        every module program, Rivet plugin and app
 #   make <path>/<X>.exe         compile one source; the output lands where the convention says

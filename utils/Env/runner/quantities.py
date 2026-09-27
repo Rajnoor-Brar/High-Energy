@@ -1,6 +1,6 @@
 """Quantities: the master TOML, static values, and who consumes what (rank 1).
 
-docs/rework_v2/04_Config.md §2 and §6. A quantity renders nothing by itself. It reaches a tool
+docs/04_Config_Reference.md §3 and §8. A quantity renders nothing by itself. It reaches a tool
 through a mapping:
   * from the master TOML, by tool type: [quantities.<tool>.compatible_quantities].<q>;
   * or from the quantity's own `key` table ({<tag or tool> = key});
@@ -22,7 +22,7 @@ from typing import Any, NamedTuple
 from .errors import HepError, did_you_mean
 from .paths import repo_root, resolve
 
-#: The built-in quantities: the runner provides them, and they need no consumer (04 §6.3).
+#: The built-in quantities: the runner provides them, and they need no consumer (04 §8.3).
 BUILTIN = ("events", "threads")
 
 

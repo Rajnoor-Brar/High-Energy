@@ -3,7 +3,7 @@
 //
 //     InprocJets.exe CONFIG.toml --output=photo.yoda
 //
-// The chain App_Pythia → FIFO → rivet, as one program (docs/rework_v2/05_Tools.md §5). Its tool
+// The chain App_Pythia → FIFO → rivet, as one program (docs/05_Tools_Reference.md §18). Its tool
 // table asks for the standard configurations (V21):
 //
 //     [tools.jets]
@@ -17,7 +17,7 @@
 //   engine = "parallel"  PythiaParallel, as App_Pythia: same card, same seeds, same instances
 //            "serial"    one Pythia8::Pythia, seeded by the card's Random:seed
 //
-// It applies what App_Pythia learned (01_Assessment.md §7):
+// It applies what App_Pythia learned (docs/07_Record.md §3):
 //   L1  σ over instances is the ΣW-weighted mean, errors in quadrature;
 //   L2  once more than one instance has contributed, each event is re-stamped with the combination,
 //       so the σ Rivet takes (the last event's) is the run's;

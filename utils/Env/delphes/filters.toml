@@ -1,4 +1,4 @@
-# utils/Env/delphes/filters.toml — DelphesHepMC3 only prints (05_Tools.md §3.2). Its progress bar
+# utils/Env/delphes/filters.toml — DelphesHepMC3 only prints (docs/05_Tools_Reference.md §20). Its progress bar
 # gives a percentage, not an event count, so only the phase is followed. A rule never fails a run.
 [[rule]]
 match = '^\*\* Reading '

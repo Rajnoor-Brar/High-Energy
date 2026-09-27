@@ -1,4 +1,4 @@
-# utils/Env/herwig/filters.toml — Herwig only prints (05_Tools.md §3.2). Its counter is
+# utils/Env/herwig/filters.toml — Herwig only prints (docs/05_Tools_Reference.md §20). Its counter is
 # "event> <done> <total>", rewritten in place with \r. A rule never fails a run.
 [[rule]]
 match = 'event>\s+(?P<done>\d+)\s+(?P<total>\d+)'

@@ -1,11 +1,27 @@
 # Current plan
 
+## The manual — **DONE** (ordered by the user 2026-09-27)
+
+"Read docs, go over them … see if there are ideas worth implementing or taking inspiration from,
+especially v1 docs, then eliminate the docs; then proper design docs … a detailed dev and user
+manual."
+
+- Read: v1's design set, GUIDE and MAP at `rework/v1-final` (docs/rework, post_rework, the step
+  logs), `docs/rework_v1/`, and all of `docs/rework_v2/` with its phase logs.
+- Ideas and loose ends → `bots/intent.md` (T1–T4 throughput, U1–U9 commands, C1–C4 config, P1–P2
+  provenance, physics set-ups, F10–F14). None implemented.
+- Removed: `docs/rework_v1/`, `docs/rework_v2/`, `docs/GUIDE.md` (V30; git keeps them).
+- Written: `docs/README.md` and `docs/01_Philosophy` … `07_Record` (the record keeps the brief
+  verbatim, V1–V30, L1–L26, F1–F14, v1's cited 00/Bn and Dn, R1–R7, the verified gates, the budget,
+  the glossary). The code's citations were rewritten to the new pages; `tests/runner/test_docs.py`
+  holds the manual to the code.
+- Also on 2026-09-27, before it: the gutters (V29: `y_gutter = g` → (1 + g) × max; `0`/"default" →
+  the tool's own range).
+
 ## rework v2 — **EXECUTED** (ordered by the user 2026-09-26; P0–P4 done 2026-09-27)
 
-The plan is `docs/rework_v2/`:
-read `README.md` (decisions V1–V20, traceability) → `00_Brief.md` (the user's design, verbatim) →
-`06_Roadmap.md` (5 phases, 13 steps, budget ~5.2k lines, risks R1–R7) → `01_Assessment.md` §7
-(the knowledge ledger L1–L26) → the phase file in `docs/rework_v2/phases/`.
+The plan was `docs/rework_v2/` (now in git history: `git log --all -- docs/rework_v2`); its
+decisions, ledger and gates are in `docs/07_Record.md`.
 
 - Revised on the user's order "do not be afraid to overhaul everything and scrapping entire utils":
   **P0 deletes all of `utils/`, CMake, `legacy/`, v1 tests and v1 design docs** (tag `rework/v1-final`

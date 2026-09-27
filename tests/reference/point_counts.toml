@@ -3,7 +3,7 @@
 # From tests/golden/test_legacy_counts.py (EXPECTED_COUNTS) at rework/v1-final, captured from
 # the legacy planner on the frozen configs. `pages` is the legacy count. v1 and legacy drew no
 # page for a study with nothing scanned. v2 draws one page for any configuration with at least one
-# point (04_Config.md §4.2), so `pages_v2` is the value to compare against.
+# point (docs/04_Config_Reference.md §5.2), so `pages_v2` is the value to compare against.
 #
 # Keys are <run>.<configuration> in v2 terms. "default" was the study-less [sweep] of the v1 file,
 # which v2 has as the configuration named by [run].configuration (`pdf` for eic).

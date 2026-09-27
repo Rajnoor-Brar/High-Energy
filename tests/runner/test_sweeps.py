@@ -1,4 +1,4 @@
-"""Sweeps, pages, the P2 checks, seeds and the point-count gate (docs/rework_v2/phases/P2_sweeps.md)."""
+"""Sweeps, pages, the P2 checks, seeds and the point-count gate (docs/07_Record.md §8)."""
 
 from __future__ import annotations
 

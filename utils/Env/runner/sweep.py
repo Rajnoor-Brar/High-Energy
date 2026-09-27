@@ -1,6 +1,6 @@
 """Points and pages from `sweeps` and `plot_points` (rank 1).
 
-docs/rework_v2/04_Config.md §4.1–4.2. A string entry of `sweeps` is an independent axis; a list
+docs/04_Config_Reference.md §5.1–5.2. A string entry of `sweeps` is an independent axis; a list
 entry is an entangled group that moves together (value i with value i). The points are the grid of
 the axes, in `sweeps` order. Pages are the grid of the `plot_points` axes, and every other swept
 quantity becomes the curves on a page.

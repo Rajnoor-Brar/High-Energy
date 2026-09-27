@@ -1,6 +1,6 @@
 """Running a point: [prelim], the tool groups, supervision, the checks (rank 3).
 
-docs/rework_v2/02_Architecture.md §9. A FIFO chain fails in two ways a single process does not,
+docs/02_Architecture.md §11. A FIFO chain fails in two ways a single process does not,
 and both are handled here by construction:
 
 * **Deadlock at open (L8).** A FIFO blocks until both ends are open. If the writer dies before
@@ -395,7 +395,7 @@ def _finished(plan: PointPlan, result: PointResult, sink, journal: Journal | Non
 
 
 def _cleanup(plan: PointPlan) -> None:
-    """FIFOs are removed when the point ends (04 §5); files are kept."""
+    """FIFOs are removed when the point ends (04 §6); files are kept."""
     for interface in plan.interfaces.values():
         if interface.kind == "fifo" and interface.path.exists() and stat.S_ISFIFO(interface.path.stat().st_mode):
             interface.path.unlink()

@@ -13,7 +13,7 @@
 
 ### Directory Layout
 
-The layout is rework v2's ([docs/rework_v2/03_Layout_Build.md](../docs/rework_v2/03_Layout_Build.md)).
+The layout is described in [docs/06_Developer_Guide.md §1](../docs/06_Developer_Guide.md#1-repository-layout); the manual's index is [docs/README.md](../docs/README.md).
 
 | Path         | Purpose                                                                      |
 | ------------ | ---------------------------------------------------------------------------- |
@@ -22,7 +22,7 @@ The layout is rework v2's ([docs/rework_v2/03_Layout_Build.md](../docs/rework_v2
 | `build/`     | Everything compiled (`make`/`hep build`); `build/Rivet/` holds the Rivet plugins |
 | `configs/`   | Run TOMLs and native cards per project (`configs/<Project>/`)                |
 | `datasets/`  | Your own reference data (YODA), gitignored; Rivet's are `rivet:<Analysis>` in `[plot.data]` |
-| `docs/`      | `GUIDE.md` (how to use it), `rework_v2/` (the executed plan), `rework_v1/` (the v1 retrospective) |
+| `docs/`      | the manual: `01_Philosophy` … `07_Record` (the record holds the decisions, the ledger and the findings the code cites) |
 | `modules/`   | Project sources: `<Name>.cc` programs, headers, Rivet plugins in `Rivet/` or `Rivet_*.cc`; `_`-prefixed folders are parked (not built) |
 | `output/`    | Technical files per project (cards, logs, FIFOs, status), and `output/tests/` for tests |
 | `results/`   | Products per project (YODA, ROOT, plots, provenance)                         |
@@ -43,11 +43,11 @@ The layout is rework v2's ([docs/rework_v2/03_Layout_Build.md](../docs/rework_v2
   namespace scope.
 - A source declares what it links in a `// requires: …` line near the top.
 - The Python runner is one flat package, `utils/Env/runner/`. A module imports only from lower
-  ranks (docs/rework_v2/02_Architecture.md §3), and `tests/runner/test_imports.py` enforces it.
+  ranks (docs/02_Architecture.md §3.1), and `tests/runner/test_imports.py` enforces it.
 - Everything the runner knows about a tool lives in `utils/Env/<tool>/`. The runner core never
   names a tool.
 - Before writing code for a tool, read its rows in the knowledge ledger
-  (docs/rework_v2/01_Assessment.md §7).
+  (docs/07_Record.md §3).
 
 ## Testing
 

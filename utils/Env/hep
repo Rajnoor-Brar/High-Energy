@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# utils/Env/hep — the `hep` command (docs/rework_v2/03_Layout_Build.md §6).
+# utils/Env/hep — the `hep` command (docs/04_Config_Reference.md §14).
 #
 #   hep run <config> [<configuration>] [options]   the runner (utils/Env/run)
 #   hep plot <config> [<configuration>] | FILE…     pages: a configuration's, or any YODA/ROOT files
@@ -23,7 +23,7 @@ usage: hep <command> [options]
         --configure                probe the toolchain again (rewrite build/flags.mk)
         -j N                       parallel jobs (default: all cores)
 
-  make <path>/<X>.exe | <path>/<x>.so   compile one source (docs/rework_v2/03_Layout_Build.md §5)
+  make <path>/<X>.exe | <path>/<x>.so   compile one source (docs/06_Developer_Guide.md §2)
 EOF
 }
 

@@ -1,4 +1,4 @@
-# utils/Env/master.toml — how each standard tool consumes named quantities (docs/rework_v2/04_Config.md §2).
+# utils/Env/master.toml — how each standard tool consumes named quantities (docs/04_Config_Reference.md §3).
 #
 # [quantities.<tool>.compatible_quantities].<quantity> = one of
 #   { key = "K" }                     the card line K = value

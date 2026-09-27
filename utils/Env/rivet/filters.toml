@@ -1,4 +1,4 @@
-# utils/Env/rivet/filters.toml — Rivet only prints (05_Tools.md §3.2). A rule never fails a run.
+# utils/Env/rivet/filters.toml — Rivet only prints (docs/05_Tools_Reference.md §20). A rule never fails a run.
 [[rule]]
 match = '^Event (?P<done>\d+) \('
 emit  = "progress"

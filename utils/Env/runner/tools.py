@@ -1,13 +1,13 @@
 """Tool folders, point cards, argv, and the connection rules (rank 2).
 
-docs/rework_v2/05_Tools.md §1 (the tool-folder contract), 02_Architecture.md §5 (connections) and
-04_Config.md §7 (tool tables, custom tools, standard configurations). Everything the runner knows
+docs/06_Developer_Guide.md §4 (the tool-folder contract), docs/02_Architecture.md §6 (connections) and
+docs/04_Config_Reference.md §9 (tool tables, custom tools, standard configurations). Everything the runner knows
 about a tool comes from its folder utils/Env/<tool>/. This module never names one.
 
 `plan_point` turns (run, configuration, point) into groups of Steps: argv, environment, files to
 write, inputs and outputs, and what to check afterwards. Nothing is spawned or written here; that is
 `execute`. Seeds are added last (`finalise`), because they derive from the identity of everything
-else (02 §7).
+else (02 §8).
 """
 
 from __future__ import annotations
@@ -62,7 +62,7 @@ class Folder:
 
     @property
     def plugin(self):
-        """utils/Env/<tool>/render.py, for `[card] style = "render"` (05 §1)."""
+        """utils/Env/<tool>/render.py, for `[card] style = "render"` (06 §4)."""
         path = self.dir / "render.py"
         if not path.is_file():
             raise HepError(f'{self.name} has [card] style = "render" but no render.py', where=str(self.dir))
@@ -174,7 +174,7 @@ def sha256_file(path: Path) -> str:
 
 
 def executable_of(tool, folder: Folder, project: str) -> Path:
-    """A folder's executable (`{repo}` expanded, else PATH), or a custom table's (03 §2: bare →
+    """A folder's executable (`{repo}` expanded, else PATH), or a custom table's (04 §2: bare →
     build/<project>/<name>; when that does not exist, a command on PATH, shown by --plan)."""
     if tool.executable:
         candidate = resolve(tool.executable, "executable", project=project, where=f"[tools.{tool.tag}].executable")
@@ -480,7 +480,7 @@ def _outputs(plan: PointPlan, step: Step, run) -> None:
                            where=f"[tools.{step.tag}].output_file", hint="every output has exactly one writer (C6)")
         if name in plan.interfaces:
             interface = plan.interfaces[name]
-        else:                                          # not an agreed interface: a product (03 §2)
+        else:                                          # not an agreed interface: a product (04 §2)
             final = resolve(name, "output", root=plan.res, where=f"[tools.{step.tag}].output_file")
             interface = Interface(name, final, "product")
             plan.interfaces[name] = interface
@@ -504,7 +504,7 @@ def _inputs(plan: PointPlan, step: Step, run) -> None:
 
 
 def _check_connections(plan: PointPlan, run) -> None:
-    """C6 (02 §5): FIFOs inside one group, one reader each, never into a non-streamable tool; files
+    """C6 (02 §6): FIFOs inside one group, one reader each, never into a non-streamable tool; files
     between groups; every input made by someone earlier or already on disk."""
     for interface in plan.interfaces.values():
         where = f"[prelim] / [tools.*]: '{interface.name}'"
@@ -809,7 +809,7 @@ def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
             continue
         value = tool.extra.get(key, [] if rule.get("kind") == "list" else "")
         context[key] = [str(v) for v in value] if isinstance(value, list) else str(value)
-    # standard configurations handed to a custom/module tool (V21, 04 §7.3)
+    # standard configurations handed to a custom/module tool (V21, 04 §9.4)
     standard: dict[str, dict] = {}
     for key, tag in requests.items():
         source = plan.rendered[tag]
@@ -820,7 +820,7 @@ def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
             standard[key] = {"tool": source.tool.tool, "tag": tag, "path": str(source.card_combined), "parts": parts}
         else:
             values = {"tool": source.tool.tool, "tag": tag}
-            if declared.get("needs_prepare"):          # prepare on demand (04 §7.3)
+            if declared.get("needs_prepare"):          # prepare on demand (04 §9.4)
                 if source.prepare_dir is None:
                     raise HepError(f"{source.folder.name} export '{export}' needs a prepare step the tool does not have",
                                    where=f"{source.folder.name}/tool.toml")
