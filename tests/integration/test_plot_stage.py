@@ -33,7 +33,9 @@ def stage(scratch, request):
                plot={"backend": backend, "formats": ["png"], "ratio": True, "min_entries": 10, "range_pad": 1,
                      "data": {"file": "./tests/reference/legacy_run/ydmrg/photo_eic_data.yoda", "legend": "legacy",
                               "map": {"d01-x01-y01": "/REF/photo_eic/d01-x01-y01"}},
-                     "object": {"d04-*": {"logy": True, "y_gutter": 3.0, "title": "override"}}})
+                     "style": {"page": {"dpi": 100}},
+                     "object": {"d04-*": {"logy": True, "y_gutter": 3.0, "title": "override",
+                                          "style": {"legend": {"position": "top-left"}}}}})
     run = parse(data, scratch)
     configuration = run.configuration(None)
     master = quantities.load_master(run.project, run.master_toml)
@@ -80,6 +82,16 @@ def test_object_overrides_and_rivet_labels(stage):
     if (REPO / "build" / "Rivet" / "photo_eic.plot").exists():
         assert pages["em/d01-x01-y01"]["x_label"] == "#it{E}_{#it{T}} [GeV]"
         assert pages["em/d02-x01-y01"]["logy"] is False
+
+
+def test_a_page_carries_only_the_style_it_changes(stage):
+    run, configuration, plans = stage
+    by = {p.name: p for p in plot.pages(run, configuration, plans)}
+    assert tomllib.loads(by["em/d04-x01-y01"].config.read_text())["style"] == {
+        "page": {"dpi": 100}, "legend": {"position": "top-left"}}
+    assert tomllib.loads(by["em/d02-x01-y01"].config.read_text())["style"] == {"page": {"dpi": 100}}
+    assert by["em/d02-x01-y01"].style["legend"]["position"] == "top-right"     # base.toml's
+    assert by["em/d02-x01-y01"].style["page"]["size"] == [4.67, 4.21]
 
 
 def test_incomplete_points_are_not_drawn(stage):

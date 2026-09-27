@@ -70,6 +70,7 @@ ROOTS = {
     "executable": lambda project: build_root() / project,
     "data":       lambda project: repo_root() / "datasets",
     "filters":    lambda project: repo_root() / "configs" / project,
+    "root_style": lambda project: repo_root() / "configs" / project,
 }
 
 

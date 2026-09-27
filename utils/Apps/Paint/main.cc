@@ -2,10 +2,13 @@
 // requires: root toml
 //
 //     Paint.exe PAGE.toml [--dump-ranges]
+//     Paint.exe [PAGE.toml] --dump-style
 //
 // One page per call, in the order v1 found load-bearing: load → void → align data → auto-range →
 // gutters → draw → save. `--dump-ranges` prints the final ranges and the voided bins as JSON and
-// draws nothing, which is how the arithmetic is tested without looking at pixels.
+// draws nothing, which is how the arithmetic is tested without looking at pixels. `--dump-style`
+// prints the page's style — utils/Apps/Paint/base.toml with the page's [style] over it — as TOML;
+// with no page, base.toml's.
 // Exit codes (02 §9): 0 ok, 1 page config, 2 usage, 4 input, 5 output.
 
 #include "Status.hh"
@@ -15,21 +18,34 @@
 #include "Transform.hh"
 
 #include <cstdio>
+#include <iostream>
 #include <string>
 #include <vector>
 
 int main(int argc, char** argv) {
     std::vector<std::string> positional;
-    bool dump = false, bad = false;
+    bool dump = false, dumpStyle = false, bad = false;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--dump-ranges") dump = true;
+        else if (arg == "--dump-style") dumpStyle = true;
         else if (arg.rfind("-", 0) == 0) bad = true;
         else positional.push_back(arg);
     }
-    if (bad || positional.size() != 1) {
-        std::fputs("usage: Paint.exe PAGE.toml [--dump-ranges]\n", stderr);
+    if (bad || positional.size() > 1 || (positional.empty() && !dumpStyle)) {
+        std::fputs("usage: Paint.exe PAGE.toml [--dump-ranges]  |  Paint.exe [PAGE.toml] --dump-style\n", stderr);
         return 2;
+    }
+    if (dumpStyle) {
+        try {
+            toml::table doc;
+            if (!positional.empty()) doc = toml::parse_file(positional.front());
+            std::cout << Paint::readStyle(doc["style"].as_table()).merged << "\n";
+        } catch (const std::exception& error) {
+            std::fprintf(stderr, "%s\n", error.what());
+            return 1;
+        }
+        return 0;
     }
     const std::string pagePath = positional.front();
     Status::Reporter status(0);

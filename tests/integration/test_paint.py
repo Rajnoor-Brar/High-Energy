@@ -11,6 +11,7 @@ import json
 import math
 import re
 import subprocess
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -217,3 +218,36 @@ def test_v1_data_is_trimmed_to_its_longest_aligned_run(scratch):
     unaligned = v1_curve(scratch, "bad", [1.0, 2.0], edges=(0.1, 0.9, 1.7))
     assert v1_page(scratch, mc, data=aligned)["data_bins"] == 2           # [1, 2, 3]: the 0.5 edge goes
     assert v1_page(scratch, mc, data=unaligned)["data_bins"] == 0
+
+
+# ── the style (Style.hh, utils/Apps/Paint/base.toml) ─────────────────────────────────────────
+
+def dump_style(path: Path | None = None, *extra: str) -> subprocess.CompletedProcess:
+    return subprocess.run([str(PAINT), *([str(path)] if path else []), "--dump-style", *extra],
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
+
+
+def test_the_base_style_is_base_toml():
+    done = dump_style()
+    assert done.returncode == 0, done.stderr
+    assert tomllib.loads(done.stdout) == tomllib.loads((REPO / "utils/Apps/Paint/base.toml").read_text(encoding="utf-8"))
+
+
+def test_a_page_style_merges_over_the_base_and_is_checked(inputs):
+    config = page(inputs, "d01-x01-y01", formats=["png"])
+    document = tomllib.loads(config.read_text())
+    document["style"] = {"page": {"dpi": 100}, "legend": {"position": [0.4, 0.9]}}
+    config.write_text(tomli_w.dumps(document))
+    merged = tomllib.loads(dump_style(config).stdout)
+    assert merged["page"]["dpi"] == 100 and merged["legend"]["position"] == [0.4, 0.9]
+    assert merged["text"] == tomllib.loads((REPO / "utils/Apps/Paint/base.toml").read_text(encoding="utf-8"))["text"]
+    done = subprocess.run([str(PAINT), str(config)], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    Image = pytest.importorskip("PIL.Image")
+    assert Image.open(inputs["dir"] / "d01-x01-y01.png").size == (467, 421)   # size × dpi
+    for bad, message in (({"legend": {"place": 1}}, "legend.place"), ({"page": {"dpi": "x"}}, "page.dpi"),
+                         ({"curves": {"errors": "dots"}}, "curves.errors")):
+        document["style"] = bad
+        config.write_text(tomli_w.dumps(document))
+        done = subprocess.run([str(PAINT), str(config)], capture_output=True, text=True)
+        assert done.returncode == 1 and message in done.stderr + done.stdout

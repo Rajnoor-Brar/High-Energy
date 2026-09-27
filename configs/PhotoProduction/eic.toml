@@ -236,7 +236,6 @@ y_gutter    = 1.5
 auto_range  = true
 void_empty  = false
 min_entries = 1
-legend      = "top-right"
 
 [plot.data]
 file   = "rivet:ZEUS_2012_I1116258"     # Rivet's own ZEUS 2012 tables (the same numbers as datasets/zeus_eic.yoda)

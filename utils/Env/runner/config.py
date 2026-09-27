@@ -38,7 +38,7 @@ TOOL_COMMON = {"tool": str, "baseconfig": (str, list), "input": (str, list), "ou
                "consumes_events": bool}
 PLOT_KEYS = {"backend": str, "formats": list, "objects": list, "ratio": bool, "y_gutter": (int, float),
              "x_gutter": (int, float), "logy": bool, "logx": bool, "auto_range": bool, "void_empty": bool,
-             "min_entries": int, "range_pad": int, "legend": str, "data": dict, "style": dict, "object": dict}
+             "min_entries": int, "range_pad": int, "root_style": str, "data": dict, "style": dict, "object": dict}
 
 
 @dataclass
@@ -349,6 +349,9 @@ def parse(raw: dict, path: Path) -> RunConfig:
                        or f"configurations: {', '.join(configurations) or '(none)'}")
 
     plot = raw.get("plot", {})
+    if "legend" in plot:
+        raise HepError("[plot].legend is now part of the style", where=f"{where}: [plot].legend",
+                       hint=f'[plot.style] legend.position = "{plot["legend"]}" (or in the root_style file)')
     _check(plot, PLOT_KEYS, f"{where}: [plot]")
 
     return RunConfig(path=path, project=project, name=run["name"], serial=run.get("serial"),

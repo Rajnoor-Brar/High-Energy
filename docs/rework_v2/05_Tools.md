@@ -411,9 +411,12 @@ label  = "ZEUS 2012"
 
 The algorithms of steps 2–4 are v1's `plot/transform.py` and `plot/data.py`, read in git and
 written again in C++. The config-driven style layer (canvas, palette, draw options, scales) follows
-`legacy/utils/Paint/`, also read in git. Its defaults copy rivet-mkhtml's `default.mplstyle`: the
-same page (4.67 in, 10:9), palette, font size in points, tick lengths and margins, so a ROOT page
-and a `backend = "yoda"` page of the same object look alike. The overlays across files, the ratio pad, the reference
+`legacy/utils/Paint/`, also read in git. As there, a default style file sits under the user's
+overrides, merged table by table: `utils/Apps/Paint/base.toml`, found beside `build/` (else
+under `$HEKIT_ROOT`), with the page's `[style]` over it (`Style.hh`). Unknown keys and values of
+another type are errors. Its defaults copy rivet-mkhtml's `default.mplstyle`: the same page
+(4.67 in, 10:9), palette, text sizes in points, tick lengths and margins, so a ROOT page and a
+`backend = "yoda"` page of the same object look alike. `--dump-style` prints the merged style. The overlays across files, the ratio pad, the reference
 data and the gutters are new.
 
 **`Paint --dump-ranges PAGE.toml`** prints the final axis ranges as JSON, which is how the gutter

@@ -191,7 +191,7 @@ and `points.json` inside), and the pages are drawn from it to `results/…/plots
 `hep plot FILE…` draws the same kind of pages from any files: YODA files (one curve each), ROOT files
 from `yd2rt`, or a merged sweep (one curve per point, labelled by its swept values). Options:
 `-o DIR` (default `results/plots/<first file>`), `--labels A,B`, `--objects GLOB…`, `--formats`,
-`--ratio`.
+`--ratio`, `--style FILE`.
 
 ```toml
 [plot]
@@ -202,13 +202,19 @@ x_gutter    = 1.0
 auto_range  = true                # trim x to the filled bins (range_pad whole bins either side)
 min_entries = 1                   # void bins fewer raw entries went into, across all curves
 objects     = ["/photo_eic/d0*"]  # which histograms get pages (default: every 1D object)
+root_style  = "talk.toml"         # a style file over the base style (configs/<Project>/talk.toml)
 
 [plot.data]                       # reference data: drawn only where the map says
 file = "rivet:ZEUS_2012_I1116258"   # Rivet's own reference data; a bare name is under datasets/
 map  = { "d01-x01-y01" = "/REF/ZEUS_2012_I1116258/d01-x01-y01" }
 
-[plot.object."d04-*"]             # per-object overrides: title, x_label, y_label, logx, logy, …
+[plot.style]                      # the style, inline: over root_style
+page.dpi        = 300
+legend.position = "top-left"
+
+[plot.object."d04-*"]             # per-object overrides: title, x_label, y_label, logx, logy, style
 logy = true
+style.legend.position = "bottom-left"
 ```
 
 Titles and axis labels come from the analysis's Rivet `.plot` file, translated to ROOT's TLatex.
@@ -216,6 +222,19 @@ The default backend is ROOT, drawn by `build/Paint.exe` from one page config per
 find in `output/…/plots/`. `backend = "yoda"` draws the same pages with the same ranges using
 `rivet-mkhtml`, one HTML page set per cell, in `results/…/plots/yoda/`. A key a backend cannot
 honour is an error, not ignored.
+
+**The style.** Every ROOT page starts from `utils/Apps/Paint/base.toml`: rivet-mkhtml's look, with
+every key commented. Edit it to change all pages:
+- the page size and PNG dpi;
+- the font and the text sizes (in points);
+- the palette, line width and error style;
+- the data markers, ticks and axis titles;
+- the legend's position and spacing;
+- the ratio pad.
+
+For one run, name only the keys you change: in a style file (`root_style`), in `[plot.style]`,
+or per object in `[plot.object."<glob>"].style`, later layers winning. A misspelt key is an error
+at plan time. `build/Paint.exe PAGE.toml --dump-style` prints a page's whole style.
 
 ## 7. When a point fails
 

@@ -38,7 +38,8 @@ read `README.md` (decisions V1–V20, traceability) → `00_Brief.md` (the user'
 - **P5 — the user's additions (2026-09-27): done.** `.complete`/`provenance.json` in output/,
   plots/root and plots/yoda, one block per finished point, a `pre` stage, the sweep merged into
   plots/root/<cfg>.root (App_yd2rt --merge; the `plotmerge` post tool), `hep plot` (a
-  configuration, or any YODA/ROOT files). S2: Paint's pages look like rivet-mkhtml's.
+  configuration, or any YODA/ROOT files). S2: Paint's pages look like rivet-mkhtml's. S3: the style
+  is TOML: utils/Apps/Paint/base.toml under [plot].root_style, [plot.style] and per-object style.
 - **Rework v2 is executed.** Open with the user: whether to write a Geant4 simulation module.
 ---
 

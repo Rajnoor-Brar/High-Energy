@@ -11,7 +11,10 @@ docs/rework_v2/04_Config.md §9, 05_Tools.md §7. After the points, from the com
   LaTeX translated to TLatex (V11), under [plot.object."<glob>"] overrides;
 * reference data are drawn only through the explicit [plot.data].map (L18);
 * one Paint config per page, output/…/plots/[<page>/]<object>.toml, drawn to
-  results/…/plots/root/[<page>/]<object>.<fmt>; the yoda backend writes results/…/plots/yoda/.
+  results/…/plots/root/[<page>/]<object>.<fmt>; the yoda backend writes results/…/plots/yoda/;
+* the style is utils/Apps/Paint/base.toml, which Paint reads itself; a page's [style] holds only
+  what the run changes: the [plot].root_style file, then [plot.style], then the matching
+  [plot.object."<glob>"].style, each checked against base.toml's keys and types.
 """
 
 from __future__ import annotations
@@ -23,6 +26,7 @@ import importlib.util
 import json
 import re
 import subprocess
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -37,8 +41,9 @@ BACKENDS = ("root", "yoda")
 FORMATS = ("pdf", "png", "svg", "eps")
 LEGENDS = ("top-right", "top-left", "bottom-right", "bottom-left")
 DATA_KEYS = ("file", "legend", "map")
-STYLE_KEYS = ("canvas", "font_size", "palette")
-OBJECT_KEYS = ("title", "x_label", "y_label", "logx", "logy", "y_gutter", "x_gutter", "ratio", "legend")
+OBJECT_KEYS = ("title", "x_label", "y_label", "logx", "logy", "y_gutter", "x_gutter", "ratio", "style")
+STYLE_CHOICES = {"page.font": ("serif", "sans", "mono"), "curves.errors": ("bars", "band", "none"),
+                 "legend.position": LEGENDS}
 COUNTERS = ("/_XSEC", "/_EVTCOUNT")
 
 
@@ -55,6 +60,7 @@ class Page:
     data: tuple | None = None                       # (reference YODA, its object path)
     overrides: set = field(default_factory=set)     # [plot.object] keys that applied
     ranges: dict = field(default_factory=dict)      # Paint --dump-ranges, for other backends
+    style: dict = field(default_factory=dict)       # base.toml with the page's [style] over it
 
 
 def backend(name: str):
@@ -85,15 +91,13 @@ def validate(run) -> None:
                                hint=did_you_mean(key, allowed) or f"its keys: {', '.join(allowed)}")
 
     one_of(settings.get("backend", "root"), BACKENDS, "backend")
-    one_of(settings.get("legend", "top-right"), LEGENDS, "legend")
     for fmt in settings.get("formats", []):
         one_of(fmt, FORMATS, "formats")
     only(settings.get("data", {}), DATA_KEYS, "data")
-    only(settings.get("style", {}), STYLE_KEYS, "style")
+    run_style(run)
     for glob, table in settings.get("object", {}).items():
         only(table, OBJECT_KEYS, f'object."{glob}"')
-        if "legend" in table:
-            one_of(table["legend"], LEGENDS, f'object."{glob}".legend')
+        check_style(table.get("style", {}), f'{where}.object."{glob}".style')
     if settings.get("backend", "root") != "root":
         backend(settings["backend"]).validate(settings)
     data = settings.get("data", {})
@@ -102,6 +106,85 @@ def validate(run) -> None:
                        hint='reference data are matched only through an explicit map (L18): "d01-x01-y01" = "/REF/…/d01-x01-y01"')
     if data and "file" not in data:
         raise HepError("[plot.data] has a map but no file", where=f"{where}.data")
+
+
+# ── the style: utils/Apps/Paint/base.toml and the layers over it ─────────────────────────────
+
+def base_style() -> dict:
+    """utils/Apps/Paint/base.toml: every style key, with its default. Paint reads the same file."""
+    path = repo_root() / "utils" / "Apps" / "Paint" / "base.toml"
+    try:
+        return tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as error:
+        raise HepError(f"cannot read the base style: {error}", where=str(path)) from None
+
+
+def _number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def check_style(layer: dict, where: str, base: dict | None = None, at: str = "") -> None:
+    """A style layer names only keys base.toml has, each a value of the same kind: a number for a
+    number, a pair for a pair, a list for the palette. legend.position is a corner or [x, y]."""
+    base = base_style() if base is None else base
+    for key, value in layer.items():
+        name = f"{at}.{key}" if at else key
+        if key not in base:
+            raise HepError(f"the style has no key '{name}'", where=where,
+                           hint=did_you_mean(key, list(base)) or f"utils/Apps/Paint/base.toml has: {', '.join(base)}")
+        mine = base[key]
+        if isinstance(mine, dict) or isinstance(value, dict):
+            if not (isinstance(mine, dict) and isinstance(value, dict)):
+                raise HepError(f"style '{name}' must be {'a table' if isinstance(mine, dict) else 'a value'}", where=where)
+            check_style(value, where, mine, name)
+            continue
+        if name == "legend.position" and isinstance(value, list):
+            ok = len(value) == 2 and all(_number(v) for v in value)
+        elif _number(mine):
+            ok = _number(value)
+        elif isinstance(mine, list):
+            ok = isinstance(value, list) and bool(value) and (
+                len(value) == len(mine) and all(_number(v) for v in value) if all(_number(v) for v in mine)
+                else all(isinstance(v, (str, int)) and not isinstance(v, bool) for v in value))
+        else:
+            ok = type(value) is type(mine)
+        if not ok:
+            raise HepError(f"style '{name}' = {value!r} is not of the kind base.toml gives it ({mine!r})", where=where)
+        if name in STYLE_CHOICES and isinstance(value, str) and value not in STYLE_CHOICES[name]:
+            raise HepError(f"style '{name}' must be one of {', '.join(STYLE_CHOICES[name])}, not '{value}'", where=where)
+
+
+def merge_style(*layers: dict) -> dict:
+    """Later layers win, key by key, into nested tables."""
+    out: dict = {}
+    for layer in layers:
+        for key, value in layer.items():
+            out[key] = merge_style(out.get(key, {}), value) if isinstance(value, dict) else value
+    return out
+
+
+def style_file(value: str, project: str = "", where: str = "") -> dict:
+    """A style layer from a file: [plot].root_style (configs/<Project>/…), or `hep plot --style`."""
+    path = resolve(value, "root_style", project=project, where=where) if project else Path(value).resolve()
+    if path.suffix != ".toml":
+        path = path.with_name(path.name + ".toml")
+    try:
+        layer = tomllib.loads(path.read_text(encoding="utf-8"))
+    except OSError:
+        raise HepError(f"no style file {path}", where=where or str(path)) from None
+    except tomllib.TOMLDecodeError as error:
+        raise HepError(f"cannot parse the style file: {error}", where=str(path)) from None
+    check_style(layer, str(path))
+    return layer
+
+
+def run_style(run) -> dict:
+    """What a run changes of the base style: its root_style file, then [plot.style]."""
+    settings = run.plot
+    where = f"{run.path}: [plot]"
+    layer = style_file(settings["root_style"], run.project, f"{where}.root_style") if "root_style" in settings else {}
+    check_style(settings.get("style", {}), f"{where}.style")
+    return merge_style(layer, settings.get("style", {}))
 
 
 # ── LaTeX ($…$ in Rivet .plot files) → ROOT TLatex (V11) ──────────────────────────────────────
@@ -313,7 +396,7 @@ def pages(run, configuration, plans) -> list[Page]:
         key = "_".join(tag_of(run.quantities[g[0]], plan.point.choice[g[0]]) for g in page_groups)
         by_page.setdefault(key, []).append(plan)
 
-    style = settings.get("style", {})
+    style, base = run_style(run), base_style()
     made = []
     for key, members in by_page.items():
         for path in objects:
@@ -323,7 +406,8 @@ def pages(run, configuration, plans) -> list[Page]:
             page, override = page_settings(settings, path, rel, res_dir / rel, reference is not None)
             curves = [(plan, full) for plan in members for full in variants.get(plan.point.name, {}).get(path, [])]
             several = {plan.point.name for plan, _ in curves if len(variants[plan.point.name][path]) > 1}
-            document = {"page": page, "style": dict(style), "curve": [
+            layer = merge_style(style, override.get("style", {}))
+            document = {"page": page, "style": layer, "curve": [
                 {"file": str(merged), "object": f"{plan.point.name}/{root_name(full)}",
                  **({"raw": f"{plan.point.name}/RAW/{root_name(full)}"} if "/RAW" + full in raws[plan.point.name] else {}),
                  "label": _curve_label(run, plan, curve_groups)
@@ -337,7 +421,8 @@ def pages(run, configuration, plans) -> list[Page]:
             config.write_text(tomli_w.dumps(document), encoding="utf-8")
             made.append(Page(rel, config, res_dir / rel, cell=key, object=path, document=document,
                              sources=[yoda_of(plan) for plan, _ in curves], variants=[full for _, full in curves],
-                             data=(source, reference) if reference else None, overrides=set(override)))
+                             data=(source, reference) if reference else None, overrides=set(override),
+                             style=merge_style(base, layer)))
     return made
 
 
@@ -362,7 +447,7 @@ def page_settings(settings: dict, path: str, rel: str, output: Path, with_data: 
         "logx": bool(pick("logx", labels.get("LogX") == "1")),
         "logy": bool(pick("logy", labels.get("LogY") == "1")),
         "y_gutter": float(pick("y_gutter", 1.5)), "x_gutter": float(pick("x_gutter", 1.0)),
-        "ratio": bool(pick("ratio", False)), "legend": pick("legend", "top-right"),
+        "ratio": bool(pick("ratio", False)),
         "ratio_label": "MC/Data" if with_data else "Ratio",
         "void_empty": bool(settings.get("void_empty", False)),
         "min_entries": int(settings.get("min_entries", 0)),
@@ -462,9 +547,10 @@ def _root_curves(path: Path, label: str | None) -> list[tuple[str, Path, dict[st
 
 
 def files(targets: list[str], outdir: Path | None, *, labels: list[str] | None = None, objects: list[str] = (),
-          formats: list[str] = ("pdf", "png"), ratio: bool = False, say=print) -> int:
+          formats: list[str] = ("pdf", "png"), ratio: bool = False, style: str | None = None, say=print) -> int:
     """Overlay YODA and ROOT files through Paint: one page per object any of them holds, one curve
-    per file (per point, for a merged sweep). YODA files are merged into one ROOT file first."""
+    per file (per point, for a merged sweep). YODA files are merged into one ROOT file first.
+    `style` is a style file over base.toml, as [plot].root_style is for a run."""
     paths = [Path(t).resolve() for t in targets]
     missing = [str(p) for p in paths if not p.is_file()]
     if missing:
@@ -500,11 +586,12 @@ def files(targets: list[str], outdir: Path | None, *, labels: list[str] | None =
     if not pages_of:
         raise HepError("no 1D object to draw" + (f" matches {list(objects)}" if objects else ""))
     settings = {"formats": list(formats), "ratio": ratio, "auto_range": True}
+    layer = style_file(style) if style else {}
     failed = 0
     for path in pages_of:
         rel = path.strip("/").replace(":", "__")
         page, _ = page_settings(settings, path, rel, outdir / rel, False)
-        document = {"page": page, "curve": [
+        document = {"page": page, "style": layer, "curve": [
             {"file": str(file), "object": found[path][0], **({"raw": found[path][1]} if found[path][1] else {}),
              "label": label} for label, file, found in curves if path in found]}
         config = work / f"{rel}.toml"

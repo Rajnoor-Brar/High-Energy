@@ -47,6 +47,7 @@ def parser() -> argparse.ArgumentParser:
     draw.add_argument("--objects", nargs="+", default=[], metavar="GLOB", help="files: only these YODA paths")
     draw.add_argument("--formats", default="pdf,png", help="files: pdf, png, svg, eps (default pdf,png)")
     draw.add_argument("--ratio", action="store_true", help="files: a ratio panel against the first curve")
+    draw.add_argument("--style", metavar="FILE", help="files: a style file over utils/Apps/Paint/base.toml")
 
     watch = commands.add_parser("watch", help="attach the live view to a running job")
     watch.add_argument("config", nargs="?", help="the run config whose job to watch (default: the latest job)")
@@ -187,7 +188,7 @@ def cmd_plot(args) -> int:
             raise HepError(f"format '{bad[0]}' is not one of {', '.join(plot.FORMATS)}")
         labels = [x.strip() for x in args.labels.split(",")] if args.labels else None
         return 1 if plot.files(args.targets, Path(args.output) if args.output else None, labels=labels,
-                               objects=args.objects, formats=formats, ratio=args.ratio) else 0
+                               objects=args.objects, formats=formats, ratio=args.ratio, style=args.style) else 0
     if len(args.targets) > 2:
         raise HepError("hep plot takes CONFIG [CONFIGURATION], or files ending .yoda/.yoda.gz/.root")
     args.config, args.configuration = args.targets[0], (args.targets[1] if len(args.targets) > 1 else None)

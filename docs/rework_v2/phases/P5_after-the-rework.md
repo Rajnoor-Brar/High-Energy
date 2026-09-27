@@ -76,3 +76,50 @@ review left open in P3 S2 task 3. The reference was the same zeus page drawn by 
 - `configs/PhotoProduction/eic.toml` dropped its `[plot.style]` (900 × 600, font 13), which would
   have undone the new defaults.
 - Tests: the tlatex expectations are now italic (`test_plot.py`, `test_plot_stage.py`).
+
+### S3 — 2026-09-27 — done: the style in TOML, after the legacy Paint
+
+The user asked for this ("Take inspiration from pre-rework Paint utility about toml based style
+config … at the very least … output dpi (for png), legends placement, and text sizes etc"). The
+current style is saved as `base.toml`, and a run names its own file with `plot.root_style`.
+
+**What the legacy Paint did.** `legacy/utils/Paint/` (read in git at `0c3df8f^`):
+- a defaults file, `configs/defaults/Paint.toml`, under the user's config, merged table by table
+  (`Book.hh`), which `[paint].default_style` could replace or turn off;
+- named sub-tables (`axis`, `canvas`, `legend`, `title_box`, `stats`), each key read into a struct
+  (`Style.hh`);
+- `use =` preset chains, and image, text and brush scales.
+
+Kept: the defaults file under the overrides, the table-by-table merge, and the sub-tables. Not
+kept: the preset chains and the scales. Three layers do the same job, and `dpi` with sizes in
+points replaces the scales.
+
+| Layer (later wins) | Where |
+|---|---|
+| the base style | `utils/Apps/Paint/base.toml`: every key, commented; Paint reads it itself (`Style.hh`), found beside `build/`, else under `$HEKIT_ROOT` |
+| a style file | `[plot].root_style = "talk.toml"`: a bare name is under `configs/<Project>/`, `.toml` optional; `hep plot FILE… --style FILE` |
+| inline | `[plot.style]` |
+| per object | `[plot.object."<glob>"].style` |
+
+The tables:
+- `[page]`: size (in), dpi, font, margins;
+- `[text]`: title, labels, legend, header (pt);
+- `[curves]`: palette, width, errors (bars, band or none);
+- `[data]`: colour, marker, marker size, x bars;
+- `[axes]`: tick length, ticks on all sides, titles at the ends, offsets;
+- `[legend]`: position (a corner, or [x, y]), inset, spacing, symbol, gap;
+- `[ratio]`: heights, range, limits, divisions, decimals.
+
+- A page's config holds only what the layers changed. `Paint.exe [PAGE.toml] --dump-style` prints
+  the whole style after the merge.
+- Checked twice, against base.toml's keys and kinds: at plan time (`plot.check_style`, with the
+  nearest spelling) and by Paint (`Style.hh`).
+- `[plot].legend` and `[plot.object].legend` moved to `legend.position`, and the old key says so.
+  The yoda backend honours only a `legend.position` corner and refuses the rest, `root_style`
+  included. Before this, `canvas` was accepted there and silently ignored.
+- The ratio pad's top is trimmed by 0.5% of its range, so a label at the pad joint (3.0 at the
+  limit) is not drawn.
+- Tests:
+  - `test_plot.py`: +8 refusals, 2 layer tests, and the yoda refusals;
+  - `test_plot_stage.py`: +1, only the changed keys reach a page;
+  - `test_paint.py`: +2, `--dump-style` equals base.toml, the merge, and dpi 100 → 467 × 421 px.
