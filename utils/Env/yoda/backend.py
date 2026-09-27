@@ -1,7 +1,8 @@
 """utils/Env/yoda/backend.py — `[plot] backend = "yoda"`: the same pages drawn by rivet-mkhtml.
 
 docs/rework_v2/04_Config.md §9, V10/V11. The runner hands over the pages it wrote for Paint, with
-Paint's --dump-ranges of each: the x and y ranges (auto_range, gutters) and the voided bins. Per
+Paint's --dump-ranges of each: the x and y ranges (auto_range, gutters; none where no gutter leaves
+them to the tool) and the voided bins. Per
 plot_points cell this writes
 
 * the curves' YODAs with the voided bins blanked (value NaN, no errors), as v1 did;
@@ -116,6 +117,9 @@ def _plot_block(page) -> str:
             keys[native] = latex(settings[key])
     if settings["logy"] and not ylo > 0:
         del keys["YMin"]
+    for axis in ("x", "y"):                  # no gutter: the range is mkhtml's to choose, as it is ROOT's for Paint
+        if page.ranges.get(f"{axis}_tool"):
+            keys.pop(f"{axis.upper()}Min", None), keys.pop(f"{axis.upper()}Max", None)
     body = "".join(f"{k}={v}\n" for k, v in keys.items() if not (isinstance(v, str) and v in ("nan", "inf")))
     return f"# BEGIN PLOT {_base(page.object)}\n{body}# END PLOT\n"
 

@@ -796,8 +796,8 @@ backend     = "root"             # "root" (Paint, default) | "yoda" (rivet-mkhtm
 formats     = ["pdf", "png", "svg"]
 objects     = ["/photo_eic/*"]   # which histograms get pages; default every 1D object
 ratio       = true               # ratio panel against the first curve, or the data
-y_gutter    = 1.5                # y axis to 1.5 × the largest y drawn: room for legend and labels
-x_gutter    = 1.0                # the same for x (1.0 = none)
+y_gutter    = 0.5                # y axis to (1 + 0.5) × the largest y drawn (default 0.5); 0 or "default": the tool's own range
+x_gutter    = "default"          # widens x by this fraction of its span; 0 or "default" (the default): none
 logy        = false
 auto_range  = true               # trim empty edges, as v1's auto_range
 void_empty  = false

@@ -9,11 +9,13 @@
 //              or dropped (never rebinned past the end).
 //   * range  — x is clipped to the bins that carry content, in curves and data, widened by
 //              range_pad whole bins. Order: void, then align, then range (L18, v1 §5).
-//   * gutter — the y axis reaches y_gutter × the largest drawn value (the brief's definition).
+//   * gutter — y_gutter = g puts the top of the y axis at (1 + g) × the largest drawn value; x_gutter = g
+//              widens x by g of its span. 0 (or "default") sets nothing: the range is ROOT's own choice.
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -121,24 +123,48 @@ namespace Paint {
         return out;
     }
 
-    // x_gutter widens x symmetrically: the span becomes x_gutter × itself.
-    inline Range xWithGutter(Range x, double gutter, bool logx) {
-        if (gutter <= 1.0) return x;
+    // x_gutter = g widens x symmetrically: the span becomes (1 + g) × itself, in decades on a log
+    // axis. None (0 or "default") keeps the range the bins give, as ROOT draws a histogram.
+    inline Range xWithGutter(Range x, std::optional<double> gutter, bool logx) {
+        if (!gutter) return x;
         if (logx && x.lo > 0) {
-            const double l = std::log10(x.lo), h = std::log10(x.hi), extra = (h - l) * (gutter - 1) / 2;
+            const double l = std::log10(x.lo), h = std::log10(x.hi), extra = (h - l) * *gutter / 2;
             return {std::pow(10, l - extra), std::pow(10, h + extra)};
         }
-        const double extra = (x.hi - x.lo) * (gutter - 1) / 2;
+        const double extra = (x.hi - x.lo) * *gutter / 2;
         return {x.lo - extra, x.hi + extra};
     }
 
     struct YRange {
         double lo, hi, largest;
+        bool tool = false;                 // ROOT's own choice (no gutter): another backend may choose its own
     };
 
-    // y: 0 (or the smallest value) to y_gutter × the largest drawn value, within the x range. On a log
-    // axis the gutter is the same fraction of the decades shown.
-    inline YRange yRange(const std::vector<const Series*>& all, Range x, double gutter, bool logy) {
+    // ROOT's choice for a histogram drawn alone (THistPainter::PaintInit, HIST, gStyle's 5% top margin),
+    // taken over every value on the page: what "let the tool decide" means for Paint.
+    inline YRange rootRange(double smallest, double largest, bool logy) {
+        constexpr double margin = 0.05;
+        double lo = smallest, hi = largest;
+        if (logy) {
+            if (lo <= 0) lo = hi >= 1 ? std::max(0.005, hi * 1e-10) : 0.001 * hi;
+            if (hi <= 0) return {0.01, 10.0, largest, true};
+            if (lo >= hi) lo = 0.001 * hi;
+            return {lo * 0.5, hi * 2 * (0.9 / 0.95), largest, true};
+        }
+        if (lo >= hi) {
+            if (lo > 0) lo = 0, hi *= 2;
+            else if (lo < 0) hi = 0, lo *= 2;
+            else lo = 0, hi = 1;
+        }
+        const double below = margin * (hi - lo);
+        lo = (lo >= 0 && lo - below <= 0) ? 0.0 : lo - below;
+        hi += margin * (hi - lo);
+        return {lo, hi, largest, true};
+    }
+
+    // y: 0 (or the smallest value) to (1 + y_gutter) × the largest drawn value, within the x range. On a
+    // log axis the gutter is the same fraction of the decades shown. No gutter: ROOT's own choice.
+    inline YRange yRange(const std::vector<const Series*>& all, Range x, std::optional<double> gutter, bool logy) {
         double largest = -std::numeric_limits<double>::infinity(), smallest = std::numeric_limits<double>::infinity();
         double smallestPositive = std::numeric_limits<double>::infinity();
         for (const Series* s : all)
@@ -148,14 +174,16 @@ namespace Paint {
                 smallest = std::min(smallest, s->y[i]);
                 if (s->y[i] > 0) smallestPositive = std::min(smallestPositive, s->y[i]);
             }
-        if (!std::isfinite(largest)) return {0.0, 1.0, 0.0};
+        if (!std::isfinite(largest)) return {0.0, 1.0, 0.0, !gutter};
+        if (!gutter) return rootRange(smallest, largest, logy);
+        const double g = 1.0 + *gutter;
         if (logy) {
             const double low = std::isfinite(smallestPositive) ? smallestPositive / 2 : largest / 1e3;
             const double decades = std::log10(largest) - std::log10(low);
-            return {low, largest * std::pow(10, decades * (gutter - 1)), largest};
+            return {low, largest * std::pow(10, decades * *gutter), largest};
         }
-        const double low = smallest >= 0 ? 0.0 : smallest * gutter;
-        return {low, largest > 0 ? largest * gutter : 1.0, largest};
+        const double low = smallest >= 0 ? 0.0 : smallest * g;
+        return {low, largest > 0 ? largest * g : 1.0, largest};
     }
 
     // A density rebinned onto [lo, hi) from the bins it covers (bin-width weighted, errors in

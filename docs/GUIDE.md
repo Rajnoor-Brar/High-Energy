@@ -197,8 +197,8 @@ from `yd2rt`, or a merged sweep (one curve per point, labelled by its swept valu
 [plot]
 formats     = ["pdf", "png"]      # pdf, png, svg, eps
 ratio       = true                # a ratio panel: against the data if drawn, else the first curve
-y_gutter    = 1.5                 # the y axis reaches 1.5 × the largest value drawn
-x_gutter    = 1.0
+y_gutter    = 0.5                 # the y axis reaches (1 + 0.5) × the largest value drawn (the default)
+x_gutter    = "default"           # 0 or "default": no gutter, the tool picks the range (the default for x)
 auto_range  = true                # trim x to the filled bins (range_pad whole bins either side)
 min_entries = 1                   # void bins fewer raw entries went into, across all curves
 objects     = ["/photo_eic/d0*"]  # which histograms get pages (default: every 1D object)

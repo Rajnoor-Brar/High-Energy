@@ -84,6 +84,15 @@ def backends(settings: dict) -> list[str]:
     return sorted(dict.fromkeys(names), key=lambda n: n != "root")
 
 
+def check_gutter(value, where: str) -> None:
+    """y_gutter / x_gutter: g ≥ 0 puts the axis end at (1 + g) × the largest value (x: widens by g of
+    the span); 0 or "default" sets nothing, and the drawing tool picks its own range."""
+    if value == "default" or (_number(value) and value >= 0):
+        return
+    raise HepError(f"a gutter must be a number >= 0 or \"default\", not {value!r}", where=where,
+                   hint='y_gutter = 0.5 puts the top of the axis at 1.5 × the largest value; "default" leaves it to the tool')
+
+
 def validate(run) -> None:
     """Keys a backend cannot honour are errors at plan time, never dropped (v1's LegendXPos)."""
     settings = run.plot
@@ -99,6 +108,8 @@ def validate(run) -> None:
                 raise HepError(f"[plot.{name}] has no key '{key}'", where=f"{where}.{name}",
                                hint=did_you_mean(key, allowed) or f"its keys: {', '.join(allowed)}")
 
+    for key in ("y_gutter", "x_gutter"):
+        check_gutter(settings.get(key, 0), f"{where}.{key}")
     names = backends(settings)
     if not names:
         raise HepError("[plot].backend names no backend", where=f"{where}.backend", hint='"root", "yoda" or "both"')
@@ -110,6 +121,8 @@ def validate(run) -> None:
     run_style(run)
     for glob, table in settings.get("object", {}).items():
         only(table, OBJECT_KEYS, f'object."{glob}"')
+        for key in ("y_gutter", "x_gutter"):
+            check_gutter(table.get(key, 0), f'{where}.object."{glob}".{key}')
         check_style(table.get("style", {}), f'{where}.object."{glob}".style')
     for name in names[1:] if names[0] == "root" else names:
         backend(name).validate(settings, beside_root=names[0] == "root")
@@ -459,7 +472,7 @@ def page_settings(settings: dict, path: str, rel: str, output: Path, with_data: 
         "y_label": override.get("y_label", tlatex(labels.get("YLabel", ""))),
         "logx": bool(pick("logx", labels.get("LogX") == "1")),
         "logy": bool(pick("logy", labels.get("LogY") == "1")),
-        "y_gutter": float(pick("y_gutter", 1.5)), "x_gutter": float(pick("x_gutter", 1.0)),
+        "y_gutter": _gutter(pick("y_gutter", 0.5)), "x_gutter": _gutter(pick("x_gutter", "default")),
         "ratio": bool(pick("ratio", False)),
         "ratio_label": "MC/Data" if with_data else "Ratio",
         "void_empty": bool(settings.get("void_empty", False)),
@@ -468,6 +481,10 @@ def page_settings(settings: dict, path: str, rel: str, output: Path, with_data: 
         "range_pad": int(settings.get("range_pad", 0)),
     }
     return page, override
+
+
+def _gutter(value):
+    return value if value == "default" else float(value)
 
 
 def _curve_label(run, plan, curve_groups) -> str:

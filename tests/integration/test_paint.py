@@ -92,10 +92,10 @@ def test_voided_bins_equal_the_legacy_voids(inputs):
         assert dump(page(inputs, obj, **LEGACY_PAGE))["voided"] == mstw[obj], obj
 
 
-def test_y_gutter_is_the_largest_drawn_value_times_the_gutter(inputs):
+def test_y_gutter_puts_the_top_at_one_plus_the_gutter_times_the_largest(inputs):
     uproot = pytest.importorskip("uproot")
     for obj in ("d01-x01-y01", "d02-x01-y01", "d13-x01-y01"):
-        ranges = dump(page(inputs, obj, auto_range=False, y_gutter=1.5))
+        ranges = dump(page(inputs, obj, auto_range=False, y_gutter=0.5))
         largest = max(max(uproot.open(inputs[n])[f"photo_eic/{obj}"].values()) for n in ("MSTW", "NNLO"))
         assert ranges["largest"] == pytest.approx(largest, rel=1e-9)
         assert ranges["y"][1] == pytest.approx(1.5 * largest, rel=1e-9)
@@ -104,16 +104,38 @@ def test_y_gutter_is_the_largest_drawn_value_times_the_gutter(inputs):
 
 def test_x_gutter_widens_symmetrically(inputs):
     plain = dump(page(inputs, "d02-x01-y01", **LEGACY_PAGE))["x"]
-    wide = dump(page(inputs, "d02-x01-y01", x_gutter=1.2, **LEGACY_PAGE))["x"]
+    wide = dump(page(inputs, "d02-x01-y01", x_gutter=0.2, **LEGACY_PAGE))["x"]
     assert wide[1] - wide[0] == pytest.approx(1.2 * (plain[1] - plain[0]))
     assert wide[0] + wide[1] == pytest.approx(plain[0] + plain[1])
 
 
 def test_log_y_gutter_is_a_fraction_of_the_decades(inputs):
-    ranges = dump(page(inputs, "d01-x01-y01", logy=True, y_gutter=1.5, **LEGACY_PAGE))
+    ranges = dump(page(inputs, "d01-x01-y01", logy=True, y_gutter=0.5, **LEGACY_PAGE))
     low, high, largest = ranges["y"][0], ranges["y"][1], ranges["largest"]
     assert low > 0
     assert math.log10(high / largest) == pytest.approx(0.5 * math.log10(largest / low))
+
+
+def test_no_gutter_leaves_the_range_to_root(inputs):
+    """0 or "default": the range ROOT picks for one histogram holding every drawn value (THistPainter:
+    5% of the span above and below, 0 if that crosses it; on a log axis ×0.5 below and ×2·0.9/0.95 above)."""
+    for value in (0, "default"):
+        linear = dump(page(inputs, "d02-x01-y01", y_gutter=value, x_gutter=value, **LEGACY_PAGE))
+        assert linear["y_tool"] and not linear["x_tool"]                    # x is auto_range's, not the tool's
+        assert linear["x"] == dump(page(inputs, "d02-x01-y01", **LEGACY_PAGE))["x"]
+        top, bottom = linear["y"][1], linear["y"][0]
+        assert 0.0 <= bottom < linear["largest"]                                 # d02 sits well above 0
+        assert top == pytest.approx(linear["largest"] + 0.05 * (linear["largest"] - bottom), rel=1e-9)
+        log = dump(page(inputs, "d01-x01-y01", logy=True, y_gutter=value, **LEGACY_PAGE))
+        assert log["y"][1] == pytest.approx(log["largest"] * 2 * 0.9 / 0.95, rel=1e-9)
+    assert dump(page(inputs, "d02-x01-y01", x_gutter="default", auto_range=False))["x_tool"]
+
+
+def test_a_gutter_is_a_number_or_default(inputs):
+    for bad in (-1, "auto"):
+        done = subprocess.run([str(PAINT), str(page(inputs, "d02-x01-y01", y_gutter=bad)), "--dump-ranges"],
+                              capture_output=True, text=True, encoding="utf-8", errors="replace")
+        assert done.returncode == 1 and "y_gutter" in done.stdout + done.stderr
 
 
 def test_data_that_lines_up_nowhere_is_dropped(inputs):

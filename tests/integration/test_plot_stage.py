@@ -78,7 +78,7 @@ def test_object_overrides_and_rivet_labels(stage):
     pages = {p.name: tomllib.loads(p.config.read_text())["page"] for p in plot.pages(run, configuration, plans)}
     assert pages["em/d04-x01-y01"]["logy"] is True and pages["em/d04-x01-y01"]["y_gutter"] == 3.0
     assert pages["em/d04-x01-y01"]["title"] == "override"
-    assert pages["em/d02-x01-y01"]["y_gutter"] == 1.5
+    assert pages["em/d02-x01-y01"]["y_gutter"] == 0.5 and pages["em/d02-x01-y01"]["x_gutter"] == "default"
     if (REPO / "build" / "Rivet" / "photo_eic.plot").exists():
         assert pages["em/d01-x01-y01"]["x_label"] == "#it{E}_{#it{T}} [GeV]"
         assert pages["em/d02-x01-y01"]["logy"] is False

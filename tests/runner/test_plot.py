@@ -42,6 +42,9 @@ def test_a_valid_plot_table_passes(scratch):
     ({"root_style": "/nowhere/talk.toml"}, "no style file"),
     ({"object": {"d01*": {"LegendXPos": 0.5}}}, "LegendXPos"),         # v1 parsed it and dropped it
     ({"object": {"d01*": {"legend": "centre"}}}, "legend"),
+    ({"y_gutter": -1}, "gutter"),
+    ({"x_gutter": "auto"}, "gutter"),
+    ({"object": {"d01*": {"y_gutter": -0.5}}}, "gutter"),
     ({"data": {"file": "zeus_eic.yoda"}}, "no map"),                     # L18: explicit only
     ({"data": {"map": {"d01-x01-y01": "/REF/X/d01"}}}, "no file"),
 ])
@@ -107,6 +110,15 @@ def test_the_yoda_backend_refuses_what_mkhtml_cannot_do(scratch):
             validated(scratch, backend="yoda", style=style)
     with pytest.raises(HepError, match="root_style"):
         validated(scratch, backend="yoda", root_style="/x.toml")
+
+
+def test_no_gutter_leaves_mkhtml_its_own_range(yoda_backend, scratch):
+    validated(scratch, y_gutter="default", x_gutter=0, object={"d04*": {"y_gutter": "default"}})
+    page = plot.Page("d01", scratch / "d01.toml", scratch / "d01", object="/A/d01",
+                     document={"page": {"logx": False, "logy": False, "ratio": False}},
+                     style=plot.base_style(), ranges={"x": [0, 1], "y": [0, 2], "x_tool": False, "y_tool": True})
+    block = yoda_backend._plot_block(page)
+    assert "XMin=0" in block and "YMin" not in block and "YMax" not in block
 
 
 def test_both_backends_draw_the_same_pages_and_the_style_is_paints(scratch):

@@ -94,9 +94,12 @@ int main(int argc, char** argv) {
         std::string voided;
         for (size_t i = 0; i < mask.size(); ++i)
             if (mask[i]) voided += (voided.empty() ? "" : ", ") + std::to_string(i + 1);
+        // x_tool / y_tool: the range is the drawing tool's own choice, which another backend may make itself
+        const bool xTool = !page.xGutter && !page.autoRange;
         std::printf("{\"x\": [%.10g, %.10g], \"y\": [%.10g, %.10g], \"largest\": %.10g, \"voided\": [%s], "
-                    "\"data_bins\": %zu, \"data_x\": [%.10g, %.10g]}\n", x.lo, x.hi, y.lo, y.hi, y.largest, voided.c_str(),
-                    haveData ? data.size() : 0, haveData ? data.lo.front() : 0.0, haveData ? data.hi.back() : 0.0);
+                    "\"data_bins\": %zu, \"data_x\": [%.10g, %.10g], \"x_tool\": %s, \"y_tool\": %s}\n", x.lo, x.hi, y.lo,
+                    y.hi, y.largest, voided.c_str(), haveData ? data.size() : 0, haveData ? data.lo.front() : 0.0,
+                    haveData ? data.hi.back() : 0.0, xTool ? "true" : "false", y.tool ? "true" : "false");
         return 0;
     }
     try {

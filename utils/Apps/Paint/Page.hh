@@ -11,6 +11,7 @@
 
 #include <toml++/toml.hpp>
 
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -25,13 +26,25 @@ namespace Paint {
         std::string name, output, title, xLabel, yLabel, ratioLabel = "Ratio";
         std::vector<std::string> formats{"pdf"};
         bool logx = false, logy = false, ratio = false, voidEmpty = false, autoRange = true;
-        double yGutter = 1.5, xGutter = 1.0;
+        std::optional<double> yGutter = 0.5, xGutter;          // none: ROOT's own range (0 or "default")
         int minEntries = 0, rangePad = 0;
         Style style;
         std::vector<Source> curves;
         bool hasData = false;
         Source data;
     };
+
+    // y_gutter / x_gutter: a number ≥ 0, where 0 means none, or "default", which also means none.
+    inline std::optional<double> gutter(toml::node_view<toml::node> node, const std::string& key,
+                                        std::optional<double> fallback) {
+        if (!node) return fallback;
+        if (const auto text = node.value<std::string>()) {
+            if (*text == "default") return std::nullopt;
+        } else if (const auto value = node.value<double>(); value && *value >= 0) {
+            return *value > 0 ? std::optional<double>(*value) : std::nullopt;
+        }
+        throw std::runtime_error("[page]." + key + " must be a number >= 0 or \"default\"");
+    }
 
     inline Page readPage(const std::string& path) {
         toml::table doc;
@@ -58,8 +71,8 @@ namespace Paint {
         page.ratio = p["ratio"].value_or(false);
         page.voidEmpty = p["void_empty"].value_or(false);
         page.autoRange = p["auto_range"].value_or(true);
-        page.yGutter = p["y_gutter"].value_or(1.5);
-        page.xGutter = p["x_gutter"].value_or(1.0);
+        page.yGutter = gutter(p["y_gutter"], "y_gutter", page.yGutter);
+        page.xGutter = gutter(p["x_gutter"], "x_gutter", page.xGutter);
         page.minEntries = p["min_entries"].value_or(0);
         page.rangePad = p["range_pad"].value_or(0);
         page.style = readStyle(doc["style"].as_table());
