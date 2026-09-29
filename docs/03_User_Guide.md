@@ -534,7 +534,8 @@ page's whole style; the page configs are in `output/…/plots/`. Every key is in
 
 **The yoda backend** draws the same pages with the same ranges and voided bins through rivet-mkhtml,
 one HTML page set per cell, in `results/…/plots/yoda/`. It keeps mkhtml's own look, so only a legend
-corner carries over; `"both"` draws both sets in one run.
+corner and the ratio's y ticks (`ratio.divisions`) carry over; `"both"` draws both sets in one run.
+Denser or sparser ratio ticks: `[plot.style] ratio = { divisions = 508 }` (0.2 apart) or `515`.
 
 ---
 

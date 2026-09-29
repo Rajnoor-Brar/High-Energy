@@ -55,5 +55,5 @@ gap      = 5.0               # points between the "+" and its text
 heights   = [2.0, 1.0]       # the main pad to the ratio pad (mkhtml's 6:3)
 range     = [0.5, 1.5]       # always shown; widened to the ratios drawn …
 limits    = [0.0, 3.0]       # … but never past these
-divisions = 508              # ROOT's axis divisions: 8 primary, 5 secondary
+divisions = 512              # ROOT's axis divisions: at most 12 labelled (0.1 on ~0.4–1.5), 5 minor each
 decimals  = true             # labels 1.0, 1.2, … rather than 1, 1.2, …

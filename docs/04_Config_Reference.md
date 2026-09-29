@@ -679,11 +679,11 @@ again. A page's config holds only what the layers changed; `build/Paint.exe PAGE
 | `ratio.heights` | `[2.0, 1.0]` | the main pad to the ratio pad |
 | `ratio.range` | `[0.5, 1.5]` | always shown; widened to the ratios drawn … |
 | `ratio.limits` | `[0.0, 3.0]` | … but never past these |
-| `ratio.divisions` | `508` | ROOT's axis divisions |
+| `ratio.divisions` | `512` | the ratio pad's y ticks, ROOT's `n1 + 100·n2`: at most n1 labelled divisions (0.1 apart on the usual ~0.4–1.5), each cut into n2 by minor ticks; `508` gives 0.2. The yoda backend follows it too |
 | `ratio.decimals` | `true` | labels `1.0, 1.2` rather than `1, 1.2` |
 
-**The yoda backend** honours only a `legend.position` corner. Alone, it refuses `root_style` and
-every other style key; beside the root backend (`"both"`) those are Paint's to honour and allowed,
+**The yoda backend** honours a `legend.position` corner and `ratio.divisions`. Alone, it refuses
+`root_style` and every other style key; beside the root backend (`"both"`) those are Paint's to honour and allowed,
 but a legend at `[x, y]` is still refused, because the two page sets would disagree about it.
 
 ---

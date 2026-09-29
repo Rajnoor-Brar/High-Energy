@@ -12,8 +12,10 @@ plot_points cell this writes
   overrides in LaTeX; the rest of the labels mkhtml reads from the analysis's own .plot;
 
 and runs rivet-mkhtml into results/…/plots/<cell>/. mkhtml always writes PDF and PNG; svg and eps
-are added. Of the style (utils/Apps/Paint/base.toml) mkhtml can honour only a legend corner: any
-other [plot.style] or [plot.object."<glob>"].style key, and [plot].root_style, are refused. Beside
+are added. Of the style (utils/Apps/Paint/base.toml) mkhtml can honour a legend corner and the ratio
+pad's y ticks (ratio.divisions: YODA's generator puts them at a fifth of the range, so each page's
+script is redone with ROOT's rule and run again); any other [plot.style] or
+[plot.object."<glob>"].style key, and [plot].root_style, are refused. Beside
 the root backend (backend = ["root", "yoda"]) they are Paint's to honour and are allowed, except a
 legend placed at [x, y]: the two page sets would then disagree about where the legend is, not
 only about its look.
@@ -21,9 +23,11 @@ only about its look.
 
 from __future__ import annotations
 
+import math
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 from runner.errors import HepError
@@ -34,6 +38,8 @@ LEGEND = {"top-right": {"LegendAlign": "r"}, "top-left": {"LegendAlign": "l", "L
           "bottom-right": {"LegendAlign": "r", "LegendYPos": "0.4"},
           "bottom-left": {"LegendAlign": "l", "LegendXPos": "0.05", "LegendYPos": "0.4"}}
 _MATH = {"bf": "mathbf", "it": "mathit", "LT": "<", "GT": ">"}
+HONOURED = {("legend", "position"), ("ratio", "divisions")}             # style keys mkhtml can follow
+MARK = "# ratio ticks: ratio.divisions (utils/Env/yoda/backend.py)"
 
 
 def validate(settings: dict, beside_root: bool = False) -> None:
@@ -46,10 +52,10 @@ def validate(settings: dict, beside_root: bool = False) -> None:
         for table, keys in layer.items():
             for key, value in keys.items() if isinstance(keys, dict) else [(None, keys)]:
                 placed = (table, key) == ("legend", "position") and not isinstance(value, str)
-                if placed or (not beside_root and (table, key) != ("legend", "position")):
+                if placed or (not beside_root and (table, key) not in HONOURED):
                     name = f"{table}.{key}" if key else table
                     raise HepError(f'{where} {name} cannot be honoured by backend = "yoda"', where=where,
-                                   hint=hint + " (only a legend.position corner carries over)")
+                                   hint=hint + " (only a legend.position corner and ratio.divisions carry over)")
 
 
 def latex(text: str) -> str:
@@ -124,6 +130,36 @@ def _plot_block(page) -> str:
     return f"# BEGIN PLOT {_base(page.object)}\n{body}# END PLOT\n"
 
 
+def _step(width: float) -> float:
+    """The smallest 1, 2 or 5 × 10^k at least `width`: ROOT's choice for at most n divisions."""
+    power = 10.0 ** math.floor(math.log10(width))
+    return next(m * power for m in (1, 2, 5, 10) if m * power >= width * (1 - 1e-9))
+
+
+def ratio_ticks(script: Path, divisions: int) -> bool:
+    """The ratio pad's y ticks as ROOT's `divisions` (n1 + 100·n2) says: at most n1 labelled
+    divisions of the pad's range, each cut into n2 by minor ticks. Rewrites mkhtml's script; True
+    when it changed, and the script must run again."""
+    text = script.read_text(encoding="utf-8")
+    limits = re.search(r"ratio0_ax\.set_ylim\(([-+\d.eE]+), ([-+\d.eE]+)\)", text)
+    save = text.find("plt.savefig(")
+    if not limits or save < 0:
+        return False
+    lo, hi = float(limits.group(1)), float(limits.group(2))
+    n1, n2 = max(divisions % 100, 1), (divisions // 100) % 100
+    # just before the figure is saved: the script's later set_yscale() resets an axis's locators
+    lines = (f"{MARK}\nratio0_ax.yaxis.set_major_locator(mpl.ticker.MultipleLocator({_step((hi - lo) / n1):g}))\n"
+             + (f"ratio0_ax.yaxis.set_minor_locator(mpl.ticker.AutoMinorLocator({n2}))\n" if n2 > 1 else ""))
+    old = re.search(re.escape(MARK) + r"\n(?:ratio0_ax\.yaxis\.set_m[a-z]+_locator\([^\n]*\)\n)+", text)
+    if old and old.group(0) == lines:
+        return False
+    if old:
+        text = text[:old.start()] + text[old.end():]
+        save = text.find("plt.savefig(")
+    script.write_text(text[:save] + lines + text[save:], encoding="utf-8")
+    return True
+
+
 def draw(cells: dict, settings: dict, say) -> int:
     import yoda
     failed = 0
@@ -154,6 +190,13 @@ def draw(cells: dict, settings: dict, say) -> int:
         done = subprocess.run(argv, capture_output=True, text=True, env=env, cwd=work)
         (work / "mkhtml.log").write_text(" ".join(argv) + "\n" + done.stdout + done.stderr, encoding="utf-8")
         drawn = [p for p in pages if (outdir / _base(p.object).split("/")[1] / f"{p.object.rsplit('/', 1)[-1]}.pdf").exists()]
+        for page in drawn if settings.get("ratio", False) else []:
+            script = outdir / _base(page.object).split("/")[1] / f"{page.object.rsplit('/', 1)[-1]}.py"
+            if script.is_file() and ratio_ticks(script, int(page.style["ratio"]["divisions"])):
+                again = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, cwd=script.parent)
+                if again.returncode != 0:
+                    drawn.remove(page)
+                    say(f"plot: {script.name} with the ratio's ticks: {again.stderr.strip()[-200:]}")
         if done.returncode != 0 or len(drawn) != len(pages):
             failed += len(pages) - len(drawn)
             say(f"plot: rivet-mkhtml for {cell or 'the page'}: {len(drawn)} of {len(pages)} drawn "

@@ -166,3 +166,20 @@ def test_references_are_cut_to_the_aligned_run_and_renamed(yoda_backend):
     assert list(ref.xEdges()) == [17, 21, 25, 29, 35, 41, 47] and len(whole.xEdges()) > 7
     assert [ref.bin(i).val() for i in range(1, 7)] == [whole.bin(i).val() for i in range(1, 7)]
     assert ref.bin(1).errDownUp("stat") == whole.bin(1).errDownUp("stat")
+
+
+def test_the_yoda_backend_gives_the_ratio_the_divisions_paint_has(scratch):
+    """mkhtml's ratio ticks are a fifth of the pad's range, and its script's set_yscale() resets any
+    locator set before it: ratio.divisions' locators go just before the figure is saved."""
+    yoda_backend = plot.backend("yoda")
+    script = scratch / "d02-x01-y01.py"
+    script.write_text("ratio0_ax.yaxis.set_major_locator(mpl.ticker.MultipleLocator(0.2))\n"
+                      "ratio0_ax.set_ylim(0.5, 1.4999)\nratio0_ax.set_yscale('linear')\n"
+                      "plt.savefig('x.pdf')\nplt.savefig('x.png')\n", encoding="utf-8")
+    assert yoda_backend.ratio_ticks(script, 512)
+    text = script.read_text(encoding="utf-8")
+    assert text.index("MultipleLocator(0.1)") > text.index("set_yscale") and text.index("MultipleLocator(0.1)") < text.index("plt.savefig")
+    assert "AutoMinorLocator(5)" in text
+    assert not yoda_backend.ratio_ticks(script, 512)                    # already so: no second run
+    assert yoda_backend.ratio_ticks(script, 508) and "MultipleLocator(0.2))\nratio0_ax.yaxis.set_minor" in script.read_text()
+    assert script.read_text(encoding="utf-8").count(yoda_backend.MARK) == 1
