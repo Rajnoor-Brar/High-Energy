@@ -24,8 +24,8 @@ TOP_LEVEL = ("master", "run", "prelim", "static", "tools", "quantities", "plot")
 RUN_KEYS = {"serial": int, "name": str, "project": str, "configuration": str, "event_count": int,
             "threads": int, "description": str}
 CONFIGURATION_KEYS = {"serial": int, "name": str, "description": str, "event_count": int, "threads": int,
-                      "sweeps": list, "plot_points": list, "tools": list, "pre": list, "post": list, "static": dict,
-                      "prelim": dict}
+                      "sweeps": list, "plot_points": list, "combine": list, "tools": list, "pre": list, "post": list,
+                      "static": dict, "prelim": dict}
 PRELIM_KEYS = {"fifo": list, "files": list, "commands": list}
 MASTER_KEYS = {"master_toml": str}
 QUANTITY_KEYS = {"values": list, "tags": list, "labels": list, "key": (str, dict), "target": (str, list),
@@ -88,6 +88,7 @@ class Configuration:
     static: dict
     prelim: dict
     pre: list[list[str]] = field(default_factory=list)   # tools run once before every point
+    combine: list[str] = field(default_factory=list)    # swept quantities whose points are merged into one (V35)
 
 
 @dataclass
@@ -324,6 +325,16 @@ def parse(raw: dict, path: Path) -> RunConfig:
             if name not in swept:
                 raise HepError(f"plot_points names '{name}', which is not swept here", where=f"{at}.plot_points",
                                hint="pages are cells of the grid of swept quantities (04 §5.2)")
+        combine = table.get("combine", [])
+        axes = {entry for entry in sweeps if isinstance(entry, str)}
+        for name in combine:                                                # C14
+            if name not in axes:
+                raise HepError(f"combine names '{name}', which is not swept here as an axis of its own",
+                               where=f"{at}.combine",
+                               hint="the points that differ only in a combined quantity are merged into one (04 §5.5)")
+            if name in plot_points:
+                raise HepError(f"'{name}' is both combined and a page axis (plot_points)", where=f"{at}.combine",
+                               hint="a combined quantity's points become one curve: it cannot also make pages")
         local_static = table.get("static", {})
         for name in local_static:
             if name not in quantities:
@@ -339,7 +350,7 @@ def parse(raw: dict, path: Path) -> RunConfig:
             key=key, name=table.get("name", key), serial=table.get("serial"),
             description=table.get("description", ""), event_count=int(event_count),
             threads=_resolved_threads(int(table.get("threads", run.get("threads", 1))), f"{at}.threads"),
-            sweeps=sweeps, plot_points=list(plot_points),
+            sweeps=sweeps, plot_points=list(plot_points), combine=list(combine),
             tools=_groups(table["tools"], f"{at}.tools", tools),
             post=_groups(table.get("post", []), f"{at}.post", tools),
             pre=_groups(table.get("pre", []), f"{at}.pre", tools),

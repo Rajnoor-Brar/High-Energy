@@ -176,6 +176,7 @@ prelim      = { fifo = ["events.hepmc"] }    # replaces [prelim] for this config
 | `tools` | array | **required** | §5.3 |
 | `sweeps` | array | `[]` | §5.1; `[]` is one point |
 | `plot_points` | array of strings | `[]` | §5.2 |
+| `combine` | array of strings | `[]` | swept quantities whose points are merged into one curve (§5.5) |
 | `event_count` | integer | `[run].event_count` | required here if `[run]` has none |
 | `threads` | integer | `[run].threads`, else 1 | `0` = every core |
 | `pre`, `post` | array | `[]` | the form of `tools` (§5.4) |
@@ -233,6 +234,35 @@ The same form as `tools`, run **once**:
 Neither takes quantities or `[prelim]`. A point may not be named `pre` or `post`. A pre tool's
 products are interfaces every point may name as `input`. A post tool may not write a file with the
 name of the points' product.
+
+### 5.5 `combine`
+
+`combine = ["replica"]` (V35) merges the points that differ **only** in the combined quantities: each
+group becomes one curve with their statistics added. The typical use is seed replicas, so one PDF's
+five 1M-event seeds become one 5M-event curve:
+
+```toml
+[run.default]
+sweeps  = ["pdf", "replica"]        # 4 PDFs × 5 seeds = 20 points
+combine = ["replica"]               # 4 groups, one per PDF: rivet-merge -e of its 5 seeds
+tools   = [["pythia", "rivet"]]
+
+[quantities.replica]
+target = "pythia/seed"              # a seed block of its own per value (§8); renders nothing
+values = [1, 2, 3, 4, 5]
+tags   = ["s1", "s2", "s3", "s4", "s5"]
+```
+
+| | |
+|---|---|
+| The groups | points with the same values of every other swept quantity; named by those values' tags (`MSTW08lo`), or `combined` when every swept quantity is combined |
+| The merge | a stage per group, after its points: the `merge` tool (`rivet-merge -e`, [05 §5](05_Tools_Reference.md#5-merge--rivet-merge-in-post)) of the points' YODA product into `results/…/<cfg>/<group>/<product>`, beside the points' folders; skipped when complete, rerun when any of its points changes; `--plan` lists them |
+| The pages | drawn from the groups, not the points: the combined quantities are neither pages nor curves; `plot_points` and the curves are the other swept quantities |
+| Rules (C14) | each name is swept here as an axis of its own (not inside an entangled group), and is not in `plot_points` |
+
+The points themselves keep their own products, and another configuration with the same sweeps and
+no `combine` (`plot_points = ["pdf"]`, say) draws each seed as its own curve, from the same seeds
+and events. Whole example: `configs/PhotoProduction/zeus_seedSweep.toml`.
 
 ---
 
@@ -679,6 +709,7 @@ anything runs.
 | **C11** | Point directory names are unique. | `these points would share a directory: …` |
 | **C12** | Paths: no `../`; a missing file is reported under its convention root. | `'../cards/x.cmnd' climbs out of its root` |
 | **C13** | A standard-configuration request names an export its tool offers and resolves to exactly one table. | `pythia_cmnd = true matches several pythia tables: pythia, shower` · `name one: pythia_cmnd = "<tag>"` |
+| **C14** | `combine` names quantities swept here as axes of their own, none of them in `plot_points`. | `combine names 'pdf', which is not swept here as an axis of its own` · `'replica' is both combined and a page axis (plot_points)` |
 
 The plot checks follow the same shape: an unknown backend, format, gutter value, `[plot.data]` key,
 `[plot.object]` key or style key; a data file without a map; a style key a backend cannot honour.

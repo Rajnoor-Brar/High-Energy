@@ -21,6 +21,7 @@ class Point:
     name: str                                       # tags joined by "_", in sweeps order; "point" if none
     choice: dict[str, int] = field(default_factory=dict)   # swept quantity → value index
     page: tuple = ()                                # the plot_points part of the choice
+    stage: str = ""                                 # "combined": a merged group of points (V35), not a point
 
 
 def tag_of(quantity, index: int) -> str:

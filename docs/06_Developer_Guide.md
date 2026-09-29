@@ -124,6 +124,12 @@ inserted as the next group; `_retarget` points quantities aimed at the table (`t
 tag-keyed `key`) at every copy. The rest of planning sees an ordinary chain; the count check carries the
 member's path as its key into the sidecar's `written_per_output`.
 
+**Combine** (`post.plan_combined`, V35) plans one stage per group of points that differ only in
+`combine`'s quantities, as `post.plan` plans the post stage: a `Tool` of the `merge` folder whose input
+is the group's products (an interface named apart from the product, which the stage writes under its
+own name), `upstream` = the members' identities, `Point.stage = "combined"` and the group's `choice`, so
+`plot.pages` draws the groups as it draws points.
+
 **The flow** (`cli.build_plans`, then `cmd_run`): `config.load` → `sweep.points` →
 `post.plan_pre` → `tools.plan_point` per point → `record.identity` → `record.assign_seeds` →
 `tools.finalise` (seed lines, the files to write) → `plot.validate` → `post.plan`; then

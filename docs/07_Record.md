@@ -215,6 +215,7 @@ execution and after it, most on the user's instruction.
 | **V32** | **A view never blocks the run**: every line and frame goes through one background thread (`watch._Screen`); a terminal that stops reading loses the display, never the supervision, and `end()` gives up after a few seconds. | a view that is exactly in step with the run | user, 2026-09-29 |
 | **V33** | **The integrated program runs Pythia as App_Pythia does**: `InprocJets` is split into headers (`modules/PhotoProduction/Inproc/`: `Stamp.hh`, `Feed.hh`, `Analysis.hh`, `Engines.hh`); a converter per instance with `processAsync = on`; one Rivet on its own thread behind a bounded feed, given the L28 σ at the end as a user σ. Still one Rivet (L16). | one file; Rivet inside Pythia's callback | user, 2026-09-29 |
 | **V34** | **Several Rivets in one process**: `rivet_threads = K` in InprocJets' config runs K `AnalysisHandler`s on threads of their own, fed first-free from one queue, initialised on the first event before any analyses, merged (`AnalysisHandler::merge`) before one `finalize`. It needs FastJet's SISCone patched (L29) and refuses K > 1 without it. `InProcZeus.toml` and `InProcEIC.toml` use 12 + 12. | a stock `~/HEP` FastJet; a Rivet that is one thread per process | user, 2026-09-29 |
+| **V35** | **`combine = ["replica"]`**: the points that differ only in the combined quantities are merged per group (`rivet-merge -e`, planned as a stage like `post`, in `<cfg>/<group>/`), and the pages are drawn from the groups: seed replicas become one curve per PDF with their statistics added. C14 checks it. `zeus_seedSweep.toml` uses it (4 PDFs × 5 seeds, pT0Ref = 3.2); its `spread` configuration draws the same seeds one curve each. | a post merge of every point, or one long run per curve | user, 2026-09-29 |
 
 **v1 decisions these overturn:**
 
@@ -391,6 +392,7 @@ ones marked slow), so a regression shows up there.
 | An integrated program (InprocJets) against the chain | all 17 objects equal bin for bin at 1 thread (the chain sharded 10 ways); σ equals the sidecar exactly at 4 threads | `test_modules_p4.py` (slow) |
 | A sharded point against the same point unsharded (4 shards, 4 threads, 4,000 events) | RAW sums equal to 1e-9, σ equal to 1e-9 | `test_gates_shards.py` (slow) |
 | Four Rivets on threads in one process against one (InProcEIC and InProcZeus, 4,000 events) | every raw sum and final bin equal; σ equal | `test_modules_p4.py` (slow) |
+| Two PDFs × two seeds, combined | each merged YODA's events = its seeds' sum; one curve per PDF, from the groups | `test_gates_combine.py` (slow) |
 | Every output of App_Pythia ends on the same σ | a deal group of three and a copy: one σ line | `test_app_pythia.py` |
 | Replicas merged by `rivet-merge -e` | 14,996 entries = 4,998 + 4,999 + 4,999 | `test_post.py` |
 | Delphes | the `Delphes` tree's entries = the sidecar's written (2,000) | `test_generators_p4.py` (slow) |

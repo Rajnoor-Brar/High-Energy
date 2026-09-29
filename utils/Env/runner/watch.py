@@ -162,7 +162,10 @@ class PlainView:
         self.screen.close()
 
     def heading(self, plan, bold: bool = False) -> str:
-        """'── point 3/16: <name>', or '── post (after every point)' for the post stage (index 0)."""
+        """'── point 3/16: <name>', '── combined: <name>' for a merged group (V35), or '── post (after
+        every point)' for the post stage (index 0)."""
+        if plan.point.stage == "combined":
+            return f"── combined: {f'[bold]{plan.point.name}[/bold]' if bold else plan.point.name}"
         if plan.point.index == 0:
             return "── post (after every point)"
         if plan.point.index < 0:
@@ -353,7 +356,8 @@ def follow(journal: Path, *, plain: bool = False, idle_exit: float = 0.0) -> int
                     if kind == "point":
                         if message.get("state") == "started":
                             index = message.get("index", 0)
-                            heading = ("── post (after every point)" if index == 0 else "── pre (before every point)"
+                            heading = (f"── combined: {point}" if message.get("stage") == "combined" else
+                                       "── post (after every point)" if index == 0 else "── pre (before every point)"
                                        if index < 0 else f"── point {index}/{shown.total or '?'}: {point}")
                             blocks[point] = [heading, message.get("t", time.time()), []]
                         else:

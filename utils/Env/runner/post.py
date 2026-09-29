@@ -12,6 +12,10 @@ docs/02_Architecture.md §7, docs/04_Config_Reference.md §5.4 (V15). `[run.<cfg
 
 It runs only when every point of the configuration is complete: a merge or a fit over a subset
 would look like the whole.
+
+`combine = ["replica"]` (V35) plans one more stage per group of points that differ only in the
+combined quantities: rivet-merge -e of the group's YODA product into <cfg>/<group>/, a file of the
+same name. Each runs once its own points are complete, and the plot stage draws the groups.
 """
 
 from __future__ import annotations
@@ -19,11 +23,14 @@ from __future__ import annotations
 from dataclasses import replace
 
 from . import execute, record, tools
+from .config import Tool
 from .errors import HepError
-from .sweep import Point
+from .sweep import Point, tag_of
 
 NAME = "post"
 PRE = "pre"
+COMBINED = "combined"            # the group's name when every swept quantity is combined
+MERGE_TAG = "combine"
 
 
 def plan_pre(run, configuration, master: dict, points: list) -> tools.PointPlan | None:
@@ -88,3 +95,77 @@ def run(post: tools.PointPlan | None, every: list, run_config, configuration, *,
         return True
     result = execute.run_point(post, run_config, configuration, sink=sink, journal=journal, stopper=stopper)
     return result.ok
+
+
+# ── combine: the points that differ only in the combined quantities, merged (V35) ──────────────
+
+def _yoda_product(plan) -> tuple[str, object] | None:
+    for interface in plan.interfaces.values():
+        if interface.kind == "product" and not interface.shard and interface.path.suffix == ".yoda":
+            return interface.name, interface.path
+    return None
+
+
+def plan_combined(run, configuration, master: dict, plans: list) -> list[tools.PointPlan]:
+    """One stage per group, planned like post in <cfg>/<group>/: the merge folder (rivet-merge -e) of
+    the group's YODA product into a file of the same name. The group is named by its other swept
+    quantities' tags, "combined" when there are none, and its point carries their choice, so the
+    plot stage draws the groups as it would draw points."""
+    if not configuration.combine:
+        return []
+    where = f"{run.path}: [run.{configuration.key}].combine"
+    if MERGE_TAG in run.tools:
+        raise HepError(f"[tools.{MERGE_TAG}] is the name combine uses for its merges", where=where,
+                       hint="rename that table")
+    combined = set(configuration.combine)
+    kept = [name for entry in configuration.sweeps for name in (entry if isinstance(entry, list) else [entry])
+            if name not in combined]
+    groups: dict[tuple, list] = {}
+    for p in plans:
+        groups.setdefault(tuple(p.point.choice[name] for name in kept), []).append(p)
+    taken = {p.point.name for p in plans} | {NAME, PRE}
+    stage = replace(configuration, tools=[[MERGE_TAG]], static={}, prelim={}, pre=[], post=[], combine=[])
+    manifest = plans[0].out.parent / "points.json"
+    out = []
+    for number, (key, members) in enumerate(groups.items(), start=1):
+        choice = dict(zip(kept, key))
+        name = "_".join(tag_of(run.quantities[q], choice[q]) for q in kept) or COMBINED
+        if name in taken:
+            raise HepError(f"the combined group '{name}' would share a directory with a point or stage", where=where,
+                           hint="give the swept quantities distinct tags (C11)")
+        found = [_yoda_product(m) for m in members]
+        if not all(found):
+            raise HepError("combine merges the points' YODA product, and these points have none", where=where)
+        product = found[0][0]
+        source = f"{product} of the combined points"           # not the product's own name: the output is
+        stage_run = replace(run, tools={**run.tools, MERGE_TAG: Tool(tag=MERGE_TAG, tool="merge", input=[source],
+                                                                      output_file=[product])})
+        plan = tools.plan_point(stage_run, stage, Point(index=number, name=name, stage=COMBINED), master,
+                                post={"manifest": manifest, "products": {source: [(m.point.name, f[1])
+                                                                                  for m, f in zip(members, found)]}})
+        plan.point = replace(plan.point, choice=choice)
+        plan.upstream = [m.identity for m in members]
+        plan.identity = record.identity(plan)
+        tools.finalise(plan, record.seed_of(plan.identity, plan.threads))
+        out.append(plan)
+    return out
+
+
+def run_combined(groups: list, every: list, run_config, configuration, *, sink, journal, stopper, rerun: bool,
+                 say) -> int:
+    """Each group once its own points are complete; the number that failed."""
+    failed = 0
+    for group in groups:
+        members = [p for p in every if p.identity in set(group.upstream)]
+        missing = [p.point.name for p in members if not record.is_complete(p)]
+        if missing:
+            say(f"combine: {group.point.name} not merged, {len(missing)} of its points incomplete")
+            continue
+        if not rerun and record.is_complete(group):
+            sink.skipped(group)
+            continue
+        result = execute.run_point(group, run_config, configuration, sink=sink, journal=journal, stopper=stopper)
+        if result.stopped or stopper.requested:
+            return failed + 1
+        failed += not result.ok
+    return failed

@@ -1,5 +1,18 @@
 # Current plan
 
+## Seed sweeps, merged per curve (`combine`) — **DONE 2026-09-29** (ordered by the user 2026-09-29)
+
+"Sweep at different seeds, and plot combined data against pdf, make zeus_seedSweep.toml."
+
+- V35: `[run.<cfg>].combine = ["replica"]` (config.py, C14); `post.plan_combined` plans a stage per
+  group of points differing only in the combined quantities (the merge folder, `rivet-merge -e`, into
+  `<cfg>/<group>/<product>`); `post.run_combined` runs each once its points are complete; the plot
+  stage draws the groups (`plot.pages` drops the combined axes). `Point.stage = "combined"` names the
+  block in the views and the journal.
+- `configs/PhotoProduction/zeus_seedSweep.toml`: 4 PDFs × 5 seeds at pT0Ref 3.2, `default` combined,
+  `spread` one page per PDF with a curve per seed (the same seeds).
+- Tests: `tests/runner/test_combine.py`, `tests/integration/test_gates_combine.py` (slow).
+
 ## Several Rivets in one process (option 2) — **DONE 2026-09-29** (ordered by the user 2026-09-29)
 
 "Implement option two for PhotoProduction module": SISCone per thread, then Rivets on threads.

@@ -85,7 +85,8 @@ def test_a_point_is_one_block_when_it_ends():
     view = PlainView(stream=out)
     view.begin(4)
     view.number = 1
-    plan = SimpleNamespace(point=SimpleNamespace(index=2, name="NNPDF23lo"), res="results/x/NNPDF23lo")
+    from runner.sweep import Point
+    plan = SimpleNamespace(point=Point(index=2, name="NNPDF23lo"), res="results/x/NNPDF23lo")   # a real Point (L26)
     view.point_started(plan)
     view.tool_finished(SimpleNamespace(tag="pythia", error=""), ToolResult("pythia", exit=0, seconds=71.6))
     view.tool_finished(SimpleNamespace(tag="sherpa:prepare", error=""), ToolResult("sherpa:prepare", exit=0, seconds=3.0))

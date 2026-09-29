@@ -287,7 +287,8 @@ def run_point(plan: PointPlan, run, configuration, *, sink=None, journal: Journa
     results: dict[str, ToolResult] = {}
     sink.point_started(plan)
     if journal is not None:
-        journal.write(plan.point.name, "", {"k": "point", "state": "started", "index": plan.point.index})
+        journal.write(plan.point.name, "", {"k": "point", "state": "started", "index": plan.point.index,
+                                            **({"stage": plan.point.stage} if plan.point.stage else {})})
     try:
         prepare(plan)
     except HepError as error:

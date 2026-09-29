@@ -387,7 +387,7 @@ def pages(run, configuration, plans) -> list[Page]:
     complete = [p for p in plans if is_complete(p) and yoda_of(p)]
     if not complete:
         return []
-    groups = axes(configuration)
+    groups = [g for g in axes(configuration) if not set(g) & set(configuration.combine)]   # merged away (V35)
     page_groups = [g for g in groups if set(g) & set(configuration.plot_points)]
     curve_groups = [g for g in groups if g not in page_groups]
 

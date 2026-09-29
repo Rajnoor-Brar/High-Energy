@@ -185,7 +185,8 @@ equivalent  = true               # default: -e, statistically equivalent runs
 
 Runs `rivet-merge [-e] -o <partial output> <every point's input>`, with `RIVET_ANALYSIS_PATH` set:
 it re-runs the analyses' `finalize()`, so they must be re-entrant. The same folder merges a sharded
-Rivet's shards inside a point (§3.1), where the runner adds it by itself.
+Rivet's shards inside a point (§3.1), and each group of a `combine` (04 §5.5: one PDF's seed
+replicas, say), where the runner adds it by itself.
 
 ## 6. `plotmerge` — the sweep in one file, in `post`
 

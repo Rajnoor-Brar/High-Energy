@@ -73,7 +73,7 @@ def build_plans(args):
         tools.finalise(plan, plan.seed)
     plot.validate(run)
     return (run, configuration, plans, [p for p in plans if p.point.index in chosen],
-            post.plan(run, configuration, master, plans), pre_plan)
+            post.plan(run, configuration, master, plans), pre_plan, post.plan_combined(run, configuration, master, plans))
 
 
 def _print_stage(title: str, stage, run) -> None:
@@ -83,7 +83,7 @@ def _print_stage(title: str, stage, run) -> None:
     print(f"  results {stage.res}   ({'complete' if record.is_complete(stage) else 'to run'})")
 
 
-def print_plan(run, configuration, plans, post_plan=None, pre_plan=None) -> None:
+def print_plan(run, configuration, plans, post_plan=None, pre_plan=None, combined=()) -> None:
     print(f"run {run.name} ({run.path}) · configuration {configuration.key}: {len(plans)} point(s), "
           f"{configuration.event_count} events, {configuration.threads} threads")
     if pre_plan is not None:
@@ -93,6 +93,9 @@ def print_plan(run, configuration, plans, post_plan=None, pre_plan=None) -> None
         for line in tools.describe(plan, run):
             print(line)
         print(f"  output  {plan.out}\n  results {plan.res}   ({state})")
+    for group in combined:
+        _print_stage(f"combined {group.point.name} (merges {len(group.upstream)} points: "
+                     f"{', '.join(configuration.combine)})", group, run)
     if post_plan is not None:
         _print_stage("post (after every point)", post_plan, run)
     if run.plot and plans:
@@ -102,12 +105,12 @@ def print_plan(run, configuration, plans, post_plan=None, pre_plan=None) -> None
 
 
 def cmd_run(args) -> int:
-    run, configuration, every, plans, post_plan, pre_plan = build_plans(args)
+    run, configuration, every, plans, post_plan, pre_plan, combined = build_plans(args)
     if args.plan:
-        print_plan(run, configuration, plans, post_plan, pre_plan)
+        print_plan(run, configuration, plans, post_plan, pre_plan, combined)
         return 0
     if args.only == "plot":
-        return 1 if plot.draw(run, configuration, every, print) else 0
+        return 1 if plot.draw(run, configuration, combined or every, print) else 0
     if args.only == "post" and post_plan is None:
         raise HepError(f"configuration '{configuration.key}' has no post tools", where=f"{run.path}: [run.{configuration.key}].post")
     if args.only == "pre" and pre_plan is None:
@@ -157,6 +160,14 @@ def cmd_run(args) -> int:
             done += result.ok
         verdict = f"{done} done, {failed} failed, {len(plans) - done - failed} skipped" if args.only != "post" else ""
         manifest()                           # post tools read it: it must say which points are complete
+        if combined and args.only != "post":
+            bad = post.run_combined(combined, every, run, configuration, sink=shown, journal=journal, stopper=stopper,
+                                    rerun=args.rerun, say=shown.say)
+            if stopper.requested:
+                return 6
+            if bad:
+                failed += bad
+                verdict = f"{verdict}, {bad} combined group(s) failed"
         if not post.run(post_plan, every, run, configuration, sink=shown, journal=journal, stopper=stopper,
                         rerun=args.rerun or args.only == "post", say=shown.say):
             if stopper.requested:
@@ -166,7 +177,7 @@ def cmd_run(args) -> int:
         elif post_plan is not None and args.only == "post":
             verdict = "post done"
         if args.only != "post":
-            failed += plot.draw(run, configuration, every, shown.say) > 0
+            failed += plot.draw(run, configuration, combined or every, shown.say) > 0   # the groups, when combined
         shown.say(verdict)                   # before end(): the view's thread prints it (V32)
     finally:
         shown.end()
@@ -193,10 +204,10 @@ def cmd_plot(args) -> int:
         raise HepError("hep plot takes CONFIG [CONFIGURATION], or files ending .yoda/.yoda.gz/.root")
     args.config, args.configuration = args.targets[0], (args.targets[1] if len(args.targets) > 1 else None)
     args.points = None
-    run, configuration, every, _, _, _ = build_plans(args)
+    run, configuration, every, _, _, _, combined = build_plans(args)
     if not run.plot:
         raise HepError(f"{run.path} has no [plot] table", hint="add [plot], or give the files: hep plot FILE…")
-    return 1 if plot.draw(run, configuration, every, print) else 0
+    return 1 if plot.draw(run, configuration, combined or every, print) else 0
 
 
 def cmd_watch(args) -> int:

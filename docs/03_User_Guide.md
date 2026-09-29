@@ -256,6 +256,21 @@ output_file = "merged.yoda"          # → results/…/replicas/post/merged.yoda
 → `eic replicas`, `lambda replicas`. The post stage runs only when every point is complete, and
 reruns when any point changes.
 
+**Seeds per curve, merged** (`combine`, [04 §5.5](04_Config_Reference.md#55-combine)): sweep the
+replica beside the quantity you compare, and merge each value's seeds into one curve:
+
+```toml
+[run.default]
+sweeps  = ["pdf", "replica"]         # 4 PDFs × 5 seeds
+combine = ["replica"]                # one curve per PDF: its 5 seeds merged, 5× the statistics
+tools   = [["pythia", "rivet"]]
+```
+
+The merged YODAs are `results/…/default/<pdf>/zeus.yoda`, beside the seeds' own folders, and the
+pages are drawn from them. A second configuration with the same sweeps and `plot_points = ["pdf"]`
+(no `combine`) gets the same seeds and draws each as its own curve: how far one seed's result
+wanders. → `zeus_seedSweep` (and its `spread`).
+
 ### 4.10 A file chain: generator → Delphes → your analysis
 
 ```toml
