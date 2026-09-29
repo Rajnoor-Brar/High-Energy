@@ -33,7 +33,7 @@ def inputs(tmp_path_factory) -> dict[str, Path]:
     for name, source in (("MSTW", LEGACY / "mini_27x920_ep_MSTW.yoda"), ("NNLO", LEGACY / "mini_27x920_ep_NNLO.yoda"),
                          ("data", LEGACY / "ydmrg" / "photo_eic_data.yoda")):
         out[name] = where / f"{name}.root"
-        done = subprocess.run([str(YD2RT), str(source), str(out[name]), "--keep-raw"], capture_output=True, text=True)
+        done = subprocess.run([str(YD2RT), str(source), str(out[name]), "--keep-raw"], capture_output=True, text=True, encoding="utf-8")
         assert done.returncode == 0, done.stderr
     out["dir"] = where
     return out
@@ -53,7 +53,7 @@ def page(inputs, obj: str, *, data: str | None = None, **keys) -> Path:
 
 
 def dump(path: Path) -> dict:
-    done = subprocess.run([str(PAINT), str(path), "--dump-ranges"], capture_output=True, text=True)
+    done = subprocess.run([str(PAINT), str(path), "--dump-ranges"], capture_output=True, text=True, encoding="utf-8")
     assert done.returncode == 0, done.stderr
     return json.loads(done.stdout)
 
@@ -147,14 +147,14 @@ def test_data_that_lines_up_nowhere_is_dropped(inputs):
 def test_a_page_is_saved_in_every_format(inputs):
     config = page(inputs, "d01-x01-y01", data="d01-x01-y01", formats=["pdf", "png", "svg"], ratio=True,
                   logy=True, title="-3.5 < #eta < 3.5", x_label="E_{T} [GeV]", **LEGACY_PAGE)
-    done = subprocess.run([str(PAINT), str(config)], capture_output=True, text=True)
+    done = subprocess.run([str(PAINT), str(config)], capture_output=True, text=True, encoding="utf-8")
     assert done.returncode == 0, done.stderr
     for fmt in ("pdf", "png", "svg"):
         assert (inputs["dir"] / f"d01-x01-y01.{fmt}").stat().st_size > 1000
 
 
 def test_exit_codes(inputs):
-    usage = subprocess.run([str(PAINT)], capture_output=True, text=True)
+    usage = subprocess.run([str(PAINT)], capture_output=True, text=True, encoding="utf-8")
     bad = inputs["dir"] / "bad.toml"
     bad.write_text("[page]\nname = 'x'\n")                                   # no output, no curves
     missing = page(inputs, "d99-x01-y01")
@@ -263,7 +263,7 @@ def test_a_page_style_merges_over_the_base_and_is_checked(inputs):
     merged = tomllib.loads(dump_style(config).stdout)
     assert merged["page"]["dpi"] == 100 and merged["legend"]["position"] == [0.4, 0.9]
     assert merged["text"] == tomllib.loads((REPO / "utils/Apps/Paint/base.toml").read_text(encoding="utf-8"))["text"]
-    done = subprocess.run([str(PAINT), str(config)], capture_output=True, text=True)
+    done = subprocess.run([str(PAINT), str(config)], capture_output=True, text=True, encoding="utf-8")
     assert done.returncode == 0, done.stderr
     Image = pytest.importorskip("PIL.Image")
     assert Image.open(inputs["dir"] / "d01-x01-y01.png").size == (467, 421)   # size × dpi
@@ -271,5 +271,5 @@ def test_a_page_style_merges_over_the_base_and_is_checked(inputs):
                          ({"curves": {"errors": "dots"}}, "curves.errors")):
         document["style"] = bad
         config.write_text(tomli_w.dumps(document))
-        done = subprocess.run([str(PAINT), str(config)], capture_output=True, text=True)
+        done = subprocess.run([str(PAINT), str(config)], capture_output=True, text=True, encoding="utf-8")
         assert done.returncode == 1 and message in done.stderr + done.stdout

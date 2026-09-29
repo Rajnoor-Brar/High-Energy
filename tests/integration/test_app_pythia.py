@@ -110,3 +110,18 @@ def test_a_deal_group_splits_the_events_and_counts_each_share(scratch, card):
     assert (len(a), len(b)) == (counts["a.hepmc"], counts["b.hepmc"])
     assert not set(a) & set(b) and sorted(a + b) == sorted(c) == list(range(side["written"]))
     assert side["outputs"] == ["a.hepmc", "b.hepmc", "c.hepmc"]
+
+
+def last_sigma(path: Path) -> str:
+    return [line for line in path.read_text(encoding="utf-8").splitlines() if " GenCrossSection " in line][-1]
+
+
+def test_every_output_ends_on_the_same_sigma(scratch, card):
+    """L2 per output (L28): a CLI Rivet takes σ from the last event it reads, so every member of a deal
+    group, and every copy output, ends on the σ of the last event stamped, not on an older running one."""
+    (scratch / "more.cmnd").write_text("Main:numberOfEvents = 400\n", encoding="utf-8")
+    result = run("--threads", 4, "--seeds", "11,12,13,14", "a.hepmc+b.hepmc+d.hepmc,c.hepmc", card,
+                 scratch / "more.cmnd", cwd=scratch)
+    assert result.returncode == 0, result.stderr
+    ends = {n: last_sigma(scratch / f"{n}.hepmc") for n in "abcd"}
+    assert len(set(ends.values())) == 1, ends

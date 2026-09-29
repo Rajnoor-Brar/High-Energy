@@ -50,6 +50,18 @@ def test_sharding_does_not_move_the_seeds(scratch):
     assert record.identity(one) != record.identity(four)                     # but not the same point: it reruns
 
 
+@pytest.mark.parametrize("radius", [{"target": "rivet/photo_eic", "key": "R"},        # eic's radius
+                                    {"target": "rivet/photo_eic", "key": {"rivet": "R"}}])
+def test_a_quantity_aimed_at_the_table_reaches_every_shard(scratch, radius):
+    data = sharded(3, run__one__sweeps=["radius"],
+                   quantities__radius={**radius, "values": [0.4, 0.7], "tags": ["r04", "r07"]})
+    _, _, p = plan(data, scratch, point=1)
+    for i in range(1, 4):
+        assert "photo_eic:R=0.7" in p.rendered[f"rivet.{i}"].argv
+    assert not any("photo_eic:R" in a for a in p.rendered["rivet.merge"].argv)
+    assert p.point.name == "r07"
+
+
 def test_other_outputs_still_get_every_event(scratch):
     data = sharded(2, prelim__fifo=["events.hepmc", "copy.hepmc"],
                    tools__pythia__output_file=["events.hepmc", "copy.hepmc"],

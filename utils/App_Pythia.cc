@@ -19,7 +19,11 @@
 //       event with its own instance's running σ. So once more than one instance has contributed,
 //       every event is re-stamped with the combination; the last one then carries the final σ.
 //       With one instance the converter's own numbers are left untouched: bit for bit the legacy
-//       pipeline's.
+//       pipeline's. With callbacks in parallel and several outputs, "the last event" is per output:
+//       each output writes its events one late, and at the end its held event takes the σ of the
+//       last event stamped. So every shard of a dealt group ends on the same σ, the one a single
+//       Rivet would have read, and rivet-merge -e keeps it (a shard ending on an older running σ
+//       was 2e-4 off at 4,000 events, L28).
 //   L3  The callback runs on worker threads, so nothing may escape it. An exception is caught
 //       there and re-raised on the main thread.
 //   L4  Parallelism:seeds must have one seed per thread, each in 1…9e8. Pythia does not check.
@@ -62,6 +66,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -185,6 +190,12 @@ namespace {
         std::unique_ptr<HepMC3::Writer> writer;
         std::mutex lock;
         std::atomic<long> written{0};
+        std::shared_ptr<HepMC3::GenEvent> held;   // under lock: written when the next one comes (L2)
+    };
+    // The σ an event was stamped with, as the converter or the re-stamp left it.
+    struct Stamp {
+        std::vector<double> xs, err;
+        long accepted = -1, attempted = -1;
     };
     // What one event goes to: every group, and one member of each (a copy output is a group of one).
     struct Group {
@@ -295,6 +306,7 @@ int main(int argc, char** argv) {
     pythia.foreach([&](Pythia8::Pythia* instance) { converters[instance] = std::make_unique<Pythia8::Pythia8ToHepMC>(); });
     std::map<const Pythia8::Pythia*, Instance> latest;          // under xsLock
     std::shared_ptr<HepMC3::GenRunInfo> runInfo;                // under xsLock: one for every event
+    Stamp last;                                                 // under xsLock: the latest event's σ
     std::mutex xsLock, failLock;
     std::exception_ptr failure;                                 // under failLock
     std::atomic<bool> failed{false};
@@ -302,7 +314,12 @@ int main(int argc, char** argv) {
 
     // One event to one sink of a group: a copy output's only member, or the first free member of a
     // deal group (starting from a rotating index, so an even load deals round-robin).
-    auto deliver = [&](Group& group, const HepMC3::GenEvent& event) {
+    auto write = [&](Sink& sink, const HepMC3::GenEvent& event) {   // under sink.lock
+        sink.writer->write_event(event);
+        if (sink.writer->failed()) ++writeFailures;
+        else ++sink.written;
+    };
+    auto deliver = [&](Group& group, std::shared_ptr<HepMC3::GenEvent> event) {
         Sink* sink = nullptr;
         const size_t k = group.members.size(), start = k > 1 ? group.next++ % k : 0;
         for (size_t j = 0; j < k && !sink; ++j)
@@ -312,9 +329,8 @@ int main(int argc, char** argv) {
             sink->lock.lock();
         }
         std::lock_guard<std::mutex> guard(sink->lock, std::adopt_lock);
-        sink->writer->write_event(event);
-        if (sink->writer->failed()) ++writeFailures;
-        else ++sink->written;
+        std::swap(sink->held, event);
+        if (event) write(*sink, *event);
     };
 
     auto onEvent = [&](Pythia8::Pythia* instance) {
@@ -325,18 +341,20 @@ int main(int argc, char** argv) {
                 ++writeFailures;
                 return;
             }
-            HepMC3::GenEvent& event = converter.event();
-            event.set_event_number(static_cast<int>(numbered++));   // one numbering across instances, from 0
-            bool restamp = false;
-            Xsec xs;
+            const std::shared_ptr<HepMC3::GenEvent> event = converter.getEventPtr();   // a new one each event
+            event->set_event_number(static_cast<int>(numbered++));  // one numbering across instances, from 0
             {
                 std::lock_guard<std::mutex> guard(xsLock);
-                if (!runInfo) runInfo = event.run_info();
+                if (!runInfo) runInfo = event->run_info();
                 latest[instance] = {instance->info.weightSum(), instance->info.sigmaGen(), instance->info.sigmaErr()};
-                if (latest.size() > 1) restamp = true, xs = combine(latest);   // L2: re-stamp with the combination
+                const auto cs = event->cross_section();
+                if (cs && latest.size() > 1) {                        // L2: re-stamp with the combination
+                    const Xsec xs = combine(latest);
+                    cs->set_cross_section(xs.pb, xs.errPb);
+                }
+                if (cs) last = {cs->xsecs(), cs->xsec_errs(), cs->get_accepted_events(), cs->get_attempted_events()};
             }
-            event.set_run_info(runInfo);                               // one run info: no per-event warning
-            if (restamp) event.cross_section()->set_cross_section(xs.pb, xs.errPb);
+            event->set_run_info(runInfo);                              // one run info: no per-event warning
             for (auto& group : groups) deliver(*group, event);
             ++written;
         } catch (...) {
@@ -361,6 +379,15 @@ int main(int argc, char** argv) {
         status.progress(written, requested, rate());
         const Xsec running = combine(latest);
         status.xsec(running.pb, running.errPb, false);
+    }
+    // Every output's held event: stamped with the latest σ (unless it is that event), then written (L2).
+    for (auto& sink : sinks) {
+        if (!sink->held) continue;
+        const auto cs = sink->held->cross_section();
+        if (cs && !last.xs.empty() && (cs->xsecs() != last.xs || cs->xsec_errs() != last.err))
+            cs->set_cross_section(last.xs, last.err, last.accepted, last.attempted);
+        write(*sink, *sink->held);
+        sink->held.reset();
     }
     for (auto& sink : sinks) sink->writer->close();
 

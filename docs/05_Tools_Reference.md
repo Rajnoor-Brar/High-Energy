@@ -130,9 +130,21 @@ shards      = 10
   deal (`pythia`); every analysis is re-entrant (`Reentrant: true` in its `.info`), because
   `rivet-merge -e` runs `finalize()` again on the summed histograms. Other outputs of the producer
   (a module program's FIFO) still get every event.
+- **Quantities aimed at the table reach every shard**: `target = "rivet/photo_eic"` (eic's
+  `radius`) or `key = { rivet = … }` gives each `rivet.<i>` the same option; `--plan` shows it as
+  `rivet.1–10:R`.
 - **Choosing K.** Each shard is one core, and so is each Pythia thread: `threads + shards` should
-  not exceed the machine (on 24 cores, e.g. `threads = 12`, `shards = 10`). The chain then runs at
-  about `shards ×` one Rivet's rate, until Pythia's own generation rate is the limit.
+  not exceed the machine. Measured on the lab PC (i7-13700K, 24 hardware threads), 200k ZEUS_2012
+  events, steady rate after the ~5 s start:
+
+  | `threads` + `shards` | events/s |
+  |---|---|
+  | 20 + unsharded | ~1,570 |
+  | 8 + 8 | ~8,100 |
+  | 12 + 10 | ~9,200 |
+  | 14 + 10, 10 + 12 | the same as 12 + 10: the CPU is full |
+
+  `threads = 12`, `shards = 10` is what `eic.toml` and `zeus_validation.toml` use.
 
 ## 4. `yd2rt` — YODA → ROOT
 
@@ -399,6 +411,7 @@ events and seeds are in the point card.
 | Catches in the callback and re-raises on the main thread | L3 |
 | σ combined over instances: the ΣW-weighted mean, errors in quadrature | L1 |
 | Once more than one instance has contributed, **re-stamps every event's `GenCrossSection` with the combination**, so the last event Rivet reads carries the final σ; at one thread the converter's numbers are untouched (bit for bit the legacy pipeline's) | L2 |
+| **Every output ends on the latest σ**: each writes its events one late, and at the end its held event takes the σ of the last event stamped, so every shard of a deal group (and every copy) normalises to the σ an unsharded Rivet would | L28 |
 | Several outputs: the same events to each (fan-out, V16), or one of a deal group's members each; a `.gz` or `.zst` suffix picks HepMC3's compressed writer | L25 |
 | Events are numbered once, from 0, across the threads; every event carries one shared run info | — |
 | Status on `$HEP_STATUS_FD` (§19) | — |
@@ -565,10 +578,23 @@ runs single-threaded; one that uses threads and clusters jets must not share Fas
 statics (L16). **Exit codes** (`Module::Exit`): `Ok` 0, `Config` 1, `Usage` 2, `Init` 3, `Input` 4,
 `Output` 5, `Stopped` 6, `Internal` 70.
 
-An **integrated program** (`modules/PhotoProduction/InprocJets.cc`) asks for `pythia_cmnd` and
-`rivet_analyses`, runs `Pythia8::Pythia` and a `Rivet::AnalysisHandler` in its own loop, sets
-Rivet's σ once at the end, and reports its events with `countEvent`; it gets the same card and seeds
-as the chain's App_Pythia would.
+An **integrated program** (`modules/PhotoProduction/InprocJets.cc`, V33) asks for `pythia_cmnd`
+and `rivet_analyses` (`job.standard`, `job.standardValues`), so it gets the same card and seeds as
+the chain's App_Pythia would, and the rivet table's analyses with their options. It runs Pythia as
+App_Pythia does and one `Rivet::AnalysisHandler` on a thread of its own. Its parts are headers in
+`modules/PhotoProduction/Inproc/`:
+
+| Header | Holds |
+|---|---|
+| `Stamp.hh` | what every event gets before Rivet sees it: one numbering, one run info, the combined σ (L1, L2), and the last σ stamped (L28) |
+| `Feed.hh` | a bounded queue from the Pythia threads to Rivet's: a full feed holds generation back |
+| `Analysis.hh` | Rivet on its thread: `analyze`, `countEvent`; at the end the L28 σ as a user σ (`setCrossSection(σ, true)`), `finalize`, `writeData` |
+| `Engines.hh` | `serial` (one `Pythia8::Pythia`) and `parallel` (`PythiaParallel`, `processAsync = on`, a converter per instance, chunks of 100 × threads); after Rivet's thread starts, a failure is returned, never exited on (L3, L5, L6) |
+
+Rivet stays on **one** thread: it is not thread-safe, and photo_eic's SISCone keeps process-wide
+statics (L16). Taking Rivet out of Pythia's callback made a 40k-event `inproc` point 1.26× faster
+(31.3 s → 24.9 s at 12 threads) with the same YODA to the last digit; for more than one Rivet's
+rate, use the chain with `shards` (§3.1).
 
 ## 19. `Status.hh` and the status protocol
 

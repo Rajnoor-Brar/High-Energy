@@ -3,8 +3,8 @@
 
 The two configurations share the generator set-up, so the same seeds and events (V22); the sharded
 one deals them among four Rivet processes and merges with `rivet-merge -e`. The raw histograms must
-be the same sums, the finalised ones the same up to the cross section each run normalised to, and
-that cross section the same to the precision the last events carry.
+be the same sums, and the cross section the same: every shard ends on the σ of the last event
+App_Pythia stamped, the one the unsharded Rivet read (L28).
 """
 
 from __future__ import annotations
@@ -76,7 +76,7 @@ def test_a_sharded_point_equals_the_same_point_unsharded(scratch):
     raw_one, raw_four = one["/RAW/_EVTCOUNT"], four["/RAW/_EVTCOUNT"]
     assert raw_one.numEntries() == raw_four.numEntries() and raw_one.sumW() == pytest.approx(raw_four.sumW(), rel=1e-12)
     xs_one, xs_four = one["/_XSEC"].val(), four["/_XSEC"].val()
-    assert xs_four == pytest.approx(xs_one, rel=1e-3)
+    assert xs_four == pytest.approx(xs_one, rel=1e-9)                        # was 2e-4 off before L28
     for path, histo in one.items():
         if not path.startswith("/RAW/photo_eic/") or not hasattr(histo, "sumW"):
             continue

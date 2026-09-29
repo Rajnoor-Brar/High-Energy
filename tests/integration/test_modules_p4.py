@@ -74,7 +74,8 @@ def test_inproc_sigma_equals_the_sidecar_at_four_threads(scratch):
     for configuration in ("single", "inproc"):
         output, results = hep_run(scratch, "PhotoProduction/eic", configuration, "--set", "run.event_count=4000",
                                   "--set", "run.threads=4")
-    sidecar = json.loads((output / "PhotoProduction" / "03_eic" / "single" / "point" / "events.hepmc.json").read_text(encoding="utf-8", errors="replace"))
+    point = output / "PhotoProduction" / "03_eic" / "single" / "point"
+    sidecar = json.loads(min(point.glob("events*.hepmc.json")).read_text(encoding="utf-8", errors="replace"))  # sharded: .s1
     report = json.loads((results / "PhotoProduction" / "03_eic" / "11_inproc" / "point" / "photo.yoda.json").read_text(encoding="utf-8", errors="replace"))
     assert report["events"] == sidecar["written"]
     assert report["sigma_pb"] == pytest.approx(sidecar["sigma_pb"], rel=1e-6)

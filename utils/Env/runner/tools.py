@@ -396,6 +396,7 @@ def _shard(run, configuration, groups_tags: list[list[str]], out: Path):
     if not sharded:
         return run, configuration, groups_tags, {}, set()
     tables = dict(run.tools)
+    quantities = dict(run.quantities)
     prelim = {key: list(value) for key, value in configuration.prelim.items()}
     groups = [list(group) for group in groups_tags]
     deal: dict[str, str] = {}
@@ -439,6 +440,7 @@ def _shard(run, configuration, groups_tags: list[list[str]], out: Path):
             copies.append(copy)
             parts.append(part)
         shard_products.update(parts)
+        quantities = _retarget(quantities, tag, copies)
         joined = f"{tag}.merge"
         tables[joined] = Tool(tag=joined, tool=merge, input=parts, output_file=list(tool.output_file))
         for g, group in enumerate(groups):
@@ -447,7 +449,25 @@ def _shard(run, configuration, groups_tags: list[list[str]], out: Path):
                 group[at:at + 1] = copies
                 groups.insert(g + 1, [joined])
                 break
-    return replace(run, tools=tables), replace(configuration, prelim=prelim), groups, deal, shard_products
+    return (replace(run, tools=tables, quantities=quantities), replace(configuration, prelim=prelim), groups, deal,
+            shard_products)
+
+
+def _retarget(quantities: dict, tag: str, copies: list[str]) -> dict:
+    """A quantity aimed at a sharded table (`target = "rivet/photo_eic"`, `key = {rivet = …}`) is
+    aimed at every shard: each one runs the same analysis, with the same options, on its share."""
+    out = dict(quantities)
+    for name, quantity in quantities.items():
+        target = []
+        for entry in quantity.target:
+            head, sep, rest = entry.partition("/")
+            target += [f"{copy}{sep}{rest}" for copy in copies] if head == tag else [entry]
+        key = quantity.key
+        if isinstance(key, dict) and tag in key:
+            key = {**key, **{copy: key[tag] for copy in copies}}
+        if target != list(quantity.target) or key is not quantity.key:
+            out[name] = replace(quantity, target=target, key=key)
+    return out
 
 
 def plan_point(run, configuration, point, master: dict, *, post: dict | None = None,
@@ -1025,12 +1045,21 @@ def finalise(plan: PointPlan, seed: int) -> None:
             plan.writes[step.config_path] = tomli_w.dumps(step.config_data or {})
 
 
+def _unsharded(tag: str, plan: PointPlan) -> str:
+    """rivet.3 → rivet.1–10 in --plan, where a quantity reaches every shard alike."""
+    head, _, index = tag.rpartition(".")
+    count = sum(1 for group in plan.groups for s in group if s.tag.rpartition(".")[0] == head
+                and s.tag.rpartition(".")[2].isdigit())
+    return f"{head}.1–{count}" if head and index.isdigit() and f"{head}.merge" in plan.rendered else tag
+
+
 def describe(plan: PointPlan, run) -> list[str]:
     """--plan: the groups, argv, connections and files of one point."""
     lines = [f"point {plan.point.index} {plan.point.name}   identity {plan.identity[:12]}   seed {plan.seed}"]
     for name, index in plan.values.items():
         quantity = run.quantities[name]
-        where = ", ".join(f"{m.tag}:{m.key if m.form != 'seed' else 'seed'}" for m in plan.consumers.get(name, []))
+        where = ", ".join(dict.fromkeys(f"{_unsharded(m.tag, plan)}:{m.key if m.form != 'seed' else 'seed'}"
+                                        for m in plan.consumers.get(name, [])))
         lines.append(f"  {name:12s} = {tag_of(quantity, index):14s} → {where}")
     for g, group in enumerate(plan.groups, start=1):
         lines.append(f"  group {g}: {', '.join(s.tag for s in group)}")

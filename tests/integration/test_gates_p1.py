@@ -37,7 +37,7 @@ def chain(workdir: Path, cards: list[Path], plugin_dir: Path, name: str) -> tupl
     rivet = subprocess.Popen(["rivet", "--analysis=photo_eic", "-o", str(yoda), str(fifo)], cwd=workdir, env=env,
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     pythia = subprocess.run([str(APP), str(fifo), *map(str, cards)], cwd=workdir, env=env,
-                            capture_output=True, text=True, timeout=1800)
+                            capture_output=True, text=True, encoding="utf-8", timeout=1800)
     assert rivet.wait(timeout=1800) == 0
     assert pythia.returncode == 0, pythia.stderr
     fifo.unlink()
@@ -49,7 +49,7 @@ def capture_plugin(tmp_path_factory) -> Path:
     where = tmp_path_factory.mktemp("capture_photo_eic")
     for ext in ("cc", "info", "plot"):
         text = subprocess.run(["git", "show", f"a2eac4e:sources/PhotoProduction/photo_eic.{ext}"], cwd=REPO,
-                              capture_output=True, text=True, check=True).stdout
+                              capture_output=True, text=True, encoding="utf-8", check=True).stdout
         (where / f"photo_eic.{ext}").write_text(text, encoding="utf-8")
     subprocess.run(["rivet-build", "Rivet_photo_eic.so", "photo_eic.cc"], cwd=where, check=True,
                    capture_output=True)

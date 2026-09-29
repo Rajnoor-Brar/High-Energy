@@ -119,7 +119,8 @@ The package and its ranks are [02 §3.1](02_Architecture.md#31-the-runner). The 
 sharded table becomes `<tag>.1` … `<tag>.K` (copies of its `Tool` reading `<fifo>.s<i>.<ext>` and
 writing under `output/…/shards/`), the producer's `output_file` gets the K members (rendered as a
 `+` group by `_outputs_argument`), and a `<tag>.merge` step of the folder's `[shard] merge` tool is
-inserted as the next group. The rest of planning sees an ordinary chain; the count check carries the
+inserted as the next group; `_retarget` points quantities aimed at the table (`target`, a
+tag-keyed `key`) at every copy. The rest of planning sees an ordinary chain; the count check carries the
 member's path as its key into the sidecar's `written_per_output`.
 
 **The flow** (`cli.build_plans`, then `cmd_run`): `config.load` → `sweep.points` →

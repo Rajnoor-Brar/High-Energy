@@ -59,7 +59,7 @@ def point_dirs(where: Path) -> tuple[Path, Path]:
 def start(config: str, where: Path) -> subprocess.Popen:
     env = dict(os.environ, HEKIT_RESULTS=str(where / "results"), HEKIT_OUTPUT=str(where / "output"))
     return subprocess.Popen([str(HEP), "run", config], cwd=REPO, env=env, stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT, text=True)
+                            stderr=subprocess.STDOUT, text=True, encoding="utf-8")
 
 
 def wait_for_progress(out: Path, tool: str, timeout: float = 120) -> None:
@@ -76,7 +76,7 @@ def wait_for_progress(out: Path, tool: str, timeout: float = 120) -> None:
 
 
 def pid_of(pattern: str) -> int:
-    out = subprocess.run(["pgrep", "-f", pattern], capture_output=True, text=True).stdout.split()
+    out = subprocess.run(["pgrep", "-f", pattern], capture_output=True, text=True, encoding="utf-8").stdout.split()
     assert out, f"no process matches {pattern}"
     return int(out[0])
 

@@ -1,6 +1,19 @@
 # Current plan
 
-## Sharded Rivet and a view that never blocks — **SOURCE EDITED, NOT BUILT OR TESTED** (ordered by the user 2026-09-29)
+## InprocJets as App_Pythia runs Pythia — **DONE 2026-09-29** (ordered by the user 2026-09-29)
+
+"Update the PhotoProduction module for integrated in-process rivet pythia, as per new norms and ways
+to get standard configs; you can split the main program via headers into smaller chunks."
+
+- V33: `modules/PhotoProduction/InprocJets.cc` is now `main()` only; `Inproc/Stamp.hh` (numbering,
+  run info, σ: L1 L2 L28), `Inproc/Feed.hh` (bounded queue), `Inproc/Analysis.hh` (one Rivet on its
+  own thread, L16; σ given at the end as a user σ), `Inproc/Engines.hh` (serial, parallel with
+  processAsync = on and a converter per instance; no exit after Rivet's thread starts).
+- Measured: 40k events at 12 threads, 31.3 s → 24.9 s, the same YODA to the last digit.
+- Docs: 03 §4.14, 05 §15 (L28 row) and §18, 07 V33 and §8 rows. Tests: `test_modules_p4.py`
+  (sidecar found when sharded), `text=True` subprocesses name utf-8 (L17).
+
+## Sharded Rivet and a view that never blocks — **DONE, built and tested 2026-09-29** (ordered by the user 2026-09-29)
 
 "Though pythia is configured to use 20 out of 24 threads, it uses 4% cpu" → measured (L27): one
 Rivet core ~1,500 events/s, App_Pythia writer-capped ~2,200. The user said "do it" to three parts,
@@ -17,11 +30,14 @@ done later".
 - **Views** (V32): `watch._Screen` thread for every line and frame; `cli` says the verdict before `end()`.
 - Tests written, not run: `tests/runner/test_shards.py`, `test_status.py` (a pipe nobody reads),
   `test_module.py`/`test_post.py` adjusted, `tests/integration/test_app_pythia.py` (deal groups),
-  `tests/integration/test_shards.py` (slow: sharded vs unsharded, RAW sumW and σ).
+  `tests/integration/test_gates_shards.py` (slow: sharded vs unsharded, RAW sumW and σ).
 - Docs: 02 §6.1 and §10, 03 §4.17, 04 §9.1 `shards`, 05 §3.1 and App_Pythia, 06 folder keys and
   `_shard`, 07 V31, V32, L27; `bots/intent.md` T5.
-- **To do by the user**: `hep build`, then `make test` and `make test-slow`. Pythia points rerun once
-  (new binary sha).
+- Built and tested on the user's order "edit configs, rebuild and test": eic and zeus_validation got
+  `threads = 12`, rivet `shards = 10` (the user then set zeus to 20 + 20). Found and fixed on the
+  way: a quantity aimed at the rivet table did not reach its shards (`tools._retarget`), and each
+  shard normalised to its own last event's running σ (L28: App_Pythia writes each output one late
+  and ends it on the latest σ). The user's 4 × 1M zeus run took ~8 min instead of ~43.
 
 ## The manual — **DONE** (ordered by the user 2026-09-27)
 

@@ -388,7 +388,9 @@ rivet_analyses = true                             # the rivet table's analysis l
 
 The program reads `job.standard("pythia_cmnd")`: the same card, seeds included, that App_Pythia
 would have got, so `inproc` and `single` give the same events. It owns what the chain would do:
-σ over threads, the final σ to Rivet, counting (04 §9.4). → `eic inproc`.
+σ over threads, the final σ to Rivet, counting (04 §9.4). Pythia runs on the configuration's
+`threads` and Rivet on one more; it is ~1.3× one chain Rivet, while the chain with `shards` (§4.17)
+is several times faster. How it is built: [05 §18](05_Tools_Reference.md#18-modulehh). → `eic inproc`.
 
 ### 4.15 A custom tool, and a Python one
 
