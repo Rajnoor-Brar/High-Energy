@@ -22,7 +22,7 @@ name          = "eic"
 project       = "PhotoProduction"
 configuration = "pdf"
 event_count   = 1_000_000
-threads       = 20
+threads       = 12            # Pythia's; with rivet's 10 shards that fills the 24 hardware threads
 
 [run.single]
 description = "One run at the static point (27x920 e+p)"
@@ -131,6 +131,8 @@ tool        = "rivet"
 input       = "events.hepmc"
 analyses    = ["photo_eic"]
 output_file = "photo.yoda"
+shards      = 10              # 10 Rivet processes, merged into photo.yoda (03 §4.17): one Rivet
+                              # reads ~1,500 ev/s; 12 threads + 10 shards run ~9,200 ev/s (L27)
 
 [tools.yd2rt]
 tool        = "yd2rt"

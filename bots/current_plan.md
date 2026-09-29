@@ -1,5 +1,73 @@
 # Current plan
 
+## Seed sweeps, merged per curve (`combine`) — **DONE 2026-09-29** (ordered by the user 2026-09-29)
+
+"Sweep at different seeds, and plot combined data against pdf, make zeus_seedSweep.toml."
+
+- V35: `[run.<cfg>].combine = ["replica"]` (config.py, C14); `post.plan_combined` plans a stage per
+  group of points differing only in the combined quantities (the merge folder, `rivet-merge -e`, into
+  `<cfg>/<group>/<product>`); `post.run_combined` runs each once its points are complete; the plot
+  stage draws the groups (`plot.pages` drops the combined axes). `Point.stage = "combined"` names the
+  block in the views and the journal.
+- `configs/PhotoProduction/zeus_seedSweep.toml`: 4 PDFs × 5 seeds at pT0Ref 3.2, `default` combined,
+  `spread` one page per PDF with a curve per seed (the same seeds).
+- Tests: `tests/runner/test_combine.py`, `tests/integration/test_gates_combine.py` (slow).
+
+## Several Rivets in one process (option 2) — **DONE 2026-09-29** (ordered by the user 2026-09-29)
+
+"Implement option two for PhotoProduction module": SISCone per thread, then Rivets on threads.
+
+- `~/HEP` FastJet 3.5.0 patched (`utils/Env/patches/fastjet-3.5.0-siscone-thread-local-ranlux.patch`):
+  SISCone's ranlux state and `Ceta_phi_range::eta_min/eta_max` are `thread_local` (L29). The second
+  was found by the gate (FastJet internal error with only the generator patched). ABI unchanged, so
+  Rivet/Herwig/Whizard were not rebuilt; backup `~/HEP/install/fastjet.bak.20260929`. Single-threaded
+  Rivet byte-identical before/after (ZEUS + photo_eic, 20k events).
+- V34: `Inproc/Analysis.hh` runs `rivet_threads` handlers, fed first-free, merged before one
+  finalize; checks the patch and refuses without it (verified with the old library preloaded).
+- Gate: 4 Rivets = 1 exactly (every raw sum and final bin, σ) for InProcEIC and InProcZeus
+  (`test_modules_p4.py::test_rivet_threads_equal_one_rivet`). Speed, 200k photo_eic events: chain
+  12 + 10 shards 29.0 s; in one process 12 + 12 Rivets 20.7 s, 10 + 14 19.3 s.
+- Also: output paths with ',' or '+' are refused at plan time (they are App_Pythia's separators).
+
+## InprocJets as App_Pythia runs Pythia — **DONE 2026-09-29** (ordered by the user 2026-09-29)
+
+"Update the PhotoProduction module for integrated in-process rivet pythia, as per new norms and ways
+to get standard configs; you can split the main program via headers into smaller chunks."
+
+- V33: `modules/PhotoProduction/InprocJets.cc` is now `main()` only; `Inproc/Stamp.hh` (numbering,
+  run info, σ: L1 L2 L28), `Inproc/Feed.hh` (bounded queue), `Inproc/Analysis.hh` (one Rivet on its
+  own thread, L16; σ given at the end as a user σ), `Inproc/Engines.hh` (serial, parallel with
+  processAsync = on and a converter per instance; no exit after Rivet's thread starts).
+- Measured: 40k events at 12 threads, 31.3 s → 24.9 s, the same YODA to the last digit.
+- Docs: 03 §4.14, 05 §15 (L28 row) and §18, 07 V33 and §8 rows. Tests: `test_modules_p4.py`
+  (sidecar found when sharded), `text=True` subprocesses name utf-8 (L17).
+
+## Sharded Rivet and a view that never blocks — **DONE, built and tested 2026-09-29** (ordered by the user 2026-09-29)
+
+"Though pythia is configured to use 20 out of 24 threads, it uses 4% cpu" → measured (L27): one
+Rivet core ~1,500 events/s, App_Pythia writer-capped ~2,200. The user said "do it" to three parts,
+then "edit source … neither build now nor use a separate worktree, building and testing would be
+done later".
+
+- **App_Pythia** (`utils/App_Pythia.cc`): `processAsync = on`, HepMC formatting on the worker threads,
+  one writer + lock per output; deal groups `A+B+C` (each event to the first free member); sidecar
+  `written_per_output`. Old binaries treat `a+b` as a filename, so sharded runs need the rebuild.
+- **`shards = K`** (V31): `config.Tool.shards`, `tools._shard` rewrites the chain (K copies, a
+  `<tag>.merge` group from the folder's `[shard] merge`), the count check keyed per member, shard
+  products skipped by plot/record/post. `pythia/tool.toml` `[outputs] deal = true`, `rivet/tool.toml`
+  `[shard] merge = "merge"`.
+- **Views** (V32): `watch._Screen` thread for every line and frame; `cli` says the verdict before `end()`.
+- Tests written, not run: `tests/runner/test_shards.py`, `test_status.py` (a pipe nobody reads),
+  `test_module.py`/`test_post.py` adjusted, `tests/integration/test_app_pythia.py` (deal groups),
+  `tests/integration/test_gates_shards.py` (slow: sharded vs unsharded, RAW sumW and σ).
+- Docs: 02 §6.1 and §10, 03 §4.17, 04 §9.1 `shards`, 05 §3.1 and App_Pythia, 06 folder keys and
+  `_shard`, 07 V31, V32, L27; `bots/intent.md` T5.
+- Built and tested on the user's order "edit configs, rebuild and test": eic and zeus_validation got
+  `threads = 12`, rivet `shards = 10` (the user then set zeus to 20 + 20). Found and fixed on the
+  way: a quantity aimed at the rivet table did not reach its shards (`tools._retarget`), and each
+  shard normalised to its own last event's running σ (L28: App_Pythia writes each output one late
+  and ends it on the latest σ). The user's 4 × 1M zeus run took ~8 min instead of ~43.
+
 ## The manual — **DONE** (ordered by the user 2026-09-27)
 
 "Read docs, go over them … see if there are ideas worth implementing or taking inspiration from,

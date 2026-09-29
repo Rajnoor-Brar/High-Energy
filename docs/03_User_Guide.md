@@ -256,6 +256,21 @@ output_file = "merged.yoda"          # → results/…/replicas/post/merged.yoda
 → `eic replicas`, `lambda replicas`. The post stage runs only when every point is complete, and
 reruns when any point changes.
 
+**Seeds per curve, merged** (`combine`, [04 §5.5](04_Config_Reference.md#55-combine)): sweep the
+replica beside the quantity you compare, and merge each value's seeds into one curve:
+
+```toml
+[run.default]
+sweeps  = ["pdf", "replica"]         # 4 PDFs × 5 seeds
+combine = ["replica"]                # one curve per PDF: its 5 seeds merged, 5× the statistics
+tools   = [["pythia", "rivet"]]
+```
+
+The merged YODAs are `results/…/default/<pdf>/zeus.yoda`, beside the seeds' own folders, and the
+pages are drawn from them. A second configuration with the same sweeps and `plot_points = ["pdf"]`
+(no `combine`) gets the same seeds and draws each as its own curve: how far one seed's result
+wanders. → `zeus_seedSweep` (and its `spread`).
+
 ### 4.10 A file chain: generator → Delphes → your analysis
 
 ```toml
@@ -388,7 +403,11 @@ rivet_analyses = true                             # the rivet table's analysis l
 
 The program reads `job.standard("pythia_cmnd")`: the same card, seeds included, that App_Pythia
 would have got, so `inproc` and `single` give the same events. It owns what the chain would do:
-σ over threads, the final σ to Rivet, counting (04 §9.4). → `eic inproc`.
+σ over threads, the final σ to Rivet, counting (04 §9.4). Pythia runs on the configuration's
+`threads`, and `rivet_threads = K` in `[tools.jets.config]` runs K Rivets on threads of their own,
+merged at the end: with 12 + 12 it is ~1.5× the sharded chain (§4.17). K above 1 needs the SISCone
+patch in `~/HEP` (L29). Whole files: `configs/PhotoProduction/InProcEIC.toml` and `InProcZeus.toml`.
+How it is built: [05 §18](05_Tools_Reference.md#18-modulehh). → `eic inproc`.
 
 ### 4.15 A custom tool, and a Python one
 
@@ -427,7 +446,32 @@ output_file = "shared.lhe"                        # every point may name it: inp
 
 A changed pre stage reruns the points; a failed one stops the run.
 
-### 4.17 Any files, overlaid
+### 4.17 Faster points: more Rivets
+
+A Rivet process uses one core, so in a Pythia → Rivet chain it is the limit (about 1,500 events/s
+with ZEUS_2012), and more Pythia threads only wait for it. Split its events among several:
+
+```toml
+[run.default]
+threads = 12                     # Pythia's threads
+
+[tools.rivet]
+tool        = "rivet"
+input       = "events.hepmc"
+analyses    = ["ZEUS_2012_I1116258"]
+output_file = "zeus.yoda"
+shards      = 10                 # 10 Rivet processes, each on a share, merged into zeus.yoda
+```
+
+Nothing else changes: not the chain, not the file names, not what the later tools and the pages
+read. The runner deals the events among ten FIFOs, runs ten Rivets, checks each one's count, and
+merges them with `rivet-merge -e` ([05 §3.1](05_Tools_Reference.md#31-sharded-rivet-shards--k)).
+The events are the same as unsharded, so the result is the same; the point reruns, since its
+commands changed. Keep `threads + shards` within the machine's cores. For one run only:
+`--set tools.rivet.shards=10 --set run.default.threads=12`. Every analysis must be re-entrant
+(`Reentrant: true` in its `.info`).
+
+### 4.18 Any files, overlaid
 
 ```bash
 hep plot a.yoda b.yoda --labels "Tune A,Tune B" --ratio --objects "/MC_JETS/*"
@@ -506,6 +550,7 @@ corner carries over; `"both"` draws both sets in one run.
 | only the post (or pre) tools | `--only post` / `--only pre` |
 | plain lines (logs, CI) | `--plain` (automatic when not a terminal) |
 | to follow a job elsewhere | `hep watch [CONFIG [CFG]]` |
+| a point faster | `shards = K` on the Rivet table (§4.17); more Pythia `threads` alone do not help |
 
 The identity covers cards, argv, binaries, analyses and their plugins, events and threads, and seeds
 derive from it, so a rerun of an unchanged point does nothing, and a changed one reruns by itself.

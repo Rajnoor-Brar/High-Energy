@@ -1,0 +1,63 @@
+--- plugins/SISCone/siscone/siscone/ranlux.cpp	2025-05-22 18:10:14.000000000 +0530
++++ plugins/SISCone/siscone/siscone/ranlux.cpp	2026-09-29 20:58:41.068675633 +0530
+@@ -55,7 +55,12 @@
+ 
+ // internal generator state
+ //--------------------------
+-ranlux_state_t local_ranlux_state;
++// Per thread (patched for High-Energy: utils/Env/patches/). SISCone draws a random 96-bit reference
++// for every particle it clusters; one state shared by several threads is a data race, and threads
++// then get different jets. Each thread seeds its own state on first use with the seed ranlux_init()
++// uses, so a single-threaded program draws exactly the sequence it did before.
++thread_local ranlux_state_t local_ranlux_state;
++static thread_local bool local_ranlux_ready = false;
+ 
+ 
+ // incrementation of the generator state
+@@ -126,6 +131,8 @@
+   } else {
+     local_ranlux_state.carry = 0;
+   }
++
++  local_ranlux_ready = true;
+ }
+ 
+ 
+@@ -140,6 +147,7 @@
+ // get random number
+ //-------------------
+ unsigned long int ranlux_get(){
++  if (!local_ranlux_ready) ranlux_set(0);   // a thread that has not seeded its own state yet
+   const unsigned int skip = local_ranlux_state.skip;
+   unsigned long int r = increment_state();
+   
+--- plugins/SISCone/siscone/siscone/geom_2d.h	2025-05-22 18:10:14.000000000 +0530
++++ plugins/SISCone/siscone/siscone/geom_2d.h	2026-09-29 21:04:18.484106471 +0530
+@@ -146,8 +146,12 @@
+   unsigned int phi_range;     
+ 
+   // extremal value for eta
+-  static double eta_min;  ///< minimal value for eta
+-  static double eta_max;  ///< maximal value for eta
++  // Per thread (patched for High-Energy: utils/Env/patches/): each clustering sets the range from
++  // its own particles (Csplit_merge::init_pleft), so threads clustering at once overwrote each
++  // other's, and split-merge failed ("trying to recombine an object that has previously been
++  // recombined") or gave other jets.
++  static thread_local double eta_min;  ///< minimal value for eta
++  static thread_local double eta_max;  ///< maximal value for eta
+ 
+ private:
+   /// return the cell index corrsponding to an eta value
+--- plugins/SISCone/siscone/siscone/geom_2d.cpp	2025-05-22 18:10:14.000000000 +0530
++++ plugins/SISCone/siscone/siscone/geom_2d.cpp	2026-09-29 21:04:18.484187467 +0530
+@@ -44,8 +44,8 @@
+ 
+ // static member default init
+ //----------------------------
+-double Ceta_phi_range::eta_min = -100.0;
+-double Ceta_phi_range::eta_max = 100.0;
++thread_local double Ceta_phi_range::eta_min = -100.0;   // per thread: see geom_2d.h
++thread_local double Ceta_phi_range::eta_max = 100.0;
+ 
+ // default ctor
+ //--------------

@@ -24,8 +24,8 @@ TOP_LEVEL = ("master", "run", "prelim", "static", "tools", "quantities", "plot")
 RUN_KEYS = {"serial": int, "name": str, "project": str, "configuration": str, "event_count": int,
             "threads": int, "description": str}
 CONFIGURATION_KEYS = {"serial": int, "name": str, "description": str, "event_count": int, "threads": int,
-                      "sweeps": list, "plot_points": list, "tools": list, "pre": list, "post": list, "static": dict,
-                      "prelim": dict}
+                      "sweeps": list, "plot_points": list, "combine": list, "tools": list, "pre": list, "post": list,
+                      "static": dict, "prelim": dict}
 PRELIM_KEYS = {"fifo": list, "files": list, "commands": list}
 MASTER_KEYS = {"master_toml": str}
 QUANTITY_KEYS = {"values": list, "tags": list, "labels": list, "key": (str, dict), "target": (str, list),
@@ -35,7 +35,7 @@ QUANTITY_KEYS = {"values": list, "tags": list, "labels": list, "key": (str, dict
 TOOL_COMMON = {"tool": str, "baseconfig": (str, list), "input": (str, list), "output_file": (str, list),
                "timeout": (int, float), "stall_after": (int, float), "status": str, "executable": str,
                "arguments": list, "consumes": list, "config": dict, "streamable": bool,
-               "consumes_events": bool}
+               "consumes_events": bool, "shards": int}
 PLOT_KEYS = {"backend": (str, list), "formats": list, "objects": list, "ratio": bool, "y_gutter": (int, float, str),
              "x_gutter": (int, float, str), "logy": bool, "logx": bool, "auto_range": bool, "void_empty": bool,
              "min_entries": int, "range_pad": int, "root_style": str, "data": dict, "style": dict, "object": dict}
@@ -57,6 +57,7 @@ class Tool:
     config: dict | None = None
     streamable: bool | None = None
     consumes_events: bool | None = None
+    shards: int = 1                                  # K > 1: K processes on a share of the events each (V31)
     extra: dict = field(default_factory=dict)       # tool-specific keys and export requests
 
 
@@ -87,6 +88,7 @@ class Configuration:
     static: dict
     prelim: dict
     pre: list[list[str]] = field(default_factory=list)   # tools run once before every point
+    combine: list[str] = field(default_factory=list)    # swept quantities whose points are merged into one (V35)
 
 
 @dataclass
@@ -289,13 +291,16 @@ def parse(raw: dict, path: Path) -> RunConfig:
         extras = _check(table, TOOL_COMMON, at, extra_ok=True)
         if "tool" not in table:
             raise HepError("a tool table needs tool = \"<standard tool>\" or \"custom\"", where=at)
+        if table.get("shards", 1) < 1:
+            raise HepError("shards must be at least 1", where=f"{at}.shards")
         tools[tag] = Tool(tag=tag, tool=table["tool"], baseconfig=_as_list(table.get("baseconfig")),
                           input=_as_list(table.get("input")), output_file=_as_list(table.get("output_file")),
                           timeout=float(table.get("timeout", 0)), stall_after=float(table.get("stall_after", 0)),
                           status=table.get("status", ""), executable=table.get("executable", ""),
                           arguments=list(table.get("arguments", [])), consumes=list(table.get("consumes", [])),
                           config=table.get("config"), streamable=table.get("streamable"),
-                          consumes_events=table.get("consumes_events"), extra=extras)
+                          consumes_events=table.get("consumes_events"), shards=int(table.get("shards", 1)),
+                          extra=extras)
 
     static = raw.get("static", {})
     if not isinstance(static, dict):
@@ -320,6 +325,16 @@ def parse(raw: dict, path: Path) -> RunConfig:
             if name not in swept:
                 raise HepError(f"plot_points names '{name}', which is not swept here", where=f"{at}.plot_points",
                                hint="pages are cells of the grid of swept quantities (04 §5.2)")
+        combine = table.get("combine", [])
+        axes = {entry for entry in sweeps if isinstance(entry, str)}
+        for name in combine:                                                # C14
+            if name not in axes:
+                raise HepError(f"combine names '{name}', which is not swept here as an axis of its own",
+                               where=f"{at}.combine",
+                               hint="the points that differ only in a combined quantity are merged into one (04 §5.5)")
+            if name in plot_points:
+                raise HepError(f"'{name}' is both combined and a page axis (plot_points)", where=f"{at}.combine",
+                               hint="a combined quantity's points become one curve: it cannot also make pages")
         local_static = table.get("static", {})
         for name in local_static:
             if name not in quantities:
@@ -335,7 +350,7 @@ def parse(raw: dict, path: Path) -> RunConfig:
             key=key, name=table.get("name", key), serial=table.get("serial"),
             description=table.get("description", ""), event_count=int(event_count),
             threads=_resolved_threads(int(table.get("threads", run.get("threads", 1))), f"{at}.threads"),
-            sweeps=sweeps, plot_points=list(plot_points),
+            sweeps=sweeps, plot_points=list(plot_points), combine=list(combine),
             tools=_groups(table["tools"], f"{at}.tools", tools),
             post=_groups(table.get("post", []), f"{at}.post", tools),
             pre=_groups(table.get("pre", []), f"{at}.pre", tools),

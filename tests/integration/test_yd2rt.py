@@ -17,7 +17,7 @@ yoda = pytest.importorskip("yoda")
 
 
 def convert(source: Path, target: Path, *extra) -> subprocess.CompletedProcess:
-    return subprocess.run([str(APP), str(source), str(target), *extra], capture_output=True, text=True)
+    return subprocess.run([str(APP), str(source), str(target), *extra], capture_output=True, text=True, encoding="utf-8")
 
 
 def test_every_histogram_equals_the_yoda_values(scratch):

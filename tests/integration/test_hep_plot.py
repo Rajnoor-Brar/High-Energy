@@ -45,7 +45,7 @@ def test_a_merged_sweep_is_one_curve_per_point(scratch, monkeypatch):
         {"name": "b", "values": {"pdf": {"label": "NNPDF 2.3 LO", "swept": True}}}]}))
     sweep = scratch / "sweep.root"
     done = subprocess.run([str(REPO / "build" / "App_yd2rt.exe"), "--merge", str(sweep), f"a={YODAS[0]}", f"b={YODAS[1]}",
-                           "--keep-raw", "--points", str(points)], capture_output=True, text=True)
+                           "--keep-raw", "--points", str(points)], capture_output=True, text=True, encoding="utf-8")
     assert done.returncode == 0, done.stderr
     pytest.importorskip("uproot")
     assert plot.files([str(sweep)], scratch / "pages", objects=["/photo_eic/d01*"], formats=["png"], say=lambda _: None) == 0

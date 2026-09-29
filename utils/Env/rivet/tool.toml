@@ -28,6 +28,11 @@ gives = ["analyses", "plugin_path"]
 files   = ["{repo}/build/Rivet/Rivet_{analysis}.so"]
 version = ["rivet", "--version"]
 
+[shard]
+# shards = K on a rivet table: K rivet processes, each on a share of the events, then rivet-merge -e
+# (the merge folder) into the table's output. Every analysis must be re-entrant (Reentrant: true).
+merge = "merge"
+
 [checks]
 # Every analysis must have a .info (an unknown name is refused before anything runs), and every
 # option given to it must be declared there: an undeclared option is silently ignored by Rivet and
