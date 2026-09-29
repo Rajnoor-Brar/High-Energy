@@ -992,6 +992,11 @@ def _outputs_argument(step: Step, deal: dict[str, str]) -> str:
     items: list[str] = []
     at: dict[str, int] = {}
     for interface in step.outputs:
+        if set(str(interface.path)) & {",", "+"}:
+            raise HepError(f"an output path of [tools.{step.tag}] contains ',' or '+', which separate its outputs",
+                           where=str(interface.path),
+                           hint="rename what puts it there: the run's name or serial, a configuration, a quantity tag, "
+                                "or $HEKIT_OUTPUT")
         group = deal.get(interface.name)
         if group is not None and group in at:
             items[at[group]] += "+" + str(interface.path)

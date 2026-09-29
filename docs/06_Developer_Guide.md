@@ -13,6 +13,7 @@ C++, the tests, and the conventions. The design it serves is [02_Architecture.md
 | `configs/<Project>/` | run TOMLs and native base cards; optionally a project `master.toml` and style files | yes |
 | `modules/<Project>/` | programs (`<Name>.cc`), shared headers, Rivet plugins (`Rivet/<x>.{cc,info,plot,yoda}` or `Rivet_<x>.cc`); `_`-prefixed folders are parked | yes |
 | `utils/Status.hh`, `utils/Module.hh` | the only C++ headers | yes |
+| `utils/Env/patches/` | patches this repository needs in the `~/HEP` stack, applied by hand (each file says to which source; `fastjet-3.5.0-siscone-thread-local-ranlux.patch`: `cd ~/HEP/src/fastjet-3.5.0 && patch -p0 < …`, rebuild, `make install`) | yes |
 | `utils/App_Pythia.cc`, `utils/App_yd2rt.cc` | single-file apps | yes |
 | `utils/Apps/Paint/` | the multi-file Paint app, and `base.toml` (the style) | yes |
 | `utils/Env/` | `hep`, `run`, `hep_env.sh`, `flags.sh`, `master.toml`, `runner/`, the tool folders | yes |

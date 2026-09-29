@@ -581,20 +581,33 @@ statics (L16). **Exit codes** (`Module::Exit`): `Ok` 0, `Config` 1, `Usage` 2, `
 An **integrated program** (`modules/PhotoProduction/InprocJets.cc`, V33) asks for `pythia_cmnd`
 and `rivet_analyses` (`job.standard`, `job.standardValues`), so it gets the same card and seeds as
 the chain's App_Pythia would, and the rivet table's analyses with their options. It runs Pythia as
-App_Pythia does and one `Rivet::AnalysisHandler` on a thread of its own. Its parts are headers in
-`modules/PhotoProduction/Inproc/`:
+App_Pythia does and `rivet_threads` `Rivet::AnalysisHandler`s on threads of their own (V34). Its
+parts are headers in `modules/PhotoProduction/Inproc/`:
 
 | Header | Holds |
 |---|---|
 | `Stamp.hh` | what every event gets before Rivet sees it: one numbering, one run info, the combined σ (L1, L2), and the last σ stamped (L28) |
-| `Feed.hh` | a bounded queue from the Pythia threads to Rivet's: a full feed holds generation back |
-| `Analysis.hh` | Rivet on its thread: `analyze`, `countEvent`; at the end the L28 σ as a user σ (`setCrossSection(σ, true)`), `finalize`, `writeData` |
+| `Feed.hh` | a bounded queue from the Pythia threads to the Rivets: whichever Rivet is free takes the next event; a full feed holds generation back |
+| `Analysis.hh` | the Rivets: every handler initialised on the first event before any analyses; each `analyze`s on its own thread; at the end `merge` into the first (raw fills and event counters added, before any `finalize`, so re-entrancy is not needed), the L28 σ as a user σ (`setCrossSection(σ, true)`), one `finalize`, `writeData`. Above one Rivet it checks that SISCone's state is per thread (L29) and refuses otherwise |
 | `Engines.hh` | `serial` (one `Pythia8::Pythia`) and `parallel` (`PythiaParallel`, `processAsync = on`, a converter per instance, chunks of 100 × threads); after Rivet's thread starts, a failure is returned, never exited on (L3, L5, L6) |
 
-Rivet stays on **one** thread: it is not thread-safe, and photo_eic's SISCone keeps process-wide
-statics (L16). Taking Rivet out of Pythia's callback made a 40k-event `inproc` point 1.26× faster
-(31.3 s → 24.9 s at 12 threads) with the same YODA to the last digit; for more than one Rivet's
-rate, use the chain with `shards` (§3.1).
+Config (`[tools.<tag>.config]`): `engine` (`"parallel"`, `"serial"`) and **`rivet_threads`** (default
+1). Several Rivets in one process need FastJet's SISCone to keep its state per thread: stock SISCone
+has one random generator and one η range for the process, and threads clustering at once get other
+jets or a FastJet internal error (L16, L29). The patch is
+`utils/Env/patches/fastjet-3.5.0-siscone-thread-local-ranlux.patch` (applied to `~/HEP` on
+2026-09-29); a single-threaded Rivet gives byte-identical YODAs with it.
+
+| 200k events of `single`, with the ~5 s start-up | photo_eic (`InProcEIC`) | ZEUS (`InProcZeus`) |
+|---|---|---|
+| chain, 12 threads + 10 `shards` | 29.0 s | 27.1 s |
+| in one process, 12 threads + 1 Rivet | 112 s | — |
+| in one process, 12 + 12 Rivets | 20.7 s | — |
+| in one process, 10 + 14 Rivets | 19.3 s | 17.3 s |
+
+One Rivet in one process was already 1.26× the old callback design (31.3 s → 24.9 s for 40k
+events, the same YODA to the last digit); several make the integrated program ~1.5× the sharded
+chain, because nothing formats or parses HepMC text.
 
 ## 19. `Status.hh` and the status protocol
 

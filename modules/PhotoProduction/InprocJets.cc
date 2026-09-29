@@ -15,13 +15,16 @@
 //     rivet_analyses = true       # [standard.rivet_analyses]: the rivet table's analyses (options included)
 //                                 # and the plugin path
 //
-// Config ([tools.jets.config]):
-//   engine = "parallel"  PythiaParallel as App_Pythia runs it: the same card, seeds and instances
-//            "serial"    one Pythia8::Pythia, seeded by the card's Random:seed
+// Config ([tools.<tag>.config]):
+//   engine        = "parallel"  PythiaParallel as App_Pythia runs it: the same card, seeds and instances
+//                   "serial"    one Pythia8::Pythia, seeded by the card's Random:seed
+//   rivet_threads = 1           Rivets, each on its own thread, merged at the end (V34); above 1 it
+//                               needs the SISCone patch (L29) and refuses to run without it
 //
-// Threads: the card's Parallelism:numThreads generate and convert; one more runs Rivet. The pieces
-// are in Inproc/: Stamp.hh (numbering and σ: L1, L2, L28), Feed.hh (Pythia threads → Rivet),
-// Analysis.hh (Rivet on its own thread, L16), Engines.hh (serial and parallel: L3, L5, L6).
+// Threads: the card's Parallelism:numThreads generate and convert, and rivet_threads analyse. The
+// pieces are in Inproc/: Stamp.hh (numbering and σ: L1, L2, L28), Feed.hh (Pythia threads → the
+// Rivets), Analysis.hh (the Rivets and their merge: L16, L29), Engines.hh (serial and parallel: L3,
+// L5, L6).
 
 #include "Module.hh"
 #include "Inproc/Analysis.hh"
@@ -37,7 +40,7 @@ int main(int argc, char** argv) {
     const std::string engine = job.config().get("engine", "parallel");
     if (engine != "parallel" && engine != "serial") job.fail(Module::Config, "engine must be parallel or serial");
 
-    Inproc::Analysis rivet(job, job.standardValues("rivet_analyses"));
+    Inproc::Analysis rivet(job, job.standardValues("rivet_analyses"), job.config().get("rivet_threads", 1));
     Inproc::Stamper stamper;
     const Inproc::Run run = engine == "serial" ? Inproc::serial(job, card, stamper, rivet)
                                                : Inproc::parallel(job, card, stamper, rivet);

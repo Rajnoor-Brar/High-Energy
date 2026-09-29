@@ -4,7 +4,7 @@
   events; the module's histograms equal Rivet's to the precision YODA writes (7 significant digits).
 * InprocJets (rows 6–8): an integrated Pythia + Rivet program gets the chain's card and seeds, so at
   one thread its YODA equals the chain's bin for bin; at four its σ equals App_Pythia's sidecar;
-  and the serial engine is reproducible.
+  four Rivets on threads equal one (V34, L29); and the serial engine is reproducible.
 """
 
 from __future__ import annotations
@@ -79,6 +79,30 @@ def test_inproc_sigma_equals_the_sidecar_at_four_threads(scratch):
     report = json.loads((results / "PhotoProduction" / "03_eic" / "11_inproc" / "point" / "photo.yoda.json").read_text(encoding="utf-8", errors="replace"))
     assert report["events"] == sidecar["written"]
     assert report["sigma_pb"] == pytest.approx(sidecar["sigma_pb"], rel=1e-6)
+
+
+@pytest.mark.parametrize("config, product", [("PhotoProduction/InProcEIC", "photo.yoda"),
+                                             ("PhotoProduction/InProcZeus", "zeus.yoda")])
+def test_rivet_threads_equal_one_rivet(scratch, config, product):
+    """V34, the gate: four Rivets on threads of their own, merged, equal one Rivet on the same events.
+    Both analyses cluster with SISCone, which needs the patch for this (L29): without it the jets
+    change or FastJet stops with an internal error."""
+    results = []
+    for k in (1, 4):
+        _, res = hep_run(scratch / f"k{k}", config, "single", "--set", "run.event_count=4000", "--set", "run.threads=4",
+                         "--set", f"tools.inproc.config.rivet_threads={k}")
+        results.append(yoda.read(str(next(res.rglob(product)))))
+    one, four = results
+    assert one["/RAW/_EVTCOUNT"].numEntries() == four["/RAW/_EVTCOUNT"].numEntries()
+    assert four["/_XSEC"].val() == pytest.approx(one["/_XSEC"].val(), rel=1e-12)
+    compared = 0
+    for path, histo in one.items():
+        if path.startswith("/RAW/") and hasattr(histo, "sumW"):
+            assert four[path].sumW() == pytest.approx(histo.sumW(), rel=1e-12), path
+        elif histo.type() == "Estimate1D":
+            assert np.array_equal(np.nan_to_num(histo.vals(), nan=-1), np.nan_to_num(four[path].vals(), nan=-1)), path
+            compared += 1
+    assert compared > 10
 
 
 def test_the_serial_engine_is_reproducible(scratch):

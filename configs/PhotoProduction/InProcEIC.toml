@@ -6,7 +6,7 @@
 #
 # The same physics set-up as eic.toml: base card photo_ep.cmnd, the same quantities, statics and
 # configurations, photo_eic. Instead of App_Pythia → FIFO → rivet, one program
-# (modules/PhotoProduction/InprocJets.cc) runs PythiaParallel and one Rivet, and hands each event to
+# (modules/PhotoProduction/InprocJets.cc) runs PythiaParallel and its Rivets, and hands each event to
 # Rivet as an in-memory HepMC3::GenEvent: no HepMC text, no FIFO. It gets the pythia table's point
 # card (seeds included) and the rivet table's analyses with their options (radius's R) as standard
 # configurations (04 §9.4); those two tables are configured here but never run.
@@ -17,9 +17,10 @@
 # Seeds follow the generator's card, base card, binary, threads and event count (V22): with the same
 # event_count and threads as eic.toml, a point here and the same point there are the same events.
 #
-# Speed: one Rivet on one thread (L16: photo_eic's SISCone keeps process-wide statics), so ~1,600
-# events/s whatever `threads` (the Pythia threads wait on the feed and cost nothing). For more,
-# eic.toml with rivet `shards` is several times faster.
+# Speed: `rivet_threads` Rivets, each on its own thread, merged at the end (V34); they need the
+# SISCone patch (L29, utils/Env/patches/), without which the program refuses more than one.
+# Measured, 200k events of `single` with start-up: 12 + 1 Rivet 112 s, 12 + 12 Rivets 20.7 s,
+# 10 + 14 19.3 s; eic.toml's chain with 12 + 10 shards 29.0 s.
 #
 # Physics notes carried over from eic.toml:
 #   * Photon:ProcessType 0 and 1 give identical events with this card; the direct contribution needs
@@ -34,7 +35,7 @@ name          = "inproc_eic"
 project       = "PhotoProduction"
 configuration = "pdf"
 event_count   = 1_000_000
-threads       = 12            # as eic.toml, for its seeds; Rivet sets the pace here
+threads       = 12            # Pythia's; as eic.toml, so the same seeds (10 + 14 Rivets is 7% faster)
 
 [run.single]
 description = "One run at the static point (27x920 e+p), in one process"
@@ -128,7 +129,8 @@ pythia_cmnd    = true         # [tools.pythia]'s point card: sweeps and seeds in
 rivet_analyses = true         # [tools.rivet]'s analyses (options included) and the plugin path
 
 [tools.inproc.config]
-engine = "parallel"           # PythiaParallel as App_Pythia runs it; "serial": one Pythia8::Pythia
+engine        = "parallel"    # PythiaParallel as App_Pythia runs it; "serial": one Pythia8::Pythia
+rivet_threads = 12            # Rivets on threads of their own, merged at the end (V34, L29)
 
 [tools.pythia]                # configured, not run: exported to inproc as pythia_cmnd
 tool        = "pythia"

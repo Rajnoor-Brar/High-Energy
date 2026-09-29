@@ -1,5 +1,21 @@
 # Current plan
 
+## Several Rivets in one process (option 2) — **DONE 2026-09-29** (ordered by the user 2026-09-29)
+
+"Implement option two for PhotoProduction module": SISCone per thread, then Rivets on threads.
+
+- `~/HEP` FastJet 3.5.0 patched (`utils/Env/patches/fastjet-3.5.0-siscone-thread-local-ranlux.patch`):
+  SISCone's ranlux state and `Ceta_phi_range::eta_min/eta_max` are `thread_local` (L29). The second
+  was found by the gate (FastJet internal error with only the generator patched). ABI unchanged, so
+  Rivet/Herwig/Whizard were not rebuilt; backup `~/HEP/install/fastjet.bak.20260929`. Single-threaded
+  Rivet byte-identical before/after (ZEUS + photo_eic, 20k events).
+- V34: `Inproc/Analysis.hh` runs `rivet_threads` handlers, fed first-free, merged before one
+  finalize; checks the patch and refuses without it (verified with the old library preloaded).
+- Gate: 4 Rivets = 1 exactly (every raw sum and final bin, σ) for InProcEIC and InProcZeus
+  (`test_modules_p4.py::test_rivet_threads_equal_one_rivet`). Speed, 200k photo_eic events: chain
+  12 + 10 shards 29.0 s; in one process 12 + 12 Rivets 20.7 s, 10 + 14 19.3 s.
+- Also: output paths with ',' or '+' are refused at plan time (they are App_Pythia's separators).
+
 ## InprocJets as App_Pythia runs Pythia — **DONE 2026-09-29** (ordered by the user 2026-09-29)
 
 "Update the PhotoProduction module for integrated in-process rivet pythia, as per new norms and ways

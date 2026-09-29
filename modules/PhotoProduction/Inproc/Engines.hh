@@ -5,8 +5,8 @@
 //   parallel  PythiaParallel as App_Pythia runs it: the same card, seeds and instances; callbacks in
 //             parallel (processAsync = on), each instance converting with its own converter
 //
-// Both stamp every converted event (Stamp.hh) and hand it to Rivet's thread (Analysis.hh). Nothing
-// here exits the program once Rivet's thread has started: a failure is returned in Run::error.
+// Both stamp every converted event (Stamp.hh) and hand it to the Rivets (Analysis.hh). Nothing here
+// exits the program once the Rivets' threads have started: a failure is returned in Run::error.
 //   L3  Nothing may leave a callback: the first exception is kept and returned.
 //   L5  Main:numberOfEvents counts attempts, and failed events never reach Rivet.
 //   L6  run() goes in chunks of 100 × threads, as App_Pythia, so the instances see the same work.
@@ -78,7 +78,7 @@ namespace Inproc {
         detail::configure(job, pythia, card);
         Run run;
         run.requested = pythia.settings.mode("Main:numberOfEvents");
-        job.status().phase("init", "serial");
+        job.status().phase("init", "serial, " + std::to_string(rivet.threads()) + " Rivet");
         if (!pythia.init()) job.fail(Module::Init, "Pythia initialisation failed");
 
         rivet.start();
@@ -108,7 +108,7 @@ namespace Inproc {
         Run run;
         run.requested = pythia.settings.mode("Main:numberOfEvents");
         run.threads = std::max(1, pythia.settings.mode("Parallelism:numThreads"));
-        job.status().phase("init", std::to_string(run.threads) + " threads");
+        job.status().phase("init", std::to_string(run.threads) + " threads, " + std::to_string(rivet.threads()) + " Rivet");
         if (!pythia.init()) job.fail(Module::Init, "Pythia initialisation failed");
 
         // A converter per instance, each used only on its instance's thread; read-only from here.

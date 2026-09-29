@@ -6,19 +6,20 @@
 #
 # The same physics set-up as zeus_validation.toml: base card photo_zs.cmnd, the same quantities and
 # statics, ZEUS_2012_I1116258. Instead of App_Pythia → FIFO → rivet, one program
-# (modules/PhotoProduction/InprocJets.cc) runs PythiaParallel and one Rivet, and hands each event to
+# (modules/PhotoProduction/InprocJets.cc) runs PythiaParallel and its Rivets, and hands each event to
 # Rivet as an in-memory HepMC3::GenEvent: no HepMC text, no FIFO. It gets the pythia table's point
 # card (seeds included) and the rivet table's analyses as standard configurations (04 §9.4); those
 # two tables are configured here but never run.
 #
 # Seeds follow the generator's card, base card, binary, threads and event count (V22): with the same
 # event_count and threads as zeus_validation.toml, a point here and the same point there get the
-# same seeds, so the same events, comparable bin for bin. (zeus_validation.toml now asks for 10M;
-# `--set run.event_count=10000000` here matches it, at ~1.4 h a point in one process.)
+# same seeds, so the same events, comparable bin for bin (`--set run.threads=20 --set
+# run.event_count=10000000` matches it as it is now).
 #
-# Speed: one Rivet on one thread (L16), so ~2,000 events/s whatever `threads` (the Pythia threads
-# wait on the feed and cost nothing). For more, zeus_validation.toml with rivet `shards` is several
-# times faster.
+# Speed: `rivet_threads` Rivets, each on its own thread, merged at the end (V34); they need the
+# SISCone patch (L29, utils/Env/patches/), without which the program refuses more than one.
+# Measured, 200k events of `single` with start-up: 10 + 14 Rivets 17.3 s; zeus_validation.toml's
+# chain with 12 + 10 shards 27.1 s.
 
 [run]
 serial        = 1
@@ -26,7 +27,7 @@ name          = "inproc_zeus"
 project       = "PhotoProduction"
 configuration = "default"
 event_count   = 1_000_000
-threads       = 20            # as zeus_validation.toml, for its seeds; Rivet sets the pace here
+threads       = 12            # Pythia's; 12 + 12 Rivets fill the 24 hardware threads
 
 [run.default]
 description = "Proton-PDF comparison at 27.5x920 GeV e+p against ZEUS 2012, in one process"
@@ -65,7 +66,8 @@ pythia_cmnd    = true         # [tools.pythia]'s point card: sweeps and seeds in
 rivet_analyses = true         # [tools.rivet]'s analyses (options included) and the plugin path
 
 [tools.inproc.config]
-engine = "parallel"           # PythiaParallel as App_Pythia runs it; "serial": one Pythia8::Pythia
+engine        = "parallel"    # PythiaParallel as App_Pythia runs it; "serial": one Pythia8::Pythia
+rivet_threads = 12            # Rivets on threads of their own, merged at the end (V34, L29)
 
 [tools.pythia]                # configured, not run: exported to inproc as pythia_cmnd
 tool        = "pythia"

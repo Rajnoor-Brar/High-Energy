@@ -73,6 +73,13 @@ def test_other_outputs_still_get_every_event(scratch):
     assert groups == [f"{p.out / 'events.s1.hepmc'}+{p.out / 'events.s2.hepmc'}", str(p.out / "copy.hepmc")]
 
 
+def test_an_output_path_with_a_separator_is_refused(scratch):
+    """`+` and `,` separate App_Pythia's outputs: a path holding one would be split into others."""
+    with pytest.raises(HepError, match="contains ',' or '\\+'"):
+        plan(sharded(2, run__one__sweeps=["q"], quantities__q={"key": {"pythia": "MultipartonInteractions:pT0Ref"},
+                                                                 "values": [3.0, 3.2], "tags": ["a+b", "c"]}), scratch)
+
+
 @pytest.mark.parametrize("changes, message", [
     ({"tools__rivet__shards": 0}, "at least 1"),
     ({"tools__yd2rt": {"tool": "yd2rt", "input": "photo.yoda", "output_file": "photo.root", "shards": 2},
