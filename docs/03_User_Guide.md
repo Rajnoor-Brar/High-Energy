@@ -427,7 +427,32 @@ output_file = "shared.lhe"                        # every point may name it: inp
 
 A changed pre stage reruns the points; a failed one stops the run.
 
-### 4.17 Any files, overlaid
+### 4.17 Faster points: more Rivets
+
+A Rivet process uses one core, so in a Pythia → Rivet chain it is the limit (about 1,500 events/s
+with ZEUS_2012), and more Pythia threads only wait for it. Split its events among several:
+
+```toml
+[run.default]
+threads = 12                     # Pythia's threads
+
+[tools.rivet]
+tool        = "rivet"
+input       = "events.hepmc"
+analyses    = ["ZEUS_2012_I1116258"]
+output_file = "zeus.yoda"
+shards      = 10                 # 10 Rivet processes, each on a share, merged into zeus.yoda
+```
+
+Nothing else changes: not the chain, not the file names, not what the later tools and the pages
+read. The runner deals the events among ten FIFOs, runs ten Rivets, checks each one's count, and
+merges them with `rivet-merge -e` ([05 §3.1](05_Tools_Reference.md#31-sharded-rivet-shards--k)).
+The events are the same as unsharded, so the result is the same; the point reruns, since its
+commands changed. Keep `threads + shards` within the machine's cores. For one run only:
+`--set tools.rivet.shards=10 --set run.default.threads=12`. Every analysis must be re-entrant
+(`Reentrant: true` in its `.info`).
+
+### 4.18 Any files, overlaid
 
 ```bash
 hep plot a.yoda b.yoda --labels "Tune A,Tune B" --ratio --objects "/MC_JETS/*"
@@ -506,6 +531,7 @@ corner carries over; `"both"` draws both sets in one run.
 | only the post (or pre) tools | `--only post` / `--only pre` |
 | plain lines (logs, CI) | `--plain` (automatic when not a terminal) |
 | to follow a job elsewhere | `hep watch [CONFIG [CFG]]` |
+| a point faster | `shards = K` on the Rivet table (§4.17); more Pythia `threads` alone do not help |
 
 The identity covers cards, argv, binaries, analyses and their plugins, events and threads, and seeds
 derive from it, so a rerun of an unchanged point does nothing, and a changed one reruns by itself.

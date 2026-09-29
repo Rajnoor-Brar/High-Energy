@@ -156,7 +156,7 @@ def points_manifest(plans: list[PointPlan], run, configuration) -> dict:
                               "value": quantity[name].values[i], "swept": name in plan.point.choice}
                        for name, i in plan.values.items()},
             "page": [tag_of(quantity[name], plan.point.choice[name]) for name in page_names],
-            "products": {i.name: str(i.path) for i in plan.interfaces.values() if i.kind == "product"},
+            "products": {i.name: str(i.path) for i in plan.interfaces.values() if i.kind == "product" and not i.shard},
             "results": str(plan.res), "output": str(plan.out),
             "identity": plan.identity, "seed": plan.seed, "complete": is_complete(plan),
         })

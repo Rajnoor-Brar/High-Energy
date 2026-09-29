@@ -16,7 +16,7 @@ runner discovers the folders and names none of them.
 | `tool =` | Category | Runs | Card | Streamable | Status | Count check | Prepare | Exports |
 |---|---|---|---|---|---|---|---|---|
 | `pythia` | event generator | `build/App_Pythia.exe` | `.cmnd`, append | — (writes) | standard | produces: sidecar | — | `card`, `cmnd` |
-| `rivet` | analysis application | `rivet` | none (flags) | yes | filters | `/RAW/_EVTCOUNT` | — | `analyses` |
+| `rivet` | analysis application | `rivet` (or K of them: `shards`) | none (flags) | yes | filters | `/RAW/_EVTCOUNT` | — | `analyses` |
 | `yd2rt` | visualisation | `build/App_yd2rt.exe` | none | file | standard | — | — | — |
 | `merge` | analysis application (post) | `rivet-merge` | none | files | none | — | — | — |
 | `plotmerge` | visualisation (post) | `App_yd2rt.exe --merge` | none | files | standard | — | — | — |
@@ -60,7 +60,8 @@ output_file = "events.hepmc"         # a [prelim] FIFO or file; an array fans ou
   an earlier group (MadGraph); the base card sets `Beams:frameType = 4`.
 - **Consumes** through the master: `energies`, `sqrts`, `beam_a`, `beam_b`, `beams`, `pdf`
   (checked installed), `events`, `threads` (04 §3); anything else with `key = { pythia = … }`.
-- **Writes** HepMC3 to every output, and the **sidecar** `<first output>.json` (§15).
+- **Writes** HepMC3 to every output, and the **sidecar** `<first output>.json` (§15). It can
+  **deal** its events among a sharded tool's inputs (`[outputs] deal = true`, §3.1).
 - **Exports** `pythia_card` = `pythia_cmnd`: `path` (the combined card, seeds included) and `parts`.
 - **Identity** includes the binary's sha256; **version** from `pythia8-config --version`.
 - Ledger: L1–L6, L25.
@@ -96,6 +97,42 @@ output_file = "photo.yoda"
   `photo_eic:R=0.4`) and `plugin_path` (`build/Rivet`).
 - Status by filters: `Event N (` → progress, `ERROR`/`Exception` → error, `WARN` → warning (the
   "unvalidated" warning ignored). Ledger: L7, L9, L10, L19.
+
+### 3.1 Sharded Rivet: `shards = K`
+
+One Rivet process is one core: with ZEUS_2012_I1116258 about 1,500 events/s, a third of it reading
+the HepMC text and the rest clustering jets. It sets the pace of a Pythia → Rivet chain whatever
+Pythia's threads (measured 2026-09-29: 20 threads left the machine at 4%). `shards = K` runs K Rivet
+processes, each on a share of the events, and merges them (V31):
+
+```toml
+[tools.rivet]
+tool        = "rivet"
+input       = "events.hepmc"          # a [prelim] FIFO (or file) written by pythia
+analyses    = ["ZEUS_2012_I1116258"]
+output_file = "zeus.yoda"
+shards      = 10
+```
+
+- **The chain does not change** (`tools = [["pythia", "rivet"], "yd2rt"]`). For each point the
+  runner makes the FIFOs `events.s1.hepmc` … `events.s10.hepmc` in place of `events.hepmc`; App_Pythia
+  deals the events among them (§15); the steps `rivet.1` … `rivet.10` run in the group, each writing
+  `output/…/<point>/shards/zeus.s<i>.yoda`; each is count-checked against **its own share**
+  (`written_per_output` in the sidecar); then `rivet.merge`, a step of its own in the next group,
+  runs `rivet-merge -e` (the `merge` folder) into the table's `output_file` (`zeus.yoda`, in
+  `results/`). Logs: `logs/rivet.<i>.log`, `logs/rivet.merge.log`. `--plan` shows every step.
+- **The events do not change.** Seeds follow the generator's cards, not its argv (V22), so a
+  sharded point has the same events as the same point unsharded; the merged YODA is the same up to
+  the rounding of summing in another order. The point's identity does change (its argv), so
+  changing `shards` reruns it.
+- **Requirements**, refused at plan time otherwise: the tool reads one input and writes one output;
+  the input is a `[prelim]` FIFO or file with exactly one producer in the chain, whose folder can
+  deal (`pythia`); every analysis is re-entrant (`Reentrant: true` in its `.info`), because
+  `rivet-merge -e` runs `finalize()` again on the summed histograms. Other outputs of the producer
+  (a module program's FIFO) still get every event.
+- **Choosing K.** Each shard is one core, and so is each Pythia thread: `threads + shards` should
+  not exceed the machine (on 24 cores, e.g. `threads = 12`, `shards = 10`). The chain then runs at
+  about `shards ×` one Rivet's rate, until Pythia's own generation rate is the limit.
 
 ## 4. `yd2rt` — YODA → ROOT
 
@@ -135,7 +172,8 @@ equivalent  = true               # default: -e, statistically equivalent runs
 | `equivalent` | flag | true | `-e`: runs of one process (seed replicas); statistics add, σ is averaged. `false` merges different processes into their sum. |
 
 Runs `rivet-merge [-e] -o <partial output> <every point's input>`, with `RIVET_ANALYSIS_PATH` set:
-it re-runs the analyses' `finalize()`, so they must be re-entrant.
+it re-runs the analyses' `finalize()`, so they must be re-entrant. The same folder merges a sharded
+Rivet's shards inside a point (§3.1), where the runner adds it by itself.
 
 ## 6. `plotmerge` — the sweep in one file, in `post`
 
@@ -342,26 +380,34 @@ A backend is a module with `validate(settings, beside_root=False)` and
 App_Pythia.exe [--threads N] [--events N] [--seeds S1,S2,…] [--sidecar FILE] OUTPUT[,OUTPUT…] CARD [CARD…]
 ```
 
+Every comma-separated OUTPUT gets **every** event (fan-out, V16). An OUTPUT written **`A+B+C`** is a
+**deal group**: each event goes to **one** of its members, the first that is free starting from a
+rotating index (so a slow consumer gets fewer), which is how a sharded Rivet gets its shares (§3.1).
+`events.s1.hepmc+events.s2.hepmc,to_module.hepmc` deals the events between two Rivet shards and
+still copies every one to a module program.
+
 `// requires: pythia8 hepmc3 zstd zlib`. The runner calls it as `{exe} {outputs} {cards}`: threads,
 events and seeds are in the point card.
 
 | Behaviour | Ledger |
 |---|---|
 | Reads the cards in order (the point card last: last wins) | — |
-| `PythiaParallel` with `processAsync = off` and **one serialised writer** | L3 |
+| `PythiaParallel` with `processAsync = on`: callbacks run concurrently, each instance converts with its **own** `Pythia8ToHepMC`, σ is combined under one small lock, and **each output has its own writer and lock**, so formatting the HepMC text is shared among the outputs. (With `processAsync = off` and one writer, the app was capped at ~2,200 events/s whatever its threads: 4 threads took 17.7 s and 20 threads 20.5 s for 40k events.) | L3 |
 | Checks the seed list before `init()`: one per thread, each in 1…9·10⁸ (Pythia does not) | L4 |
 | Opens the outputs only after `init()` succeeds: a bad card leaves no half-open FIFO | — |
 | Runs in chunks of a multiple of the thread count, so SIGINT takes effect within a chunk | L6 |
 | Catches in the callback and re-raises on the main thread | L3 |
 | σ combined over instances: the ΣW-weighted mean, errors in quadrature | L1 |
 | Once more than one instance has contributed, **re-stamps every event's `GenCrossSection` with the combination**, so the last event Rivet reads carries the final σ; at one thread the converter's numbers are untouched (bit for bit the legacy pipeline's) | L2 |
-| Several outputs: the same events to each (fan-out, V16); a `.gz` or `.zst` suffix picks HepMC3's compressed writer | L25 |
+| Several outputs: the same events to each (fan-out, V16), or one of a deal group's members each; a `.gz` or `.zst` suffix picks HepMC3's compressed writer | L25 |
+| Events are numbered once, from 0, across the threads; every event carries one shared run info | — |
 | Status on `$HEP_STATUS_FD` (§19) | — |
 
 **The sidecar**, `<first output>.json` (or `--sidecar`): `tool`, `pythia_version`, `requested`,
 `attempted`, `accepted`, **`written`** (what the count check compares; can be below `requested`,
 L5), `write_failures`, `sigma_pb`, `sigma_err_pb`, `sum_w`, `threads`, `seeds`, `random_seed`,
-`outputs`, `cards`, `stopped`. It is written after the outputs are closed.
+`outputs` (every path, in order), **`written_per_output`** (`{"<path>": events, …}`: what a
+shard's count check compares), `cards`, `stopped`. It is written after the outputs are closed.
 
 **Exit codes**: 0 ok, 1 card or config, 2 usage, 3 init, 5 output, 6 stopped (outputs and sidecar
 written, `stopped: true`), 70 internal.

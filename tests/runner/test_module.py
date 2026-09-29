@@ -25,7 +25,7 @@ def test_a_module_reading_a_fifo_gets_no_sidecar_and_is_count_checked(scratch):
     assert step.argv == ["/bin/true", str(step.config_path), f"--input={fifo}", f"--output={partial}",
                          "--events=10", "--sidecar="]            # a FIFO's sidecar appears only after the stream
     assert step.config_path in p.writes                           # a kit program always gets a config
-    assert step.count_check == (partial, p.rendered["pythia"].sidecar, "json:events")
+    assert step.count_check == (partial, p.rendered["pythia"].sidecar, "json:events", None)   # not a shard: every event
 
 
 def test_a_module_in_a_later_group_gets_the_producer_sidecar(scratch):

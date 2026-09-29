@@ -167,13 +167,13 @@ def cmd_run(args) -> int:
             verdict = "post done"
         if args.only != "post":
             failed += plot.draw(run, configuration, every, shown.say) > 0
+        shown.say(verdict)                   # before end(): the view's thread prints it (V32)
     finally:
         shown.end()
         manifest()
         if journal:
             journal.write("", "", {"k": "run", "state": "finished", "verdict": verdict})
             journal.close()
-    shown.say(verdict)
     return 1 if failed else 0
 
 

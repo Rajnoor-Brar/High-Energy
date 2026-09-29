@@ -23,6 +23,7 @@ argv = ["{exe}", "{outputs}", "{cards}"]
 
 [outputs]
 sidecar = "{output}.json"           # App_Pythia writes it next to its first output
+deal    = true                      # it can deal events among a sharded tool's inputs (A+B+C, V31)
 
 [exports.cmnd]
 alias = "card"                      # pythia_cmnd = pythia_card

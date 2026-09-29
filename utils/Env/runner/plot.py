@@ -374,7 +374,7 @@ def merge(sources: dict[str, Path], target: Path, stamp: Path, points: Path | No
 
 def yoda_of(plan) -> Path | None:
     for interface in plan.interfaces.values():
-        if interface.kind == "product" and interface.path.suffix == ".yoda":
+        if interface.kind == "product" and not interface.shard and interface.path.suffix == ".yoda":
             return interface.path
     return None
 

@@ -108,12 +108,19 @@ The package and its ranks are [02 §3.1](02_Architecture.md#31-the-runner). The 
 | `Mapping` | `quantities` | how one quantity reaches one tool: `tag`, `form` (`key`, `keys`, `flag`, `option`, `config`, `seed`), `key`, `format`, `analysis`, `check` |
 | `Override` | `quantities` | `(key, value, origin)`, a `NamedTuple`: what a `render.py` receives |
 | `Folder` | `tools` | a tool folder: `name`, `dir`, `spec` (its `tool.toml`), `plugin` (`render.py`), `filters` |
-| `Interface` | `tools` | `name`, `path`, `kind` (`fifo`, `file`, `product`, `pre`, `points`), `producer`, `readers`, `group`, and for `points` the `paths` and `names` of every point |
+| `Interface` | `tools` | `name`, `path`, `kind` (`fifo`, `file`, `product`, `pre`, `points`), `producer`, `readers`, `group`, for `points` the `paths` and `names` of every point, and `shard` (a shard's product: technical, not the point's) |
 | `Step` | `tools` | one tool of one point: its folder, group, executable, argv, env, cwd, log, status mode, filters, inputs, outputs, products (final, partial), sidecar, count check, card lines and paths, config, prepare entry and argv, `identity_parts` |
-| `PointPlan` | `tools` | one point (or stage): `values`, `out`, `res`, `groups` of steps, `rendered` (every step, export-only ones included), `interfaces`, `consumers`, `identity`, `seed`, `writes` (files to write), `context`, `upstream` |
+| `PointPlan` | `tools` | one point (or stage): `values`, `out`, `res`, `groups` of steps, `rendered` (every step, export-only ones included), `interfaces`, `consumers`, `identity`, `seed`, `writes` (files to write), `context`, `upstream`, `deal` (a dealt interface → its group) |
 | `ToolState`, `Journal`, `Reader` | `status` | what the views show per tool; `status.jsonl`; one process's pipe or log tail |
 | `ToolResult`, `PointResult` | `execute` | exits, causes and messages |
 | `Page` | `plot` | one page: its config path, output, cell, object, document, sources, variants, data, overrides, ranges, merged style |
+
+**Sharding** (`tools._shard`, V31) rewrites a point's chain before anything else is planned: the
+sharded table becomes `<tag>.1` … `<tag>.K` (copies of its `Tool` reading `<fifo>.s<i>.<ext>` and
+writing under `output/…/shards/`), the producer's `output_file` gets the K members (rendered as a
+`+` group by `_outputs_argument`), and a `<tag>.merge` step of the folder's `[shard] merge` tool is
+inserted as the next group. The rest of planning sees an ordinary chain; the count check carries the
+member's path as its key into the sidecar's `written_per_output`.
 
 **The flow** (`cli.build_plans`, then `cmd_run`): `config.load` → `sweep.points` →
 `post.plan_pre` → `tools.plan_point` per point → `record.identity` → `record.assign_seeds` →
@@ -165,6 +172,7 @@ Every section and key is checked when the folders load: an unknown one is an err
 | | `event_count` | how a count is read back: `yoda:<path>` (a counter's entries), `json:<key>` (the product's report), `root:<tree>` (a tree's entries) |
 | | `sidecar` | where a producer's sidecar is (`"{output}.json"`) |
 | | `written` | `"requested"`: it always makes what it is asked for or fails, so the runner writes the sidecar after exit 0 |
+| | `deal` | `true`: its `{outputs}` may hold a deal group (`A+B+C`: each event to one member), so it can feed a sharded tool; its sidecar must then carry `written_per_output` |
 | `[prepare]` | `argv` | the prepare step (`{repo}`, `{exe}`, `{card}`, `{prepare_card}`, `{prepared}`, `{out}`), run in the cache entry |
 | | `marker` | a file the step must leave; the `.prepared` stamp is written only then |
 | | `ignore` | card keys left out of the cache key (`EVENTS`, `n_events`, `seed`) |
@@ -175,6 +183,7 @@ Every section and key is checked when the folders load: an unknown one is an err
 | | `needs_prepare` | asking for it runs the prepare step on demand |
 | `[identity]` | `files` | files whose sha256 enters the identity (`{repo}`, `{exe}`, `{analysis}`) |
 | | `version` | a command whose first line is the version, for provenance |
+| `[shard]` | `merge` | the tool folder that joins K shards' products into the table's `output_file`; without it, `shards` is refused (rivet: `merge`, i.e. `rivet-merge -e`) |
 | `[checks]` | `files` | files that must exist at plan time (C10) |
 | | `info_dirs`, `info_dirs_command` | where analyses' `.info` files are, for C9 |
 

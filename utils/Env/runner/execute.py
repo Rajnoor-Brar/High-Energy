@@ -115,6 +115,7 @@ def prepare(plan: PointPlan) -> None:
         write_atomic(path, text)
     for step in plan.rendered.values():  # a product left by an earlier attempt must not pass for this one's
         for final, partial in step.products:
+            final.parent.mkdir(parents=True, exist_ok=True)          # a shard's is under output/…/shards/
             for path in (final, partial, report_of(final), report_of(partial)):
                 path.unlink(missing_ok=True)
     for interface in plan.interfaces.values():
@@ -363,15 +364,17 @@ def _settle(group: list[Step], results: dict[str, ToolResult]) -> PointResult | 
     for step in group:
         if step.count_check is None:
             continue
-        product, sidecar, reader = step.count_check
+        product, sidecar, reader, key = step.count_check
         counted = read_count(product, reader)
         try:
-            written = json.loads(sidecar.read_text(encoding="utf-8"))["written"]
-        except (OSError, ValueError, KeyError):
+            data = json.loads(sidecar.read_text(encoding="utf-8"))
+            written = data["written_per_output"][key] if key else data["written"]   # a shard: its own share
+        except (OSError, ValueError, KeyError, TypeError):
             written = None
         if counted is None or written is None or round(counted) != written:
+            share = f" to {Path(key).name}" if key else ""
             message = (f"{step.tag} analysed {counted if counted is None else round(counted)} events; "
-                       f"the producer wrote {written} ({sidecar.name})")
+                       f"the producer wrote {written}{share} ({sidecar.name})")
             results.setdefault(step.tag, ToolResult(step.tag)).cause = "count"
             return PointResult(False, cause=step.tag, message=message, tools=results)
         results[step.tag].message = f"count ok: {written} events"

@@ -61,7 +61,7 @@ def plan(run, configuration, master: dict, plans: list) -> tools.PointPlan | Non
     products: dict[str, list] = {}                  # name → [(point, path)], in point order
     for p in plans:
         for interface in p.interfaces.values():
-            if interface.kind == "product":
+            if interface.kind == "product" and not interface.shard:
                 products.setdefault(interface.name, []).append((p.point.name, interface.path))
     stage = replace(configuration, tools=configuration.post, static={}, prelim={})
     manifest = plans[0].out.parent / "points.json"

@@ -35,7 +35,7 @@ QUANTITY_KEYS = {"values": list, "tags": list, "labels": list, "key": (str, dict
 TOOL_COMMON = {"tool": str, "baseconfig": (str, list), "input": (str, list), "output_file": (str, list),
                "timeout": (int, float), "stall_after": (int, float), "status": str, "executable": str,
                "arguments": list, "consumes": list, "config": dict, "streamable": bool,
-               "consumes_events": bool}
+               "consumes_events": bool, "shards": int}
 PLOT_KEYS = {"backend": (str, list), "formats": list, "objects": list, "ratio": bool, "y_gutter": (int, float, str),
              "x_gutter": (int, float, str), "logy": bool, "logx": bool, "auto_range": bool, "void_empty": bool,
              "min_entries": int, "range_pad": int, "root_style": str, "data": dict, "style": dict, "object": dict}
@@ -57,6 +57,7 @@ class Tool:
     config: dict | None = None
     streamable: bool | None = None
     consumes_events: bool | None = None
+    shards: int = 1                                  # K > 1: K processes on a share of the events each (V31)
     extra: dict = field(default_factory=dict)       # tool-specific keys and export requests
 
 
@@ -289,13 +290,16 @@ def parse(raw: dict, path: Path) -> RunConfig:
         extras = _check(table, TOOL_COMMON, at, extra_ok=True)
         if "tool" not in table:
             raise HepError("a tool table needs tool = \"<standard tool>\" or \"custom\"", where=at)
+        if table.get("shards", 1) < 1:
+            raise HepError("shards must be at least 1", where=f"{at}.shards")
         tools[tag] = Tool(tag=tag, tool=table["tool"], baseconfig=_as_list(table.get("baseconfig")),
                           input=_as_list(table.get("input")), output_file=_as_list(table.get("output_file")),
                           timeout=float(table.get("timeout", 0)), stall_after=float(table.get("stall_after", 0)),
                           status=table.get("status", ""), executable=table.get("executable", ""),
                           arguments=list(table.get("arguments", [])), consumes=list(table.get("consumes", [])),
                           config=table.get("config"), streamable=table.get("streamable"),
-                          consumes_events=table.get("consumes_events"), extra=extras)
+                          consumes_events=table.get("consumes_events"), shards=int(table.get("shards", 1)),
+                          extra=extras)
 
     static = raw.get("static", {})
     if not isinstance(static, dict):

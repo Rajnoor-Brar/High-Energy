@@ -1,5 +1,28 @@
 # Current plan
 
+## Sharded Rivet and a view that never blocks — **SOURCE EDITED, NOT BUILT OR TESTED** (ordered by the user 2026-09-29)
+
+"Though pythia is configured to use 20 out of 24 threads, it uses 4% cpu" → measured (L27): one
+Rivet core ~1,500 events/s, App_Pythia writer-capped ~2,200. The user said "do it" to three parts,
+then "edit source … neither build now nor use a separate worktree, building and testing would be
+done later".
+
+- **App_Pythia** (`utils/App_Pythia.cc`): `processAsync = on`, HepMC formatting on the worker threads,
+  one writer + lock per output; deal groups `A+B+C` (each event to the first free member); sidecar
+  `written_per_output`. Old binaries treat `a+b` as a filename, so sharded runs need the rebuild.
+- **`shards = K`** (V31): `config.Tool.shards`, `tools._shard` rewrites the chain (K copies, a
+  `<tag>.merge` group from the folder's `[shard] merge`), the count check keyed per member, shard
+  products skipped by plot/record/post. `pythia/tool.toml` `[outputs] deal = true`, `rivet/tool.toml`
+  `[shard] merge = "merge"`.
+- **Views** (V32): `watch._Screen` thread for every line and frame; `cli` says the verdict before `end()`.
+- Tests written, not run: `tests/runner/test_shards.py`, `test_status.py` (a pipe nobody reads),
+  `test_module.py`/`test_post.py` adjusted, `tests/integration/test_app_pythia.py` (deal groups),
+  `tests/integration/test_shards.py` (slow: sharded vs unsharded, RAW sumW and σ).
+- Docs: 02 §6.1 and §10, 03 §4.17, 04 §9.1 `shards`, 05 §3.1 and App_Pythia, 06 folder keys and
+  `_shard`, 07 V31, V32, L27; `bots/intent.md` T5.
+- **To do by the user**: `hep build`, then `make test` and `make test-slow`. Pythia points rerun once
+  (new binary sha).
+
 ## The manual — **DONE** (ordered by the user 2026-09-27)
 
 "Read docs, go over them … see if there are ideas worth implementing or taking inspiration from,

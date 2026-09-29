@@ -89,3 +89,24 @@ def test_fan_out_writes_the_same_events_everywhere(scratch, card):
     result = run("a.hepmc,b.hepmc", card, cwd=scratch)
     assert result.returncode == 0, result.stderr
     assert (scratch / "a.hepmc").read_bytes() == (scratch / "b.hepmc").read_bytes()
+
+
+def event_numbers(path: Path) -> list[int]:
+    return [int(line.split()[1]) for line in path.read_text(encoding="utf-8").splitlines() if line.startswith("E ")]
+
+
+def test_a_deal_group_splits_the_events_and_counts_each_share(scratch, card):
+    """V31: `a+b,c`: every event goes to one of a and b, and to c. The sidecar counts each output, and
+    the events are numbered once across the threads, from 0."""
+    (scratch / "more.cmnd").write_text("Main:numberOfEvents = 400\n", encoding="utf-8")
+    result = run("--threads", 4, "--seeds", "11,12,13,14", "a.hepmc+b.hepmc,c.hepmc", card, scratch / "more.cmnd",
+                 cwd=scratch)
+    assert result.returncode == 0, result.stderr
+    side = json.loads((scratch / "a.hepmc.json").read_text(encoding="utf-8"))
+    counts = side["written_per_output"]
+    assert counts["a.hepmc"] + counts["b.hepmc"] == side["written"] == counts["c.hepmc"]
+    assert counts["a.hepmc"] > 0 and counts["b.hepmc"] > 0
+    a, b, c = (event_numbers(scratch / f"{n}.hepmc") for n in "abc")
+    assert (len(a), len(b)) == (counts["a.hepmc"], counts["b.hepmc"])
+    assert not set(a) & set(b) and sorted(a + b) == sorted(c) == list(range(side["written"]))
+    assert side["outputs"] == ["a.hepmc", "b.hepmc", "c.hepmc"]

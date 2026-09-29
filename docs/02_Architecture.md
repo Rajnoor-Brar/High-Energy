@@ -199,9 +199,29 @@ previous tool" is meant.
 | A FIFO connects tools in the same group only | a FIFO needs both ends open at once: a reader in a later group leaves the writer blocked for ever (L8) |
 | Between groups, the interface is a regular file | the earlier group has finished, so the file is complete |
 | A FIFO has exactly one reader; fan-out is a list-valued `output_file` on the producer (V16) | two readers would split the stream, each getting some events |
+| A **sharded** tool (`shards = K`) reads from a producer that can **deal** | the runner replaces its FIFO by K, the producer sends each event to one of them, and a merge step joins the K products (V31, §6.1) |
 | No FIFO into a tool that is not `streamable` | Delphes skips zero-length input, which a FIFO always is (L11) |
 | Every input is produced earlier or in the same group, is a `[prelim]` file, or already exists | the brief's "inexistence error" cannot happen |
 | Every output has exactly one writer | two writers race |
+
+### 6.1 Sharding: one tool as K processes
+
+A Rivet process uses one core, and in a Pythia → Rivet chain it sets the pace whatever Pythia's
+threads (measured at ~1,500 events/s for ZEUS_2012). `shards = K` on the table (V31) is rewritten,
+for each point, before anything else is planned:
+
+```
+[["pythia", "rivet"], "yd2rt"]         with [tools.rivet] shards = 3
+  → [["pythia", "rivet.1", "rivet.2", "rivet.3"], ["rivet.merge"], ["yd2rt"]]
+     pythia writes  events.s1.hepmc+events.s2.hepmc+events.s3.hepmc   (a deal group: one each)
+     rivet.<i>      reads events.s<i>.hepmc, writes output/…/shards/photo.s<i>.yoda
+     rivet.merge    rivet-merge -e the three → results/…/photo.yoda
+```
+
+Every rule of this section then applies to the rewritten chain as to any other. Each shard is
+count-checked against its own share of the producer's sidecar. The generator's seeds follow its
+cards, not its argv, so the events are the same as unsharded (§8). The shards' products are
+technical: not the point's products, not in `points.json`, not drawn.
 
 **Standard configurations** move *configuration*, where connections move *data*: a custom or module
 tool may ask for a standard tool's rendered card or values (`pythia_cmnd = true`), and that tool is
@@ -304,7 +324,9 @@ directory).
   tool and time, plus the runner's `run`, `point` and `exit` records.
 - **The views.** The live view (with `rich`, on a terminal) shows a line per running tool: progress,
   rate, ETA, σ, the last warning. The plain view (`--plain`, or not a terminal) prints progress every
-  few seconds. Both print **one block per finished point**:
+  few seconds. **A view never blocks the run** (V32): everything it prints goes through one
+  background thread, so a terminal that stops reading (a paused tab, Ctrl-S) stops the display, not
+  the supervision. Both print **one block per finished point**:
 
   ```
   ── point 2/4: NNPDF23lo ── ok after 71.8 s

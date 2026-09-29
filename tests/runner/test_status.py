@@ -90,11 +90,32 @@ def test_a_point_is_one_block_when_it_ends():
     view.tool_finished(SimpleNamespace(tag="pythia", error=""), ToolResult("pythia", exit=0, seconds=71.6))
     view.tool_finished(SimpleNamespace(tag="sherpa:prepare", error=""), ToolResult("sherpa:prepare", exit=0, seconds=3.0))
     view.point_finished(plan, PointResult(True))
+    view.flush()                                                       # the view writes on its own thread (V32)
     lines = out.getvalue().splitlines()
     assert lines[0].startswith("── point 2/4: NNPDF23lo ── ok after ") and lines[0].endswith(" s")
     assert lines[1:] == ["   sherpa:prepare: ok after 3.0 s", "   done → results/x/NNPDF23lo"]
     view.point_started(plan)
     view.tool_finished(SimpleNamespace(tag="rivet", error="boom"), ToolResult("rivet", exit=1, seconds=2.0))
     view.point_finished(plan, PointResult(False, cause="rivet", message="rivet exited 1"))
+    view.flush()
     tail = out.getvalue().splitlines()[3:]
     assert "── FAILED [rivet] after" in tail[0] and tail[1:] == ["   rivet: exit 1 after 2.0 s  (boom)", "   rivet exited 1"]
+
+
+def test_a_terminal_that_stops_reading_never_stops_the_run():
+    """V32: the supervisor calls the view from its poll loop. A stream nobody reads (a paused terminal
+    tab, Ctrl-S) fills after 64 kB; the view's calls must still return at once, and end() must not
+    wait on it for more than its timeout."""
+    import os
+    import time
+    read_end, write_end = os.pipe()
+    stream = os.fdopen(write_end, "w")
+    view = PlainView(stream=stream)
+    started = time.monotonic()
+    for i in range(5000):                                            # ~1 MB: far past the pipe's buffer
+        view.say(f"line {i:05d} " + "x" * 200)
+    assert time.monotonic() - started < 1.0
+    started = time.monotonic()
+    view.end()                                                        # gives up after its timeout
+    assert time.monotonic() - started < 5.0
+    os.close(read_end)                                                # the writer thread gets EPIPE and stops

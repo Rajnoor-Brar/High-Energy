@@ -17,13 +17,14 @@ import re
 import shutil
 import subprocess
 import tomllib
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
 import tomli_w
 
 from . import quantities as qmod
+from .config import Tool
 from .errors import HepError, did_you_mean
 from .paths import output_root, repo_root, resolve, results_root
 from .sweep import label_of, tag_of
@@ -35,11 +36,12 @@ FOLDER_SECTIONS = {
     "card": {"style", "ext", "comment", "bools", "seed", "seed_parallel", "line", "footer"},
     "command": {"argv", "env", "cwd"},
     "options": None,                                      # free: the schema of tool-specific keys
-    "outputs": {"products", "event_count", "sidecar", "written"},
+    "outputs": {"products", "event_count", "sidecar", "written", "deal"},
     "exports": None,
     "identity": {"files", "version"},
     "prepare": {"argv", "marker", "ignore", "key"},
     "checks": {"info_dirs", "info_dirs_command", "files"},
+    "shard": {"merge"},
 }
 CARD_STYLES = ("append", "prepend", "none", "render")
 EXPORT = re.compile(r"^(?P<tool>[a-z0-9]+)_(?P<export>[a-z0-9_]+)$")
@@ -232,6 +234,7 @@ class Interface:
     group: int = -1
     paths: list[Path] = field(default_factory=list)   # kind points: one per point, in point order
     names: list[str] = field(default_factory=list)    # … and the points' names
+    shard: bool = False                # one shard's product: technical, merged into the table's own output
 
 
 @dataclass
@@ -250,7 +253,7 @@ class Step:
     outputs: list[Interface] = field(default_factory=list)
     products: list[tuple[Path, Path]] = field(default_factory=list)   # (final, partial)
     sidecar: Path | None = None        # what it writes, as a producer of events
-    count_check: tuple[Path, Path, str] | None = None                 # (product partial, sidecar, reader)
+    count_check: tuple[Path, Path, str, str | None] | None = None     # (product partial, sidecar, reader, output key)
     stall_after: float = 300.0
     timeout: float = 0.0
     card_base: list[Path] = field(default_factory=list)
@@ -287,6 +290,7 @@ class PointPlan:
     writes: dict[Path, str] = field(default_factory=dict)
     context: dict[str, Any] = field(default_factory=dict)   # post: {points}, the manifest
     upstream: list[str] = field(default_factory=list)       # post: the identities of the points
+    deal: dict[str, str] = field(default_factory=dict)      # a dealt interface → its deal group (V31)
 
 
 def location(serial: int | None, name: str) -> str:
@@ -378,6 +382,74 @@ def _resolve_chain(run, configuration, point) -> list[list[str]]:
     return groups
 
 
+def _shard(run, configuration, groups_tags: list[list[str]], out: Path):
+    """`shards = K` on a table (V31): the table becomes K copies in its group, each reading a share of
+    the events (`events.s1.hepmc` … `events.sK.hepmc`) and writing its product under the point's
+    output/…/shards/; the folder's merge tool ([shard] merge) runs as its own group right after,
+    reading the K products and writing the table's own output_file. The producer deals its events
+    among the K interfaces instead of copying them to each (its folder says [outputs] deal = true).
+
+    Seeds follow the generator's cards, not its argv, so a sharded point has the same events as the
+    same point unsharded, and its merged product is the same up to rounding.
+    Returns (run, configuration, groups, deal, shard products), rewritten for this point only."""
+    sharded = [tag for group in groups_tags for tag in group if run.tools[tag].shards > 1]
+    if not sharded:
+        return run, configuration, groups_tags, {}, set()
+    tables = dict(run.tools)
+    prelim = {key: list(value) for key, value in configuration.prelim.items()}
+    groups = [list(group) for group in groups_tags]
+    deal: dict[str, str] = {}
+    shard_products: set[str] = set()
+    for tag in sharded:
+        tool = run.tools[tag]
+        where = f"{run.path}: [tools.{tag}].shards"
+        folder = folder_of(tool)
+        merge = folder.get("shard", "merge")
+        if not merge:
+            raise HepError(f"a {folder.name} tool cannot be sharded", where=where,
+                           hint="its tool folder has no [shard] merge: nothing would put the shares back together")
+        if len(tool.input) != 1 or len(tool.output_file) != 1:
+            raise HepError("a sharded tool reads one input and writes one output_file", where=where)
+        name = tool.input[0]
+        kind = "fifo" if name in prelim.get("fifo", []) else "files" if name in prelim.get("files", []) else ""
+        if not kind:
+            raise HepError(f"'{name}' is not a [prelim] FIFO or file", where=where,
+                           hint="a sharded tool reads its events through an agreed interface, which the producer deals")
+        producers = [t for group in groups for t in group if name in tables[t].output_file]
+        if len(producers) != 1:
+            raise HepError(f"'{name}' needs exactly one producer in the chain to be dealt", where=where)
+        producer = producers[0]
+        if not folder_of(tables[producer]).get("outputs", "deal"):
+            raise HepError(f"'{producer}' ({tables[producer].tool}) cannot deal its events among shards", where=where,
+                           hint="only a producer whose tool folder says [outputs] deal = true (pythia) can feed a sharded tool")
+        head, dot, tail = name.rpartition(".")
+        members = [f"{head}.s{i}.{tail}" if dot else f"{name}.s{i}" for i in range(1, tool.shards + 1)]
+        prelim[kind] = [m for n in prelim[kind] for m in (members if n == name else [n])]
+        deal.update({member: name for member in members})
+        tables[producer] = replace(tables[producer], output_file=[m for o in tables[producer].output_file
+                                                                  for m in (members if o == name else [o])])
+        product = Path(tool.output_file[0])
+        copies, parts = [], []
+        for i, member in enumerate(members, start=1):
+            copy = f"{tag}.{i}"
+            if copy in tables:
+                raise HepError(f"[tools.{copy}] exists, and it is the name of {tag}'s shard {i}", where=where)
+            part = str(out / "shards" / f"{product.stem}.s{i}{product.suffix}")
+            tables[copy] = replace(tool, tag=copy, input=[member], output_file=[part], shards=1)
+            copies.append(copy)
+            parts.append(part)
+        shard_products.update(parts)
+        joined = f"{tag}.merge"
+        tables[joined] = Tool(tag=joined, tool=merge, input=parts, output_file=list(tool.output_file))
+        for g, group in enumerate(groups):
+            if tag in group:
+                at = group.index(tag)
+                group[at:at + 1] = copies
+                groups.insert(g + 1, [joined])
+                break
+    return replace(run, tools=tables), replace(configuration, prelim=prelim), groups, deal, shard_products
+
+
 def plan_point(run, configuration, point, master: dict, *, post: dict | None = None,
                pre: "PointPlan | None" = None) -> PointPlan:
     """The plan of one point. With `post` ({"manifest": Path, "products": {name: [Path]}}) it is a
@@ -386,6 +458,7 @@ def plan_point(run, configuration, point, master: dict, *, post: dict | None = N
     part of the point's."""
     out, res = point_dirs(run, configuration, point)
     groups_tags = _resolve_chain(run, configuration, point)
+    run, configuration, groups_tags, deal, shard_products = _shard(run, configuration, groups_tags, out)
     chain = [tag for group in groups_tags for tag in group]
     for tag in chain:
         if run.tools[tag].tool not in folders():
@@ -408,7 +481,7 @@ def plan_point(run, configuration, point, master: dict, *, post: dict | None = N
 
     plan = PointPlan(point=point, values=values, out=out, res=res, prelim=configuration.prelim,
                      groups=[], rendered={}, interfaces={}, consumers=consumers,
-                     threads=configuration.threads, events=configuration.event_count)
+                     threads=configuration.threads, events=configuration.event_count, deal=deal)
 
     # interfaces declared in [prelim] live in the point's output directory
     for kind in ("fifo", "files"):
@@ -420,7 +493,7 @@ def plan_point(run, configuration, point, master: dict, *, post: dict | None = N
     if pre is not None:                               # what the pre stage made, for every point
         plan.upstream = [pre.identity]
         for interface in pre.interfaces.values():
-            if interface.kind == "product":
+            if interface.kind == "product" and not interface.shard:
                 plan.interfaces[interface.name] = Interface(interface.name, interface.path, "pre", producer="")
     if post:
         plan.context["points"] = str(post["manifest"])
@@ -454,6 +527,8 @@ def plan_point(run, configuration, point, master: dict, *, post: dict | None = N
         plan.rendered[tag] = step
         if step.group >= 0:
             _outputs(plan, step, run)
+    for name in shard_products:
+        plan.interfaces[name].shard = True
     for tag in chain:
         _inputs(plan, plan.rendered[tag], run)
     _check_connections(plan, run)
@@ -790,7 +865,7 @@ def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
         "prepared": str(step.prepare_dir or ""),
         "seed": "{seed}",                      # filled in by finalise: seeds derive from the identity
         "output": str(step.outputs[0].path) if step.outputs else "",
-        "outputs": ",".join(str(o.path) for o in step.outputs),
+        "outputs": _outputs_argument(step, plan.deal),
         "partial:": {"output": str(step.products[0][1]) if step.products else ""},
         "in:": {i.name: str(i.path) for i in step.inputs},
         "file:": {name: str(i.path) for name, i in plan.interfaces.items() if i.kind in ("fifo", "file")},
@@ -887,7 +962,24 @@ def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
     if consumes and reader and step.products and step.inputs:
         producer = plan.rendered.get(step.inputs[0].producer)
         if producer is not None and producer.sidecar is not None:
-            step.count_check = (step.products[0][1], producer.sidecar, reader)
+            key = str(step.inputs[0].path) if step.inputs[0].name in plan.deal else None   # a shard: its share
+            step.count_check = (step.products[0][1], producer.sidecar, reader, key)
+
+
+def _outputs_argument(step: Step, deal: dict[str, str]) -> str:
+    """`{outputs}`: every output, comma-separated; the members of a deal group joined by `+`
+    (App_Pythia sends each event to one member of a group, and to every group)."""
+    items: list[str] = []
+    at: dict[str, int] = {}
+    for interface in step.outputs:
+        group = deal.get(interface.name)
+        if group is not None and group in at:
+            items[at[group]] += "+" + str(interface.path)
+            continue
+        if group is not None:
+            at[group] = len(items)
+        items.append(str(interface.path))
+    return ",".join(items)
 
 
 def _upstream_sidecar(plan: PointPlan, step: Step) -> str:

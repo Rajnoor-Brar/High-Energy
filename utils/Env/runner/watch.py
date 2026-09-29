@@ -8,12 +8,21 @@ docs/02_Architecture.md §10. The views are fed only by status: ToolState object
   count, rate and ETA, and the last warning — with each finished point printed above it.
 * `PlainView` (a pipe, a log file, or `--plain`): one line per event of note, and a progress line
   every few seconds.
+
+**A view never blocks the run.** The supervisor calls the view from its poll loop, so a view that
+waits on the terminal stops the supervision: on 2026-09-29 a terminal tab that stopped reading
+(paused, or Ctrl-S) held rich's refresh thread in a tty write, the supervisor waited on the
+console's lock, and the run froze for hours with its tools already exited (V32). So everything a
+view prints goes through `_Screen`, one background thread: the calls the supervisor makes only
+queue a line or replace the latest frame, and a blocked terminal stops the display, never the run.
 """
 
 from __future__ import annotations
 
 import json
+import queue
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -46,6 +55,72 @@ def progress_text(state) -> str:
     return " ".join(parts)
 
 
+class _Screen:
+    """The one thread that talks to the terminal. `line()` queues a line and `frame()` replaces the
+    latest live frame; neither waits. `close()` flushes for at most `timeout` seconds: a terminal
+    that has stopped reading cannot keep the process from ending (the journal has everything)."""
+
+    def __init__(self, write, update=None, start=None, stop=None):
+        self._write, self._update, self._start, self._stop_live = write, update, start, stop
+        self._lines: queue.SimpleQueue = queue.SimpleQueue()
+        self._frame = None
+        self._wake = threading.Event()
+        self._closing = False
+        self._broken = False                     # the stream went away (a closed pipe): stop writing
+        self._queued = self._done = 0            # lines queued (the caller) and written (the thread)
+        self._thread = threading.Thread(target=self._loop, name="hep-view", daemon=True)
+        self._thread.start()
+
+    def line(self, text: str) -> None:
+        self._queued += 1
+        self._lines.put(text)
+        self._wake.set()
+
+    def drain(self, timeout: float = 3.0) -> bool:
+        """Wait until every queued line is written (tests, and anything reading the stream after)."""
+        until = time.monotonic() + timeout
+        while self._done < self._queued and time.monotonic() < until and self._thread.is_alive():
+            self._wake.set()
+            time.sleep(0.01)
+        return self._done >= self._queued
+
+    def frame(self, renderable) -> None:
+        self._frame = renderable
+        self._wake.set()
+
+    def _call(self, function, *args) -> None:
+        if function is None or self._broken:
+            return
+        try:
+            function(*args)
+        except (OSError, ValueError):
+            self._broken = True
+
+    def _loop(self) -> None:
+        self._call(self._start)
+        while True:
+            self._wake.wait(0.5)
+            self._wake.clear()
+            while True:
+                try:
+                    text = self._lines.get_nowait()
+                except queue.Empty:
+                    break
+                self._call(self._write, text)
+                self._done += 1
+            latest, self._frame = self._frame, None
+            if latest is not None:
+                self._call(self._update, latest)
+            if self._closing and self._lines.empty():
+                self._call(self._stop_live)
+                return
+
+    def close(self, timeout: float = 3.0) -> None:
+        self._closing = True
+        self._wake.set()
+        self._thread.join(timeout)
+
+
 class PlainView:
     """One block per point, printed when it ends: its heading with the verdict and wall time, then
     only what needs saying (a failed tool, a prepare step) and where the results are:
@@ -58,6 +133,7 @@ class PlainView:
     def __init__(self, stream=None, every: float = 5.0):
         self.stream = stream or sys.stdout
         self.every = every
+        self.screen = self._screen()
         self.last = 0.0
         self.total = 0
         self.number = 0
@@ -66,8 +142,16 @@ class PlainView:
         self._notes: list[str] = []
         self._failed: list[str] = []
 
+    def _screen(self) -> _Screen:
+        def write(text: str) -> None:
+            print(text, file=self.stream, flush=True)
+        return _Screen(write)
+
     def say(self, text: str) -> None:
-        print(text, file=self.stream, flush=True)
+        self.screen.line(text)
+
+    def flush(self) -> None:
+        self.screen.drain()
 
     def begin(self, count: int, title: str = "") -> None:
         self.total = count
@@ -75,7 +159,7 @@ class PlainView:
             self.say(title)
 
     def end(self) -> None:
-        pass
+        self.screen.close()
 
     def heading(self, plan, bold: bool = False) -> str:
         """'── point 3/16: <name>', or '── post (after every point)' for the post stage (index 0)."""
@@ -144,27 +228,24 @@ class LiveView(PlainView):
     SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
     def __init__(self):
-        super().__init__()
         from rich.console import Console
         from rich.live import Live
         self.console = Console()
         self.live = Live(console=self.console, refresh_per_second=4, transient=True)
+        super().__init__()
         self.states: list[ToolState] = []
         self.point_name = ""
         self.started = time.monotonic()
         self.frame = 0
 
-    def say(self, text: str) -> None:
-        self.console.print(text, highlight=False)
+    def _screen(self) -> _Screen:            # rich's Live starts, prints, redraws and stops on the thread
+        return _Screen(lambda text: self.console.print(text, highlight=False),
+                       update=self.live.update, start=self.live.start, stop=self.live.stop)
 
     def begin(self, count: int, title: str = "") -> None:
         self.total = count
         if title:
             self.say(f"[bold]{title}[/bold]")
-        self.live.start()
-
-    def end(self) -> None:
-        self.live.stop()
 
     def point_started(self, plan) -> None:
         super().point_started(plan)
@@ -182,7 +263,7 @@ class LiveView(PlainView):
 
     def tick(self, states) -> None:
         self.frame += 1
-        self.live.update(self.render(states or self.states))
+        self.screen.frame(self.render(states or self.states))
 
     def render(self, states):
         from rich.progress_bar import ProgressBar
