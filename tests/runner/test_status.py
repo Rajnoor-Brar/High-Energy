@@ -6,6 +6,8 @@ import io
 import json
 import os
 
+import pytest
+
 from runner.status import Journal, Reader, ToolState
 from runner.watch import PlainView, follow
 
@@ -73,14 +75,15 @@ def test_watch_follows_the_latest_run_and_stops_when_it_finishes(scratch, monkey
     assert follow(journal, plain=True) == 0
     text = captured.getvalue()
     assert "watching new" in text and "old" not in text
-    assert "── point 1/1: a ── ok after 71.8 s" in text and "run finished: 1 done" in text
+    assert "── point 1/1: a ── ok after 1min 12s" in text and "run finished: 1 done" in text
     assert "pythia: ok" not in text                                     # a tool that did its job says nothing
 
 
 def test_a_point_is_one_block_when_it_ends():
-    """── point 2/4: NNPDF23lo ── ok after 71.8 s, then where the results are (the user's layout)."""
+    """── point 2/4: NNPDF23lo ── ok after 1min 12s, then where the results are (the user's layout)."""
     from types import SimpleNamespace
     from runner.execute import PointResult, ToolResult
+    from runner.status import ToolState
     out = io.StringIO()
     view = PlainView(stream=out)
     view.begin(4)
@@ -88,19 +91,19 @@ def test_a_point_is_one_block_when_it_ends():
     from runner.sweep import Point
     plan = SimpleNamespace(point=Point(index=2, name="NNPDF23lo"), res="results/x/NNPDF23lo")   # a real Point (L26)
     view.point_started(plan)
-    view.tool_finished(SimpleNamespace(tag="pythia", error=""), ToolResult("pythia", exit=0, seconds=71.6))
-    view.tool_finished(SimpleNamespace(tag="sherpa:prepare", error=""), ToolResult("sherpa:prepare", exit=0, seconds=3.0))
+    view.tool_finished(ToolState(point="NNPDF23lo", tag="pythia"), ToolResult("pythia", exit=0, seconds=71.6))
+    view.tool_finished(ToolState(point="NNPDF23lo", tag="sherpa:prepare"), ToolResult("sherpa:prepare", exit=0, seconds=3.0))
     view.point_finished(plan, PointResult(True))
     view.flush()                                                       # the view writes on its own thread (V32)
     lines = out.getvalue().splitlines()
-    assert lines[0].startswith("── point 2/4: NNPDF23lo ── ok after ") and lines[0].endswith(" s")
-    assert lines[1:] == ["   sherpa:prepare: ok after 3.0 s", "   done → results/x/NNPDF23lo"]
+    assert lines[0].startswith("── point 2/4: NNPDF23lo ── ok after ") and lines[0].endswith("s")
+    assert lines[1:] == ["   sherpa:prepare: ok after 3.0s", "   done → results/x/NNPDF23lo"]
     view.point_started(plan)
-    view.tool_finished(SimpleNamespace(tag="rivet", error="boom"), ToolResult("rivet", exit=1, seconds=2.0))
+    view.tool_finished(ToolState(point="NNPDF23lo", tag="rivet", error="boom"), ToolResult("rivet", exit=1, seconds=2.0))
     view.point_finished(plan, PointResult(False, cause="rivet", message="rivet exited 1"))
     view.flush()
     tail = out.getvalue().splitlines()[3:]
-    assert "── FAILED [rivet] after" in tail[0] and tail[1:] == ["   rivet: exit 1 after 2.0 s  (boom)", "   rivet exited 1"]
+    assert "── FAILED [rivet] after" in tail[0] and tail[1:] == ["   rivet: exit 1 after 2.0s  (boom)", "   rivet exited 1"]
 
 
 def test_a_terminal_that_stops_reading_never_stops_the_run():
@@ -120,3 +123,49 @@ def test_a_terminal_that_stops_reading_never_stops_the_run():
     view.end()                                                        # gives up after its timeout
     assert time.monotonic() - started < 5.0
     os.close(read_end)                                                # the writer thread gets EPIPE and stops
+
+
+@pytest.mark.parametrize("seconds, shown", [(3.04, "3.0s"), (59.9, "59.9s"), (59.96, "1min 0s"), (71.8, "1min 12s"),
+                                            (3599.6, "1h 0min 0s"), (10687.2, "2h 58min 7s")])
+def test_durations_are_seconds_then_minutes_then_hours(seconds, shown):
+    from runner.watch import duration
+    assert duration(seconds) == shown
+
+
+@pytest.mark.parametrize("seconds, shown", [(3.7, "00:03"), (72, "01:12"), (3599.9, "59:59"), (3600, "01:00:00"),
+                                            (35237, "09:47:17"), (370929, "103:02:09"), (-1, "00:00")])
+def test_a_running_clock_is_mm_ss_then_hh_mm_ss(seconds, shown):
+    from runner.watch import clock
+    assert clock(seconds) == shown
+
+
+def test_the_live_view_puts_each_running_point_over_its_tools():
+    """A blank line after the finished blocks, the point's heading and time so far, then its tools
+    under it, their columns lined up across points."""
+    pytest.importorskip("rich")
+    from types import SimpleNamespace
+    from rich.console import Console
+    from runner.sweep import Point
+    from runner.watch import LiveView
+    view = LiveView()
+    try:
+        view.begin(4)
+        view.number = 2
+        for index, name in ((3, "MSTW08lo"), (4, "PDF4LHC21")):
+            view.point_started(SimpleNamespace(point=Point(index=index, name=name), res=f"results/x/{name}"))
+        view.points["PDF4LHC21"].started -= 35237
+        view.tool_started(ToolState(point="MSTW08lo", tag="pythia", phase="init"))
+        view.tool_started(ToolState(point="PDF4LHC21", tag="pythia", phase="generating", done=1_700_000,
+                                    total=10_000_000, rate=2812))
+        view.tool_started(ToolState(point="PDF4LHC21", tag="rivet.12", phase="analysing", done=1_700_000))
+        out = io.StringIO()
+        Console(file=out, width=120).print(view.render([]))
+    finally:
+        view.end()
+    lines = [line.rstrip() for line in out.getvalue().splitlines()]
+    assert lines[0] == "" and lines[1].startswith("point 3/4: MSTW08lo · 00:0")
+    assert lines[2].startswith("   pythia   init ")
+    assert lines[3] == "" and lines[4].startswith("point 4/4: PDF4LHC21 · 09:47:1")
+    assert lines[5].startswith("   pythia   generating ") and lines[5].endswith("1.70M/10.00M 2,812/s 49:11")
+    assert lines[6].startswith("   rivet.12 analysing  ") and lines[6].endswith("1.70M")
+    assert lines[5].index("1.70M") == lines[6].index("1.70M") and lines[2].index("init") == lines[5].index("generating")

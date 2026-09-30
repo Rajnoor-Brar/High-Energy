@@ -96,8 +96,8 @@ energies = "27x920"
 values = [[920, 27.5], [275, 18]]
 tags   = ["27x920", "18x275"]
 
-[quantities.pdf]                  # the master knows it too: PDF:pSet = LHAPDF6:<set>
-values = ["MSTW2008lo68cl", "NNPDF23_lo_as_0130_qed"]
+[quantities.pdf]                  # the master knows it too: PDF:pSet = <value>, as written
+values = ["LHAPDF6:MSTW2008lo68cl", "LHAPDF6:NNPDF23_lo_as_0130_qed"]   # or Pythia's own sets: 13, 14
 tags   = ["MSTW08lo", "NNPDF23lo"]
 labels = ["MSTW 2008 LO", "NNPDF 2.3 LO"]
 
@@ -196,7 +196,10 @@ tags   = ["pt30", "pt32", "pt34"]
 labels = ["p_{T0}^{ref} = 3.0 GeV", "p_{T0}^{ref} = 3.2 GeV", "p_{T0}^{ref} = 3.4 GeV"]
 ```
 
-Labels are ROOT TLatex (`p_{T0}`, `#sqrt{s}`, `e^{-}`). An override equal to the base card's own
+Labels are ROOT TLatex (`p_{T0}`, `#sqrt{s}`, `e^{-}`). Only a brace makes a sub- or superscript,
+so `"PDF4LHC21_40"` shows its underscores as they are, in both backends. To be explicit, write
+`'PDF4LHC21\_40'` in **single** quotes: in `"…"` TOML reads the backslash as an escape and refuses
+the file. An override equal to the base card's own
 value is written but does not change the identity.
 
 ### 4.7 Analysis options
@@ -471,7 +474,24 @@ commands changed. Keep `threads + shards` within the machine's cores. For one ru
 `--set tools.rivet.shards=10 --set run.default.threads=12`. Every analysis must be re-entrant
 (`Reentrant: true` in its `.info`).
 
-### 4.18 Any files, overlaid
+### 4.18 Many points: several at once
+
+When one point cannot fill the machine (a Rivet that stops scaling, many short points, each
+spending ~5 s in Pythia's init), run several points at once:
+
+```toml
+[run]
+threads     = 5                  # each point's Pythia threads, as before
+parallelism = 4                  # 4 points at a time: ~4 × (5 + its Rivets) cores
+```
+
+Every point gets exactly the result it gets one at a time: `parallelism` is not in any identity or
+seed, so it reruns nothing either. Each point keeps its own folder, and the view prints each
+point's block whole when it ends (in the order they finish). `--plan` prints the estimate
+("4 at once (~24 of 24 cores)") and warns past the machine. For one run:
+`--set run.parallelism=4`.
+
+### 4.19 Any files, overlaid
 
 ```bash
 hep plot a.yoda b.yoda --labels "Tune A,Tune B" --ratio --objects "/MC_JETS/*"
@@ -480,6 +500,55 @@ hep plot results/PhotoProduction/03_eic/01_pdf/plots/root/pdf.root      # a swee
 
 No run TOML: one page per object any file holds, one curve per file (or per point of a merged
 sweep, labelled from its `points.json`). Pages go to `results/plots/<first file>/` unless `-o`.
+
+### 4.20 Every configuration, one run after another
+
+To run all of a TOML's configurations in one go, turn the sweep on and leave out the ones you don't
+want:
+
+```toml
+[run]
+sweep = true                     # hep run eic: every configuration, in the order of the file
+
+[run.pdf]
+title = "Proton PDFs"            # the header line: run 01 - Proton PDFs -
+
+[run.delphes]
+swept = false                    # not in the sweep; hep run eic delphes still runs it
+```
+
+Each configuration is an ordinary run, with its own title, blocks, verdict and folder, exactly as
+`hep run eic <cfg>` would make it. They are all checked before the first starts, so a typo in the
+last one costs nothing. A failed run lets the next one start, and Ctrl-C stops everything.
+`hep watch` follows from one run to the next. That's what a shell loop can't do: in
+`for c in …; do hep run eic $c; done`, a Ctrl-C only ends the current run (hep exits 6 and bash
+carries on) and a typo in a later configuration shows up hours in. `hep run eic pdf` still runs
+only `pdf`, and `--set run.sweep=false` turns the sweep off for one call.
+
+### 4.21 Exact seeds, random seeds, and repeating a run
+
+By default a point's seeds follow its generator's identity, so the same setup always gives the same
+events. A `Random:seed` in your card is ignored, because the runner writes its own after it. To
+choose the seeds yourself:
+
+```toml
+[run]
+seed_type   = "manual"           # "identity" (default) | "manual" | "random"
+manual_seed = 3245364            # every point's seed; [run.<cfg>] can set its own
+
+[quantities.seed]                # or one exact seed per point, swept like anything else
+target = "pythia/seed"
+values = [1001, 2001, 3001]
+```
+
+- **`"manual"`:** a point gets exactly its seed; at `threads = 12` its threads get seed … seed + 11.
+  Space swept seeds by at least `threads`: two points with the same setup whose blocks overlap
+  would repeat events, so the plan refuses them. Points with different physics may share one seed.
+- **`"random"`:** a new seed is drawn each time a point runs; a complete point keeps its sample
+  (it's skipped as usual) and `--rerun` draws again.
+- **Repeating a run:** every point's `provenance.json` records the seed it used, so any run, a
+  random one included, can be repeated with `seed_type = "manual"` and that seed.
+  `--plan` shows each point's seed.
 
 ---
 
@@ -534,7 +603,8 @@ page's whole style; the page configs are in `output/…/plots/`. Every key is in
 
 **The yoda backend** draws the same pages with the same ranges and voided bins through rivet-mkhtml,
 one HTML page set per cell, in `results/…/plots/yoda/`. It keeps mkhtml's own look, so only a legend
-corner carries over; `"both"` draws both sets in one run.
+corner and the ratio's y ticks (`ratio.divisions`) carry over; `"both"` draws both sets in one run.
+Denser or sparser ratio ticks: `[plot.style] ratio = { divisions = 508 }` (0.2 apart) or `515`.
 
 ---
 
@@ -551,6 +621,7 @@ corner carries over; `"both"` draws both sets in one run.
 | plain lines (logs, CI) | `--plain` (automatic when not a terminal) |
 | to follow a job elsewhere | `hep watch [CONFIG [CFG]]` |
 | a point faster | `shards = K` on the Rivet table (§4.17); more Pythia `threads` alone do not help |
+| many points faster | `parallelism = K` (§4.18): K points at once |
 
 The identity covers cards, argv, binaries, analyses and their plugins, events and threads, and seeds
 derive from it, so a rerun of an unchanged point does nothing, and a changed one reruns by itself.

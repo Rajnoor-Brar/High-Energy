@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -38,16 +39,20 @@ class ToolState:
 
 
 class Journal:
-    """Appends every status message to status.jsonl, so `hep watch` can follow from elsewhere."""
+    """Appends every status message to status.jsonl, so `hep watch` can follow from elsewhere. Points
+    running at once (V36) write from their own threads: one line at a time, under a lock."""
 
     def __init__(self, path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
         self.path = path
         self.handle = open(path, "a", encoding="utf-8")
+        self.lock = threading.Lock()
 
     def write(self, point: str, tag: str, message: dict) -> None:
-        self.handle.write(json.dumps({"point": point, "tool": tag, "t": round(time.time(), 3), **message}) + "\n")
-        self.handle.flush()
+        line = json.dumps({"point": point, "tool": tag, "t": round(time.time(), 3), **message}) + "\n"
+        with self.lock:
+            self.handle.write(line)
+            self.handle.flush()
 
     def close(self) -> None:
         self.handle.close()

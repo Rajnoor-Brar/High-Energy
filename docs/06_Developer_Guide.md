@@ -124,17 +124,41 @@ inserted as the next group; `_retarget` points quantities aimed at the table (`t
 tag-keyed `key`) at every copy. The rest of planning sees an ordinary chain; the count check carries the
 member's path as its key into the sidecar's `written_per_output`.
 
+**Points at once** (`execute.run_points`, V36): the points not yet complete, `parallelism` at a time,
+each through `run_point` on a worker thread with `view.for_point(plan)` as its sink (a proxy that
+tells `note()` its point); the main thread waits in half-second steps so Ctrl-C gets in, and starts
+nothing more once it is set. Shared across points: `status.Journal` (a lock), the views (a part per
+point, under one lock) and prepare cache entries (`execute._prepare_lock`: a lock per entry and
+`flock` on `<entry>.lock`; the `.prepared` stamp is checked again inside). `execute.cores(plan)`
+is `--plan`'s estimate.
+
 **Combine** (`post.plan_combined`, V35) plans one stage per group of points that differ only in
 `combine`'s quantities, as `post.plan` plans the post stage: a `Tool` of the `merge` folder whose input
 is the group's products (an interface named apart from the product, which the stage writes under its
 own name), `upstream` = the members' identities, `Point.stage = "combined"` and the group's `choice`, so
 `plot.pages` draws the groups as it draws points.
 
-**The flow** (`cli.build_plans`, then `cmd_run`): `config.load` → `sweep.points` →
+**The flow** (`cli.build_plans`, then `cli.run_one`): `config.load` → `sweep.points` →
 `post.plan_pre` → `tools.plan_point` per point → `record.identity` → `record.assign_seeds` →
-`tools.finalise` (seed lines, the files to write) → `plot.validate` → `post.plan`; then
-`post.run_pre` → `execute.run_point` per incomplete point → `points.json` → `post.run` →
-`plot.draw`. Planning writes nothing; `execute.prepare` is the first write of a point.
+`tools.finalise` (seed lines, the files to write) → `plot.validate` → `post.plan`, returned as one
+`cli.Planned`; then `post.run_pre` → `execute.run_points` → `points.json` → `post.run_combined` →
+`post.run` → `plot.draw`. Planning writes nothing; `execute.prepare` is the first write of a point.
+
+**Several runs** (`[run].sweep`, V38): `cmd_run` asks `RunConfig.runs(name)` which configurations
+to run (the named one; else the `swept` ones in file order; else `[run].configuration`). With one,
+it is `run_one`. With several, it calls `build_plans` for each first (a `HepError` names the
+configuration and nothing runs), then `run_one(…, number=N, following=<next journal>)` in turn.
+There is one `Stopper` for all of them; a run's `run finished` record carries `"next"` unless a stop
+was asked; a run whose planning fails at its turn gets a `not run` pair of records from `not_run`,
+so `watch.follow` (which moves on through `"next"`, to the first run started after it) never waits
+on it.
+
+**Seeds** (`record`, V39): `seed_rule(plan)` is what the identity says ("generator", ["manual",
+seed] or "random"); `manual_seed_of` reads a seed quantity's value (the step's `replica` identity
+part) or `manual_seed`; `assign_seeds(plans, rerun)` fills `plan.seed` by mode: manual (with the
+overlap refusal over `seed_basis(plan, replica=False)`), random (a complete point's provenance seed,
+else `secrets`, unless named in `rerun`), identity (as before). `PointPlan.seed_type` is set only for
+points (`plan_point` without `post=`), so stages keep the identity rule.
 
 **Where a check lives**: C1–C5 and C12 in `config`/`paths`; C7, C8, C10 in `quantities` and
 `tools._render`; C6, C9, C13 in `tools`; C11 in `sweep`; the plot checks in `plot.validate`.

@@ -291,6 +291,9 @@ class PointPlan:
     context: dict[str, Any] = field(default_factory=dict)   # post: {points}, the manifest
     upstream: list[str] = field(default_factory=list)       # post: the identities of the points
     deal: dict[str, str] = field(default_factory=dict)      # a dealt interface → its deal group (V31)
+    seed_type: str = "identity"                             # a point's seed rule (V39); stages keep identity
+    manual_seed: int | None = None
+    seed_kept: bool = False                                 # random: a complete point's seed, from its provenance
 
 
 def location(serial: int | None, name: str) -> str:
@@ -502,6 +505,8 @@ def plan_point(run, configuration, point, master: dict, *, post: dict | None = N
     plan = PointPlan(point=point, values=values, out=out, res=res, prelim=configuration.prelim,
                      groups=[], rendered={}, interfaces={}, consumers=consumers,
                      threads=configuration.threads, events=configuration.event_count, deal=deal)
+    if post is None:                                   # a point, not a pre, post or combined stage
+        plan.seed_type, plan.manual_seed = configuration.seed_type, configuration.manual_seed
 
     # interfaces declared in [prelim] live in the point's output directory
     for kind in ("fifo", "files"):
@@ -1060,7 +1065,8 @@ def _unsharded(tag: str, plan: PointPlan) -> str:
 
 def describe(plan: PointPlan, run) -> list[str]:
     """--plan: the groups, argv, connections and files of one point."""
-    lines = [f"point {plan.point.index} {plan.point.name}   identity {plan.identity[:12]}   seed {plan.seed}"]
+    drawn = "  (random: drawn again by each run)" if plan.seed_type == "random" and not plan.seed_kept else ""
+    lines = [f"point {plan.point.index} {plan.point.name}   identity {plan.identity[:12]}   seed {plan.seed}{drawn}"]
     for name, index in plan.values.items():
         quantity = run.quantities[name]
         where = ", ".join(dict.fromkeys(f"{_unsharded(m.tag, plan)}:{m.key if m.form != 'seed' else 'seed'}"

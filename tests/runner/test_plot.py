@@ -97,9 +97,42 @@ def yoda_backend():
     ("p_{T0}^{ref} = 3.0 GeV", "$p_{T0}^{ref}$ = 3.0 GeV"),
     ("#hat{p}_{T} > 2 GeV", r"$\hat{p}_{T}$ > 2 GeV"),
     ("R: 0.4", "R  0.4"),                                                 # ':' separates mkhtml's options
+    ("PDF4LHC21_40_pdfas", "PDF4LHC21_40_pdfas"),                        # TLatex's rule: a bare _ is itself
+    ("E_T jets", "E_T jets"),
+    (r"PDF4LHC21\_40", "PDF4LHC21_40"),                                  # the escapes are the characters
+    (r"\#1 \^2", "#1 ^2"),
+    (r"x_1\_a_{2}", r"$x\_1\_a_{2}$"),                                   # literal underscores inside math
 ])
 def test_tlatex_becomes_latex_for_mkhtml(yoda_backend, root, latex):
     assert yoda_backend.latex(root) == latex
+
+
+@pytest.mark.parametrize("label, root", [
+    ("PDF4LHC21_40_pdfas", "PDF4LHC21_40_pdfas"),                        # TLatex draws a bare _ as itself
+    (r"PDF4LHC21\_40\_pdfas", "PDF4LHC21_40_pdfas"),
+    ("p_{T0}^{ref} #sqrt{s}", "p_{T0}^{ref} #sqrt{s}"),
+    (r"a\_{b}", "a#kern[0]{_}{b}"),                                       # before a brace: kept apart from it
+    (r"\#1 \\ x", "#1 \\ x"),
+])
+def test_labels_as_root_draws_them(label, root):
+    assert plot.root_text(label) == root
+
+
+def test_paint_gets_root_labels_and_the_page_keeps_them_as_written():
+    document = {"page": {"title": r"a\_b", "ratio": True}, "style": {},
+                "curve": [{"file": "f", "object": "o", "label": r"PDF4LHC21\_40"}], "data": {"label": r"ZEUS\_2012"}}
+    root = plot.for_root(document)
+    assert (root["page"]["title"], root["curve"][0]["label"], root["data"]["label"]) == ("a_b", "PDF4LHC21_40", "ZEUS_2012")
+    assert document["curve"][0]["label"] == r"PDF4LHC21\_40" and root["page"]["ratio"] is True
+
+
+def test_a_backslash_in_a_double_quoted_label_says_how_to_write_it(scratch):
+    from runner import config
+    path = scratch / "bad.toml"
+    path.write_text('[run]\nname = "x"\n[quantities.pdf]\nlabels = ["PDF4LHC21\\_40"]\n', encoding="utf-8")
+    with pytest.raises(HepError, match="not valid TOML") as caught:
+        config.load(str(path))
+    assert "single quotes" in caught.value.hint
 
 
 def test_the_yoda_backend_refuses_what_mkhtml_cannot_do(scratch):
@@ -166,3 +199,68 @@ def test_references_are_cut_to_the_aligned_run_and_renamed(yoda_backend):
     assert list(ref.xEdges()) == [17, 21, 25, 29, 35, 41, 47] and len(whole.xEdges()) > 7
     assert [ref.bin(i).val() for i in range(1, 7)] == [whole.bin(i).val() for i in range(1, 7)]
     assert ref.bin(1).errDownUp("stat") == whole.bin(1).errDownUp("stat")
+
+
+def test_the_yoda_backend_gives_the_ratio_the_divisions_paint_has(scratch):
+    """mkhtml's ratio ticks are a fifth of the pad's range, and its script's set_yscale() resets any
+    locator set before it: ratio.divisions' locators go just before the figure is saved."""
+    yoda_backend = plot.backend("yoda")
+    script = scratch / "d02-x01-y01.py"
+    script.write_text("ratio0_ax.yaxis.set_major_locator(mpl.ticker.MultipleLocator(0.2))\n"
+                      "ratio0_ax.set_ylim(0.5, 1.4999)\nratio0_ax.set_yscale('linear')\n"
+                      "plt.savefig('x.pdf')\nplt.savefig('x.png')\n", encoding="utf-8")
+    assert yoda_backend.ratio_ticks(script, 512)
+    text = script.read_text(encoding="utf-8")
+    assert text.index("MultipleLocator(0.1)") > text.index("set_yscale") and text.index("MultipleLocator(0.1)") < text.index("plt.savefig")
+    assert "AutoMinorLocator(5)" in text
+    assert not yoda_backend.ratio_ticks(script, 512)                    # already so: no second run
+    assert yoda_backend.ratio_ticks(script, 508) and "MultipleLocator(0.2))\nratio0_ax.yaxis.set_minor" in script.read_text()
+    assert script.read_text(encoding="utf-8").count(yoda_backend.MARK) == 1
+
+
+# ── "default": set nothing, the drawing tool decides (V37) ─────────────────────────────────────
+
+DRAWING = ("backend", "formats", "objects", "ratio", "y_gutter", "x_gutter", "logy", "logx", "auto_range",
+           "void_empty", "min_entries", "range_pad", "root_style")
+
+
+def test_every_drawing_option_takes_default(scratch):
+    run = validated(scratch, **{key: "default" for key in DRAWING})
+    assert plot.backends(run.plot) == ["root"] and plot.formats_of(run.plot) == ["pdf"]
+    assert plot.run_style(run) == {}                                   # no root_style file
+
+
+def page(settings, path="/photo_eic/d01-x01-y01", with_data=True):
+    return plot.page_settings(settings, path, "d01", Path("/tmp/x"), with_data)[0]
+
+
+def test_default_is_what_the_tool_does_by_itself():
+    ours = page({})                                                    # nothing set: the runner's defaults
+    native = page({key: "default" for key in ("logy", "ratio", "auto_range", "void_empty", "min_entries", "y_gutter")})
+    assert ours["auto_range"] and not native["auto_range"]             # the tool's own range
+    assert (native["void_empty"], native["min_entries"]) == (False, 0)
+    assert native["logy"] and native["y_gutter"] == "default"          # photo_eic's .plot says LogY=1
+    assert native["ratio"] and not page({"ratio": "default"}, with_data=False)["ratio"]   # mkhtml's rule
+
+
+def test_an_objects_default_is_the_tools_whatever_plot_says():
+    settings = {"logy": False, "object": {"d01-*": {"logy": "default", "title": "default"}}}
+    shown = page(settings)
+    assert shown["logy"] and shown["title"] == page({})["title"]       # the .plot's, not [plot]'s false
+
+
+def test_a_style_default_falls_through_to_the_layer_below():
+    plot.check_style({"legend": {"position": "default"}, "ratio": {"divisions": "default"}}, "here")
+    merged = plot.merge_style({"legend": {"position": "top-left"}}, {"legend": {"position": "default"}})
+    assert merged == {"legend": {"position": "top-left"}}
+    assert plot.merge_style({}, {"legend": {"position": "default"}}) == {"legend": {}}
+
+
+def test_an_object_value_of_the_wrong_kind_is_refused(scratch):
+    with pytest.raises(HepError, match="must be true or false"):
+        validated(scratch, object={"d01-*": {"logy": "yes"}})
+    validated(scratch, object={"d01-*": {"logy": "default", "ratio": True}})
+
+
+def test_the_yoda_backend_has_nothing_to_honour_in_a_default(scratch):
+    validated(scratch, backend="yoda", style={"legend": {"position": "default"}, "page": {"dpi": "default"}})

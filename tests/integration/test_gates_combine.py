@@ -44,7 +44,7 @@ analyses    = ["photo_eic"]
 output_file = "photo.yoda"
 
 [quantities.pdf]
-values = ["MSTW2008lo68cl", "NNPDF23_nlo_as_0119_qed"]
+values = ["LHAPDF6:MSTW2008lo68cl", "LHAPDF6:NNPDF23_nlo_as_0119_qed"]
 tags   = ["MSTW08lo", "NNPDF23nlo"]
 labels = ["MSTW 2008 LO", "NNPDF 2.3 NLO"]
 

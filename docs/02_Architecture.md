@@ -140,7 +140,10 @@ and what it reads and writes**, which its tool folder declares.
 
 ## 5. A run, from command to pages
 
-`runner.cli.cmd_run` does this, in order:
+`runner.cli.run_one` does this for one run, in order. Under `[run].sweep` (V38, 04 §4.1)
+`cmd_run` first plans every swept configuration (a config error anywhere exits 2 with nothing run),
+then does all of it for each in turn, after a `run NN - <title> -` line: each is a run of its own,
+planned again at its turn, and a stop starts no more.
 
 1. **Load** the run TOML, apply `--set` to the raw table, and check the file (C1–C5, C12): every
    section, key and type; sweeps, plot_points and tool lists. `threads = 0` becomes a number.
@@ -276,7 +279,23 @@ same events**: eic's `single` point and its integrated `inproc` point can be com
 Consequences (v1's D21, kept): the same point gets the same events in every run, and the thread
 count changes the partition, not the statistics. For Pythia the card always gets `Random:setSeed =
 on`, `Random:seed = base`, and at threads > 1 `Parallelism:seeds = {base, …}`; other tools get their
-own seed line or flag.
+own seed line or flag. The runner's seed lines come after the base card, so a seed set in the card
+(`Random:seed = 0`) never counts: `seed_type` is how to choose.
+
+**`seed_type`** (V39; `[run]` or `[run.<cfg>]`, 04 §4) chooses the base; the threads always use
+base … base + threads − 1:
+
+| `seed_type` | base | in the identity |
+|---|---|---|
+| `"identity"` (default) | from the seed basis, as above | `"generator"`, what every identity said before V39 |
+| `"manual"` | exactly the value of a quantity targeting `<tool>/seed`, else `manual_seed`: every point shares it | `["manual", base]` |
+| `"random"` | drawn from the OS when the point runs (`--rerun` draws again); a complete point keeps the seed its `provenance.json` records | `"random"` |
+
+Under `"manual"`, points whose physics differs may share a seed. Two points with one generator set-up
+(the seed basis without the seed value) whose blocks overlap without being equal are refused: they
+would repeat some of each other's events. The pre, post and combined stages keep the identity rule.
+Every mode records the seed in `provenance.json` and `points.json`, so any point can be repeated
+with `seed_type = "manual"` and its seed.
 
 **Skip-unchanged.** A point is complete when `output/…/<point>/.complete` holds its identity; it is
 then skipped (`--rerun` runs it anyway). `.complete` is written last, after the count checks, so a
@@ -322,14 +341,19 @@ directory).
 - **A filter rule never fails a run.** The exit code does that.
 - **The journal**, `output/…/<cfg>/status.jsonl`, gets every status message tagged with its point,
   tool and time, plus the runner's `run`, `point` and `exit` records.
-- **The views.** The live view (with `rich`, on a terminal) shows a line per running tool: progress,
-  rate, ETA, σ, the last warning. The plain view (`--plain`, or not a terminal) prints progress every
+- **The views.** The live view (with `rich`, on a terminal) shows each running point below the
+  finished blocks, after a blank line: its heading and time so far (`mm:ss`, `hh:mm:ss` once there
+  are hours), then a line per running tool: progress, rate, ETA, σ, the last warning. The plain view (`--plain`, or not a terminal) prints progress every
   few seconds. **A view never blocks the run** (V32): everything it prints goes through one
   background thread, so a terminal that stops reading (a paused tab, Ctrl-S) stops the display, not
-  the supervision. Both print **one block per finished point**:
+  the supervision. With `parallelism = K` (V36) up to K points run at once, each on a thread of its
+  own through the same executor: the views keep a part per running point (the live view shows each
+  under its own heading), a block is printed whole when its point ends, the journal takes one line at
+  a time, and a prepare cache entry is filled by one point at a time (a lock in the runner, `flock`
+  across runners). Both print **one block per finished point**:
 
   ```
-  ── point 2/4: NNPDF23lo ── ok after 71.8 s
+  ── point 2/4: NNPDF23lo ── ok after 1min 12s
      done → results/PhotoProduction/zeus/default/NNPDF23lo
   ```
 

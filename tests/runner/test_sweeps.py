@@ -103,10 +103,36 @@ def test_c9_an_unknown_analysis_is_refused(scratch):
 
 
 def test_c10_a_pdf_set_that_is_not_installed_is_refused(scratch):
-    data = raw(static={"pdf": "NoSuchSet"}, quantities__pdf={"values": ["NoSuchSet"], "tags": ["x"]})
+    data = raw(static={"pdf": "x"}, quantities__pdf={"values": ["LHAPDF6:NoSuchSet"], "tags": ["x"]})
     with pytest.raises(HepError, match="not installed") as caught:
         plan(data, scratch)
     assert "lhapdf install NoSuchSet" in caught.value.hint
+
+
+def one_pdf(value):
+    return raw(static={"pdf": "x"}, quantities__pdf={"values": [value], "tags": ["x"]})
+
+
+@pytest.mark.parametrize("value, line", [("LHAPDF6:MSTW2008lo68cl", "PDF:pSet = LHAPDF6:MSTW2008lo68cl"),
+                                         ("LHAPDF6:MSTW2008lo68cl/3", "PDF:pSet = LHAPDF6:MSTW2008lo68cl/3"),
+                                         (14, "PDF:pSet = 14")])
+def test_pythia_gets_the_pdf_value_as_written(scratch, value, line):
+    """No prefix is added: the value is LHAPDF6:<set>[/member], or one of Pythia's own sets."""
+    _, _, p = plan(one_pdf(value), scratch)
+    assert line in p.writes[p.rendered["pythia"].card_combined].splitlines()
+
+
+def test_a_bare_lhapdf_set_name_for_pythia_is_refused(scratch):
+    with pytest.raises(HepError, match="Pythia reads only as LHAPDF6:MSTW2008lo68cl") as caught:
+        plan(one_pdf("MSTW2008lo68cl"), scratch)
+    assert 'LHAPDF6:MSTW2008lo68cl' in caught.value.hint
+
+
+def test_sherpa_takes_the_bare_set_name():
+    from runner.quantities import check_provider
+    check_provider("lhapdf", "MSTW2008lo68cl", "x")
+    with pytest.raises(HepError, match="takes the bare LHAPDF set name"):
+        check_provider("lhapdf", "LHAPDF6:MSTW2008lo68cl", "x")
 
 
 def test_an_override_equal_to_the_base_card_does_not_change_the_identity(scratch):

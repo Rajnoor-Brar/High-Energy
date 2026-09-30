@@ -15,23 +15,32 @@ and both are handled here by construction:
 Attribution: the cause is the first process to exit nonzero before the runner sent any signal. A
 SIGPIPE death is a consequence (its reader went away), never the cause: the reader is blamed, even
 when both exits are seen in the same poll (found by P1's failure injection).
+
+**Points at once** (`parallelism = K`, V36): `run_points` runs up to K points on threads of their
+own, each through the same `run_point`. Nothing of a point is shared with another (its folder holds
+its FIFOs, logs and products), except the journal (locked) and a prepare cache entry, which one
+point at a time may fill (`_prepare_lock`: a lock in this process and flock across processes).
 """
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import re
 import signal
 import stat
 import subprocess
+import threading
 import time
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from .errors import HepError
 from .paths import repo_root
-from .record import complete_marker, now, provenance, write_atomic
+from .record import complete_marker, is_complete, now, provenance, write_atomic
 from .status import Journal, Reader, ToolState
 from .tools import PointPlan, Step, expand
 
@@ -71,6 +80,99 @@ class NullSink:
     def tick(self, states): pass
     def tool_finished(self, state, result): pass
     def point_finished(self, plan, result): pass
+    def skipped(self, plan): pass
+
+
+def _sink_for(sink, plan):
+    """One point's view of the sink: a view gives each point its own (V36), anything else is shared."""
+    return sink.for_point(plan) if hasattr(sink, "for_point") else sink
+
+
+def run_points(plans: list[PointPlan], run, configuration, *, sink, journal: Journal | None, stopper: Stopper,
+               rerun: bool) -> tuple[int, int, bool]:
+    """Every point not already complete, `configuration.parallelism` at a time, in order: (done,
+    failed, stopped). A stop (Ctrl-C) starts nothing more and stops the running points through
+    their groups' stop ladder. An error of the runner itself is raised once the running points
+    have ended."""
+    todo = []
+    for plan in plans:
+        if not rerun and is_complete(plan):
+            sink.skipped(plan)
+        else:
+            todo.append(plan)
+    done = failed = 0
+    stopped = False
+    at_once = max(1, configuration.parallelism)
+    if at_once == 1:
+        for plan in todo:
+            result = run_point(plan, run, configuration, sink=_sink_for(sink, plan), journal=journal, stopper=stopper)
+            if result.stopped or stopper.requested:
+                return done, failed, True
+            failed += not result.ok
+            done += result.ok
+        return done, failed, False
+    error: BaseException | None = None
+    with ThreadPoolExecutor(max_workers=at_once, thread_name_prefix="hep-point") as pool:
+        running: set = set()
+        while todo or running:
+            while todo and len(running) < at_once and not stopper.requested and error is None:
+                plan = todo.pop(0)
+                running.add(pool.submit(run_point, plan, run, configuration, sink=_sink_for(sink, plan),
+                                        journal=journal, stopper=stopper))
+            if not running:
+                break
+            finished, running = wait(running, timeout=0.5, return_when=FIRST_COMPLETED)   # SIGINT gets in
+            for future in finished:
+                try:
+                    result = future.result()
+                except BaseException as caught:          # the runner's own error, not a tool's
+                    error = error or caught
+                    continue
+                stopped |= result.stopped
+                failed += not result.ok and not result.stopped
+                done += result.ok
+    if error is not None:
+        raise error
+    return done, failed, stopped or stopper.requested
+
+
+def cores(plan: PointPlan) -> int:
+    """About how many cores a point keeps busy, for the plan's note: its busiest group, where a
+    generator counts its threads, an integrated program its threads and rivet_threads, anything
+    else one."""
+    busiest = 0
+    for group in plan.groups:
+        count = 0
+        for step in group:
+            data = step.config_data or {}
+            if step.folder.get("tool", "produces_events"):
+                count += plan.threads
+            elif "pythia_cmnd" in data.get("standard", {}):
+                count += plan.threads + int(data.get("rivet_threads", 1))
+            else:
+                count += 1
+        busiest = max(busiest, count)
+    return max(busiest, 1)
+
+
+_PREPARE_LOCKS: dict[Path, threading.Lock] = {}
+_PREPARE_GUARD = threading.Lock()
+
+
+@contextmanager
+def _prepare_lock(directory: Path):
+    """One point at a time in a prepare cache entry: a lock per entry in this process, and flock on
+    <entry>.lock beside it across processes (two hep runs), so the entry's own folder stays the tool's."""
+    with _PREPARE_GUARD:
+        lock = _PREPARE_LOCKS.setdefault(directory, threading.Lock())
+    with lock:
+        directory.parent.mkdir(parents=True, exist_ok=True)
+        with open(directory.with_name(directory.name + ".lock"), "w") as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle, fcntl.LOCK_UN)
 
 
 # ── the count check ────────────────────────────────────────────────────────────────────────────
@@ -342,17 +444,35 @@ def run_prepares(plan: PointPlan, *, sink, journal: Journal | None, stopper: Sto
             if hasattr(sink, "note"):
                 sink.note(f"   {tag}: cached ({step.prepare_dir})")
             continue
-        step.prepare_dir.mkdir(parents=True, exist_ok=True)
-        job = replace(step, tag=tag, argv=step.prepare_argv, cwd=step.prepare_dir, inputs=[], outputs=[], products=[],
-                      count_check=None, sidecar=None, sidecar_written=None, log=plan.out / "logs" / f"{step.tag}.prepare.log",
-                      stall_after=max(step.stall_after, 3600.0))
-        ok, blamed, message = run_group(plan, [job], sink=sink, journal=journal, stopper=stopper, results=results)
-        if not ok:
-            return False, step.tag, message
-        marker = step.folder.spec["prepare"].get("marker")
-        if marker and not (step.prepare_dir / marker).exists():
-            return False, step.tag, f"{tag} exited 0 but left no {marker} in {step.prepare_dir}"
-        write_atomic(stamp, json.dumps({"argv": job.argv, "finished": now()}, indent=1) + "\n")
+        with _prepare_lock(step.prepare_dir):            # another point may be filling it (V36)
+            if stopper.requested:
+                return False, step.tag, "stopped before its prepare step"
+            if stamp.exists():
+                results[tag] = ToolResult(tag, exit=0, message=f"cache hit {step.prepare_dir.name}")
+                if hasattr(sink, "note"):
+                    sink.note(f"   {tag}: cached, made by a point running beside it ({step.prepare_dir})")
+                continue
+            ok, blamed, message = _prepare(plan, step, tag, stamp, sink=sink, journal=journal, stopper=stopper,
+                                           results=results)
+            if not ok:
+                return False, blamed, message
+    return True, "", ""
+
+
+def _prepare(plan: PointPlan, step: Step, tag: str, stamp: Path, *, sink, journal: Journal | None, stopper: Stopper,
+             results: dict[str, ToolResult]) -> tuple[bool, str, str]:
+    """One prepare step into its (locked) cache entry; the stamp only after it exited 0 with its marker."""
+    step.prepare_dir.mkdir(parents=True, exist_ok=True)
+    job = replace(step, tag=tag, argv=step.prepare_argv, cwd=step.prepare_dir, inputs=[], outputs=[], products=[],
+                  count_check=None, sidecar=None, sidecar_written=None, log=plan.out / "logs" / f"{step.tag}.prepare.log",
+                  stall_after=max(step.stall_after, 3600.0))
+    ok, blamed, message = run_group(plan, [job], sink=sink, journal=journal, stopper=stopper, results=results)
+    if not ok:
+        return False, step.tag, message
+    marker = step.folder.spec["prepare"].get("marker")
+    if marker and not (step.prepare_dir / marker).exists():
+        return False, step.tag, f"{tag} exited 0 but left no {marker} in {step.prepare_dir}"
+    write_atomic(stamp, json.dumps({"argv": job.argv, "finished": now()}, indent=1) + "\n")
     return True, "", ""
 
 

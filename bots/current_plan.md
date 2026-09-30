@@ -1,5 +1,82 @@
 # Current plan
 
+## Literal `_` in labels, and the TOML backslash error — **DONE 2026-09-30** (asked by the user 2026-09-30)
+
+"escape _ and other characters like \\_, toml error" (their label "PDF4LHC21\\_40\\_pdfas" in double
+quotes is invalid TOML). V41: yoda `latex()` follows TLatex (only `_{`, `^{`, `#name` are math);
+`plot.root_text`/`for_root` for Paint's page TOML; escapes `\\_ \\^ \\#`; config.load hints at
+single quotes. Checked by drawing through Paint and matplotlib. Tests in test_plot.py. The user's
+zeus_validation.toml line 102 is left as they wrote it (it still fails to parse until they change it).
+
+## No automatic `LHAPDF6:` for Pythia's `pdf` — **DONE 2026-09-30** (ordered by the user 2026-09-30)
+
+"make it so LHAPDF6: is not appended and user has to put it in value itself." Decided with the
+user: update all five configs (eic, InProcEIC, InProcZeus, zeus_seedSweep committed; the user's
+uncommitted zeus_validation.toml only in its commented-out values line, its active values are
+Pythia set numbers [5, 14, 15, 25]).
+
+- V40: master.toml pythia `pdf` has no format and `check = "pythia_pdf"`; quantities.py
+  `check_provider` kinds "lhapdf" (bare, refuses a prefix) and "pythia_pdf".
+- Tests: test_sweeps.py (C10, as written, bare refused, Sherpa bare), BASE and fixtures prefixed.
+- `--plan`: zeus_seedSweep's 24 complete points still complete (identities unchanged).
+
+## Exact and random seeds (`seed_type`, `manual_seed`) — **DONE 2026-09-30** (ordered by the user 2026-09-30)
+
+"run.seed_type = "manual"|"random"|"identity", and run.manual_seed = 3245364, valid for run and
+run.<cfg>". Decided with the user: manual = every point gets manual_seed (cfg overrides), seeds can
+be swept (a <tool>/seed quantity's value is the seed); random = drawn and recorded by the runner (not
+Random:seed = 0: PythiaParallel.cc:95-101 time+i overlaps); an unused manual_seed is allowed.
+
+- V39: config.py `SEED_TYPES`, `_seed_type`, `_manual_seed`; tools.py `PointPlan.seed_type`,
+  `.manual_seed`, `.seed_kept`, set for points only; record.py `seed_rule`, `manual_seed_of`,
+  `seed_basis(replica=False)`, `assign_seeds(plans, rerun)`, `_recorded_seed`; cli.py passes the
+  points `--rerun` runs anew, and `--plan` prints the mode and an unused manual_seed.
+- Default identities checked equal before and after (BASE at threads 1 and 4).
+- Tests: `tests/runner/test_seeds.py`, `tests/integration/test_gates_seeds.py` (slow).
+
+## Every configuration, one run after another (`sweep`) — **DONE 2026-09-30** (ordered by the user 2026-09-30)
+
+"Execute run configurations … a run.sweep bool option, and run.<configuration>.sweeped bool option
+to exclude particular configs"; "each configuration runs as one execution of run, without being a
+subpart of a grand run … a header line"; "run.<cfg>.title for 'run NN - <title> -'". Decided with
+the user: NN is the place in the sequence; each run re-reads the TOML at its turn (all checked at
+the start); Ctrl-C stops everything; the key is `swept`; TOML order.
+
+- V38: `[run].sweep`, `[run.<cfg>].swept` and `.title` (config.py, `RunConfig.runs`); cli.py
+  `Planned` (was a 7-tuple), `run_one` (the old `cmd_run` body), `cmd_run` loops (check all, then
+  each in turn; one Stopper; `not_run` journals a run an edit broke); `hep plot` draws every swept
+  configuration; `hep watch` picks the sweep's latest journal and `follow` moves on through the
+  finished record's `"next"`. Views: `begin(…, header=)`.
+- Tests: `tests/runner/test_run_sweep.py`, `tests/integration/test_gates_run_sweep.py` (slow).
+- Seen on the way, not changed: argparse does not take a configuration after an option
+  (`hep run eic --plain pdf` fails: "unrecognized arguments"); `parse_intermixed_args` would.
+
+## `"default"` for plot options — **DONE 2026-09-30** (ordered by the user 2026-09-30)
+
+"In plot options, make "default" a valid value; that is skips any configuration and lets tool
+decide, such as for min_entries."
+
+- V37: `plot.DEFAULT`; `plot.page_settings` resolves each key to the tool's own behaviour
+  (`pick(name, ours, native)`: an object-level "default" wins over `[plot]`); `formats_of`,
+  `backends`, `run_style` (root_style), `pages` (objects); style layers skip "default" values
+  (`check_style`, `merge_style`); config.py lets "default" past the type check; the yoda backend
+  reads each page's resolved ratio. `[plot.object]` values type-checked (OBJECT_TYPES).
+- Docs 04 §11 table of meanings; tests in `tests/runner/test_plot.py`.
+
+## Points at once (`parallelism`) — **DONE 2026-09-30** (ordered by the user 2026-09-30)
+
+"Make support for run.parallelism … run multiple points in parallel", with temp files prefixed
+`P001_`. Decided with the user: no prefixes (each point has its own folder), `threads` per point.
+
+- V36: `parallelism` in `[run]`/`[run.<cfg>]` (config.py); `execute.run_points` (a thread pool of
+  `run_point`s, stop-aware) and `execute.cores` (the `--plan` estimate); `status.Journal` lock;
+  `watch` views with a part per point and `for_point`; prepare cache entries locked
+  (`_prepare_lock`: threading lock + flock on `<entry>.lock`, stamp re-checked).
+- Found on the way: `test_fan_out_writes_the_same_events_everywhere` assumed byte-identical fan-out
+  outputs, which V31 (per-output writers) no longer gives under load: it now compares the events.
+- Tests: `tests/runner/test_parallel.py`, `tests/integration/test_gates_parallel.py` (slow).
+- Not yet: the timing measurement (the user's 100M-event zeus run held the machine).
+
 ## Seed sweeps, merged per curve (`combine`) — **DONE 2026-09-29** (ordered by the user 2026-09-29)
 
 "Sweep at different seeds, and plot combined data against pdf, make zeus_seedSweep.toml."

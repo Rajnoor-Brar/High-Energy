@@ -168,7 +168,7 @@ tags   = ["em", "ep"]
 labels = ["e^{-}", "e^{+}"]
 
 [quantities.pdf]
-values = ["MSTW2008lo68cl", "NNPDF23_lo_as_0130_qed", "NNPDF23_nlo_as_0119_qed", "PDF4LHC21_40"]
+values = ["LHAPDF6:MSTW2008lo68cl", "LHAPDF6:NNPDF23_lo_as_0130_qed", "LHAPDF6:NNPDF23_nlo_as_0119_qed", "LHAPDF6:PDF4LHC21_40"]
 tags   = ["MSTW08lo", "NNPDF23lo", "NNPDF23nlo", "PDF4LHC21"]
 labels = ["MSTW 2008 LO", "NNPDF 2.3 QCD+QED LO", "NNPDF 2.3 QCD+QED NLO", "PDF4LHC21"]
 

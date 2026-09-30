@@ -178,15 +178,45 @@ def consumer_table(run, master: dict, active: list[str], tags: list[str],
 
 # ── providers: things a value needs installed (02 §4, category 1) ─────────────────────────────
 
-def check_provider(kind: str, value, where: str) -> None:
-    """Refuse at plan time a value whose provider is missing (C10)."""
+LHAPDF_PREFIXES = ("LHAPDF6:", "LHAPDF5:")
+
+
+def _lhapdf_dirs() -> list[str]:
     import os
+    return [d for d in os.environ.get("LHAPDF_DATA_PATH", "").split(":") if d]
+
+
+def _lhapdf_installed(name: str) -> bool:
+    return any((Path(d) / name / f"{name}.info").is_file() for d in _lhapdf_dirs())
+
+
+def check_provider(kind: str, value, where: str) -> None:
+    """Refuse at plan time a value whose provider is missing (C10).
+
+    * "lhapdf": the value is a bare LHAPDF set name ("<set>[/member]", Sherpa's PDF_SET).
+    * "pythia_pdf": Pythia's PDF:pSet, written as the user gives it (no prefix is added): an
+      internal set number, "LHAPDF6:<set>[/member]" (the set must be installed), or a grid file.
+      A bare name that is an installed LHAPDF set is refused: Pythia would read it as a file."""
+    text = str(value)
     if kind == "lhapdf":
-        dirs = [d for d in os.environ.get("LHAPDF_DATA_PATH", "").split(":") if d]
-        name = str(value).split("/")[0]
-        if not any((Path(d) / name / f"{name}.info").is_file() for d in dirs):
-            raise HepError(f"the PDF set '{name}' is not installed", where=where,
-                           hint=f"lhapdf install {name}   (searched LHAPDF_DATA_PATH: {', '.join(dirs) or 'unset'})")
+        if text.startswith(LHAPDF_PREFIXES):
+            raise HepError(f"'{text}': this tool takes the bare LHAPDF set name", where=where,
+                           hint=f"write '{text.split(':', 1)[1]}'")
+        _require_set(text.split("/")[0], where)
+    elif kind == "pythia_pdf":
+        if isinstance(value, int) and not isinstance(value, bool) or text.isdigit():
+            return                                              # one of Pythia's internal sets
+        if text.startswith(LHAPDF_PREFIXES):
+            _require_set(text.split(":", 1)[1].split("/")[0], where)
+        elif _lhapdf_installed(text.split("/")[0]):
+            raise HepError(f"PDF:pSet = '{text}' is an LHAPDF set, which Pythia reads only as LHAPDF6:{text}",
+                           where=where, hint=f"write the value as \"LHAPDF6:{text}\"")
     else:
         raise HepError(f"unknown provider check '{kind}'", where=where)
+
+
+def _require_set(name: str, where: str) -> None:
+    if not _lhapdf_installed(name):
+        raise HepError(f"the PDF set '{name}' is not installed", where=where,
+                       hint=f"lhapdf install {name}   (searched LHAPDF_DATA_PATH: {', '.join(_lhapdf_dirs()) or 'unset'})")
 

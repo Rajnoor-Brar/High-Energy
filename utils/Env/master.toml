@@ -14,7 +14,7 @@ sqrts    = { key = "Beams:eCM" }
 beam_a   = { key = "Beams:idA" }
 beam_b   = { key = "Beams:idB" }
 beams    = { keys = ["Beams:idA", "Beams:idB"] }  # [id_A, id_B]
-pdf      = { key = "PDF:pSet", format = "LHAPDF6:{}", check = "lhapdf" }   # the set must be installed (C10)
+pdf      = { key = "PDF:pSet", check = "pythia_pdf" }   # as written: "LHAPDF6:<set>[/member]", checked installed (C10)
 events   = { key = "Main:numberOfEvents" }          # built-in
 threads  = { key = "Parallelism:numThreads" }       # built-in
 

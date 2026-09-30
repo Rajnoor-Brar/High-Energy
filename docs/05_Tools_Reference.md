@@ -34,7 +34,8 @@ Two more folders are not tools in a chain:
 - **Paint** (`utils/Apps/Paint/`) is driven by the plot stage, never named in `tools` (§17).
 
 **Not tools at all.** *Providers* (LHAPDF, FeynRules, SARAH) are plan-time checks: a mapping with
-`check = "lhapdf"` refuses an uninstalled PDF set (C10). *Analysis algorithms* (FastJet, ROOT
+`check = "lhapdf"` (a bare set name) or `"pythia_pdf"` (`LHAPDF6:<set>`) refuses an uninstalled PDF
+set (C10). *Analysis algorithms* (FastJet, ROOT
 libraries) are `// requires:` names in a source ([06 §2](06_Developer_Guide.md#2-the-build)). A
 *detector simulation* with no command line of its own (Geant4) is a module program with
 `// requires: geant4`. *Statistics* (RooFit, pyhf, uproot, scikit-learn) are custom tools, usually
@@ -380,7 +381,10 @@ The **yoda backend** runs `Paint --dump-ranges` on every page first, then per ce
   the range to the tool), `LogX`, `LogY`, `RatioPlot`, the legend corner, and label overrides
   translated TLatex → LaTeX;
 - `rivet-mkhtml --no-rivet-refs -o <dir> -c pages.plot <yodas…> [reference.yoda --reflabel …]`,
-  with `-f SVG`/`-f EPS` for those formats.
+  with `-f SVG`/`-f EPS` for those formats;
+- the ratio pad's y ticks: YODA's generator puts them at a fifth of the pad's range with no key to
+  change it (and a later `set_yscale` in its script resets them anyway), so the backend writes
+  `ratio.divisions`' locators into each page's script just before it saves, and runs it again.
 
 A backend is a module with `validate(settings, beside_root=False)` and
 `draw(cells, settings, say) -> failed pages`; writing one is [06 §6](06_Developer_Guide.md#6-adding-a-plot-backend).

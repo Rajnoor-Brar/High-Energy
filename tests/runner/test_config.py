@@ -75,7 +75,7 @@ def test_c12_climbing_out_is_refused(scratch):
 
 
 def test_static_values_resolve_by_tag_value_or_index(scratch):
-    for selector in ("NNPDF23lo", "NNPDF23_lo_as_0130_qed", "#2"):
+    for selector in ("NNPDF23lo", "LHAPDF6:NNPDF23_lo_as_0130_qed", "#2"):
         _, _, p = plan(raw(static={"pdf": selector}), scratch)
         assert p.values["pdf"] == 1
 

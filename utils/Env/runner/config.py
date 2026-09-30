@@ -22,10 +22,15 @@ TOP_LEVEL = ("master", "run", "prelim", "static", "tools", "quantities", "plot")
 
 # key → accepted Python types. A tuple of types means any of them.
 RUN_KEYS = {"serial": int, "name": str, "project": str, "configuration": str, "event_count": int,
-            "threads": int, "description": str}
-CONFIGURATION_KEYS = {"serial": int, "name": str, "description": str, "event_count": int, "threads": int,
+            "threads": int, "parallelism": int, "description": str, "sweep": bool, "seed_type": str,
+            "manual_seed": int}
+CONFIGURATION_KEYS = {"serial": int, "name": str, "title": str, "description": str, "event_count": int,
+                      "threads": int, "parallelism": int, "swept": bool, "seed_type": str, "manual_seed": int,
                       "sweeps": list, "plot_points": list, "combine": list, "tools": list, "pre": list, "post": list,
                       "static": dict, "prelim": dict}
+#: How a point's seeds are chosen (V39, 02 §8): from the generator's identity (the default), given
+#: (`manual_seed`, or a quantity targeting <tool>/seed), or drawn afresh when the point runs.
+SEED_TYPES = ("identity", "manual", "random")
 PRELIM_KEYS = {"fifo": list, "files": list, "commands": list}
 MASTER_KEYS = {"master_toml": str}
 QUANTITY_KEYS = {"values": list, "tags": list, "labels": list, "key": (str, dict), "target": (str, list),
@@ -89,6 +94,11 @@ class Configuration:
     prelim: dict
     pre: list[list[str]] = field(default_factory=list)   # tools run once before every point
     combine: list[str] = field(default_factory=list)    # swept quantities whose points are merged into one (V35)
+    parallelism: int = 1                                # points run at once (V36); never in an identity
+    swept: bool = True                                  # run by a [run].sweep (V38)
+    title: str = ""                                     # the `run NN - <title> -` header of a sweep
+    seed_type: str = "identity"                         # SEED_TYPES (V39)
+    manual_seed: int | None = None                      # seed_type = "manual": every point's seed
 
 
 @dataclass
@@ -97,7 +107,7 @@ class RunConfig:
     project: str
     name: str
     serial: int | None
-    default_configuration: str
+    default_configuration: str | None                  # None only under sweep
     configurations: dict[str, Configuration]
     prelim: dict
     static: dict
@@ -106,14 +116,28 @@ class RunConfig:
     plot: dict
     master_toml: str | None
     raw: dict
+    sweep: bool = False                                 # `hep run` executes every swept configuration (V38)
 
     def configuration(self, name: str | None) -> Configuration:
         wanted = name or self.default_configuration
+        if wanted is None:
+            raise HepError("[run] sweeps its configurations and names none", where=f"{self.path}: [run]",
+                           hint=f"name one: configurations {', '.join(self.configurations)}")
         if wanted not in self.configurations:
             raise HepError(f"no configuration '{wanted}'", where=f"{self.path}: [run]",
                            hint=did_you_mean(wanted, self.configurations)
                            or f"configurations: {', '.join(self.configurations) or '(none)'}")
         return self.configurations[wanted]
+
+    def runs(self, name: str | None) -> list[str]:
+        """The configurations `hep run` executes, in order (V38): the one named on the command line,
+        even under sweep; else, under [run].sweep, every configuration not `swept = false`, in the
+        order of the file; else [run].configuration."""
+        if name:
+            return [self.configuration(name).key]
+        if self.sweep:
+            return [key for key, c in self.configurations.items() if c.swept]
+        return [self.configuration(None).key]
 
 
 # ── checking ───────────────────────────────────────────────────────────────────────────────────
@@ -129,21 +153,33 @@ def _check(table: dict, spec: dict, where: str, *, allow_tables: bool = False, e
     """Unknown keys are errors (C1); known keys must have the right type. Returns the extras."""
     extras = {}
     for key, value in table.items():
+        types = spec.get(key)
+        if allow_tables and isinstance(value, dict) and dict not in (types if isinstance(types, tuple) else (types,)):
+            continue                             # a configuration, even one named like a key ([run.sweep])
         if key in spec:
-            types = spec[key]
             if isinstance(value, bool) and bool not in (types if isinstance(types, tuple) else (types,)):
                 raise HepError(f"'{key}' must be {_type_name(types)}, not true/false", where=f"{where}.{key}")
             if not isinstance(value, types):
                 raise HepError(f"'{key}' must be {_type_name(types)}", where=f"{where}.{key}",
                                hint=f"got {value!r}")
-        elif allow_tables and isinstance(value, dict):
-            continue
         elif extra_ok:
             extras[key] = value
         else:
             raise HepError(f"unknown key '{key}'", where=where,
                            hint=did_you_mean(key, spec) or f"known keys: {', '.join(spec)}")
     return extras
+
+
+def _seed_type(value: str, where: str) -> str:
+    if value not in SEED_TYPES:
+        raise HepError(f"seed_type is '{value}'", where=where, hint=f"one of {', '.join(SEED_TYPES)}")
+    return value
+
+
+def _manual_seed(value: int | None, where: str) -> int | None:
+    if value is not None and not 1 <= value < 900_000_000:          # Pythia's range (record.SEED_RANGE)
+        raise HepError(f"manual_seed {value} is out of range", where=where, hint="1 to 899,999,999")
+    return value
 
 
 def _as_list(value) -> list:
@@ -198,6 +234,12 @@ def _sweeps(entries: list, where: str, quantities: dict) -> list:
     return out
 
 
+def _parallelism(value: int, where: str) -> int:
+    if value < 1:
+        raise HepError("parallelism must be at least 1 (the points run at once)", where=where)
+    return value
+
+
 def _resolved_threads(value: int, where: str) -> int:
     if value < 0:
         raise HepError("threads must be ≥ 0 (0 = every core)", where=where)
@@ -235,7 +277,10 @@ def load(name: str, *, sets: list[str] = ()) -> RunConfig:
     try:
         raw = tomllib.loads(path.read_text(encoding="utf-8"))
     except tomllib.TOMLDecodeError as error:
-        raise HepError(f"not valid TOML: {error}", where=str(path))
+        escape = "escape" in str(error).lower() or "'\\'" in str(error)
+        raise HepError(f"not valid TOML: {error}", where=str(path),
+                       hint="in a \"…\" string a backslash starts a TOML escape: write the label in single quotes, "
+                            "'PDF4LHC21\\_40', or double the backslash, \"PDF4LHC21\\\\_40\"" if escape else None)
     apply_sets(raw, list(sets))
     return parse(raw, path)
 
@@ -254,7 +299,8 @@ def parse(raw: dict, path: Path) -> RunConfig:
     if not isinstance(run, dict):
         raise HepError("missing [run]", where=where, hint="every run TOML has [run] name, project, configuration")
     _check(run, RUN_KEYS, f"{where}: [run]", allow_tables=True)
-    for required in ("name", "project", "configuration"):
+    sweep_on = run.get("sweep") is True                 # [run.sweep] may be a configuration's table
+    for required in ("name", "project") + (() if sweep_on else ("configuration",)):
         if required not in run:
             raise HepError(f"[run] needs '{required}'", where=f"{where}: [run]")
     project = run["project"]
@@ -348,8 +394,14 @@ def parse(raw: dict, path: Path) -> RunConfig:
             raise HepError("no event_count: set it here or in [run]", where=at)
         configurations[key] = Configuration(
             key=key, name=table.get("name", key), serial=table.get("serial"),
+            swept=table.get("swept", True), title=table.get("title", key),
+            seed_type=_seed_type(table.get("seed_type", run.get("seed_type", "identity")),
+                                 f"{at}.seed_type" if "seed_type" in table else f"{where}: [run].seed_type"),
+            manual_seed=_manual_seed(table.get("manual_seed", run.get("manual_seed")),
+                                     f"{at}.manual_seed" if "manual_seed" in table else f"{where}: [run].manual_seed"),
             description=table.get("description", ""), event_count=int(event_count),
             threads=_resolved_threads(int(table.get("threads", run.get("threads", 1))), f"{at}.threads"),
+            parallelism=_parallelism(int(table.get("parallelism", run.get("parallelism", 1))), f"{at}.parallelism"),
             sweeps=sweeps, plot_points=list(plot_points), combine=list(combine),
             tools=_groups(table["tools"], f"{at}.tools", tools),
             post=_groups(table.get("post", []), f"{at}.post", tools),
@@ -357,7 +409,10 @@ def parse(raw: dict, path: Path) -> RunConfig:
             static={**static, **local_static},
             prelim=local_prelim if local_prelim is not None else prelim)
 
-    if run["configuration"] not in configurations:
+    if sweep_on and not any(c.swept for c in configurations.values()):
+        raise HepError("[run].sweep is on but every configuration has swept = false", where=f"{where}: [run].sweep",
+                       hint="leave one in, or turn the sweep off")
+    if "configuration" in run and run["configuration"] not in configurations:
         raise HepError(f"[run].configuration is '{run['configuration']}', which is not a [run.<name>] table",
                        where=f"{where}: [run].configuration",
                        hint=did_you_mean(run["configuration"], configurations)
@@ -367,9 +422,11 @@ def parse(raw: dict, path: Path) -> RunConfig:
     if "legend" in plot:
         raise HepError("[plot].legend is now part of the style", where=f"{where}: [plot].legend",
                        hint=f'[plot.style] legend.position = "{plot["legend"]}" (or in the root_style file)')
-    _check(plot, PLOT_KEYS, f"{where}: [plot]")
+    # "default" is every drawing option's own value (V37): the tool decides; plot.py resolves it
+    _check({k: v for k, v in plot.items() if v != "default" or k in ("data", "style", "object")}, PLOT_KEYS,
+           f"{where}: [plot]")
 
     return RunConfig(path=path, project=project, name=run["name"], serial=run.get("serial"),
-                     default_configuration=run["configuration"], configurations=configurations,
+                     default_configuration=run.get("configuration"), configurations=configurations,
                      prelim=prelim, static=static, tools=tools, quantities=quantities, plot=plot,
-                     master_toml=master.get("master_toml"), raw=raw)
+                     master_toml=master.get("master_toml"), raw=raw, sweep=sweep_on)

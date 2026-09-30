@@ -85,10 +85,29 @@ def test_the_suffix_picks_the_codec(scratch, card, name, magic):
     assert (scratch / name).read_bytes()[:len(magic)] == magic
 
 
+def events_of(path: Path) -> dict[int, list[str]]:
+    """Each event's lines by its number, without its σ line."""
+    events: dict[int, list[str]] = {}
+    current = None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("E "):
+            current = int(line.split()[1])
+            events[current] = [line]
+        elif line.startswith("HepMC::"):
+            current = None
+        elif current is not None and " GenCrossSection " not in line:
+            events[current].append(line)
+    return events
+
+
 def test_fan_out_writes_the_same_events_everywhere(scratch, card):
+    """V16: every output gets every event. Not byte for byte: callbacks run in parallel and each output
+    has its own writer (V31), so two outputs may take the same events in another order, and each
+    output's last event carries the latest σ (L28)."""
     result = run("a.hepmc,b.hepmc", card, cwd=scratch)
     assert result.returncode == 0, result.stderr
-    assert (scratch / "a.hepmc").read_bytes() == (scratch / "b.hepmc").read_bytes()
+    a, b = events_of(scratch / "a.hepmc"), events_of(scratch / "b.hepmc")
+    assert a and a == b
 
 
 def event_numbers(path: Path) -> list[int]:
