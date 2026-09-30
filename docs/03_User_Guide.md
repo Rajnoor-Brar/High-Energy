@@ -96,8 +96,8 @@ energies = "27x920"
 values = [[920, 27.5], [275, 18]]
 tags   = ["27x920", "18x275"]
 
-[quantities.pdf]                  # the master knows it too: PDF:pSet = LHAPDF6:<set>
-values = ["MSTW2008lo68cl", "NNPDF23_lo_as_0130_qed"]
+[quantities.pdf]                  # the master knows it too: PDF:pSet = <value>, as written
+values = ["LHAPDF6:MSTW2008lo68cl", "LHAPDF6:NNPDF23_lo_as_0130_qed"]   # or Pythia's own sets: 13, 14
 tags   = ["MSTW08lo", "NNPDF23lo"]
 labels = ["MSTW 2008 LO", "NNPDF 2.3 LO"]
 

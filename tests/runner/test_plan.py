@@ -155,5 +155,5 @@ def test_a_custom_tool_gets_its_config_and_consumed_quantities(scratch):
     _, _, p = plan(data, scratch)
     import tomllib
     written = tomllib.loads(p.writes[p.rendered["fit"].config_path])
-    assert written == {"model": "gauss", "quantities": {"pdf": "MSTW2008lo68cl"}}
+    assert written == {"model": "gauss", "quantities": {"pdf": "LHAPDF6:MSTW2008lo68cl"}}
     assert p.rendered["fit"].argv[-1] == f"{p.res}/fit.json"

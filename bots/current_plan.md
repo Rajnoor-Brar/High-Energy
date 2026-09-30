@@ -1,5 +1,17 @@
 # Current plan
 
+## No automatic `LHAPDF6:` for Pythia's `pdf` — **DONE 2026-09-30** (ordered by the user 2026-09-30)
+
+"make it so LHAPDF6: is not appended and user has to put it in value itself." Decided with the
+user: update all five configs (eic, InProcEIC, InProcZeus, zeus_seedSweep committed; the user's
+uncommitted zeus_validation.toml only in its commented-out values line, its active values are
+Pythia set numbers [5, 14, 15, 25]).
+
+- V40: master.toml pythia `pdf` has no format and `check = "pythia_pdf"`; quantities.py
+  `check_provider` kinds "lhapdf" (bare, refuses a prefix) and "pythia_pdf".
+- Tests: test_sweeps.py (C10, as written, bare refused, Sherpa bare), BASE and fixtures prefixed.
+- `--plan`: zeus_seedSweep's 24 complete points still complete (identities unchanged).
+
 ## Exact and random seeds (`seed_type`, `manual_seed`) — **DONE 2026-09-30** (ordered by the user 2026-09-30)
 
 "run.seed_type = "manual"|"random"|"identity", and run.manual_seed = 3245364, valid for run and

@@ -16,7 +16,7 @@ BASE = {
         "rivet": {"tool": "rivet", "input": "events.hepmc", "analyses": ["photo_eic"], "output_file": "photo.yoda"},
     },
     "quantities": {
-        "pdf": {"values": ["MSTW2008lo68cl", "NNPDF23_lo_as_0130_qed"], "tags": ["MSTW08lo", "NNPDF23lo"]},
+        "pdf": {"values": ["LHAPDF6:MSTW2008lo68cl", "LHAPDF6:NNPDF23_lo_as_0130_qed"], "tags": ["MSTW08lo", "NNPDF23lo"]},
     },
 }
 

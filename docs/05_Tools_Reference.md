@@ -34,7 +34,8 @@ Two more folders are not tools in a chain:
 - **Paint** (`utils/Apps/Paint/`) is driven by the plot stage, never named in `tools` (§17).
 
 **Not tools at all.** *Providers* (LHAPDF, FeynRules, SARAH) are plan-time checks: a mapping with
-`check = "lhapdf"` refuses an uninstalled PDF set (C10). *Analysis algorithms* (FastJet, ROOT
+`check = "lhapdf"` (a bare set name) or `"pythia_pdf"` (`LHAPDF6:<set>`) refuses an uninstalled PDF
+set (C10). *Analysis algorithms* (FastJet, ROOT
 libraries) are `// requires:` names in a source ([06 §2](06_Developer_Guide.md#2-the-build)). A
 *detector simulation* with no command line of its own (Geant4) is a module program with
 `// requires: geant4`. *Statistics* (RooFit, pyhf, uproot, scikit-learn) are custom tools, usually

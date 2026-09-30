@@ -97,15 +97,19 @@ A master TOML maps a **quantity name** to what it means for one **tool type**:
 [quantities.pythia.compatible_quantities]           # [quantities.<tool>.compatible_quantities]
 sqrts    = { key = "Beams:eCM" }                      # the card line  Beams:eCM = value
 energies = { keys = ["Beams:eA", "Beams:eB"] }        # an array value spread over several keys, in order
-pdf      = { key = "PDF:pSet", format = "LHAPDF6:{}", check = "lhapdf" }   # a Python format; a provider check (C10)
+pdf      = { key = "PDF:pSet", check = "pythia_pdf" }  # the value as written; a provider check (C10)
 
 [quantities.herwig.compatible_quantities]
 seed_offset = { flag = "-x" }                         # a command-line argument instead of a card line
 ```
 
 Each entry takes **exactly one** of `key`, `keys`, `flag` (`format` and `check` are additions).
-`check = "lhapdf"` refuses a value whose PDF set is not under `LHAPDF_DATA_PATH`, with the
-`lhapdf install <set>` line to type. The `render` form mentioned in `master.toml`'s header is not
+`check` is a provider check (C10), with the `lhapdf install <set>` line to type when a set is not
+under `LHAPDF_DATA_PATH`. `"lhapdf"` takes a bare set name, `<set>[/member]`, as Sherpa does.
+`"pythia_pdf"` takes the value exactly as Pythia's `PDF:pSet` reads it (V40: no prefix is added):
+`"LHAPDF6:<set>[/member]"`, whose set must be installed; one of Pythia's own set numbers (`13`); or
+a grid file. A bare name that is an installed LHAPDF set is refused with the `LHAPDF6:` spelling,
+since Pythia would read it as a file. The `render` form mentioned in `master.toml`'s header is not
 implemented (F11): a tool with a `render.py` takes plain `key` mappings and interprets the keys
 itself (a YAML path for Sherpa, a SINDARIN variable for Whizard).
 
@@ -117,7 +121,7 @@ itself (a YAML path for Sherpa, a SINDARIN variable for Whizard).
 | `sqrts` | `Beams:eCM` | `BEAM_ENERGIES = [√s/2, √s/2]` | `Luminosity:Energy` | — | — |
 | `beam_a`, `beam_b` | `Beams:idA`, `Beams:idB` | — | — | — | — |
 | `beams` `[id_A, id_B]` | `Beams:idA`, `Beams:idB` | `BEAMS` | — | `beams` (model names) | `lpp1`, `lpp2` |
-| `pdf` (checked: lhapdf) | `PDF:pSet = LHAPDF6:<set>` | `PDF_SET[0]` (and `MPI_PDF_SET`) | — | — | — |
+| `pdf` (checked, C10) | `PDF:pSet = <value>`: write `"LHAPDF6:<set>"`, or a Pythia set number | `PDF_SET[0]` (and `MPI_PDF_SET`): the bare `<set>` | — | — | — |
 | `events` (built-in) | `Main:numberOfEvents` | `EVENTS` | (the `-N` flag) | `n_events` | `nevents` |
 | `threads` (built-in) | `Parallelism:numThreads` | — | — | — | — |
 
@@ -351,8 +355,8 @@ pdf      = "#2"         # … or "#N", the N-th value (1-based)
 ## 8. `[quantities.<q>]`
 
 ```toml
-[quantities.pdf]                     # in the master: no key needed
-values = ["MSTW2008lo68cl", "NNPDF23_lo_as_0130_qed"]
+[quantities.pdf]                     # in the master: no key needed; Pythia reads the value as written
+values = ["LHAPDF6:MSTW2008lo68cl", "LHAPDF6:NNPDF23_lo_as_0130_qed"]
 tags   = ["MSTW08lo", "NNPDF23lo"]
 labels = ["MSTW 2008 LO", "NNPDF 2.3 LO"]
 
@@ -378,7 +382,7 @@ values = [0.05, 0.10, 0.15, 0.25]
 | `labels` | array of strings | the tags | legend text, in ROOT **TLatex** (`e^{-}`, `#sqrt{s}`; V11) |
 | `key` | string, or table `{<tag or tool type> = "<key>"}` | none | the native key. A string needs a `target`. A table entry for a tool tag wins over one for its type. |
 | `target` | string or array | none | restricts the consumers (§8.1) |
-| `format` | string | "" | a Python format for the value: `"LHAPDF6:{}"`, `"{}*GeV"` |
+| `format` | string | "" | a Python format for the value: `"{}*GeV"` |
 | `description` | string | "" | |
 
 ### 8.1 Who consumes a quantity
