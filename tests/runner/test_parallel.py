@@ -100,7 +100,7 @@ def test_points_running_at_once_each_print_one_whole_block():
     assert lines[0].startswith("── point 2/2: NNPDF23lo ── ok")
     assert lines[1:3] == ["   sherpa:prepare: cached", "   done → results/x/NNPDF23lo"]
     assert lines[3].startswith("── point 1/2: MSTW08lo ── FAILED [rivet]")
-    assert lines[4:] == ["   rivet: exit 1 after 1.0 s  (boom)", "   rivet exited 1"]
+    assert lines[4:] == ["   rivet: exit 1 after 1.0s  (boom)", "   rivet exited 1"]
 
 
 def test_the_journal_takes_lines_from_many_threads(scratch):

@@ -36,12 +36,12 @@ def _count(value) -> str:
 
 
 def duration(seconds: float) -> str:
-    """'42.3 s', '4 min 12 s', '2 h 58 min 7 s': how long a point or a tool took."""
+    """'42.3s', '4min 12s', '2h 58min 7s': how long a point or a tool took."""
     if seconds < 59.95:
-        return f"{seconds:.1f} s"
+        return f"{seconds:.1f}s"
     hours, rest = divmod(round(seconds), 3600)
     minutes, secs = divmod(rest, 60)
-    return f"{hours} h {minutes} min {secs} s" if hours else f"{minutes} min {secs} s"
+    return f"{hours}h {minutes}min {secs}s" if hours else f"{minutes}min {secs}s"
 
 
 def _eta(state) -> str:
@@ -161,7 +161,7 @@ class PlainView:
     """One block per point, printed when it ends: its heading with the verdict and wall time, then
     only what needs saying (a failed tool, a prepare step) and where the results are:
 
-        ── point 2/4: NNPDF23lo ── ok after 1 min 12 s
+        ── point 2/4: NNPDF23lo ── ok after 1min 12s
            done → results/PhotoProduction/zeus/default/NNPDF23lo
 
     While a point runs, a progress line every few seconds (the live view draws a table instead).

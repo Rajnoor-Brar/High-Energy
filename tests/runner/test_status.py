@@ -75,12 +75,12 @@ def test_watch_follows_the_latest_run_and_stops_when_it_finishes(scratch, monkey
     assert follow(journal, plain=True) == 0
     text = captured.getvalue()
     assert "watching new" in text and "old" not in text
-    assert "── point 1/1: a ── ok after 1 min 12 s" in text and "run finished: 1 done" in text
+    assert "── point 1/1: a ── ok after 1min 12s" in text and "run finished: 1 done" in text
     assert "pythia: ok" not in text                                     # a tool that did its job says nothing
 
 
 def test_a_point_is_one_block_when_it_ends():
-    """── point 2/4: NNPDF23lo ── ok after 1 min 12 s, then where the results are (the user's layout)."""
+    """── point 2/4: NNPDF23lo ── ok after 1min 12s, then where the results are (the user's layout)."""
     from types import SimpleNamespace
     from runner.execute import PointResult, ToolResult
     from runner.status import ToolState
@@ -96,14 +96,14 @@ def test_a_point_is_one_block_when_it_ends():
     view.point_finished(plan, PointResult(True))
     view.flush()                                                       # the view writes on its own thread (V32)
     lines = out.getvalue().splitlines()
-    assert lines[0].startswith("── point 2/4: NNPDF23lo ── ok after ") and lines[0].endswith(" s")
-    assert lines[1:] == ["   sherpa:prepare: ok after 3.0 s", "   done → results/x/NNPDF23lo"]
+    assert lines[0].startswith("── point 2/4: NNPDF23lo ── ok after ") and lines[0].endswith("s")
+    assert lines[1:] == ["   sherpa:prepare: ok after 3.0s", "   done → results/x/NNPDF23lo"]
     view.point_started(plan)
     view.tool_finished(ToolState(point="NNPDF23lo", tag="rivet", error="boom"), ToolResult("rivet", exit=1, seconds=2.0))
     view.point_finished(plan, PointResult(False, cause="rivet", message="rivet exited 1"))
     view.flush()
     tail = out.getvalue().splitlines()[3:]
-    assert "── FAILED [rivet] after" in tail[0] and tail[1:] == ["   rivet: exit 1 after 2.0 s  (boom)", "   rivet exited 1"]
+    assert "── FAILED [rivet] after" in tail[0] and tail[1:] == ["   rivet: exit 1 after 2.0s  (boom)", "   rivet exited 1"]
 
 
 def test_a_terminal_that_stops_reading_never_stops_the_run():
@@ -125,8 +125,8 @@ def test_a_terminal_that_stops_reading_never_stops_the_run():
     os.close(read_end)                                                # the writer thread gets EPIPE and stops
 
 
-@pytest.mark.parametrize("seconds, shown", [(3.04, "3.0 s"), (59.9, "59.9 s"), (59.96, "1 min 0 s"), (71.8, "1 min 12 s"),
-                                            (3599.6, "1 h 0 min 0 s"), (10687.2, "2 h 58 min 7 s")])
+@pytest.mark.parametrize("seconds, shown", [(3.04, "3.0s"), (59.9, "59.9s"), (59.96, "1min 0s"), (71.8, "1min 12s"),
+                                            (3599.6, "1h 0min 0s"), (10687.2, "2h 58min 7s")])
 def test_durations_are_seconds_then_minutes_then_hours(seconds, shown):
     from runner.watch import duration
     assert duration(seconds) == shown
