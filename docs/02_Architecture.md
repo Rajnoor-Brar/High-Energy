@@ -322,13 +322,14 @@ directory).
 - **A filter rule never fails a run.** The exit code does that.
 - **The journal**, `output/…/<cfg>/status.jsonl`, gets every status message tagged with its point,
   tool and time, plus the runner's `run`, `point` and `exit` records.
-- **The views.** The live view (with `rich`, on a terminal) shows a line per running tool: progress,
-  rate, ETA, σ, the last warning. The plain view (`--plain`, or not a terminal) prints progress every
+- **The views.** The live view (with `rich`, on a terminal) shows each running point below the
+  finished blocks, after a blank line: its heading and time so far (`mm:ss`, `hh:mm:ss` once there
+  are hours), then a line per running tool: progress, rate, ETA, σ, the last warning. The plain view (`--plain`, or not a terminal) prints progress every
   few seconds. **A view never blocks the run** (V32): everything it prints goes through one
   background thread, so a terminal that stops reading (a paused tab, Ctrl-S) stops the display, not
   the supervision. With `parallelism = K` (V36) up to K points run at once, each on a thread of its
-  own through the same executor: the views keep a part per running point (the live table shows every
-  running point's tools), a block is printed whole when its point ends, the journal takes one line at
+  own through the same executor: the views keep a part per running point (the live view shows each
+  under its own heading), a block is printed whole when its point ends, the journal takes one line at
   a time, and a prepare cache entry is filled by one point at a time (a lock in the runner, `flock`
   across runners). Both print **one block per finished point**:
 

@@ -4,8 +4,9 @@ docs/02_Architecture.md §10. The views are fed only by status: ToolState object
 `execute` updates from the tools' status pipes and log filters. They never look at a process, so
 `hep watch` can drive the same views from output/…/status.jsonl in another terminal.
 
-* `LiveView` (rich, on a terminal): one line per running tool — point, tool, phase, a bar, the
-  count, rate and ETA, and the last warning — with each finished point printed above it.
+* `LiveView` (rich, on a terminal): each running point under its heading and time so far, one line
+  per running tool — tool, phase, a bar, the count, rate and ETA, and the last warning — with each
+  finished point printed above it.
 * `PlainView` (a pipe, a log file, or `--plain`): one line per event of note, and a progress line
   every few seconds.
 
@@ -44,10 +45,17 @@ def duration(seconds: float) -> str:
     return f"{hours}h {minutes}min {secs}s" if hours else f"{minutes}min {secs}s"
 
 
+def clock(seconds: float) -> str:
+    """'00:42', '49:11', '09:47:17', '103:02:09': a running point's time so far, or an ETA; the hours
+    only once there are some."""
+    hours, rest = divmod(int(max(0.0, seconds)), 3600)
+    minutes, secs = divmod(rest, 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}" if hours else f"{minutes:02d}:{secs:02d}"
+
+
 def _eta(state) -> str:
     if state.done and state.total and state.rate:
-        left = max(0.0, (state.total - state.done) / state.rate)
-        return f"{int(left // 60)}:{int(left % 60):02d}"
+        return clock((state.total - state.done) / state.rate)
     return ""
 
 
@@ -301,10 +309,21 @@ class PlainView:
 
 
 class LiveView(PlainView):
-    """The rich version: the same blocks, and a live table of the running tools of every running
-    point, with a footer line per point (its heading and time so far)."""
+    """The rich version: the same blocks, and under them each running point: a blank line, its
+    heading and time so far, then its running tools, one line each:
+
+        ── point 3/4: MSTW08lo ── ok after 9h 12min 4s
+           done → results/PhotoProduction/zeus/default/MSTW08lo
+
+        point 4/4: PDF4LHC21 · 01:03:17
+           pythia   generating ━━━━━━━━━━━━━━━━━━━━━━━━ 1.70M/10.00M 2,812/s 49:11
+           rivet.12 analysing  ⠸                        1.70M
+
+    The columns line up across points. `hep watch` has no points' parts: its tools, each named by
+    its point."""
 
     SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+    BAR = 24
 
     def __init__(self):
         from rich.console import Console
@@ -333,24 +352,18 @@ class LiveView(PlainView):
     def tick(self, states) -> None:
         with self._lock:
             self.frame += 1
-            if self.points:                      # the executors' points: each keeps its own tools
-                shown = [s for part in self.points.values() for s in part.states]
-            else:                                # hep watch: every running tool it has read
-                shown = list(states)
-            self.screen.frame(self.render(shown))
+            self.screen.frame(self.render(states))
 
-    def render(self, states):
+    def _rows(self, states, named: bool) -> list[list]:
+        """A line per running tool: [point,] tool, phase, bar, count, rate and ETA, the last warning."""
         from rich.progress_bar import ProgressBar
-        from rich.table import Table
-        table = Table.grid(padding=(0, 1))
-        for _ in range(7):
-            table.add_column()
+        rows = []
         for s in states:
             if not s.running:
                 continue
             spinner = self.SPIN[self.frame % len(self.SPIN)]
             if s.done is not None and s.total:
-                bar = ProgressBar(total=s.total, completed=min(s.done, s.total), width=24)
+                bar = ProgressBar(total=s.total, completed=min(s.done, s.total), width=self.BAR)
                 count = f"{_count(s.done)}/{_count(s.total)}"
             elif s.done is not None:
                 bar, count = spinner, _count(s.done)
@@ -358,14 +371,53 @@ class LiveView(PlainView):
                 bar, count = spinner, ""
             rate = f"{s.rate:,.0f}/s" if s.rate else ""
             note = f"[yellow]{s.warning[:50]}[/yellow]" if s.warning else f"[dim]{(s.last_line if s.done is None else '')[:50]}[/dim]"
-            table.add_row(f"[cyan]{s.point}[/cyan]", f"[bold]{s.tag}[/bold]", s.phase or "", bar, count,
-                          f"{rate} {_eta(s)}".strip(), note)
+            row = [f"[bold]{s.tag}[/bold]", s.phase or "", bar, count, f"{rate} {_eta(s)}".strip(), note]
+            rows.append([f"[cyan]{s.point}[/cyan]", *row] if named else row)
+        return rows
+
+    def _width(self, cell) -> int:
+        from rich.text import Text
+        if not isinstance(cell, str):
+            return self.BAR
+        try:
+            return Text.from_markup(cell).cell_len
+        except Exception:                        # a tool's text that looks like markup
+            return len(cell)
+
+    def render(self, states):
+        from rich.console import Group
+        from rich.table import Table
+        from rich.text import Text
         now = time.monotonic()
-        for part in list(self.points.values()):
-            elapsed = now - part.started
-            table.add_row("", f"[dim]{part.heading.replace('── ', '')} · {int(elapsed // 60)}:{int(elapsed % 60):02d}[/dim]",
-                          "", "", "", "", "")
-        return table
+        if self.points:                          # the executors' points: each keeps its own tools
+            sections = [(f"{part.heading.replace('── ', '')} · {clock(now - part.started)}",
+                         self._rows(part.states, named=False)) for part in list(self.points.values())]
+        else:                                    # hep watch: every running tool it has read
+            sections = [("", self._rows(states, named=True))]
+        widths: list[int] = []
+        for _, rows in sections:
+            for row in rows:
+                for i, cell in enumerate(row[:-1]):      # the last column needs no width
+                    if i == len(widths):
+                        widths.append(0)
+                    widths[i] = max(widths[i], self._width(cell))
+        shown = []
+        for heading, rows in sections:
+            if not heading and not rows:
+                continue
+            shown.append(Text(""))               # a line between the finished blocks and this point
+            if heading:
+                shown.append(Text.from_markup(heading))
+            if rows:
+                table = Table.grid(padding=(0, 1))
+                for row in rows:                 # padded here: rich counts padding into min_width
+                    cells = [cell + " " * (width - self._width(cell)) if isinstance(cell, str) else cell
+                             for cell, width in zip(row, widths)] + row[len(widths):]
+                    if heading:                  # the tools sit under their point, like a block's lines
+                        cells[0] = "   " + cells[0]
+                    table.add_row(*cells)
+                shown.append(table)
+        return Group(*shown)
 
 
 def view(plain: bool = False) -> PlainView:
