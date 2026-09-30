@@ -22,9 +22,9 @@ TOP_LEVEL = ("master", "run", "prelim", "static", "tools", "quantities", "plot")
 
 # key → accepted Python types. A tuple of types means any of them.
 RUN_KEYS = {"serial": int, "name": str, "project": str, "configuration": str, "event_count": int,
-            "threads": int, "parallelism": int, "description": str}
-CONFIGURATION_KEYS = {"serial": int, "name": str, "description": str, "event_count": int, "threads": int,
-                      "parallelism": int,
+            "threads": int, "parallelism": int, "description": str, "sweep": bool}
+CONFIGURATION_KEYS = {"serial": int, "name": str, "title": str, "description": str, "event_count": int,
+                      "threads": int, "parallelism": int, "swept": bool,
                       "sweeps": list, "plot_points": list, "combine": list, "tools": list, "pre": list, "post": list,
                       "static": dict, "prelim": dict}
 PRELIM_KEYS = {"fifo": list, "files": list, "commands": list}
@@ -91,6 +91,8 @@ class Configuration:
     pre: list[list[str]] = field(default_factory=list)   # tools run once before every point
     combine: list[str] = field(default_factory=list)    # swept quantities whose points are merged into one (V35)
     parallelism: int = 1                                # points run at once (V36); never in an identity
+    swept: bool = True                                  # run by a [run].sweep (V38)
+    title: str = ""                                     # the `run NN - <title> -` header of a sweep
 
 
 @dataclass
@@ -99,7 +101,7 @@ class RunConfig:
     project: str
     name: str
     serial: int | None
-    default_configuration: str
+    default_configuration: str | None                  # None only under sweep
     configurations: dict[str, Configuration]
     prelim: dict
     static: dict
@@ -108,14 +110,28 @@ class RunConfig:
     plot: dict
     master_toml: str | None
     raw: dict
+    sweep: bool = False                                 # `hep run` executes every swept configuration (V38)
 
     def configuration(self, name: str | None) -> Configuration:
         wanted = name or self.default_configuration
+        if wanted is None:
+            raise HepError("[run] sweeps its configurations and names none", where=f"{self.path}: [run]",
+                           hint=f"name one: configurations {', '.join(self.configurations)}")
         if wanted not in self.configurations:
             raise HepError(f"no configuration '{wanted}'", where=f"{self.path}: [run]",
                            hint=did_you_mean(wanted, self.configurations)
                            or f"configurations: {', '.join(self.configurations) or '(none)'}")
         return self.configurations[wanted]
+
+    def runs(self, name: str | None) -> list[str]:
+        """The configurations `hep run` executes, in order (V38): the one named on the command line,
+        even under sweep; else, under [run].sweep, every configuration not `swept = false`, in the
+        order of the file; else [run].configuration."""
+        if name:
+            return [self.configuration(name).key]
+        if self.sweep:
+            return [key for key, c in self.configurations.items() if c.swept]
+        return [self.configuration(None).key]
 
 
 # ── checking ───────────────────────────────────────────────────────────────────────────────────
@@ -131,15 +147,15 @@ def _check(table: dict, spec: dict, where: str, *, allow_tables: bool = False, e
     """Unknown keys are errors (C1); known keys must have the right type. Returns the extras."""
     extras = {}
     for key, value in table.items():
+        types = spec.get(key)
+        if allow_tables and isinstance(value, dict) and dict not in (types if isinstance(types, tuple) else (types,)):
+            continue                             # a configuration, even one named like a key ([run.sweep])
         if key in spec:
-            types = spec[key]
             if isinstance(value, bool) and bool not in (types if isinstance(types, tuple) else (types,)):
                 raise HepError(f"'{key}' must be {_type_name(types)}, not true/false", where=f"{where}.{key}")
             if not isinstance(value, types):
                 raise HepError(f"'{key}' must be {_type_name(types)}", where=f"{where}.{key}",
                                hint=f"got {value!r}")
-        elif allow_tables and isinstance(value, dict):
-            continue
         elif extra_ok:
             extras[key] = value
         else:
@@ -262,7 +278,8 @@ def parse(raw: dict, path: Path) -> RunConfig:
     if not isinstance(run, dict):
         raise HepError("missing [run]", where=where, hint="every run TOML has [run] name, project, configuration")
     _check(run, RUN_KEYS, f"{where}: [run]", allow_tables=True)
-    for required in ("name", "project", "configuration"):
+    sweep_on = run.get("sweep") is True                 # [run.sweep] may be a configuration's table
+    for required in ("name", "project") + (() if sweep_on else ("configuration",)):
         if required not in run:
             raise HepError(f"[run] needs '{required}'", where=f"{where}: [run]")
     project = run["project"]
@@ -356,6 +373,7 @@ def parse(raw: dict, path: Path) -> RunConfig:
             raise HepError("no event_count: set it here or in [run]", where=at)
         configurations[key] = Configuration(
             key=key, name=table.get("name", key), serial=table.get("serial"),
+            swept=table.get("swept", True), title=table.get("title", key),
             description=table.get("description", ""), event_count=int(event_count),
             threads=_resolved_threads(int(table.get("threads", run.get("threads", 1))), f"{at}.threads"),
             parallelism=_parallelism(int(table.get("parallelism", run.get("parallelism", 1))), f"{at}.parallelism"),
@@ -366,7 +384,10 @@ def parse(raw: dict, path: Path) -> RunConfig:
             static={**static, **local_static},
             prelim=local_prelim if local_prelim is not None else prelim)
 
-    if run["configuration"] not in configurations:
+    if sweep_on and not any(c.swept for c in configurations.values()):
+        raise HepError("[run].sweep is on but every configuration has swept = false", where=f"{where}: [run].sweep",
+                       hint="leave one in, or turn the sweep off")
+    if "configuration" in run and run["configuration"] not in configurations:
         raise HepError(f"[run].configuration is '{run['configuration']}', which is not a [run.<name>] table",
                        where=f"{where}: [run].configuration",
                        hint=did_you_mean(run["configuration"], configurations)
@@ -381,6 +402,6 @@ def parse(raw: dict, path: Path) -> RunConfig:
            f"{where}: [plot]")
 
     return RunConfig(path=path, project=project, name=run["name"], serial=run.get("serial"),
-                     default_configuration=run["configuration"], configurations=configurations,
+                     default_configuration=run.get("configuration"), configurations=configurations,
                      prelim=prelim, static=static, tools=tools, quantities=quantities, plot=plot,
-                     master_toml=master.get("master_toml"), raw=raw)
+                     master_toml=master.get("master_toml"), raw=raw, sweep=sweep_on)

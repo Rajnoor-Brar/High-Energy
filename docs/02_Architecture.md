@@ -140,7 +140,10 @@ and what it reads and writes**, which its tool folder declares.
 
 ## 5. A run, from command to pages
 
-`runner.cli.cmd_run` does this, in order:
+`runner.cli.run_one` does this for one run, in order. Under `[run].sweep` (V38, 04 §4.1)
+`cmd_run` first plans every swept configuration (a config error anywhere exits 2 with nothing run),
+then does all of it for each in turn, after a `run NN - <title> -` line: each is a run of its own,
+planned again at its turn, and a stop starts no more.
 
 1. **Load** the run TOML, apply `--set` to the raw table, and check the file (C1–C5, C12): every
    section, key and type; sweeps, plot_points and tool lists. `threads = 0` becomes a number.

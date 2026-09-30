@@ -1,5 +1,22 @@
 # Current plan
 
+## Every configuration, one run after another (`sweep`) — **DONE 2026-09-30** (ordered by the user 2026-09-30)
+
+"Execute run configurations … a run.sweep bool option, and run.<configuration>.sweeped bool option
+to exclude particular configs"; "each configuration runs as one execution of run, without being a
+subpart of a grand run … a header line"; "run.<cfg>.title for 'run NN - <title> -'". Decided with
+the user: NN is the place in the sequence; each run re-reads the TOML at its turn (all checked at
+the start); Ctrl-C stops everything; the key is `swept`; TOML order.
+
+- V38: `[run].sweep`, `[run.<cfg>].swept` and `.title` (config.py, `RunConfig.runs`); cli.py
+  `Planned` (was a 7-tuple), `run_one` (the old `cmd_run` body), `cmd_run` loops (check all, then
+  each in turn; one Stopper; `not_run` journals a run an edit broke); `hep plot` draws every swept
+  configuration; `hep watch` picks the sweep's latest journal and `follow` moves on through the
+  finished record's `"next"`. Views: `begin(…, header=)`.
+- Tests: `tests/runner/test_run_sweep.py`, `tests/integration/test_gates_run_sweep.py` (slow).
+- Seen on the way, not changed: argparse does not take a configuration after an option
+  (`hep run eic --plain pdf` fails: "unrecognized arguments"); `parse_intermixed_args` would.
+
 ## `"default"` for plot options — **DONE 2026-09-30** (ordered by the user 2026-09-30)
 
 "In plot options, make "default" a valid value; that is skips any configuration and lets tool

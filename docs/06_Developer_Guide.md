@@ -138,11 +138,20 @@ is the group's products (an interface named apart from the product, which the st
 own name), `upstream` = the members' identities, `Point.stage = "combined"` and the group's `choice`, so
 `plot.pages` draws the groups as it draws points.
 
-**The flow** (`cli.build_plans`, then `cmd_run`): `config.load` → `sweep.points` →
+**The flow** (`cli.build_plans`, then `cli.run_one`): `config.load` → `sweep.points` →
 `post.plan_pre` → `tools.plan_point` per point → `record.identity` → `record.assign_seeds` →
-`tools.finalise` (seed lines, the files to write) → `plot.validate` → `post.plan`; then
-`post.run_pre` → `execute.run_point` per incomplete point → `points.json` → `post.run` →
-`plot.draw`. Planning writes nothing; `execute.prepare` is the first write of a point.
+`tools.finalise` (seed lines, the files to write) → `plot.validate` → `post.plan`, returned as one
+`cli.Planned`; then `post.run_pre` → `execute.run_points` → `points.json` → `post.run_combined` →
+`post.run` → `plot.draw`. Planning writes nothing; `execute.prepare` is the first write of a point.
+
+**Several runs** (`[run].sweep`, V38): `cmd_run` asks `RunConfig.runs(name)` which configurations
+to run (the named one; else the `swept` ones in file order; else `[run].configuration`). With one,
+it is `run_one`. With several, it calls `build_plans` for each first (a `HepError` names the
+configuration and nothing runs), then `run_one(…, number=N, following=<next journal>)` in turn.
+There is one `Stopper` for all of them; a run's `run finished` record carries `"next"` unless a stop
+was asked; a run whose planning fails at its turn gets a `not run` pair of records from `not_run`,
+so `watch.follow` (which moves on through `"next"`, to the first run started after it) never waits
+on it.
 
 **Where a check lives**: C1–C5 and C12 in `config`/`paths`; C7, C8, C10 in `quantities` and
 `tools._render`; C6, C9, C13 in `tools`; C11 in `sweep`; the plot checks in `plot.validate`.

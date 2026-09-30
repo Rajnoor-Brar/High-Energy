@@ -1,0 +1,140 @@
+"""V38, the gate (slow: real `hep run` processes): under `[run].sweep = true` the swept
+configurations run one after another, each exactly the run `hep run CONFIG <cfg>` makes, after a
+`run NN - <title> -` line; `swept = false` leaves one out; a failed run leaves the next to start; a
+config error anywhere stops everything before it starts; Ctrl-C starts no more runs."""
+
+from __future__ import annotations
+
+import json
+import os
+import signal
+import stat
+import subprocess
+import time
+from pathlib import Path
+
+import pytest
+
+REPO = Path(__file__).resolve().parents[2]
+HEP = REPO / "utils" / "Env" / "hep"
+
+pytestmark = pytest.mark.slow
+
+CHECK = """#!/usr/bin/env python3
+import sys, time, tomllib
+wanted = tomllib.load(open(sys.argv[1], "rb")).get("quantities", {})
+time.sleep(wanted.get("nap", 0))
+sys.exit(wanted.get("fail", 0))
+"""
+
+
+def sweep_config(scratch: Path, d_static: str = "{}", b_nap: str = "no") -> Path:
+    script = scratch / "check.py"
+    script.write_text(CHECK, encoding="utf-8")
+    script.chmod(script.stat().st_mode | stat.S_IXUSR)
+    config = scratch / "sw.toml"
+    config.write_text(f"""\
+[run]
+name        = "sw"
+project     = "PhotoProduction"
+sweep       = true
+event_count = 1
+
+[run.a]
+tools = ["check"]
+
+[run.b]
+title  = "Bee"
+tools  = ["check"]
+static = {{ fail = "bad", nap = "{b_nap}" }}
+
+[run.c]
+swept = false
+tools = ["check"]
+
+[run.d]
+tools  = ["check"]
+static = {d_static}
+
+[static]
+fail = "ok"
+nap  = "no"
+
+[tools.check]
+tool       = "custom"
+executable = "{script}"
+consumes   = ["fail", "nap"]
+
+[quantities.fail]
+values = [0, 1]
+tags   = ["ok", "bad"]
+
+[quantities.nap]
+values = [0, 60]
+tags   = ["no", "yes"]
+""", encoding="utf-8")
+    return config
+
+
+def env(where: Path) -> dict:
+    return dict(os.environ, HEKIT_OUTPUT=str(where / "output"), HEKIT_RESULTS=str(where / "results"))
+
+
+def hep(config: Path, where: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run([str(HEP), "run", str(config), *args, "--plain"], cwd=REPO, env=env(where),
+                          capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600)
+
+
+def base(where: Path) -> Path:
+    return where / "output" / "PhotoProduction" / "sw"
+
+
+def records(journal: Path) -> list[dict]:
+    return [json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines()]
+
+
+def test_the_swept_configurations_run_one_after_another(scratch):
+    config = sweep_config(scratch)
+    done = hep(config, scratch)
+    assert done.returncode == 1, done.stdout[-2000:] + done.stderr[-2000:]
+    out = done.stdout
+    assert out.index("run 01 - a -") < out.index("run 02 - Bee -") < out.index("run 03 - d -")
+    assert "FAILED [check]" in out and "run 04" not in out
+    assert not (base(scratch) / "c").exists()                          # swept = false
+    assert [p.parent.parent.name for p in sorted(base(scratch).glob("*/*/.complete"))] == ["a", "d"]
+    first = records(base(scratch) / "a" / "status.jsonl")
+    assert first[-1]["k"] == "run" and first[-1]["next"] == str(base(scratch) / "b" / "status.jsonl")
+    assert records(base(scratch) / "b" / "status.jsonl")[-1]["next"] == str(base(scratch) / "d" / "status.jsonl")
+    assert "next" not in records(base(scratch) / "d" / "status.jsonl")[-1]
+    alone = hep(config, scratch, "d")                                  # the very run `hep run sw d` makes
+    assert alone.returncode == 0 and "complete, skipped" in alone.stdout and "run 0" not in alone.stdout
+
+
+def test_a_config_error_anywhere_runs_nothing(scratch):
+    done = hep(sweep_config(scratch, d_static='{ fail = "nosuch" }'), scratch)
+    assert done.returncode == 2, done.stdout[-2000:]
+    assert "configuration 'd'" in done.stderr
+    assert not base(scratch).exists() or not list(base(scratch).glob("*/*/.complete"))
+
+
+def test_points_belong_to_one_configuration(scratch):
+    done = hep(sweep_config(scratch), scratch, "--points", "1")
+    assert done.returncode == 2 and "--points picks points of one configuration" in done.stderr
+
+
+def test_ctrl_c_starts_no_more_runs(scratch):
+    config = sweep_config(scratch, b_nap="yes")                        # b sleeps a minute
+    runner = subprocess.Popen([str(HEP), "run", str(config), "--plain"], cwd=REPO, env=env(scratch),
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8")
+    journal = base(scratch) / "b" / "status.jsonl"
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline and not (journal.exists() and any(
+            m.get("k") == "point" and m.get("state") == "started" for m in records(journal))):
+        time.sleep(0.2)
+    time.sleep(1.0)
+    runner.send_signal(signal.SIGINT)
+    text, _ = runner.communicate(timeout=60)
+    assert runner.returncode == 6, text
+    assert "run 02 - Bee -" in text and "run 03" not in text
+    assert not (base(scratch) / "d").exists()
+    assert "next" not in records(journal)[-1]

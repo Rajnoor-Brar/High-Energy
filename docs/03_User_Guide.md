@@ -498,6 +498,30 @@ hep plot results/PhotoProduction/03_eic/01_pdf/plots/root/pdf.root      # a swee
 No run TOML: one page per object any file holds, one curve per file (or per point of a merged
 sweep, labelled from its `points.json`). Pages go to `results/plots/<first file>/` unless `-o`.
 
+### 4.20 Every configuration, one run after another
+
+To run all of a TOML's configurations in one go, turn the sweep on and leave out the ones you don't
+want:
+
+```toml
+[run]
+sweep = true                     # hep run eic: every configuration, in the order of the file
+
+[run.pdf]
+title = "Proton PDFs"            # the header line: run 01 - Proton PDFs -
+
+[run.delphes]
+swept = false                    # not in the sweep; hep run eic delphes still runs it
+```
+
+Each configuration is an ordinary run, with its own title, blocks, verdict and folder, exactly as
+`hep run eic <cfg>` would make it. They are all checked before the first starts, so a typo in the
+last one costs nothing. A failed run lets the next one start, and Ctrl-C stops everything.
+`hep watch` follows from one run to the next. That's what a shell loop can't do: in
+`for c in …; do hep run eic $c; done`, a Ctrl-C only ends the current run (hep exits 6 and bash
+carries on) and a typo in a later configuration shows up hours in. `hep run eic pdf` still runs
+only `pdf`, and `--set run.sweep=false` turns the sweep off for one call.
+
 ---
 
 ## 5. Plots

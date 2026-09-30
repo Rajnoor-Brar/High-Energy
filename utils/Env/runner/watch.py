@@ -202,10 +202,12 @@ class PlainView:
     def flush(self) -> None:
         self.screen.drain()
 
-    def begin(self, count: int, title: str = "") -> None:
+    def begin(self, count: int, title: str = "", header: str = "") -> None:
+        """A run starts: its `run NN - <title> -` line in a sweep of runs (V38), then its title."""
         self.total = count
-        if title:
-            self.say(title)
+        for line in (header, title):
+            if line:
+                self.say(line)
 
     def end(self) -> None:
         self.screen.close()
@@ -337,10 +339,12 @@ class LiveView(PlainView):
         return _Screen(lambda text: self.console.print(text, highlight=False),
                        update=self.live.update, start=self.live.start, stop=self.live.stop)
 
-    def begin(self, count: int, title: str = "") -> None:
+    def begin(self, count: int, title: str = "", header: str = "") -> None:
+        from rich.markup import escape
         self.total = count
-        if title:
-            self.say(f"[bold]{title}[/bold]")
+        for line in (header, title):
+            if line:
+                self.say(f"[bold]{escape(line)}[/bold]")
 
     def block(self, heading: str, verdict: str, seconds: float, lines: list[str]) -> None:
         colour = "green" if verdict == "ok" else "yellow" if verdict == "stopped" else "red"
@@ -444,16 +448,43 @@ def _latest_run(journal: Path) -> int:
     return start
 
 
+def _run_since(journal: Path, since: float) -> int | None:
+    """The byte offset of the first run in `journal` that started at or after `since`, or None yet."""
+    offset = 0
+    if journal.exists():
+        with open(journal, "rb") as handle:
+            for raw in handle:
+                if b'"k": "run"' in raw and b'"state": "started"' in raw:
+                    try:
+                        if json.loads(raw).get("t", 0) >= since:
+                            return offset
+                    except ValueError:
+                        pass
+                offset += len(raw)
+    return None
+
+
 def follow(journal: Path, *, plain: bool = False, idle_exit: float = 0.0) -> int:
-    """Tail a run's status.jsonl until the run says it finished (or `idle_exit` seconds of silence)."""
+    """Tail a run's status.jsonl until the run says it finished (or `idle_exit` seconds of silence).
+    A run of a sweep of runs (V38) names the next one's journal when it finishes: follow on to it."""
     shown = view(plain)
     states: dict[tuple[str, str], ToolState] = {}
     blocks: dict[str, list] = {}                    # point → [heading, started, lines]
-    offset = _latest_run(journal)
+    offset: int | None = _latest_run(journal)
+    since = 0.0                                     # when following on: the next run starts after this
     title_done = False
     last = time.monotonic()
     try:
         while True:
+            if offset is None:                      # waiting for the next run of the sweep to start
+                offset = _run_since(journal, since)
+                if offset is None:
+                    if idle_exit and time.monotonic() - last > idle_exit:
+                        shown.say(f"no status for {idle_exit:.0f} s; leaving")
+                        return 0
+                    time.sleep(0.25)
+                    continue
+                shown.say("")
             size = journal.stat().st_size if journal.exists() else 0
             if size > offset:
                 with open(journal, encoding="utf-8") as handle:
@@ -469,11 +500,17 @@ def follow(journal: Path, *, plain: bool = False, idle_exit: float = 0.0) -> int
                     kind, point, tag = message.get("k"), message.get("point", ""), message.get("tool", "")
                     if kind == "run":
                         if message.get("state") == "started":
-                            shown.begin(message.get("points", 0), f"watching {message.get('title', journal.parent)}")
+                            shown.begin(message.get("points", 0), f"watching {message.get('title', journal.parent)}",
+                                        header=message.get("header", ""))
                             title_done = True
                         elif message.get("state") == "finished":
                             shown.say(f"run finished: {message.get('verdict', '')}")
-                            return 0
+                            if not message.get("next"):
+                                return 0
+                            journal, offset, since = Path(message["next"]), None, message.get("t", 0.0)
+                            states.clear()
+                            blocks.clear()
+                            break
                         continue
                     if not title_done:
                         shown.begin(0, f"watching {journal.parent}")
