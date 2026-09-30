@@ -122,8 +122,8 @@ def print_plan(run, configuration, plans, post_plan=None, pre_plan=None, combine
         _print_stage("post (after every point)", post_plan, run)
     if run.plot and plans:
         count = len(sweep.pages(configuration, [p.point for p in plans]))
-        print(f"plot ({run.plot.get('backend', 'root')}): {count} page(s) per object, "
-              f"{', '.join(run.plot.get('formats', ['pdf']))} → {plans[0].res.parent / 'plots'}")
+        print(f"plot ({', '.join(plot.backends(run.plot))}): {count} page(s) per object, "
+              f"{', '.join(plot.formats_of(run.plot))} → {plans[0].res.parent / 'plots'}")
 
 
 def cmd_run(args) -> int:

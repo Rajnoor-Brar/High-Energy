@@ -183,3 +183,51 @@ def test_the_yoda_backend_gives_the_ratio_the_divisions_paint_has(scratch):
     assert not yoda_backend.ratio_ticks(script, 512)                    # already so: no second run
     assert yoda_backend.ratio_ticks(script, 508) and "MultipleLocator(0.2))\nratio0_ax.yaxis.set_minor" in script.read_text()
     assert script.read_text(encoding="utf-8").count(yoda_backend.MARK) == 1
+
+
+# ── "default": set nothing, the drawing tool decides (V37) ─────────────────────────────────────
+
+DRAWING = ("backend", "formats", "objects", "ratio", "y_gutter", "x_gutter", "logy", "logx", "auto_range",
+           "void_empty", "min_entries", "range_pad", "root_style")
+
+
+def test_every_drawing_option_takes_default(scratch):
+    run = validated(scratch, **{key: "default" for key in DRAWING})
+    assert plot.backends(run.plot) == ["root"] and plot.formats_of(run.plot) == ["pdf"]
+    assert plot.run_style(run) == {}                                   # no root_style file
+
+
+def page(settings, path="/photo_eic/d01-x01-y01", with_data=True):
+    return plot.page_settings(settings, path, "d01", Path("/tmp/x"), with_data)[0]
+
+
+def test_default_is_what_the_tool_does_by_itself():
+    ours = page({})                                                    # nothing set: the runner's defaults
+    native = page({key: "default" for key in ("logy", "ratio", "auto_range", "void_empty", "min_entries", "y_gutter")})
+    assert ours["auto_range"] and not native["auto_range"]             # the tool's own range
+    assert (native["void_empty"], native["min_entries"]) == (False, 0)
+    assert native["logy"] and native["y_gutter"] == "default"          # photo_eic's .plot says LogY=1
+    assert native["ratio"] and not page({"ratio": "default"}, with_data=False)["ratio"]   # mkhtml's rule
+
+
+def test_an_objects_default_is_the_tools_whatever_plot_says():
+    settings = {"logy": False, "object": {"d01-*": {"logy": "default", "title": "default"}}}
+    shown = page(settings)
+    assert shown["logy"] and shown["title"] == page({})["title"]       # the .plot's, not [plot]'s false
+
+
+def test_a_style_default_falls_through_to_the_layer_below():
+    plot.check_style({"legend": {"position": "default"}, "ratio": {"divisions": "default"}}, "here")
+    merged = plot.merge_style({"legend": {"position": "top-left"}}, {"legend": {"position": "default"}})
+    assert merged == {"legend": {"position": "top-left"}}
+    assert plot.merge_style({}, {"legend": {"position": "default"}}) == {"legend": {}}
+
+
+def test_an_object_value_of_the_wrong_kind_is_refused(scratch):
+    with pytest.raises(HepError, match="must be true or false"):
+        validated(scratch, object={"d01-*": {"logy": "yes"}})
+    validated(scratch, object={"d01-*": {"logy": "default", "ratio": True}})
+
+
+def test_the_yoda_backend_has_nothing_to_honour_in_a_default(scratch):
+    validated(scratch, backend="yoda", style={"legend": {"position": "default"}, "page": {"dpi": "default"}})

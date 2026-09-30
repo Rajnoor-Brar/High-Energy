@@ -1,5 +1,17 @@
 # Current plan
 
+## `"default"` for plot options — **DONE 2026-09-30** (ordered by the user 2026-09-30)
+
+"In plot options, make "default" a valid value; that is skips any configuration and lets tool
+decide, such as for min_entries."
+
+- V37: `plot.DEFAULT`; `plot.page_settings` resolves each key to the tool's own behaviour
+  (`pick(name, ours, native)`: an object-level "default" wins over `[plot]`); `formats_of`,
+  `backends`, `run_style` (root_style), `pages` (objects); style layers skip "default" values
+  (`check_style`, `merge_style`); config.py lets "default" past the type check; the yoda backend
+  reads each page's resolved ratio. `[plot.object]` values type-checked (OBJECT_TYPES).
+- Docs 04 §11 table of meanings; tests in `tests/runner/test_plot.py`.
+
 ## Points at once (`parallelism`) — **DONE 2026-09-30** (ordered by the user 2026-09-30)
 
 "Make support for run.parallelism … run multiple points in parallel", with temp files prefixed

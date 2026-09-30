@@ -376,7 +376,9 @@ def parse(raw: dict, path: Path) -> RunConfig:
     if "legend" in plot:
         raise HepError("[plot].legend is now part of the style", where=f"{where}: [plot].legend",
                        hint=f'[plot.style] legend.position = "{plot["legend"]}" (or in the root_style file)')
-    _check(plot, PLOT_KEYS, f"{where}: [plot]")
+    # "default" is every drawing option's own value (V37): the tool decides; plot.py resolves it
+    _check({k: v for k, v in plot.items() if v != "default" or k in ("data", "style", "object")}, PLOT_KEYS,
+           f"{where}: [plot]")
 
     return RunConfig(path=path, project=project, name=run["name"], serial=run.get("serial"),
                      default_configuration=run["configuration"], configurations=configurations,

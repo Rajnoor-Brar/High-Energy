@@ -51,6 +51,8 @@ def validate(settings: dict, beside_root: bool = False) -> None:
     for where, layer in layers:
         for table, keys in layer.items():
             for key, value in keys.items() if isinstance(keys, dict) else [(None, keys)]:
+                if value == "default":                  # sets nothing, so there is nothing to honour
+                    continue
                 placed = (table, key) == ("legend", "position") and not isinstance(value, str)
                 if placed or (not beside_root and (table, key) not in HONOURED):
                     name = f"{table}.{key}" if key else table
@@ -175,8 +177,9 @@ def draw(cells: dict, settings: dict, say) -> int:
         curves = [_voided(yoda, source, pages, work / f"{i:02d}_{source.parent.name}.yoda")
                   for i, source in enumerate(sources)]
         argv = ["rivet-mkhtml", "--no-rivet-refs", "-o", str(outdir), "-c", str(work / "pages.plot")]
-        argv += [x for f in settings.get("formats", ["pdf"]) if FORMATS[f] for x in ("-f", FORMATS[f])]
-        argv += [] if settings.get("ratio", False) else ["--no-ratio"]
+        formats = settings.get("formats", ["pdf"])
+        argv += [x for f in (["pdf"] if formats == "default" else formats) if FORMATS[f] for x in ("-f", FORMATS[f])]
+        argv += [] if any(p.document["page"]["ratio"] for p in pages) else ["--no-ratio"]
         argv += [f"{path}:Title={latex(label)}" for path, label in zip(curves, labels)]
 
         references = [_reference(yoda, page) for page in pages if page.data and page.ranges.get("data_bins", 0) > 0]
@@ -190,7 +193,7 @@ def draw(cells: dict, settings: dict, say) -> int:
         done = subprocess.run(argv, capture_output=True, text=True, env=env, cwd=work)
         (work / "mkhtml.log").write_text(" ".join(argv) + "\n" + done.stdout + done.stderr, encoding="utf-8")
         drawn = [p for p in pages if (outdir / _base(p.object).split("/")[1] / f"{p.object.rsplit('/', 1)[-1]}.pdf").exists()]
-        for page in drawn if settings.get("ratio", False) else []:
+        for page in [p for p in drawn if p.document["page"]["ratio"]]:
             script = outdir / _base(page.object).split("/")[1] / f"{page.object.rsplit('/', 1)[-1]}.py"
             if script.is_file() and ratio_ticks(script, int(page.style["ratio"]["divisions"])):
                 again = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, cwd=script.parent)

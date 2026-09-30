@@ -43,6 +43,14 @@ FORMATS = ("pdf", "png", "svg", "eps")
 LEGENDS = ("top-right", "top-left", "bottom-right", "bottom-left")
 DATA_KEYS = ("file", "legend", "map")
 OBJECT_KEYS = ("title", "x_label", "y_label", "logx", "logy", "y_gutter", "x_gutter", "ratio", "style")
+OBJECT_TYPES = {"title": str, "x_label": str, "y_label": str, "logx": bool, "logy": bool, "ratio": bool}
+DEFAULT = "default"      # any drawing option's value: set nothing, the drawing tool decides (V37)
+
+
+def formats_of(settings: dict) -> list[str]:
+    """[plot].formats; "default" is Paint's own, pdf (mkhtml writes pdf and png whatever it is given)."""
+    value = settings.get("formats", ["pdf"])
+    return ["pdf"] if value == DEFAULT else list(value)
 STYLE_CHOICES = {"page.font": ("serif", "sans", "mono"), "curves.errors": ("bars", "band", "none"),
                  "legend.position": LEGENDS}
 COUNTERS = ("/_XSEC", "/_EVTCOUNT")
@@ -80,6 +88,7 @@ def backend(name: str):
 def backends(settings: dict) -> list[str]:
     """[plot].backend: a name, a list of names, or "both" (every backend). Paint's first when drawn."""
     value = settings.get("backend", "root")
+    value = "root" if value == DEFAULT else value
     names = list(BACKENDS) if value == "both" else [value] if isinstance(value, str) else list(value)
     return sorted(dict.fromkeys(names), key=lambda n: n != "root")
 
@@ -115,12 +124,17 @@ def validate(run) -> None:
         raise HepError("[plot].backend names no backend", where=f"{where}.backend", hint='"root", "yoda" or "both"')
     for name in names:
         one_of(name, BACKENDS, "backend")
-    for fmt in settings.get("formats", []):
+    for fmt in formats_of(settings):
         one_of(fmt, FORMATS, "formats")
     only(settings.get("data", {}), DATA_KEYS, "data")
     run_style(run)
     for glob, table in settings.get("object", {}).items():
         only(table, OBJECT_KEYS, f'object."{glob}"')
+        for key, kind in OBJECT_TYPES.items():
+            value = table.get(key, DEFAULT)
+            if value != DEFAULT and (not isinstance(value, kind) or (kind is not bool and isinstance(value, bool))):
+                raise HepError(f"'{key}' must be {'true or false' if kind is bool else 'a string'} or \"default\"",
+                               where=f'{where}.object."{glob}".{key}', hint=f"got {value!r}")
         for key in ("y_gutter", "x_gutter"):
             check_gutter(table.get(key, 0), f'{where}.object."{glob}".{key}')
         check_style(table.get("style", {}), f'{where}.object."{glob}".style')
@@ -155,6 +169,8 @@ def check_style(layer: dict, where: str, base: dict | None = None, at: str = "")
     base = base_style() if base is None else base
     for key, value in layer.items():
         name = f"{at}.{key}" if at else key
+        if key in base and value == DEFAULT:        # set nothing: the layer below, at last base.toml, decides
+            continue
         if key not in base:
             raise HepError(f"the style has no key '{name}'", where=where,
                            hint=did_you_mean(key, list(base)) or f"utils/Apps/Paint/base.toml has: {', '.join(base)}")
@@ -181,10 +197,12 @@ def check_style(layer: dict, where: str, base: dict | None = None, at: str = "")
 
 
 def merge_style(*layers: dict) -> dict:
-    """Later layers win, key by key, into nested tables."""
+    """Later layers win, key by key, into nested tables; a "default" value sets nothing."""
     out: dict = {}
     for layer in layers:
         for key, value in layer.items():
+            if value == DEFAULT:
+                continue
             out[key] = merge_style(out.get(key, {}), value) if isinstance(value, dict) else value
     return out
 
@@ -208,7 +226,8 @@ def run_style(run) -> dict:
     """What a run changes of the base style: its root_style file, then [plot.style]."""
     settings = run.plot
     where = f"{run.path}: [plot]"
-    layer = style_file(settings["root_style"], run.project, f"{where}.root_style") if "root_style" in settings else {}
+    named = settings.get("root_style", DEFAULT)
+    layer = style_file(named, run.project, f"{where}.root_style") if named != DEFAULT else {}
     check_style(settings.get("style", {}), f"{where}.style")
     return merge_style(layer, settings.get("style", {}))
 
@@ -398,6 +417,7 @@ def pages(run, configuration, plans) -> list[Page]:
             variants.setdefault(plan.point.name, {}).setdefault(base_of(full), []).append(full)
     objects = list(dict.fromkeys(b for plan in complete for b in variants.get(plan.point.name, {})))
     wanted = settings.get("objects", [])
+    wanted = [] if wanted == DEFAULT else wanted
     if wanted:
         objects = [o for o in objects if any(fnmatch.fnmatch(o, g) or any(fnmatch.fnmatch(f, g)
                    for v in variants.values() for f in v.get(o, [])) for g in wanted)]
@@ -447,7 +467,8 @@ def pages(run, configuration, plans) -> list[Page]:
             config.write_text(tomli_w.dumps(document), encoding="utf-8")
             made.append(Page(rel, config, res_dir / rel, cell=key, object=path, document=document,
                              sources=[yoda_of(plan) for plan, _ in curves], variants=[full for _, full in curves],
-                             data=(source, reference) if reference else None, overrides=set(override),
+                             data=(source, reference) if reference else None,
+                             overrides={k for k, v in override.items() if v != DEFAULT},
                              style=merge_style(base, layer), plots=res_dir.parent))
     return made
 
@@ -462,23 +483,33 @@ def page_settings(settings: dict, path: str, rel: str, output: Path, with_data: 
         if fnmatch.fnmatch(short, glob) or fnmatch.fnmatch(path, glob):
             override.update(table)
 
-    def pick(name, default):
-        return override.get(name, settings.get(name, default))
+    def pick(name, ours, native, tables=(override, settings)):
+        """The object's value, else [plot]'s, else ours (the runner's default); "default" at either
+        level is `native`, what the drawing tool does by itself, whatever the other level says."""
+        value = next((table[name] for table in tables if name in table), ours)
+        return native if value == DEFAULT else value
 
+    def plot_only(name, ours, native):
+        return pick(name, ours, native, tables=(settings,))
+
+    title = tlatex(labels.get("Title") or labels.get("LegendTitle", ""))
+    x_label, y_label = tlatex(labels.get("XLabel", "")), tlatex(labels.get("YLabel", ""))
+    log_x, log_y = labels.get("LogX") == "1", labels.get("LogY") == "1"
+    ratio = labels["RatioPlot"] == "1" if labels.get("RatioPlot") in ("0", "1") else with_data   # mkhtml's rule
     page = {
-        "name": rel, "output": str(output), "formats": settings.get("formats", ["pdf"]),
-        "title": override.get("title", tlatex(labels.get("Title") or labels.get("LegendTitle", ""))),
-        "x_label": override.get("x_label", tlatex(labels.get("XLabel", ""))),
-        "y_label": override.get("y_label", tlatex(labels.get("YLabel", ""))),
-        "logx": bool(pick("logx", labels.get("LogX") == "1")),
-        "logy": bool(pick("logy", labels.get("LogY") == "1")),
-        "y_gutter": _gutter(pick("y_gutter", 0.5)), "x_gutter": _gutter(pick("x_gutter", "default")),
-        "ratio": bool(pick("ratio", False)),
+        "name": rel, "output": str(output), "formats": formats_of(settings),
+        "title": pick("title", title, title, tables=(override,)),
+        "x_label": pick("x_label", x_label, x_label, tables=(override,)),
+        "y_label": pick("y_label", y_label, y_label, tables=(override,)),
+        "logx": bool(pick("logx", log_x, log_x)),
+        "logy": bool(pick("logy", log_y, log_y)),
+        "y_gutter": _gutter(pick("y_gutter", 0.5, DEFAULT)), "x_gutter": _gutter(pick("x_gutter", DEFAULT, DEFAULT)),
+        "ratio": bool(pick("ratio", False, ratio)),
         "ratio_label": "MC/Data" if with_data else "Ratio",
-        "void_empty": bool(settings.get("void_empty", False)),
-        "min_entries": int(settings.get("min_entries", 0)),
-        "auto_range": bool(settings.get("auto_range", True)),
-        "range_pad": int(settings.get("range_pad", 0)),
+        "void_empty": bool(plot_only("void_empty", False, False)),      # neither tool voids by itself
+        "min_entries": int(plot_only("min_entries", 0, 0)),
+        "auto_range": bool(plot_only("auto_range", True, False)),       # the tool's own range
+        "range_pad": int(plot_only("range_pad", 0, 0)),
     }
     return page, override
 

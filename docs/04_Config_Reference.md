@@ -594,6 +594,29 @@ style.legend.position = "bottom-left"
 | `style` | table | `{}` | §12 |
 | `object` | table | `{}` | §11.2 |
 
+**`"default"` is a value of every drawing option** (V37): it sets nothing, and the drawing tool does
+what it does by itself. That is not always the runner's default when a key is left out (a missing
+`y_gutter` is 0.5, a missing `auto_range` is true):
+
+| Key | `"default"` gives |
+|---|---|
+| `min_entries`, `range_pad` | 0: every bin drawn |
+| `void_empty` | false: neither Paint nor mkhtml voids a bin by itself |
+| `auto_range` | off: the tool's own x range |
+| `y_gutter`, `x_gutter` | no gutter: the tool's own range (as before) |
+| `logx`, `logy` | the analysis's `.plot` `LogX`/`LogY` |
+| `ratio` | the `.plot`'s `RatioPlot`, else a ratio pad when the page has reference data (mkhtml's rule) |
+| `formats` | Paint's own, pdf (mkhtml writes pdf and png anyway) |
+| `objects` | every object |
+| `backend` | `"root"` |
+| `root_style` | no style file: base.toml |
+
+In `[plot.object."<glob>"]` a `"default"` is the tool's for those objects whatever `[plot]` says
+(`logy = "default"` there takes the `.plot`'s even when `[plot].logy = false`), and `title`,
+`x_label`, `y_label` = `"default"` keep the `.plot`'s labels. In a style layer (§12) a `"default"`
+value sets nothing: the layer below decides, and at the bottom base.toml, Paint's own look.
+`--set plot.min_entries=default` works for one run.
+
 `[plot].legend` is no longer a key: it moved to the style, `legend.position` (the error says so).
 
 **What a page is.** One page per `plot_points` cell and object. Its curves are the cell's complete
