@@ -153,6 +153,13 @@ was asked; a run whose planning fails at its turn gets a `not run` pair of recor
 so `watch.follow` (which moves on through `"next"`, to the first run started after it) never waits
 on it.
 
+**Seeds** (`record`, V39): `seed_rule(plan)` is what the identity says ("generator", ["manual",
+seed] or "random"); `manual_seed_of` reads a seed quantity's value (the step's `replica` identity
+part) or `manual_seed`; `assign_seeds(plans, rerun)` fills `plan.seed` by mode: manual (with the
+overlap refusal over `seed_basis(plan, replica=False)`), random (a complete point's provenance seed,
+else `secrets`, unless named in `rerun`), identity (as before). `PointPlan.seed_type` is set only for
+points (`plan_point` without `post=`), so stages keep the identity rule.
+
 **Where a check lives**: C1–C5 and C12 in `config`/`paths`; C7, C8, C10 in `quantities` and
 `tools._render`; C6, C9, C13 in `tools`; C11 in `sweep`; the plot checks in `plot.validate`.
 Everything raises `HepError(message, where=…, hint=…)`; nothing else prints error text.

@@ -279,7 +279,23 @@ same events**: eic's `single` point and its integrated `inproc` point can be com
 Consequences (v1's D21, kept): the same point gets the same events in every run, and the thread
 count changes the partition, not the statistics. For Pythia the card always gets `Random:setSeed =
 on`, `Random:seed = base`, and at threads > 1 `Parallelism:seeds = {base, …}`; other tools get their
-own seed line or flag.
+own seed line or flag. The runner's seed lines come after the base card, so a seed set in the card
+(`Random:seed = 0`) never counts: `seed_type` is how to choose.
+
+**`seed_type`** (V39; `[run]` or `[run.<cfg>]`, 04 §4) chooses the base; the threads always use
+base … base + threads − 1:
+
+| `seed_type` | base | in the identity |
+|---|---|---|
+| `"identity"` (default) | from the seed basis, as above | `"generator"`, what every identity said before V39 |
+| `"manual"` | exactly the value of a quantity targeting `<tool>/seed`, else `manual_seed`: every point shares it | `["manual", base]` |
+| `"random"` | drawn from the OS when the point runs (`--rerun` draws again); a complete point keeps the seed its `provenance.json` records | `"random"` |
+
+Under `"manual"`, points whose physics differs may share a seed. Two points with one generator set-up
+(the seed basis without the seed value) whose blocks overlap without being equal are refused: they
+would repeat some of each other's events. The pre, post and combined stages keep the identity rule.
+Every mode records the seed in `provenance.json` and `points.json`, so any point can be repeated
+with `seed_type = "manual"` and its seed.
 
 **Skip-unchanged.** A point is complete when `output/…/<point>/.complete` holds its identity; it is
 then skipped (`--rerun` runs it anyway). `.complete` is written last, after the count checks, so a

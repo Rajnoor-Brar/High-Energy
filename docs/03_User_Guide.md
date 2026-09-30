@@ -522,6 +522,31 @@ last one costs nothing. A failed run lets the next one start, and Ctrl-C stops e
 carries on) and a typo in a later configuration shows up hours in. `hep run eic pdf` still runs
 only `pdf`, and `--set run.sweep=false` turns the sweep off for one call.
 
+### 4.21 Exact seeds, random seeds, and repeating a run
+
+By default a point's seeds follow its generator's identity, so the same setup always gives the same
+events. A `Random:seed` in your card is ignored, because the runner writes its own after it. To
+choose the seeds yourself:
+
+```toml
+[run]
+seed_type   = "manual"           # "identity" (default) | "manual" | "random"
+manual_seed = 3245364            # every point's seed; [run.<cfg>] can set its own
+
+[quantities.seed]                # or one exact seed per point, swept like anything else
+target = "pythia/seed"
+values = [1001, 2001, 3001]
+```
+
+- **`"manual"`:** a point gets exactly its seed; at `threads = 12` its threads get seed … seed + 11.
+  Space swept seeds by at least `threads`: two points with the same setup whose blocks overlap
+  would repeat events, so the plan refuses them. Points with different physics may share one seed.
+- **`"random"`:** a new seed is drawn each time a point runs; a complete point keeps its sample
+  (it's skipped as usual) and `--rerun` draws again.
+- **Repeating a run:** every point's `provenance.json` records the seed it used, so any run, a
+  random one included, can be repeated with `seed_type = "manual"` and that seed.
+  `--plan` shows each point's seed.
+
 ---
 
 ## 5. Plots

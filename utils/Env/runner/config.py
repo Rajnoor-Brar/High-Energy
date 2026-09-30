@@ -22,11 +22,15 @@ TOP_LEVEL = ("master", "run", "prelim", "static", "tools", "quantities", "plot")
 
 # key → accepted Python types. A tuple of types means any of them.
 RUN_KEYS = {"serial": int, "name": str, "project": str, "configuration": str, "event_count": int,
-            "threads": int, "parallelism": int, "description": str, "sweep": bool}
+            "threads": int, "parallelism": int, "description": str, "sweep": bool, "seed_type": str,
+            "manual_seed": int}
 CONFIGURATION_KEYS = {"serial": int, "name": str, "title": str, "description": str, "event_count": int,
-                      "threads": int, "parallelism": int, "swept": bool,
+                      "threads": int, "parallelism": int, "swept": bool, "seed_type": str, "manual_seed": int,
                       "sweeps": list, "plot_points": list, "combine": list, "tools": list, "pre": list, "post": list,
                       "static": dict, "prelim": dict}
+#: How a point's seeds are chosen (V39, 02 §8): from the generator's identity (the default), given
+#: (`manual_seed`, or a quantity targeting <tool>/seed), or drawn afresh when the point runs.
+SEED_TYPES = ("identity", "manual", "random")
 PRELIM_KEYS = {"fifo": list, "files": list, "commands": list}
 MASTER_KEYS = {"master_toml": str}
 QUANTITY_KEYS = {"values": list, "tags": list, "labels": list, "key": (str, dict), "target": (str, list),
@@ -93,6 +97,8 @@ class Configuration:
     parallelism: int = 1                                # points run at once (V36); never in an identity
     swept: bool = True                                  # run by a [run].sweep (V38)
     title: str = ""                                     # the `run NN - <title> -` header of a sweep
+    seed_type: str = "identity"                         # SEED_TYPES (V39)
+    manual_seed: int | None = None                      # seed_type = "manual": every point's seed
 
 
 @dataclass
@@ -162,6 +168,18 @@ def _check(table: dict, spec: dict, where: str, *, allow_tables: bool = False, e
             raise HepError(f"unknown key '{key}'", where=where,
                            hint=did_you_mean(key, spec) or f"known keys: {', '.join(spec)}")
     return extras
+
+
+def _seed_type(value: str, where: str) -> str:
+    if value not in SEED_TYPES:
+        raise HepError(f"seed_type is '{value}'", where=where, hint=f"one of {', '.join(SEED_TYPES)}")
+    return value
+
+
+def _manual_seed(value: int | None, where: str) -> int | None:
+    if value is not None and not 1 <= value < 900_000_000:          # Pythia's range (record.SEED_RANGE)
+        raise HepError(f"manual_seed {value} is out of range", where=where, hint="1 to 899,999,999")
+    return value
 
 
 def _as_list(value) -> list:
@@ -374,6 +392,10 @@ def parse(raw: dict, path: Path) -> RunConfig:
         configurations[key] = Configuration(
             key=key, name=table.get("name", key), serial=table.get("serial"),
             swept=table.get("swept", True), title=table.get("title", key),
+            seed_type=_seed_type(table.get("seed_type", run.get("seed_type", "identity")),
+                                 f"{at}.seed_type" if "seed_type" in table else f"{where}: [run].seed_type"),
+            manual_seed=_manual_seed(table.get("manual_seed", run.get("manual_seed")),
+                                     f"{at}.manual_seed" if "manual_seed" in table else f"{where}: [run].manual_seed"),
             description=table.get("description", ""), event_count=int(event_count),
             threads=_resolved_threads(int(table.get("threads", run.get("threads", 1))), f"{at}.threads"),
             parallelism=_parallelism(int(table.get("parallelism", run.get("parallelism", 1))), f"{at}.parallelism"),

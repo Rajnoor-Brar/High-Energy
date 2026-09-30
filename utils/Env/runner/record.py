@@ -5,12 +5,18 @@ docs/02_Architecture.md §8 and §12.
 * The identity of a point hashes everything that decides its result: each tool's binary, cards
   (before seeds), argv, extracted config, analyses and files, plus threads and events. It is
   computed before the seeds are written into the cards, and the seeds are then derived from it.
-* Seeds: base = 1 + int(basis[:12], 16) mod (9e8 − threads); the threads use base … base+threads−1.
-  The basis is the generator's own identity (the `produces_events` steps: their cards, binaries
-  and replica values), so the same generator setup gives the same events in any configuration: the
-  chain's point and an integrated program's (P4 S1). Without a seeded step it is the point's
-  identity. Blocks are checked for overlap across the whole plan, and a clash moves up by
-  `threads` (L4), so two points of one plan never share events (V9).
+* Seeds (`seed_type`, V39): the threads of a point use base … base+threads−1, and the base is
+  - "identity" (the default): 1 + int(basis[:12], 16) mod (9e8 − threads). The basis is the
+    generator's own identity (the `produces_events` steps: their cards, binaries and replica
+    values), so the same generator setup gives the same events in any configuration: the chain's
+    point and an integrated program's (P4 S1). Without a seeded step it is the point's identity.
+    Blocks are checked for overlap across the whole plan, and a clash moves up by `threads` (L4),
+    so two points of one plan never share events (V9);
+  - "manual": exactly the value of a quantity targeting <tool>/seed, else `manual_seed`. Points
+    with one generator setup whose blocks overlap without being the same are refused: they would
+    repeat some of each other's events;
+  - "random": drawn from the OS when the point runs (disjoint as above); a complete point keeps the
+    seed its provenance.json records.
 * A point is complete when output/…/<point>/.complete holds its identity. It is written last,
   after the count checks, so a half-written point is never skipped.
 """
@@ -21,11 +27,13 @@ import hashlib
 import json
 import os
 import platform
+import secrets
 import socket
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .errors import HepError
 from .paths import repo_root
 from .tools import PointPlan, version_of
 
@@ -39,7 +47,7 @@ def identity(plan: PointPlan) -> str:
         "tools": [plan.rendered[tag].identity_parts for tag in sorted(plan.rendered)],
         "groups": [[s.tag for s in group] for group in plan.groups],
         "prelim": plan.prelim,
-        "seeds": "generator",            # the seed rule: changing it must rerun what it decided
+        "seeds": seed_rule(plan),        # the seed rule: changing it must rerun what it decided
     }
     if plan.upstream:                    # post: it changes when any point does
         parts["upstream"] = plan.upstream
@@ -47,19 +55,46 @@ def identity(plan: PointPlan) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def seed_rule(plan: PointPlan):
+    """What the identity says about the seeds: "generator" (the default: the seeds follow from the
+    rest, so this is what every identity said before V39), ["manual", seed] or "random"."""
+    if plan.seed_type == "manual":
+        return ["manual", manual_seed_of(plan)]
+    return "random" if plan.seed_type == "random" else "generator"
+
+
+def manual_seed_of(plan: PointPlan) -> int:
+    """seed_type = "manual": the value of the quantity targeting <tool>/seed, else manual_seed."""
+    values = list(dict.fromkeys(v for step in plan.rendered.values() for v in step.identity_parts.get("replica", [])))
+    where = f"point {plan.point.name}"
+    if len(values) > 1:
+        raise HepError(f"two seed quantities give this point the seeds {values}", where=where,
+                       hint="a point has one seed: target <tool>/seed from one quantity")
+    seed = values[0] if values else plan.manual_seed
+    if seed is None:
+        raise HepError("seed_type is manual but this point has no seed", where=where,
+                       hint="set manual_seed in [run] or [run.<cfg>], or sweep a quantity targeting <tool>/seed")
+    if isinstance(seed, bool) or not isinstance(seed, int) or not 1 <= seed <= SEED_RANGE - plan.threads:
+        raise HepError(f"the seed {seed!r} is not an integer from 1 to {SEED_RANGE - plan.threads:,}", where=where,
+                       hint=f"with threads = {plan.threads} the point uses seed … seed + {plan.threads - 1}")
+    return seed
+
+
 def seed_of(identity_hex: str, threads: int) -> int:
     return 1 + int(identity_hex[:12], 16) % (SEED_RANGE - threads)
 
 
-def seed_basis(plan: PointPlan) -> str:
+def seed_basis(plan: PointPlan, replica: bool = True) -> str:
     """What the seeds follow: the identity of the event generators (`produces_events`), without their
     argv (which names this point's FIFOs) or card comments, whether they run or are only exported to
-    an integrated program. A detector simulation downstream does not move the generator's seeds."""
+    an integrated program. A detector simulation downstream does not move the generator's seeds.
+    Without `replica`, the generator setup alone (what a manual seed is checked against)."""
     seeded = []
     for _, step in sorted(plan.rendered.items()):
         if not step.folder.get("tool", "produces_events"):      # the generators, not Delphes
             continue
-        parts = {k: v for k, v in step.identity_parts.items() if k != "argv" and not k.startswith("_")}
+        parts = {k: v for k, v in step.identity_parts.items()
+                 if k != "argv" and not k.startswith("_") and (replica or k != "replica")}
         comment = step.folder.get("card", "comment", "")
         if comment and "card" in parts:                  # the header comment names the point
             parts["card"] = [line for line in parts["card"] if not line.startswith(comment)]
@@ -70,15 +105,51 @@ def seed_basis(plan: PointPlan) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def assign_seeds(plans: list[PointPlan]) -> None:
-    """A seed block per point, disjoint across the plan (the same point keeps its seed across runs)."""
+def assign_seeds(plans: list[PointPlan], rerun: frozenset[str] = frozenset()) -> None:
+    """A seed block per point (V39): given ("manual"), kept from a complete point's provenance or
+    drawn ("random"; `rerun` names the points about to run again, which draw anew), else from the
+    generator's identity; the last two disjoint across the plan."""
     taken: list[tuple[int, int]] = []
-    for plan in sorted(plans, key=lambda p: p.identity):
+
+    def clear(base: int, threads: int) -> bool:
+        return not any(base < end and start < base + threads for start, end in taken)
+
+    by_setup: dict[str, list[PointPlan]] = {}
+    for plan in [p for p in plans if p.seed_type == "manual"]:
+        plan.seed = manual_seed_of(plan)
+        for other in by_setup.setdefault(seed_basis(plan, replica=False), []):
+            if other.seed != plan.seed and plan.seed < other.seed + other.threads and other.seed < plan.seed + plan.threads:
+                raise HepError(f"points {other.point.name} (seed {other.seed}) and {plan.point.name} (seed {plan.seed}) "
+                               f"have one generator setup and overlapping seed blocks at threads = {plan.threads}",
+                               where=f"point {plan.point.name}",
+                               hint=f"they would repeat some of each other's events: space the seeds by ≥ {plan.threads}")
+        by_setup[seed_basis(plan, replica=False)].append(plan)
+    for plan in [p for p in plans if p.seed_type == "random"]:
+        plan.seed, plan.seed_kept = (0 if plan.point.name in rerun else _recorded_seed(plan)), True
+        if plan.seed:
+            taken.append((plan.seed, plan.seed + plan.threads))
+    for plan in [p for p in plans if p.seed_type == "random" and not p.seed]:
+        plan.seed_kept = False
+        while not clear(base := 1 + secrets.randbelow(SEED_RANGE - plan.threads), plan.threads):
+            pass
+        taken.append((base, base + plan.threads))
+        plan.seed = base
+    for plan in sorted([p for p in plans if p.seed_type == "identity"], key=lambda p: p.identity):
         base = seed_of(seed_basis(plan), plan.threads)
-        while any(base < end and start < base + plan.threads for start, end in taken):
+        while not clear(base, plan.threads):
             base = 1 + (base + plan.threads - 1) % (SEED_RANGE - plan.threads)
         taken.append((base, base + plan.threads))
         plan.seed = base
+
+
+def _recorded_seed(plan: PointPlan) -> int:
+    """A complete point's seed, from its provenance.json (0 when it is not complete, or unreadable)."""
+    if not is_complete(plan):
+        return 0
+    try:
+        return int(json.loads((plan.out / "provenance.json").read_text(encoding="utf-8"))["seed"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return 0
 
 
 def complete_marker(plan: PointPlan) -> Path:

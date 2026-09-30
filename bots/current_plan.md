@@ -1,5 +1,19 @@
 # Current plan
 
+## Exact and random seeds (`seed_type`, `manual_seed`) — **DONE 2026-09-30** (ordered by the user 2026-09-30)
+
+"run.seed_type = "manual"|"random"|"identity", and run.manual_seed = 3245364, valid for run and
+run.<cfg>". Decided with the user: manual = every point gets manual_seed (cfg overrides), seeds can
+be swept (a <tool>/seed quantity's value is the seed); random = drawn and recorded by the runner (not
+Random:seed = 0: PythiaParallel.cc:95-101 time+i overlaps); an unused manual_seed is allowed.
+
+- V39: config.py `SEED_TYPES`, `_seed_type`, `_manual_seed`; tools.py `PointPlan.seed_type`,
+  `.manual_seed`, `.seed_kept`, set for points only; record.py `seed_rule`, `manual_seed_of`,
+  `seed_basis(replica=False)`, `assign_seeds(plans, rerun)`, `_recorded_seed`; cli.py passes the
+  points `--rerun` runs anew, and `--plan` prints the mode and an unused manual_seed.
+- Default identities checked equal before and after (BASE at threads 1 and 4).
+- Tests: `tests/runner/test_seeds.py`, `tests/integration/test_gates_seeds.py` (slow).
+
 ## Every configuration, one run after another (`sweep`) — **DONE 2026-09-30** (ordered by the user 2026-09-30)
 
 "Execute run configurations … a run.sweep bool option, and run.<configuration>.sweeped bool option

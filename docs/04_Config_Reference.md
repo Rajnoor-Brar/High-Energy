@@ -146,6 +146,8 @@ description   = "EIC photoproduction studies"
 | `project` | string | **required** | the subfolder of `configs/`, `modules/`, `output/`, `results/`; must equal the folder the file is in, when it is under `configs/` |
 | `configuration` | string | **required** unless `sweep` | must name a `[run.<cfg>]` table (C2). Under `sweep` it may be left out; `hep run <config>` then ignores it |
 | `sweep` | boolean | false | `hep run <config>` runs every configuration not `swept = false`, one after another (§4.1) |
+| `seed_type` | string | `"identity"` | default for configurations: how a point's seeds are chosen, `"identity"`, `"manual"` or `"random"` (02 §8) |
+| `manual_seed` | integer | none | default for configurations: under `seed_type = "manual"`, every point's seed (1 to 899,999,999); ignored otherwise (`--plan` says so) |
 | `serial` | integer | none | a directory prefix `NN_`: **location, never identity** (V12). Changing it starts a fresh location. |
 | `event_count` | integer | none | default for configurations; one of the two must set it |
 | `threads` | integer | 1 | default for configurations. `0` means every core, **resolved to a number at plan time** |
@@ -222,6 +224,8 @@ prelim      = { fifo = ["events.hepmc"] }    # replaces [prelim] for this config
 | `name` | string | the table key | the directory name |
 | `title` | string | the table key | the header line of the run under `[run].sweep`: `run 02 - <title> -` (§4.1) |
 | `swept` | boolean | true | `false` leaves this configuration out of `[run].sweep` (§4.1); `hep run <config> <cfg>` still runs it |
+| `seed_type` | string | `[run].seed_type` | `"identity"`: from the generator's identity; `"manual"`: exactly the given seed; `"random"`: drawn when the point runs (02 §8) |
+| `manual_seed` | integer | `[run].manual_seed` | the seed of every point under `"manual"`; a quantity targeting `<tool>/seed` gives a point its own |
 | `description` | string | "" | |
 
 ### 5.1 `sweeps`
@@ -386,7 +390,7 @@ a `[tools.<tag>]` table, and a target not in this configuration's chain is skipp
 
 | Target | Tool | Effect |
 |---|---|---|
-| `"<tag>/seed"` | any | a **replica**: enters the generator's identity, so its seeds; renders nothing |
+| `"<tag>/seed"` | any | a **replica**: enters the generator's identity, so its seeds; renders nothing. Under `seed_type = "manual"` the value **is** the point's seed (an integer) |
 | `"<tag>/<analysis>"` | rivet (any tool with `analyses`) | an **analysis option** `<analysis>:<key>=<value>`; `key` is the option's name and is required. It must be declared in the analysis's `.info` (C9). |
 | `"<tag>"` | `custom` or `module` | a **config key**: `key` (or the quantity's name) in the tool's extracted config (§9.2) |
 | `"<tag>"` | a tool with a card | the native `key`, else the master's mapping for this tool type, else an error |

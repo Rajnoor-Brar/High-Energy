@@ -84,7 +84,8 @@ def build_plans(args, key: str | None) -> Planned:
         plan = tools.plan_point(run, configuration, point, master, pre=pre_plan)
         plan.identity = record.identity(plan)
         plans.append(plan)
-    record.assign_seeds(plans)
+    again = getattr(args, "rerun", False) and getattr(args, "only", None) is None   # the points run anew
+    record.assign_seeds(plans, frozenset(p.point.name for p in plans if again and p.point.index in chosen))
     for plan in plans:
         tools.finalise(plan, plan.seed)
     plot.validate(run)
@@ -135,6 +136,10 @@ def print_plan(run, configuration, plans, post_plan=None, pre_plan=None, combine
           f"{configuration.event_count} events, {configuration.threads} threads" + parallel_note(configuration, plans))
     if crowded(configuration, plans):
         print(f"note: {crowded(configuration, plans)}")
+    if configuration.seed_type != "identity":
+        print(f"seeds: {configuration.seed_type}")
+    if configuration.manual_seed is not None and configuration.seed_type != "manual":
+        print(f"note: manual_seed = {configuration.manual_seed} is unused: seed_type is '{configuration.seed_type}'")
     if pre_plan is not None:
         _print_stage("pre (before every point)", pre_plan, run)
     for plan in plans:
