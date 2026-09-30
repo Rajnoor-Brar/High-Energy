@@ -35,6 +35,15 @@ def _count(value) -> str:
     return f"{value / 1e6:.2f}M" if value >= 1e6 else f"{value / 1e3:.1f}k" if value >= 1e4 else str(value)
 
 
+def duration(seconds: float) -> str:
+    """'42.3 s', '4 min 12 s', '2 h 58 min 7 s': how long a point or a tool took."""
+    if seconds < 59.95:
+        return f"{seconds:.1f} s"
+    hours, rest = divmod(round(seconds), 3600)
+    minutes, secs = divmod(rest, 60)
+    return f"{hours} h {minutes} min {secs} s" if hours else f"{minutes} min {secs} s"
+
+
 def _eta(state) -> str:
     if state.done and state.total and state.rate:
         left = max(0.0, (state.total - state.done) / state.rate)
@@ -152,7 +161,7 @@ class PlainView:
     """One block per point, printed when it ends: its heading with the verdict and wall time, then
     only what needs saying (a failed tool, a prepare step) and where the results are:
 
-        ── point 2/4: NNPDF23lo ── ok after 71.8 s
+        ── point 2/4: NNPDF23lo ── ok after 1 min 12 s
            done → results/PhotoProduction/zeus/default/NNPDF23lo
 
     While a point runs, a progress line every few seconds (the live view draws a table instead).
@@ -260,16 +269,16 @@ class PlainView:
     def tool_finished(self, state, result) -> None:
         verdict = "ok" if result.exit == 0 else f"exit {result.exit}"
         if state.tag.endswith(":prepare"):
-            self.note(f"   {state.tag}: {verdict} after {result.seconds:.1f} s", point=state.point)
+            self.note(f"   {state.tag}: {verdict} after {duration(result.seconds)}", point=state.point)
         elif result.exit != 0:
             extra = f"  ({state.error})" if state.error else ""
             with self._lock:
                 part = self._part(state.point)
                 if part is not None:
-                    part.failed.append(f"   {state.tag}: {verdict} after {result.seconds:.1f} s{extra}")
+                    part.failed.append(f"   {state.tag}: {verdict} after {duration(result.seconds)}{extra}")
 
     def block(self, heading: str, verdict: str, seconds: float, lines: list[str]) -> None:
-        text = [f"{heading} ── {verdict} after {seconds:.1f} s", *lines]
+        text = [f"{heading} ── {verdict} after {duration(seconds)}", *lines]
         with self._lock:                            # a block's lines stay together
             for line in text:
                 self.say(line)
@@ -316,7 +325,7 @@ class LiveView(PlainView):
 
     def block(self, heading: str, verdict: str, seconds: float, lines: list[str]) -> None:
         colour = "green" if verdict == "ok" else "yellow" if verdict == "stopped" else "red"
-        text = [f"{heading} ── [{colour}]{verdict}[/{colour}] after {seconds:.1f} s", *lines]
+        text = [f"{heading} ── [{colour}]{verdict}[/{colour}] after {duration(seconds)}", *lines]
         with self._lock:
             for line in text:
                 self.say(line)
@@ -438,7 +447,7 @@ def follow(journal: Path, *, plain: bool = False, idle_exit: float = 0.0) -> int
                         verdict = "ok" if message.get("code") == 0 else f"exit {message.get('code')}"
                         if message.get("code") != 0 or tag.endswith(":prepare"):
                             blocks.get(point, [None, None, []])[2].append(
-                                f"   {tag}: {verdict} after {message.get('seconds', 0):.1f} s")
+                                f"   {tag}: {verdict} after {duration(message.get('seconds', 0))}")
                         continue
                     apply(state, message)
             shown.tick([s for s in states.values() if s.running])

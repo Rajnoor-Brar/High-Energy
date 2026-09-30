@@ -6,6 +6,8 @@ import io
 import json
 import os
 
+import pytest
+
 from runner.status import Journal, Reader, ToolState
 from runner.watch import PlainView, follow
 
@@ -73,12 +75,12 @@ def test_watch_follows_the_latest_run_and_stops_when_it_finishes(scratch, monkey
     assert follow(journal, plain=True) == 0
     text = captured.getvalue()
     assert "watching new" in text and "old" not in text
-    assert "── point 1/1: a ── ok after 71.8 s" in text and "run finished: 1 done" in text
+    assert "── point 1/1: a ── ok after 1 min 12 s" in text and "run finished: 1 done" in text
     assert "pythia: ok" not in text                                     # a tool that did its job says nothing
 
 
 def test_a_point_is_one_block_when_it_ends():
-    """── point 2/4: NNPDF23lo ── ok after 71.8 s, then where the results are (the user's layout)."""
+    """── point 2/4: NNPDF23lo ── ok after 1 min 12 s, then where the results are (the user's layout)."""
     from types import SimpleNamespace
     from runner.execute import PointResult, ToolResult
     from runner.status import ToolState
@@ -121,3 +123,10 @@ def test_a_terminal_that_stops_reading_never_stops_the_run():
     view.end()                                                        # gives up after its timeout
     assert time.monotonic() - started < 5.0
     os.close(read_end)                                                # the writer thread gets EPIPE and stops
+
+
+@pytest.mark.parametrize("seconds, shown", [(3.04, "3.0 s"), (59.9, "59.9 s"), (59.96, "1 min 0 s"), (71.8, "1 min 12 s"),
+                                            (3599.6, "1 h 0 min 0 s"), (10687.2, "2 h 58 min 7 s")])
+def test_durations_are_seconds_then_minutes_then_hours(seconds, shown):
+    from runner.watch import duration
+    assert duration(seconds) == shown

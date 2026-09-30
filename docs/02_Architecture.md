@@ -333,7 +333,7 @@ directory).
   across runners). Both print **one block per finished point**:
 
   ```
-  ── point 2/4: NNPDF23lo ── ok after 71.8 s
+  ── point 2/4: NNPDF23lo ── ok after 1 min 12 s
      done → results/PhotoProduction/zeus/default/NNPDF23lo
   ```
 
