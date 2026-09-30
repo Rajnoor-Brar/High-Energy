@@ -22,8 +22,9 @@ TOP_LEVEL = ("master", "run", "prelim", "static", "tools", "quantities", "plot")
 
 # key → accepted Python types. A tuple of types means any of them.
 RUN_KEYS = {"serial": int, "name": str, "project": str, "configuration": str, "event_count": int,
-            "threads": int, "description": str}
+            "threads": int, "parallelism": int, "description": str}
 CONFIGURATION_KEYS = {"serial": int, "name": str, "description": str, "event_count": int, "threads": int,
+                      "parallelism": int,
                       "sweeps": list, "plot_points": list, "combine": list, "tools": list, "pre": list, "post": list,
                       "static": dict, "prelim": dict}
 PRELIM_KEYS = {"fifo": list, "files": list, "commands": list}
@@ -89,6 +90,7 @@ class Configuration:
     prelim: dict
     pre: list[list[str]] = field(default_factory=list)   # tools run once before every point
     combine: list[str] = field(default_factory=list)    # swept quantities whose points are merged into one (V35)
+    parallelism: int = 1                                # points run at once (V36); never in an identity
 
 
 @dataclass
@@ -196,6 +198,12 @@ def _sweeps(entries: list, where: str, quantities: dict) -> list:
                                hint=", ".join(f"{n}: {c}" for n, c in counts.items()))
         out.append(list(members) if isinstance(entry, list) else entry)
     return out
+
+
+def _parallelism(value: int, where: str) -> int:
+    if value < 1:
+        raise HepError("parallelism must be at least 1 (the points run at once)", where=where)
+    return value
 
 
 def _resolved_threads(value: int, where: str) -> int:
@@ -350,6 +358,7 @@ def parse(raw: dict, path: Path) -> RunConfig:
             key=key, name=table.get("name", key), serial=table.get("serial"),
             description=table.get("description", ""), event_count=int(event_count),
             threads=_resolved_threads(int(table.get("threads", run.get("threads", 1))), f"{at}.threads"),
+            parallelism=_parallelism(int(table.get("parallelism", run.get("parallelism", 1))), f"{at}.parallelism"),
             sweeps=sweeps, plot_points=list(plot_points), combine=list(combine),
             tools=_groups(table["tools"], f"{at}.tools", tools),
             post=_groups(table.get("post", []), f"{at}.post", tools),

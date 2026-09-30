@@ -471,7 +471,24 @@ commands changed. Keep `threads + shards` within the machine's cores. For one ru
 `--set tools.rivet.shards=10 --set run.default.threads=12`. Every analysis must be re-entrant
 (`Reentrant: true` in its `.info`).
 
-### 4.18 Any files, overlaid
+### 4.18 Many points: several at once
+
+When one point cannot fill the machine (a Rivet that stops scaling, many short points, each
+spending ~5 s in Pythia's init), run several points at once:
+
+```toml
+[run]
+threads     = 5                  # each point's Pythia threads, as before
+parallelism = 4                  # 4 points at a time: ~4 × (5 + its Rivets) cores
+```
+
+Every point gets exactly the result it gets one at a time: `parallelism` is not in any identity or
+seed, so it reruns nothing either. Each point keeps its own folder, and the view prints each
+point's block whole when it ends (in the order they finish). `--plan` prints the estimate
+("4 at once (~24 of 24 cores)") and warns past the machine. For one run:
+`--set run.parallelism=4`.
+
+### 4.19 Any files, overlaid
 
 ```bash
 hep plot a.yoda b.yoda --labels "Tune A,Tune B" --ratio --objects "/MC_JETS/*"
@@ -552,6 +569,7 @@ Denser or sparser ratio ticks: `[plot.style] ratio = { divisions = 508 }` (0.2 a
 | plain lines (logs, CI) | `--plain` (automatic when not a terminal) |
 | to follow a job elsewhere | `hep watch [CONFIG [CFG]]` |
 | a point faster | `shards = K` on the Rivet table (§4.17); more Pythia `threads` alone do not help |
+| many points faster | `parallelism = K` (§4.18): K points at once |
 
 The identity covers cards, argv, binaries, analyses and their plugins, events and threads, and seeds
 derive from it, so a rerun of an unchanged point does nothing, and a changed one reruns by itself.

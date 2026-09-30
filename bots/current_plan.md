@@ -1,5 +1,19 @@
 # Current plan
 
+## Points at once (`parallelism`) — **DONE 2026-09-30** (ordered by the user 2026-09-30)
+
+"Make support for run.parallelism … run multiple points in parallel", with temp files prefixed
+`P001_`. Decided with the user: no prefixes (each point has its own folder), `threads` per point.
+
+- V36: `parallelism` in `[run]`/`[run.<cfg>]` (config.py); `execute.run_points` (a thread pool of
+  `run_point`s, stop-aware) and `execute.cores` (the `--plan` estimate); `status.Journal` lock;
+  `watch` views with a part per point and `for_point`; prepare cache entries locked
+  (`_prepare_lock`: threading lock + flock on `<entry>.lock`, stamp re-checked).
+- Found on the way: `test_fan_out_writes_the_same_events_everywhere` assumed byte-identical fan-out
+  outputs, which V31 (per-output writers) no longer gives under load: it now compares the events.
+- Tests: `tests/runner/test_parallel.py`, `tests/integration/test_gates_parallel.py` (slow).
+- Not yet: the timing measurement (the user's 100M-event zeus run held the machine).
+
 ## Seed sweeps, merged per curve (`combine`) — **DONE 2026-09-29** (ordered by the user 2026-09-29)
 
 "Sweep at different seeds, and plot combined data against pdf, make zeus_seedSweep.toml."

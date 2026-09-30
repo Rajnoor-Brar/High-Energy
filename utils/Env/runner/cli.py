@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import signal
 import sys
 
@@ -83,9 +84,30 @@ def _print_stage(title: str, stage, run) -> None:
     print(f"  results {stage.res}   ({'complete' if record.is_complete(stage) else 'to run'})")
 
 
+def parallel_note(configuration, plans) -> str:
+    """', 4 at once (~52 of 24 cores)' for the title and --plan; nothing when one at a time (V36)."""
+    if configuration.parallelism <= 1 or not plans:
+        return ""
+    each = max(execute.cores(p) for p in plans)
+    return f", {configuration.parallelism} at once (~{configuration.parallelism * each} of {os.cpu_count()} cores)"
+
+
+def crowded(configuration, plans) -> str:
+    """A warning when the points at once want more cores than the machine has."""
+    if configuration.parallelism <= 1 or not plans:
+        return ""
+    each = max(execute.cores(p) for p in plans)
+    if configuration.parallelism * each <= (os.cpu_count() or 1):
+        return ""
+    return (f"parallelism {configuration.parallelism} × ~{each} cores a point is more than the {os.cpu_count()} "
+            f"here: lower threads, shards or parallelism, or accept the oversubscription")
+
+
 def print_plan(run, configuration, plans, post_plan=None, pre_plan=None, combined=()) -> None:
     print(f"run {run.name} ({run.path}) · configuration {configuration.key}: {len(plans)} point(s), "
-          f"{configuration.event_count} events, {configuration.threads} threads")
+          f"{configuration.event_count} events, {configuration.threads} threads" + parallel_note(configuration, plans))
+    if crowded(configuration, plans):
+        print(f"note: {crowded(configuration, plans)}")
     if pre_plan is not None:
         _print_stage("pre (before every point)", pre_plan, run)
     for plan in plans:
@@ -129,8 +151,11 @@ def cmd_run(args) -> int:
 
     base = plans[0].out.parent if plans else None
     journal = Journal(base / "status.jsonl") if base else None
-    title = f"{run.name} · {configuration.key}: {len(plans)} point(s), {configuration.event_count} events, {configuration.threads} threads"
+    title = (f"{run.name} · {configuration.key}: {len(plans)} point(s), {configuration.event_count} events, "
+             f"{configuration.threads} threads" + parallel_note(configuration, plans))
     shown.begin(len(plans), title)
+    if crowded(configuration, plans):
+        shown.say(f"   note: {crowded(configuration, plans)}")
     if journal:
         journal.write("", "", {"k": "run", "state": "started", "points": len(plans), "title": title})
     def manifest() -> None:
@@ -149,15 +174,11 @@ def cmd_run(args) -> int:
             if args.only == "pre":
                 verdict = "pre done"
                 return 0
-        for plan in plans if args.only != "post" else []:
-            if not args.rerun and record.is_complete(plan):
-                shown.skipped(plan)
-                continue
-            result = execute.run_point(plan, run, configuration, sink=shown, journal=journal, stopper=stopper)
-            if result.stopped or stopper.requested:
+        if args.only != "post":
+            done, failed, stopped = execute.run_points(plans, run, configuration, sink=shown, journal=journal,
+                                                       stopper=stopper, rerun=args.rerun)
+            if stopped:
                 return 6
-            failed += not result.ok
-            done += result.ok
         verdict = f"{done} done, {failed} failed, {len(plans) - done - failed} skipped" if args.only != "post" else ""
         manifest()                           # post tools read it: it must say which points are complete
         if combined and args.only != "post":

@@ -326,7 +326,11 @@ directory).
   rate, ETA, σ, the last warning. The plain view (`--plain`, or not a terminal) prints progress every
   few seconds. **A view never blocks the run** (V32): everything it prints goes through one
   background thread, so a terminal that stops reading (a paused tab, Ctrl-S) stops the display, not
-  the supervision. Both print **one block per finished point**:
+  the supervision. With `parallelism = K` (V36) up to K points run at once, each on a thread of its
+  own through the same executor: the views keep a part per running point (the live table shows every
+  running point's tools), a block is printed whole when its point ends, the journal takes one line at
+  a time, and a prepare cache entry is filled by one point at a time (a lock in the runner, `flock`
+  across runners). Both print **one block per finished point**:
 
   ```
   ── point 2/4: NNPDF23lo ── ok after 71.8 s

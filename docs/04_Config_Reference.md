@@ -147,6 +147,7 @@ description   = "EIC photoproduction studies"
 | `serial` | integer | none | a directory prefix `NN_`: **location, never identity** (V12). Changing it starts a fresh location. |
 | `event_count` | integer | none | default for configurations; one of the two must set it |
 | `threads` | integer | 1 | default for configurations. `0` means every core, **resolved to a number at plan time** |
+| `parallelism` | integer | 1 | default for configurations: how many points run at once (V36). `threads` stays each point's; never part of an identity or a seed, so changing it reruns nothing |
 | `description` | string | "" | |
 
 Every other table inside `[run]` is a configuration (§5). Any other key is an error (C1).
@@ -179,6 +180,7 @@ prelim      = { fifo = ["events.hepmc"] }    # replaces [prelim] for this config
 | `combine` | array of strings | `[]` | swept quantities whose points are merged into one curve (§5.5) |
 | `event_count` | integer | `[run].event_count` | required here if `[run]` has none |
 | `threads` | integer | `[run].threads`, else 1 | `0` = every core |
+| `parallelism` | integer | `[run].parallelism`, else 1 | points at once; `--plan` and the run's title say about how many cores that is, and warn past the machine's |
 | `pre`, `post` | array | `[]` | the form of `tools` (§5.4) |
 | `static` | table | `{}` | merged over `[static]`, key by key (§7) |
 | `prelim` | table | `[prelim]` | **replaces** `[prelim]` whole for this configuration; `{}` means none |

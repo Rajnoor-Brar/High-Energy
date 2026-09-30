@@ -121,6 +121,33 @@ class _Screen:
         self._thread.join(timeout)
 
 
+class _Point:
+    """One running point's part of a view: its heading, when it started, the lines its block will
+    carry, and its tools (for the live table)."""
+
+    def __init__(self, heading: str):
+        self.heading = heading
+        self.started = time.monotonic()
+        self.notes: list[str] = []
+        self.failed: list[str] = []
+        self.states: list[ToolState] = []
+        self.last = 0.0                              # the plain view's last progress line
+
+
+class _PointSink:
+    """A view as one point's executor sees it (V36): every call goes to the view, and a note
+    carries the point it is about, since several points may be running at once."""
+
+    def __init__(self, view, name: str):
+        self._view, self._name = view, name
+
+    def note(self, text: str) -> None:
+        self._view.note(text, point=self._name)
+
+    def __getattr__(self, attribute):
+        return getattr(self._view, attribute)
+
+
 class PlainView:
     """One block per point, printed when it ends: its heading with the verdict and wall time, then
     only what needs saying (a failed tool, a prepare step) and where the results are:
@@ -128,24 +155,29 @@ class PlainView:
         ── point 2/4: NNPDF23lo ── ok after 71.8 s
            done → results/PhotoProduction/zeus/default/NNPDF23lo
 
-    While a point runs, a progress line every few seconds (the live view draws a table instead)."""
+    While a point runs, a progress line every few seconds (the live view draws a table instead).
+    Several points may run at once (parallelism, V36): each keeps its own part of the view, a block
+    is printed whole when its point ends, and the executors of the points call in from their own
+    threads, so the parts are kept under one lock."""
 
     def __init__(self, stream=None, every: float = 5.0):
         self.stream = stream or sys.stdout
         self.every = every
         self.screen = self._screen()
-        self.last = 0.0
         self.total = 0
         self.number = 0
-        self._heading = ""
-        self._started = time.monotonic()
-        self._notes: list[str] = []
-        self._failed: list[str] = []
+        self.points: dict[str, _Point] = {}
+        self._lock = threading.RLock()
+        self._watch_last = 0.0
 
     def _screen(self) -> _Screen:
         def write(text: str) -> None:
             print(text, file=self.stream, flush=True)
         return _Screen(write)
+
+    def for_point(self, plan) -> _PointSink:
+        """The sink one point's executor is given."""
+        return _PointSink(self, plan.point.name)
 
     def say(self, text: str) -> None:
         self.screen.line(text)
@@ -163,70 +195,105 @@ class PlainView:
 
     def heading(self, plan, bold: bool = False) -> str:
         """'── point 3/16: <name>', '── combined: <name>' for a merged group (V35), or '── post (after
-        every point)' for the post stage (index 0)."""
+        every point)' for the post stage (index 0). Points are numbered in the order they start."""
         if plan.point.stage == "combined":
             return f"── combined: {f'[bold]{plan.point.name}[/bold]' if bold else plan.point.name}"
         if plan.point.index == 0:
             return "── post (after every point)"
         if plan.point.index < 0:
             return "── pre (before every point)"
-        self.number += 1
+        with self._lock:
+            self.number += 1
+            number = self.number
         name = f"[bold]{plan.point.name}[/bold]" if bold else plan.point.name
-        return f"── point {self.number}/{self.total}: {name}"
+        return f"── point {number}/{self.total}: {name}"
+
+    def _part(self, name: str | None) -> _Point | None:
+        """A point's part; with no name, the one point running (a sequential caller's note)."""
+        if name is not None:
+            return self.points.get(name)
+        return next(reversed(self.points.values()), None)
 
     def point_started(self, plan) -> None:
-        self._heading = self.heading(plan, bold=isinstance(self, LiveView))
-        self._started = time.monotonic()
-        self._notes, self._failed = [], []
+        heading = self.heading(plan, bold=isinstance(self, LiveView))
+        with self._lock:
+            self.points[plan.point.name] = _Point(heading)
 
     def tool_started(self, state) -> None:
-        pass
+        with self._lock:
+            part = self._part(state.point)
+            if part is not None:
+                part.states.append(state)
 
-    def note(self, text: str) -> None:
+    def note(self, text: str, point: str | None = None) -> None:
         """A line for the point's block (a prepare step's verdict), printed when it ends."""
-        self._notes.append(text)
+        with self._lock:
+            part = self._part(point)
+            if part is not None:
+                part.notes.append(text)
 
     def tick(self, states) -> None:
         now = time.monotonic()
-        if now - self.last < self.every:
-            return
-        self.last = now
-        line = " | ".join(progress_text(s) if (s.phase or s.done is not None) else f"{s.tag} … {s.last_line[:60]}"
-                          for s in states if s.running)
-        if line:
-            point = next((s.point for s in states if s.running), "")
+        by_point: dict[str, list] = {}
+        for s in states:
+            if s.running:
+                by_point.setdefault(s.point, []).append(s)
+        watch_due = None                                 # hep watch has no parts: one clock for all
+        for point, running in by_point.items():
+            with self._lock:
+                part = self.points.get(point)
+                if part is not None:
+                    if now - part.last < self.every:
+                        continue
+                    part.last = now
+                else:
+                    if watch_due is None:
+                        watch_due = now - self._watch_last >= self.every
+                        if watch_due:
+                            self._watch_last = now
+                    if not watch_due:
+                        continue
+            line = " | ".join(progress_text(s) if (s.phase or s.done is not None) else f"{s.tag} … {s.last_line[:60]}"
+                              for s in running)
             self.say(f"   [{point}] {line}" if point else f"   {line}")
 
     def tool_finished(self, state, result) -> None:
         verdict = "ok" if result.exit == 0 else f"exit {result.exit}"
         if state.tag.endswith(":prepare"):
-            self.note(f"   {state.tag}: {verdict} after {result.seconds:.1f} s")
+            self.note(f"   {state.tag}: {verdict} after {result.seconds:.1f} s", point=state.point)
         elif result.exit != 0:
             extra = f"  ({state.error})" if state.error else ""
-            self._failed.append(f"   {state.tag}: {verdict} after {result.seconds:.1f} s{extra}")
+            with self._lock:
+                part = self._part(state.point)
+                if part is not None:
+                    part.failed.append(f"   {state.tag}: {verdict} after {result.seconds:.1f} s{extra}")
 
     def block(self, heading: str, verdict: str, seconds: float, lines: list[str]) -> None:
-        self.say(f"{heading} ── {verdict} after {seconds:.1f} s")
-        for line in lines:
-            self.say(line)
+        text = [f"{heading} ── {verdict} after {seconds:.1f} s", *lines]
+        with self._lock:                            # a block's lines stay together
+            for line in text:
+                self.say(line)
 
     def point_finished(self, plan, result) -> None:
-        seconds = time.monotonic() - self._started
+        with self._lock:
+            part = self.points.pop(plan.point.name, None) or _Point(self.heading(plan))
+        seconds = time.monotonic() - part.started
         if result.ok:
-            self.block(self._heading, "ok", seconds, [*self._notes, f"   done → {plan.res}"])
+            self.block(part.heading, "ok", seconds, [*part.notes, f"   done → {plan.res}"])
         elif result.stopped:
-            self.block(self._heading, "stopped", seconds,
-                       [*self._notes, *self._failed, "   partial outputs keep their .partial names"])
+            self.block(part.heading, "stopped", seconds,
+                       [*part.notes, *part.failed, "   partial outputs keep their .partial names"])
         else:
             blame = f" [{result.cause}]" if result.cause else ""
-            self.block(self._heading, f"FAILED{blame}", seconds, [*self._notes, *self._failed, f"   {result.message}"])
+            self.block(part.heading, f"FAILED{blame}", seconds, [*part.notes, *part.failed, f"   {result.message}"])
 
     def skipped(self, plan) -> None:
         self.say(f"{self.heading(plan)}: complete, skipped (--rerun to run it again)")
 
 
 class LiveView(PlainView):
-    """The rich version: the same blocks, and a live table of the running tools."""
+    """The rich version: the same blocks, and a live table of the running tools of every running
+    point, with a footer line per point (its heading and time so far)."""
 
     SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
@@ -236,9 +303,6 @@ class LiveView(PlainView):
         self.console = Console()
         self.live = Live(console=self.console, refresh_per_second=4, transient=True)
         super().__init__()
-        self.states: list[ToolState] = []
-        self.point_name = ""
-        self.started = time.monotonic()
         self.frame = 0
 
     def _screen(self) -> _Screen:            # rich's Live starts, prints, redraws and stops on the thread
@@ -250,23 +314,21 @@ class LiveView(PlainView):
         if title:
             self.say(f"[bold]{title}[/bold]")
 
-    def point_started(self, plan) -> None:
-        super().point_started(plan)
-        self.point_name = plan.point.name
-        self.states = []
-
     def block(self, heading: str, verdict: str, seconds: float, lines: list[str]) -> None:
         colour = "green" if verdict == "ok" else "yellow" if verdict == "stopped" else "red"
-        self.say(f"{heading} ── [{colour}]{verdict}[/{colour}] after {seconds:.1f} s")
-        for line in lines:
-            self.say(line)
-
-    def tool_started(self, state) -> None:
-        self.states.append(state)
+        text = [f"{heading} ── [{colour}]{verdict}[/{colour}] after {seconds:.1f} s", *lines]
+        with self._lock:
+            for line in text:
+                self.say(line)
 
     def tick(self, states) -> None:
-        self.frame += 1
-        self.screen.frame(self.render(states or self.states))
+        with self._lock:
+            self.frame += 1
+            if self.points:                      # the executors' points: each keeps its own tools
+                shown = [s for part in self.points.values() for s in part.states]
+            else:                                # hep watch: every running tool it has read
+                shown = list(states)
+            self.screen.frame(self.render(shown))
 
     def render(self, states):
         from rich.progress_bar import ProgressBar
@@ -289,9 +351,11 @@ class LiveView(PlainView):
             note = f"[yellow]{s.warning[:50]}[/yellow]" if s.warning else f"[dim]{(s.last_line if s.done is None else '')[:50]}[/dim]"
             table.add_row(f"[cyan]{s.point}[/cyan]", f"[bold]{s.tag}[/bold]", s.phase or "", bar, count,
                           f"{rate} {_eta(s)}".strip(), note)
-        elapsed = time.monotonic() - self.started
-        table.add_row("", f"[dim]{self._heading.replace('── ', '')} · {int(elapsed // 60)}:{int(elapsed % 60):02d}[/dim]",
-                      "", "", "", "", "")
+        now = time.monotonic()
+        for part in list(self.points.values()):
+            elapsed = now - part.started
+            table.add_row("", f"[dim]{part.heading.replace('── ', '')} · {int(elapsed // 60)}:{int(elapsed % 60):02d}[/dim]",
+                          "", "", "", "", "")
         return table
 
 

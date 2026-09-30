@@ -81,6 +81,7 @@ def test_a_point_is_one_block_when_it_ends():
     """── point 2/4: NNPDF23lo ── ok after 71.8 s, then where the results are (the user's layout)."""
     from types import SimpleNamespace
     from runner.execute import PointResult, ToolResult
+    from runner.status import ToolState
     out = io.StringIO()
     view = PlainView(stream=out)
     view.begin(4)
@@ -88,15 +89,15 @@ def test_a_point_is_one_block_when_it_ends():
     from runner.sweep import Point
     plan = SimpleNamespace(point=Point(index=2, name="NNPDF23lo"), res="results/x/NNPDF23lo")   # a real Point (L26)
     view.point_started(plan)
-    view.tool_finished(SimpleNamespace(tag="pythia", error=""), ToolResult("pythia", exit=0, seconds=71.6))
-    view.tool_finished(SimpleNamespace(tag="sherpa:prepare", error=""), ToolResult("sherpa:prepare", exit=0, seconds=3.0))
+    view.tool_finished(ToolState(point="NNPDF23lo", tag="pythia"), ToolResult("pythia", exit=0, seconds=71.6))
+    view.tool_finished(ToolState(point="NNPDF23lo", tag="sherpa:prepare"), ToolResult("sherpa:prepare", exit=0, seconds=3.0))
     view.point_finished(plan, PointResult(True))
     view.flush()                                                       # the view writes on its own thread (V32)
     lines = out.getvalue().splitlines()
     assert lines[0].startswith("── point 2/4: NNPDF23lo ── ok after ") and lines[0].endswith(" s")
     assert lines[1:] == ["   sherpa:prepare: ok after 3.0 s", "   done → results/x/NNPDF23lo"]
     view.point_started(plan)
-    view.tool_finished(SimpleNamespace(tag="rivet", error="boom"), ToolResult("rivet", exit=1, seconds=2.0))
+    view.tool_finished(ToolState(point="NNPDF23lo", tag="rivet", error="boom"), ToolResult("rivet", exit=1, seconds=2.0))
     view.point_finished(plan, PointResult(False, cause="rivet", message="rivet exited 1"))
     view.flush()
     tail = out.getvalue().splitlines()[3:]
