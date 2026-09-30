@@ -61,11 +61,14 @@ def validate(settings: dict, beside_root: bool = False) -> None:
 
 
 def latex(text: str) -> str:
-    """TLatex → LaTeX for the common subset, word by word: '#sqrt{s} = 28.6 GeV' → '$\\sqrt{s}$ = 28.6 GeV'."""
+    """TLatex → matplotlib mathtext for the common subset, word by word: '#sqrt{s} = 28.6 GeV' →
+    '$\\sqrt{s}$ = 28.6 GeV'. TLatex's rules hold (V41): only `_{…}`, `^{…}` and `#<name>` are math;
+    a bare _ or ^, and the escapes \\_ \\^ \\#, are the characters ('PDF4LHC21_40' stays as written)."""
     def word(w: str) -> str:
-        if not re.search(r"[#_^]", w):
-            return w
-        w = re.sub(r"#([A-Za-z]+)", lambda m: _MATH.get(m.group(1), "\\" + m.group(1)), w)
+        if not re.search(r"(?<!\\)(?:[_^]\{|#[A-Za-z])", w):
+            return re.sub(r"\\([_^#\\])", r"\1", w)
+        w = re.sub(r"(?<!\\)#([A-Za-z]+)", lambda m: _MATH.get(m.group(1), "\\" + m.group(1)), w)
+        w = re.sub(r"\\_|(?<!\\)_(?!\{)", "\x00", w).replace("\x00", r"\_")     # literal underscores in math
         return f"${w}$"
     return " ".join(word(w) for w in text.split(" ")).replace(":", " ")    # ':' separates mkhtml options
 

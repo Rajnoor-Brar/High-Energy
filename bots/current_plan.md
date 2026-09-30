@@ -1,5 +1,13 @@
 # Current plan
 
+## Literal `_` in labels, and the TOML backslash error — **DONE 2026-09-30** (asked by the user 2026-09-30)
+
+"escape _ and other characters like \\_, toml error" (their label "PDF4LHC21\\_40\\_pdfas" in double
+quotes is invalid TOML). V41: yoda `latex()` follows TLatex (only `_{`, `^{`, `#name` are math);
+`plot.root_text`/`for_root` for Paint's page TOML; escapes `\\_ \\^ \\#`; config.load hints at
+single quotes. Checked by drawing through Paint and matplotlib. Tests in test_plot.py. The user's
+zeus_validation.toml line 102 is left as they wrote it (it still fails to parse until they change it).
+
 ## No automatic `LHAPDF6:` for Pythia's `pdf` — **DONE 2026-09-30** (ordered by the user 2026-09-30)
 
 "make it so LHAPDF6: is not appended and user has to put it in value itself." Decided with the

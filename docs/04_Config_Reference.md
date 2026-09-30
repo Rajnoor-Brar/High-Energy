@@ -379,7 +379,7 @@ values = [0.05, 0.10, 0.15, 0.25]
 |---|---|---|---|
 | `values` | array | **required**, non-empty | scalars or arrays (an energy pair) |
 | `tags` | array of strings | derived | one per value. The default is the value with anything but `A–Za–z0–9.+-` replaced by `-`. Tags name point directories: keep them short and unique. |
-| `labels` | array of strings | the tags | legend text, in ROOT **TLatex** (`e^{-}`, `#sqrt{s}`; V11) |
+| `labels` | array of strings | the tags | legend text, in ROOT **TLatex** (`e^{-}`, `#sqrt{s}`; V11). Only `_{…}`, `^{…}` and `#<name>` are markup: a bare `_` or `^` is the character (`"PDF4LHC21_40"`), in ROOT and yoda alike (V41). `\_`, `\^` and `\#` also give the character, even before a brace; in TOML write them in single quotes, `'PDF4LHC21\_40'`, since in `"…"` a backslash starts a TOML escape |
 | `key` | string, or table `{<tag or tool type> = "<key>"}` | none | the native key. A string needs a `target`. A table entry for a tool tag wins over one for its type. |
 | `target` | string or array | none | restricts the consumers (§8.1) |
 | `format` | string | "" | a Python format for the value: `"{}*GeV"` |

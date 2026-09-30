@@ -244,6 +244,25 @@ def _italic(math: str) -> str:
     return re.sub(upright + r"|\\[A-Za-z]+|([A-Za-z]+)", lambda m: f"#it{{{m[1]}}}" if m[1] else m[0], math)
 
 
+def root_text(text: str) -> str:
+    """A label as ROOT's TLatex should draw it (V41). TLatex subscripts only `_{…}` and superscripts
+    only `^{…}`, so a bare _ or ^ is already the character ('PDF4LHC21_40', 'E_T'); the escapes \\_,
+    \\^ and \\# give the character itself, kept apart from a brace that follows it."""
+    text = re.sub(r"\\([_^])(?=\{)", r"#kern[0]{\1}", text)
+    return re.sub(r"\\([_^#\\])", r"\1", text)
+
+
+def for_root(document: dict) -> dict:
+    """The page document Paint reads: every label through root_text (the in-memory document keeps the
+    labels as written, which the yoda backend converts its own way)."""
+    out = {**document, "page": {k: root_text(v) if k in ("title", "x_label", "y_label") and isinstance(v, str) else v
+                                for k, v in document["page"].items()},
+           "curve": [{**c, "label": root_text(c["label"])} for c in document["curve"]]}
+    if "data" in document:
+        out["data"] = {**document["data"], "label": root_text(document["data"]["label"])}
+    return out
+
+
 def tlatex(text: str) -> str:
     """`$\\mathrm{d}\\sigma/\\mathrm{d}E_T$ [pb/GeV]` → `d#sigma/d#it{E}_{#it{T}} [pb/GeV]`."""
     out = "".join(_italic(part) if i % 2 else part for i, part in enumerate(text.split("$")))
@@ -464,7 +483,7 @@ def pages(run, configuration, plans) -> list[Page]:
                                     "label": data.get("legend", "Data")}
             config = out_dir / f"{rel}.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
-            config.write_text(tomli_w.dumps(document), encoding="utf-8")
+            config.write_text(tomli_w.dumps(for_root(document)), encoding="utf-8")
             made.append(Page(rel, config, res_dir / rel, cell=key, object=path, document=document,
                              sources=[yoda_of(plan) for plan, _ in curves], variants=[full for _, full in curves],
                              data=(source, reference) if reference else None,
@@ -667,7 +686,7 @@ def files(targets: list[str], outdir: Path | None, *, labels: list[str] | None =
              "label": label} for label, file, found in curves if path in found]}
         config = work / f"{rel}.toml"
         config.parent.mkdir(parents=True, exist_ok=True)
-        config.write_text(tomli_w.dumps(document), encoding="utf-8")
+        config.write_text(tomli_w.dumps(for_root(document)), encoding="utf-8")
         done = subprocess.run([str(paint), str(config)], capture_output=True, text=True)
         if done.returncode != 0:
             failed += 1

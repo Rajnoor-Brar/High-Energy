@@ -277,7 +277,10 @@ def load(name: str, *, sets: list[str] = ()) -> RunConfig:
     try:
         raw = tomllib.loads(path.read_text(encoding="utf-8"))
     except tomllib.TOMLDecodeError as error:
-        raise HepError(f"not valid TOML: {error}", where=str(path))
+        escape = "escape" in str(error).lower() or "'\\'" in str(error)
+        raise HepError(f"not valid TOML: {error}", where=str(path),
+                       hint="in a \"…\" string a backslash starts a TOML escape: write the label in single quotes, "
+                            "'PDF4LHC21\\_40', or double the backslash, \"PDF4LHC21\\\\_40\"" if escape else None)
     apply_sets(raw, list(sets))
     return parse(raw, path)
 

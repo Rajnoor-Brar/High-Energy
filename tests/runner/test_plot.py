@@ -97,9 +97,42 @@ def yoda_backend():
     ("p_{T0}^{ref} = 3.0 GeV", "$p_{T0}^{ref}$ = 3.0 GeV"),
     ("#hat{p}_{T} > 2 GeV", r"$\hat{p}_{T}$ > 2 GeV"),
     ("R: 0.4", "R  0.4"),                                                 # ':' separates mkhtml's options
+    ("PDF4LHC21_40_pdfas", "PDF4LHC21_40_pdfas"),                        # TLatex's rule: a bare _ is itself
+    ("E_T jets", "E_T jets"),
+    (r"PDF4LHC21\_40", "PDF4LHC21_40"),                                  # the escapes are the characters
+    (r"\#1 \^2", "#1 ^2"),
+    (r"x_1\_a_{2}", r"$x\_1\_a_{2}$"),                                   # literal underscores inside math
 ])
 def test_tlatex_becomes_latex_for_mkhtml(yoda_backend, root, latex):
     assert yoda_backend.latex(root) == latex
+
+
+@pytest.mark.parametrize("label, root", [
+    ("PDF4LHC21_40_pdfas", "PDF4LHC21_40_pdfas"),                        # TLatex draws a bare _ as itself
+    (r"PDF4LHC21\_40\_pdfas", "PDF4LHC21_40_pdfas"),
+    ("p_{T0}^{ref} #sqrt{s}", "p_{T0}^{ref} #sqrt{s}"),
+    (r"a\_{b}", "a#kern[0]{_}{b}"),                                       # before a brace: kept apart from it
+    (r"\#1 \\ x", "#1 \\ x"),
+])
+def test_labels_as_root_draws_them(label, root):
+    assert plot.root_text(label) == root
+
+
+def test_paint_gets_root_labels_and_the_page_keeps_them_as_written():
+    document = {"page": {"title": r"a\_b", "ratio": True}, "style": {},
+                "curve": [{"file": "f", "object": "o", "label": r"PDF4LHC21\_40"}], "data": {"label": r"ZEUS\_2012"}}
+    root = plot.for_root(document)
+    assert (root["page"]["title"], root["curve"][0]["label"], root["data"]["label"]) == ("a_b", "PDF4LHC21_40", "ZEUS_2012")
+    assert document["curve"][0]["label"] == r"PDF4LHC21\_40" and root["page"]["ratio"] is True
+
+
+def test_a_backslash_in_a_double_quoted_label_says_how_to_write_it(scratch):
+    from runner import config
+    path = scratch / "bad.toml"
+    path.write_text('[run]\nname = "x"\n[quantities.pdf]\nlabels = ["PDF4LHC21\\_40"]\n', encoding="utf-8")
+    with pytest.raises(HepError, match="not valid TOML") as caught:
+        config.load(str(path))
+    assert "single quotes" in caught.value.hint
 
 
 def test_the_yoda_backend_refuses_what_mkhtml_cannot_do(scratch):

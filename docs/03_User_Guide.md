@@ -196,7 +196,10 @@ tags   = ["pt30", "pt32", "pt34"]
 labels = ["p_{T0}^{ref} = 3.0 GeV", "p_{T0}^{ref} = 3.2 GeV", "p_{T0}^{ref} = 3.4 GeV"]
 ```
 
-Labels are ROOT TLatex (`p_{T0}`, `#sqrt{s}`, `e^{-}`). An override equal to the base card's own
+Labels are ROOT TLatex (`p_{T0}`, `#sqrt{s}`, `e^{-}`). Only a brace makes a sub- or superscript,
+so `"PDF4LHC21_40"` shows its underscores as they are, in both backends. To be explicit, write
+`'PDF4LHC21\_40'` in **single** quotes: in `"…"` TOML reads the backslash as an escape and refuses
+the file. An override equal to the base card's own
 value is written but does not change the identity.
 
 ### 4.7 Analysis options
