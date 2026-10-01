@@ -4,7 +4,7 @@ docs/04_Config_Reference.md §14. `hep build` is handled by the shell dispatcher
 (utils/Env/hep), which runs make.
 
 Exit codes: 0 every point done (or skipped), 1 a point failed, 2 a config error before anything ran,
-6 stopped by the user. Under [run].sweep (V38), several runs one after another: 6 if one was
+6 stopped by the user. Under [run].sweep_runs (V38), several runs one after another: 6 if one was
 stopped, else 1 if any failed (or could not be planned at its turn), else 0.
 """
 
@@ -33,7 +33,7 @@ def parser() -> argparse.ArgumentParser:
 
     run = commands.add_parser("run", help="plan and run a configuration")
     run.add_argument("config", help="configs/<Project>/<name>[.toml], or ./path from the repo root")
-    run.add_argument("configuration", nargs="?", help="overrides [run].configuration; under [run].sweep, runs only it")
+    run.add_argument("configuration", nargs="?", help="overrides [run].configuration; under [run].sweep_runs, runs only it")
     run.add_argument("--plan", action="store_true", help="print the plan; run nothing")
     run.add_argument("--points", metavar="SEL", help="run a subset: tags, indices or quantity=tag")
     run.add_argument("--set", metavar="KEY=VALUE", action="append", default=[],
@@ -170,7 +170,7 @@ def catch_signals(stopper: execute.Stopper) -> None:
 
 
 def cmd_run(args) -> int:
-    """One run; or, under [run].sweep, every swept configuration as a run of its own, one after
+    """One run; or, under [run].sweep_runs, every swept configuration as a run of its own, one after
     another (V38). Each is exactly `hep run CONFIG <cfg>`, after a `run NN - <title> -` line. All are
     planned before the first starts, so a config error anywhere exits 2 with nothing run; each is
     planned again at its turn, so edits made meanwhile count. A failed run leaves the next to
@@ -182,7 +182,7 @@ def cmd_run(args) -> int:
         return run_one(args, keys[0], stopper)
     if args.points:
         raise HepError("--points picks points of one configuration, and this sweep runs several",
-                       where=f"{run.path}: [run].sweep", hint=f"name it: hep run {args.config} <configuration> --points …")
+                       where=f"{run.path}: [run].sweep_runs", hint=f"name it: hep run {args.config} <configuration> --points …")
     skipped = {}
     for key in keys:
         try:
@@ -193,7 +193,7 @@ def cmd_run(args) -> int:
         if args.only in ("pre", "post") and getattr(planned, args.only) is None:
             skipped[key] = f"   no {args.only} tools: skipped"
     if len(skipped) == len(keys):
-        raise HepError(f"no configuration of this sweep has {args.only} tools", where=f"{run.path}: [run].sweep")
+        raise HepError(f"no configuration of this sweep has {args.only} tools", where=f"{run.path}: [run].sweep_runs")
     failed = False
     for number, key in enumerate(keys, 1):
         if stopper.requested:
@@ -336,7 +336,7 @@ def cmd_plot(args) -> int:
         raise HepError(f"{run.path} has no [plot] table", hint="add [plot], or give the files: hep plot FILE…")
     keys = run.runs(args.configuration)
     failed = False
-    for number, key in enumerate(keys, 1):   # under [run].sweep, every swept configuration's pages (V38)
+    for number, key in enumerate(keys, 1):   # under [run].sweep_runs, every swept configuration's pages (V38)
         planned = build_plans(args, key)
         if len(keys) > 1:
             print(("\n" if number > 1 else "") + header(number, planned.configuration))
@@ -346,7 +346,7 @@ def cmd_plot(args) -> int:
 
 def cmd_watch(args) -> int:
     """Follow a job from another terminal: its status.jsonl, or the most recent one under output/."""
-    if args.config:                          # under [run].sweep: the swept run written to last (V38)
+    if args.config:                          # under [run].sweep_runs: the swept run written to last (V38)
         run = configmod.load(args.config)
         journals = [journal_path(run, run.configurations[key]) for key in run.runs(args.configuration)]
         present = [j for j in journals if j.exists()]

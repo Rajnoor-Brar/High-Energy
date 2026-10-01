@@ -138,7 +138,7 @@ serial        = 3                   # optional: the run directory becomes 03_eic
 name          = "eic"
 project       = "PhotoProduction"
 configuration = "pdf"               # the default; `hep run <config> <configuration>` picks another
-sweep         = false               # true: `hep run <config>` runs every configuration, in turn (§4.1)
+sweep_runs    = false               # true: `hep run <config>` runs every configuration, in turn (§4.1)
 event_count   = 1_000_000           # defaults for every configuration
 threads       = 20
 description   = "EIC photoproduction studies"
@@ -148,8 +148,8 @@ description   = "EIC photoproduction studies"
 |---|---|---|---|
 | `name` | string | **required** | the run's directory name |
 | `project` | string | **required** | the subfolder of `configs/`, `modules/`, `output/`, `results/`; must equal the folder the file is in, when it is under `configs/` |
-| `configuration` | string | **required** unless `sweep` | must name a `[run.<cfg>]` table (C2). Under `sweep` it may be left out; `hep run <config>` then ignores it |
-| `sweep` | boolean | false | `hep run <config>` runs every configuration not `swept = false`, one after another (§4.1) |
+| `configuration` | string | **required** unless `sweep_runs` | must name a `[run.<cfg>]` table (C2). Under `sweep_runs` it may be left out; `hep run <config>` then ignores it |
+| `sweep_runs` | boolean | false | `hep run <config>` runs every configuration not `swept = false`, one after another (§4.1) |
 | `seed_type` | string | `"identity"` | default for configurations: how a point's seeds are chosen, `"identity"`, `"manual"` or `"random"` (02 §8) |
 | `manual_seed` | integer | none | default for configurations: under `seed_type = "manual"`, every point's seed (1 to 899,999,999); ignored otherwise (`--plan` says so) |
 | `serial` | integer | none | a directory prefix `NN_`: **location, never identity** (V12). Changing it starts a fresh location. |
@@ -160,9 +160,9 @@ description   = "EIC photoproduction studies"
 
 Every other table inside `[run]` is a configuration (§5). Any other key is an error (C1).
 
-### 4.1 `sweep`: every configuration, one run after another
+### 4.1 `sweep_runs`: every configuration, one run after another
 
-With `sweep = true`, `hep run <config>` runs each configuration not marked `swept = false`, in the
+With `sweep_runs = true`, `hep run <config>` runs each configuration not marked `swept = false`, in the
 order of the file. Each is **a run of its own**: exactly what `hep run <config> <cfg>` does (its own
 title, blocks, verdict, journal, `points.json` and plots, in its own `<run>/<cfg>/` folder),
 after one header line of its `title`:
@@ -199,7 +199,7 @@ eic · energies: 4 point(s), 1000000 events, 12 threads
 [run.energy_pdf]
 serial      = 3
 name        = "energy_pdf"                   # directory name; defaults to the table key
-title       = "Beams x PDFs"                 # the header line under [run].sweep (§4.1)
+title       = "Beams x PDFs"                 # the header line under [run].sweep_runs (§4.1)
 description = "Beams x PDF grid: one page per energy, PDF curves on each"
 event_count = 500_000                        # overrides [run]
 threads     = 20
@@ -226,8 +226,8 @@ prelim      = { fifo = ["events.hepmc"] }    # replaces [prelim] for this config
 | `prelim` | table | `[prelim]` | **replaces** `[prelim]` whole for this configuration; `{}` means none |
 | `serial` | integer | none | directory prefix `NN_` |
 | `name` | string | the table key | the directory name |
-| `title` | string | the table key | the header line of the run under `[run].sweep`: `run 02 - <title> -` (§4.1) |
-| `swept` | boolean | true | `false` leaves this configuration out of `[run].sweep` (§4.1); `hep run <config> <cfg>` still runs it |
+| `title` | string | the table key | the header line of the run under `[run].sweep_runs`: `run 02 - <title> -` (§4.1) |
+| `swept` | boolean | true | `false` leaves this configuration out of `[run].sweep_runs` (§4.1); `hep run <config> <cfg>` still runs it |
 | `seed_type` | string | `[run].seed_type` | `"identity"`: from the generator's identity; `"manual"`: exactly the given seed; `"random"`: drawn when the point runs (02 §8) |
 | `manual_seed` | integer | `[run].manual_seed` | the seed of every point under `"manual"`; a quantity targeting `<tool>/seed` gives a point its own |
 | `description` | string | "" | |
@@ -797,7 +797,7 @@ hep run CONFIG [CONFIGURATION] [--plan] [--points SEL] [--set KEY=VALUE]… [--r
 | Option | Does |
 |---|---|
 | `CONFIG` | `configs/<CONFIG>[.toml]`, or `./path` from the repository root |
-| `CONFIGURATION` | overrides `[run].configuration`; under `[run].sweep`, runs only this one (§4.1) |
+| `CONFIGURATION` | overrides `[run].configuration`; under `[run].sweep_runs`, runs only this one (§4.1) |
 | `--plan` | print everything and run nothing: per point, the values and their consumers, the groups and each tool's argv, what each reads and writes, the prepare steps and whether they are cached, the output and results directories and whether the point is complete; the pre and post stages; the page count |
 | `--points SEL` | run a subset: comma-separated point names, single tags, 1-based indices, or `quantity=tag`. The others keep their state (and `points.json` lists all). Refused under a sweep of several runs: name the configuration. |
 | `--set KEY=VALUE` | override one value of the TOML for this invocation, by dotted key, before anything is checked (repeatable). The value is read as TOML, else as a string: `--set run.event_count=50000`, `--set run.pdf.threads=8`, `--set static.energies=18x275`, `--set 'plot.formats=["png"]'`. |
@@ -810,7 +810,7 @@ The order: pre stage → every point not complete (in point order) → `points.j
 plot stage. A failed point does not stop the others. **Exit codes:** 0 everything done or skipped;
 1 a point, the post stage or a page failed; 2 a config error, before anything ran; 6 stopped by the
 user (Ctrl-C: SIGINT, then SIGTERM, then SIGKILL to the running tools; a second Ctrl-C is the
-default behaviour). Under `[run].sweep` (§4.1), each run has these codes; the command exits 6 if
+default behaviour). Under `[run].sweep_runs` (§4.1), each run has these codes; the command exits 6 if
 one was stopped, else 1 if any failed, else 0.
 
 ### `hep plot`
@@ -820,7 +820,7 @@ hep plot CONFIG [CONFIGURATION] [--set KEY=VALUE]…
 hep plot FILE… [-o DIR] [--labels A,B,…] [--objects GLOB…] [--formats pdf,png] [--ratio] [--style FILE]
 ```
 
-With a config: its pages, as after a run (`--only plot`); under `[run].sweep`, every swept
+With a config: its pages, as after a run (`--only plot`); under `[run].sweep_runs`, every swept
 configuration's, each under its `run NN - <title> -` line. With files (every target ends `.yoda`,
 `.yoda.gz` or `.root`): one page per object any of them holds, one curve per file, or one per point
 of a merged sweep file (labelled from the `points.json` inside it). `-o` defaults to
@@ -834,7 +834,7 @@ hep watch [CONFIG [CONFIGURATION]] [--plain]
 ```
 
 Follows a job from another terminal through its journal, `output/…/<cfg>/status.jsonl`; with no
-config, the most recently written journal; under `[run].sweep` with no configuration, the swept
+config, the most recently written journal; under `[run].sweep_runs` with no configuration, the swept
 configuration's journal written to last. It prints the same blocks as the run, and leaves when the
 run finishes. A run of a sweep names the next run's journal when it finishes, so the watch follows
 on to it, and leaves after the last or on a stop.

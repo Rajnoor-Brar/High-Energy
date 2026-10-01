@@ -22,7 +22,7 @@ TOP_LEVEL = ("master", "run", "prelim", "static", "tools", "quantities", "plot")
 
 # key → accepted Python types. A tuple of types means any of them.
 RUN_KEYS = {"serial": int, "name": str, "project": str, "configuration": str, "event_count": int,
-            "threads": int, "parallelism": int, "description": str, "sweep": bool, "seed_type": str,
+            "threads": int, "parallelism": int, "description": str, "sweep_runs": bool, "seed_type": str,
             "manual_seed": int}
 CONFIGURATION_KEYS = {"serial": int, "name": str, "title": str, "description": str, "event_count": int,
                       "threads": int, "parallelism": int, "swept": bool, "seed_type": str, "manual_seed": int,
@@ -95,7 +95,7 @@ class Configuration:
     pre: list[list[str]] = field(default_factory=list)   # tools run once before every point
     combine: list[str] = field(default_factory=list)    # swept quantities whose points are merged into one (V35)
     parallelism: int = 1                                # points run at once (V36); never in an identity
-    swept: bool = True                                  # run by a [run].sweep (V38)
+    swept: bool = True                                  # run by [run].sweep_runs (V38)
     title: str = ""                                     # the `run NN - <title> -` header of a sweep
     seed_type: str = "identity"                         # SEED_TYPES (V39)
     manual_seed: int | None = None                      # seed_type = "manual": every point's seed
@@ -107,7 +107,7 @@ class RunConfig:
     project: str
     name: str
     serial: int | None
-    default_configuration: str | None                  # None only under sweep
+    default_configuration: str | None                  # None only under sweep_runs
     configurations: dict[str, Configuration]
     prelim: dict
     static: dict
@@ -116,12 +116,12 @@ class RunConfig:
     plot: dict
     master_toml: str | None
     raw: dict
-    sweep: bool = False                                 # `hep run` executes every swept configuration (V38)
+    sweep_runs: bool = False                            # `hep run` executes every swept configuration (V38)
 
     def configuration(self, name: str | None) -> Configuration:
         wanted = name or self.default_configuration
         if wanted is None:
-            raise HepError("[run] sweeps its configurations and names none", where=f"{self.path}: [run]",
+            raise HepError("[run] runs every configuration (sweep_runs) and names none", where=f"{self.path}: [run]",
                            hint=f"name one: configurations {', '.join(self.configurations)}")
         if wanted not in self.configurations:
             raise HepError(f"no configuration '{wanted}'", where=f"{self.path}: [run]",
@@ -131,11 +131,11 @@ class RunConfig:
 
     def runs(self, name: str | None) -> list[str]:
         """The configurations `hep run` executes, in order (V38): the one named on the command line,
-        even under sweep; else, under [run].sweep, every configuration not `swept = false`, in the
+        even under sweep_runs; else, under [run].sweep_runs, every configuration not `swept = false`, in the
         order of the file; else [run].configuration."""
         if name:
             return [self.configuration(name).key]
-        if self.sweep:
+        if self.sweep_runs:
             return [key for key, c in self.configurations.items() if c.swept]
         return [self.configuration(None).key]
 
@@ -155,7 +155,7 @@ def _check(table: dict, spec: dict, where: str, *, allow_tables: bool = False, e
     for key, value in table.items():
         types = spec.get(key)
         if allow_tables and isinstance(value, dict) and dict not in (types if isinstance(types, tuple) else (types,)):
-            continue                             # a configuration, even one named like a key ([run.sweep])
+            continue                             # a configuration, even one named like a key ([run.threads])
         if key in spec:
             if isinstance(value, bool) and bool not in (types if isinstance(types, tuple) else (types,)):
                 raise HepError(f"'{key}' must be {_type_name(types)}, not true/false", where=f"{where}.{key}")
@@ -299,7 +299,7 @@ def parse(raw: dict, path: Path) -> RunConfig:
     if not isinstance(run, dict):
         raise HepError("missing [run]", where=where, hint="every run TOML has [run] name, project, configuration")
     _check(run, RUN_KEYS, f"{where}: [run]", allow_tables=True)
-    sweep_on = run.get("sweep") is True                 # [run.sweep] may be a configuration's table
+    sweep_on = run.get("sweep_runs") is True
     for required in ("name", "project") + (() if sweep_on else ("configuration",)):
         if required not in run:
             raise HepError(f"[run] needs '{required}'", where=f"{where}: [run]")
@@ -410,7 +410,7 @@ def parse(raw: dict, path: Path) -> RunConfig:
             prelim=local_prelim if local_prelim is not None else prelim)
 
     if sweep_on and not any(c.swept for c in configurations.values()):
-        raise HepError("[run].sweep is on but every configuration has swept = false", where=f"{where}: [run].sweep",
+        raise HepError("[run].sweep_runs is on but every configuration has swept = false", where=f"{where}: [run].sweep_runs",
                        hint="leave one in, or turn the sweep off")
     if "configuration" in run and run["configuration"] not in configurations:
         raise HepError(f"[run].configuration is '{run['configuration']}', which is not a [run.<name>] table",
@@ -429,4 +429,4 @@ def parse(raw: dict, path: Path) -> RunConfig:
     return RunConfig(path=path, project=project, name=run["name"], serial=run.get("serial"),
                      default_configuration=run.get("configuration"), configurations=configurations,
                      prelim=prelim, static=static, tools=tools, quantities=quantities, plot=plot,
-                     master_toml=master.get("master_toml"), raw=raw, sweep=sweep_on)
+                     master_toml=master.get("master_toml"), raw=raw, sweep_runs=sweep_on)

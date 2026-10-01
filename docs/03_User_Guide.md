@@ -508,7 +508,7 @@ want:
 
 ```toml
 [run]
-sweep = true                     # hep run eic: every configuration, in the order of the file
+sweep_runs = true                # hep run eic: every configuration, in the order of the file
 
 [run.pdf]
 title = "Proton PDFs"            # the header line: run 01 - Proton PDFs -
@@ -523,7 +523,7 @@ last one costs nothing. A failed run lets the next one start, and Ctrl-C stops e
 `hep watch` follows from one run to the next. That's what a shell loop can't do: in
 `for c in …; do hep run eic $c; done`, a Ctrl-C only ends the current run (hep exits 6 and bash
 carries on) and a typo in a later configuration shows up hours in. `hep run eic pdf` still runs
-only `pdf`, and `--set run.sweep=false` turns the sweep off for one call.
+only `pdf`, and `--set run.sweep_runs=false` turns the sweep off for one call.
 
 ### 4.21 Exact seeds, random seeds, and repeating a run
 

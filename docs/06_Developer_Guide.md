@@ -144,7 +144,7 @@ own name), `upstream` = the members' identities, `Point.stage = "combined"` and 
 `cli.Planned`; then `post.run_pre` → `execute.run_points` → `points.json` → `post.run_combined` →
 `post.run` → `plot.draw`. Planning writes nothing; `execute.prepare` is the first write of a point.
 
-**Several runs** (`[run].sweep`, V38): `cmd_run` asks `RunConfig.runs(name)` which configurations
+**Several runs** (`[run].sweep_runs`, V38): `cmd_run` asks `RunConfig.runs(name)` which configurations
 to run (the named one; else the `swept` ones in file order; else `[run].configuration`). With one,
 it is `run_one`. With several, it calls `build_plans` for each first (a `HepError` names the
 configuration and nothing runs), then `run_one(…, number=N, following=<next journal>)` in turn.

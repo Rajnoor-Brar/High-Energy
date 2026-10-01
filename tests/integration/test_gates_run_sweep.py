@@ -1,4 +1,4 @@
-"""V38, the gate (slow: real `hep run` processes): under `[run].sweep = true` the swept
+"""V38, the gate (slow: real `hep run` processes): under `[run].sweep_runs = true` the swept
 configurations run one after another, each exactly the run `hep run CONFIG <cfg>` makes, after a
 `run NN - <title> -` line; `swept = false` leaves one out; a failed run leaves the next to start; a
 config error anywhere stops everything before it starts; Ctrl-C starts no more runs."""
@@ -37,7 +37,7 @@ def sweep_config(scratch: Path, d_static: str = "{}", b_nap: str = "no") -> Path
 [run]
 name        = "sw"
 project     = "PhotoProduction"
-sweep       = true
+sweep_runs  = true
 event_count = 1
 
 [run.a]
