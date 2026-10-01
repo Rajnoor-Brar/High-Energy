@@ -211,3 +211,10 @@ def test_use_data_false_draws_no_data_and_divides_by_the_first_curve(stage):
     assert d01["page"]["ratio"] is True and d01["page"]["ratio_label"] == "Ratio"
     assert d01["curve"][0]["label"] == "MSTW 2008 LO"
     assert plot.draw(run, configuration, plans, lambda line: None) == 0
+
+
+def test_a_best_legend_is_drawn(stage):
+    """V49: Paint takes the corner with the fewest drawn points under the legend."""
+    run, configuration, plans = stage
+    run.plot["style"] = {**run.plot.get("style", {}), "legend": {"position": "best"}}
+    assert plot.draw(run, configuration, plans, lambda line: None) == 0

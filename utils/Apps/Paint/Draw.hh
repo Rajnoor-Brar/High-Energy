@@ -215,10 +215,45 @@ namespace Paint {
     // mkhtml's legend: no frame, the title as its header, and a "+" beside each entry — on the right
     // of right-aligned text, on the left of left-aligned text. Data come first, as in mkhtml. A
     // corner is inset from the frame's; [x, y] places the top-right corner in fractions of the frame.
+    // Where the drawn points are, in the frame's NDC: each bin's centre at its value, for "best".
+    struct Placed { std::vector<std::pair<double, double>> points; };
+
+    inline Placed placed(const std::vector<const Series*>& drawn, Range x, Range y, bool logx, bool logy, const Frame& f) {
+        auto at = [](double v, Range r, bool log) {
+            return log ? (std::log10(v) - std::log10(r.lo)) / (std::log10(r.hi) - std::log10(r.lo)) : (v - r.lo) / (r.hi - r.lo);
+        };
+        Placed out;
+        for (const Series* series : drawn)
+            for (size_t i = 0; i < series->size(); ++i) {
+                const double xc = 0.5 * (series->lo[i] + series->hi[i]), v = series->y[i];
+                if (!std::isfinite(v) || (logy && v <= 0) || (logx && xc <= 0)) continue;
+                out.points.push_back({f.l + at(xc, x, logx) * (1 - f.l - f.r), f.b + at(v, y, logy) * (1 - f.b - f.t)});
+            }
+        return out;
+    }
+
     inline void legend(const std::string& title, const std::vector<Entry>& entries, const Look& look, const Frame& f,
-                       Keep& keep) {
+                       Keep& keep, const Placed& under = {}) {
         const Style& s = look.s;
-        const bool right = s.corner.find("right") != std::string::npos, top = s.corner.find("top") != std::string::npos;
+        std::string corner = s.corner;
+        if (corner == "best") {                       // the corner with the fewest drawn points under the legend
+            size_t longest = title.size();
+            for (const auto& e : entries) longest = std::max(longest, e.label.size());
+            const double width = (s.symbol + s.gap) * look.px / f.w + 0.5 * longest * look.legend / f.w;
+            const double rows = static_cast<double>(entries.size()) + (title.empty() ? 0.0 : 1.0);
+            const double height = rows * s.spacing * look.legend / f.h;
+            const double ix = s.insetX * look.px / f.w, iy = s.insetY * look.px / f.h;
+            size_t fewest = std::numeric_limits<size_t>::max();
+            for (const std::string option : {"top-right", "top-left", "bottom-right", "bottom-left"}) {
+                const bool r = option.find("right") != std::string::npos, t = option.find("top") != std::string::npos;
+                const double x1 = r ? 1 - f.r - ix : f.l + ix + width, x0 = x1 - width;
+                const double y1 = t ? 1 - f.t - iy : f.b + iy + height, y0 = y1 - height;
+                const size_t n = std::count_if(under.points.begin(), under.points.end(), [&](const auto& p) {
+                    return p.first >= x0 && p.first <= x1 && p.second >= y0 && p.second <= y1; });
+                if (n < fewest) fewest = n, corner = option;
+            }
+        }
+        const bool right = corner.find("right") != std::string::npos, top = corner.find("top") != std::string::npos;
         const double dy = s.spacing * look.legend / f.h, sw = s.symbol * look.px / f.w, gap = s.gap * look.px / f.w;
         const double ix = s.insetX * look.px / f.w, iy = s.insetY * look.px / f.h;
         size_t rows = 1;                                                                // #splitline{a}{b}: two
@@ -320,7 +355,10 @@ namespace Paint {
             const bool drawn = std::any_of(curves[c].y.begin(), curves[c].y.end(), [](double v) { return std::isfinite(v); });
             entries.push_back({drawn ? curves[c].label : curves[c].label + " (no entries)", colourIndex, false, drawn});
         }
-        legend(page.title, entries, look, ft, keep);
+        std::vector<const Series*> drawn;
+        if (data) drawn.push_back(&*data);
+        for (const Series& c : curves) drawn.push_back(&c);
+        legend(page.title, entries, look, ft, keep, placed(drawn, x, Range{y.lo, y.hi}, page.logx, page.logy, ft));
         top->RedrawAxis();
 
         if (bottom) {

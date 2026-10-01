@@ -292,3 +292,12 @@ def test_the_yoda_ratio_window_is_paint_s(yoda_backend, curves, expected):
     reference = [(0, 1, 1.0, 0.0), (1, 2, 1.0, 0.0), (5, 6, 1.0, 0.0)]
     window = yoda_backend.ratio_window(curves, reference, (0, 2), {"range": [0.5, 1.5], "limits": [0.0, 3.0]})
     assert window == pytest.approx(expected)
+
+
+def test_a_best_legend_lets_matplotlib_choose(yoda_backend, scratch):
+    """V49: mkhtml anchors the legend at a corner; "best" leaves the spot to matplotlib."""
+    script = scratch / "page.py"
+    script.write_text("ax.add_artist(ax.legend(legend_items,\n    loc='upper right',\n"
+                      "    bbox_to_anchor=(0.97, 0.97),markerfirst=False))\n", encoding="utf-8")
+    assert yoda_backend.best_legend(script) and "loc='best',markerfirst=False))" in script.read_text()
+    assert not yoda_backend.best_legend(script)                          # once only

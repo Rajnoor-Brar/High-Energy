@@ -746,7 +746,7 @@ again. A page's config holds only what the layers changed; `build/Paint.exe PAGE
 | `axes.titles_at_ends` | `true` | x title at the right end, y title at the top; `false` centres them |
 | `axes.title_offset` | `[1.0, 1.55]` | x, y: ROOT's title offsets |
 | `axes.label_offset` | `2.5` | points between an axis and its labels |
-| `legend.position` | `"top-right"` | `top-right`, `top-left`, `bottom-right`, `bottom-left`, or `[x, y]`: the legend's top-right corner in fractions of the frame (then right-aligned) |
+| `legend.position` | `"top-right"` | `top-right`, `top-left`, `bottom-right`, `bottom-left`, `best`, or `[x, y]`: the legend's top-right corner in fractions of the frame (then right-aligned). `best` (V49): Paint takes the corner with the fewest drawn points under the legend; yoda lets matplotlib choose (`loc='best'`). Both choose within the y range they draw, so give headroom with a numeric `y_gutter` (e.g. `0.5`, which on a log axis is half the decades shown) when the legend must not touch the curves |
 | `legend.inset` | `[5.0, 5.0]` | points from the frame's corner (x, y), for a named position |
 | `legend.spacing` | `1.2` | line pitch, × the legend text size |
 | `legend.symbol` | `16.0` | points: the width of the "+" beside an entry |

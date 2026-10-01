@@ -36,7 +36,8 @@ from runner.paths import build_root
 FORMATS = {"pdf": None, "png": None, "svg": "SVG", "eps": "EPS"}       # None: mkhtml writes it anyway
 LEGEND = {"top-right": {"LegendAlign": "r"}, "top-left": {"LegendAlign": "l", "LegendXPos": "0.05"},
           "bottom-right": {"LegendAlign": "r", "LegendYPos": "0.4"},
-          "bottom-left": {"LegendAlign": "l", "LegendXPos": "0.05", "LegendYPos": "0.4"}}
+          "bottom-left": {"LegendAlign": "l", "LegendXPos": "0.05", "LegendYPos": "0.4"},
+          "best": {"LegendAlign": "r"}}                # then matplotlib's loc='best' (best_legend)
 _MATH = {"bf": "mathbf", "it": "mathit", "LT": "<", "GT": ">"}
 HONOURED = {("legend", "position"), ("ratio", "divisions"), ("ratio", "range"), ("ratio", "limits")}             # style keys mkhtml can follow
 MARK = "# ratio ticks: ratio.divisions (utils/Env/yoda/backend.py)"
@@ -182,6 +183,18 @@ def _step(width: float) -> float:
     return next(m * power for m in (1, 2, 5, 10) if m * power >= width * (1 - 1e-9))
 
 
+def best_legend(script: Path) -> bool:
+    """legend.position = "best" (V49): mkhtml anchors its legend at a corner; matplotlib's own
+    loc='best' puts it where it covers the fewest drawn points. Rewrites the script; True when it
+    changed, and the script must run again."""
+    text = script.read_text(encoding="utf-8")
+    new = re.sub(r"loc='[a-z ]+',(\s*)bbox_to_anchor=\([^)]*\)", r"loc='best'", text)
+    if new == text:
+        return False
+    script.write_text(new, encoding="utf-8")
+    return True
+
+
 def ratio_ticks(script: Path, divisions: int) -> bool:
     """The ratio pad's y ticks as ROOT's `divisions` (n1 + 100·n2) says: at most n1 labelled
     divisions of the pad's range, each cut into n2 by minor ticks. Rewrites mkhtml's script; True
@@ -253,13 +266,17 @@ def draw(cells: dict, settings: dict, say) -> int:
         done = subprocess.run(argv, capture_output=True, text=True, env=env, cwd=work)
         (work / "mkhtml.log").write_text(" ".join(argv) + "\n" + done.stdout + done.stderr, encoding="utf-8")
         drawn = [p for p in pages if (outdir / _base(p.object).split("/")[1] / f"{p.object.rsplit('/', 1)[-1]}.pdf").exists()]
-        for page in [p for p in drawn if p.document["page"]["ratio"]]:
+        for page in list(drawn):
             script = outdir / _base(page.object).split("/")[1] / f"{page.object.rsplit('/', 1)[-1]}.py"
-            if script.is_file() and ratio_ticks(script, int(page.style["ratio"]["divisions"])):
+            if not script.is_file():
+                continue
+            ticks = page.document["page"]["ratio"] and ratio_ticks(script, int(page.style["ratio"]["divisions"]))
+            best = page.style["legend"]["position"] == "best" and best_legend(script)
+            if ticks or best:
                 again = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, cwd=script.parent)
                 if again.returncode != 0:
                     drawn.remove(page)
-                    say(f"plot: {script.name} with the ratio's ticks: {again.stderr.strip()[-200:]}")
+                    say(f"plot: {script.name} rewritten (ratio ticks, best legend): {again.stderr.strip()[-200:]}")
         if done.returncode != 0 or len(drawn) != len(pages):
             failed += len(pages) - len(drawn)
             say(f"plot: rivet-mkhtml for {cell or 'the page'}: {len(drawn)} of {len(pages)} drawn "

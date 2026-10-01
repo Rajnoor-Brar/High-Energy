@@ -40,7 +40,7 @@ from .sweep import axes, label_of, tag_of
 
 BACKENDS = ("root", "yoda")
 FORMATS = ("pdf", "png", "svg", "eps")
-LEGENDS = ("top-right", "top-left", "bottom-right", "bottom-left")
+LEGENDS = ("top-right", "top-left", "bottom-right", "bottom-left", "best")
 DATA_KEYS = ("file", "legend", "map")
 OBJECT_KEYS = ("title", "x_label", "y_label", "logx", "logy", "y_gutter", "x_gutter", "ratio", "style")
 OBJECT_TYPES = {"title": str, "x_label": str, "y_label": str, "logx": bool, "logy": bool, "ratio": bool}
