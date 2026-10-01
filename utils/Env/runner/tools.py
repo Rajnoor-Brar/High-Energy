@@ -301,10 +301,10 @@ def location(serial: int | None, name: str) -> str:
 
 
 def run_dir(run, configuration) -> Path:
-    """<project>/<run name>/<NN_><cfg label> (V45): the configuration's folder is its `label` (its
-    table key when the label is empty or unset), after one serial, the configuration's if it has one,
-    else [run]'s."""
-    return Path(run.project) / run.name / location(configuration.serial, configuration.name)
+    """<project>/<name>/<NN_><label> (V45, V46): `name` is [run]'s, or the configuration's own; the
+    configuration's folder is its `label` (its table key when empty or unset), after one serial, the
+    configuration's if it has one, else [run]'s."""
+    return Path(run.project) / (configuration.run_name or run.name) / location(configuration.serial, configuration.name)
 
 
 def point_dirs(run, configuration, point) -> tuple[Path, Path]:

@@ -68,7 +68,7 @@ Every key that takes a path has **one** convention root. There is no search path
 anything else a tool writes is a product and lives in `results/`. So a HepMC file kept for another
 configuration goes in `[prelim] files`.
 
-**Where a point lives** (V45: `<run>` is the run's `name`; `<cfg>` is `NN_<label>` when there is a
+**Where a point lives** (V45, V46: `<run>` is `[run].name`, or the configuration's own `name`; `<cfg>` is `NN_<label>` when there is a
 serial, the configuration's if it sets one, else `[run]`'s, and `<label>` is the table key when the
 configuration's `label` is empty or unset):
 
@@ -227,7 +227,8 @@ prelim      = { fifo = ["events.hepmc"] }    # replaces [prelim] for this config
 | `static` | table | `{}` | merged over `[static]`, key by key (§7) |
 | `prelim` | table | `[prelim]` | **replaces** `[prelim]` whole for this configuration; `{}` means none |
 | `serial` | integer | `[run].serial` | overrides `[run].serial` for this configuration: its points go to `<P>/<run name>/NN_<label>/` (V45) |
-| `label` | string | the table key | the folder name, after the serial: `NN_<label>`; empty means the table key (V45; was `name`) |
+| `name` | string | `[run].name` | the run folder above this configuration's: `<P>/<name>/NN_<label>/` (V46) |
+| `label` | string | the table key | the configuration's folder, after the serial: `NN_<label>`; empty means the table key (V45) |
 | `title` | string | the table key | the header line of the run under `[run].sweep_runs`: `run 02 - <title> -` (§4.1) |
 | `swept` | boolean | true | `false` leaves this configuration out of `[run].sweep_runs` (§4.1); `hep run <config> <cfg>` still runs it |
 | `seed_type` | string | `[run].seed_type` | `"identity"`: from the generator's identity; `"manual"`: exactly the given seed; `"random"`: drawn when the point runs (02 §8) |
