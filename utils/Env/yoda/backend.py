@@ -39,7 +39,7 @@ LEGEND = {"top-right": {"LegendAlign": "r"}, "top-left": {"LegendAlign": "l", "L
           "bottom-left": {"LegendAlign": "l", "LegendXPos": "0.05", "LegendYPos": "0.4"},
           "best": {"LegendAlign": "r"}}                # then matplotlib's loc='best' (best_legend)
 _MATH = {"bf": "mathbf", "it": "mathit", "LT": "<", "GT": ">"}
-HONOURED = {("legend", "position"), ("ratio", "divisions"), ("ratio", "range"), ("ratio", "limits"), ("text", "legend")}             # style keys mkhtml can follow
+HONOURED = {("legend", "position"), ("ratio", "divisions"), ("ratio", "range"), ("ratio", "limits"), ("text", "legend"), ("text", "header")}             # style keys mkhtml can follow
 MARK = "# ratio ticks: ratio.divisions (utils/Env/yoda/backend.py)"
 
 
@@ -58,7 +58,7 @@ def validate(settings: dict, beside_root: bool = False) -> None:
                 if placed or (not beside_root and (table, key) not in HONOURED):
                     name = f"{table}.{key}" if key else table
                     raise HepError(f'{where} {name} cannot be honoured by backend = "yoda"', where=where,
-                                   hint=hint + " (only legend.position, text.legend and ratio.divisions, range and limits carry over)")
+                                   hint=hint + " (only legend.position, text.legend, text.header and ratio.divisions, range and limits carry over)")
 
 
 def latex(text: str) -> str:
@@ -156,7 +156,11 @@ def _plot_block(page, window: tuple[float, float] | None = None) -> str:
     keys = {"XMin": f"{xlo:.10g}", "XMax": f"{xhi:.10g}", "YMin": f"{ylo:.10g}", "YMax": f"{yhi:.10g}",
             "LogX": str(int(settings["logx"])), "LogY": str(int(settings["logy"])),
             "RatioPlot": str(int(settings["ratio"])), **LEGEND[page.style["legend"]["position"]],
-            "LegendFontSize": f"{page.style['text']['legend']:g}"}         # entries and title, as Paint's text.legend
+            # mkhtml writes `plt.rcParams['legend.fontsize'] = <value>` into the page's script as given, so
+            # the title's size rides along: matplotlib sizes a legend title from legend.title_fontsize,
+            # else from font.size, never from the entries' size (V50)
+            "LegendFontSize": f"{page.style['text']['legend']:g}; "
+                              f"plt.rcParams['legend.title_fontsize'] = {page.style['text']['header']:g}"}
     if window and settings["ratio"]:
         top = window[1] - 1e-4 * (window[1] - window[0])     # as mkhtml's 1.4999: no tick label at the pad's top
         keys["RatioPlotYMin"], keys["RatioPlotYMax"] = f"{window[0]:.6g}", f"{top:.6g}"

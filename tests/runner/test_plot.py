@@ -301,3 +301,14 @@ def test_a_best_legend_lets_matplotlib_choose(yoda_backend, scratch):
                       "    bbox_to_anchor=(0.97, 0.97),markerfirst=False))\n", encoding="utf-8")
     assert yoda_backend.best_legend(script) and "loc='best',markerfirst=False))" in script.read_text()
     assert not yoda_backend.best_legend(script)                          # once only
+
+
+def test_yoda_sizes_the_legend_title_by_text_header(yoda_backend):
+    """V50: matplotlib sizes a legend title from legend.title_fontsize (else font.size), not from the
+    entries; the backend sets both, from text.legend and text.header."""
+    from types import SimpleNamespace
+    page = SimpleNamespace(document={"page": {"logx": False, "logy": False, "ratio": False}}, overrides={},
+                           ranges={"x": (0, 1), "y": (0, 1)}, object="/photo_eic/d01-x01-y01",
+                           style={"legend": {"position": "top-right"}, "text": {"legend": 7.0, "header": 8.5}})
+    block = yoda_backend._plot_block(page)
+    assert "LegendFontSize=7; plt.rcParams['legend.title_fontsize'] = 8.5" in block
