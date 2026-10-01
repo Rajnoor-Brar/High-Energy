@@ -62,9 +62,20 @@ def test_keys_no_backend_honours_are_errors(scratch, table, message):
     (r"$Q^2 \le 1$ GeV$^2$", "#it{Q}^{2} #leq 1 GeV^{2}"),
     (r"$m(p\pi^-)$ [GeV]", "#it{m}(#it{p}#pi^{-}) [GeV]"),
     ("plain text", "plain text"),
+    (r"$Q^2<1\ GeV^2 \newline -3.5 < \eta < 3.5$",                         # V47: math open across the break
+     "#splitline{#it{Q}^{2}<1 #it{GeV}^{2}}{-3.5 < #eta < 3.5}"),
+    (r"$Q^2 < 1$ GeV$^2$\newline$-3.5 < \eta < 3.5$", "#splitline{#it{Q}^{2} < 1 GeV^{2}}{-3.5 < #eta < 3.5}"),
+    (r"a \\ b \\ c", "#splitline{a}{#splitline{b}{c}}"),                    # LaTeX's \\, three lines
+    (r"$\pT$ [\GeV], $\sqrt{s} = 13\,\TeV$", "{#it{p}_{T}} [GeV], #sqrt{#it{s}} = 13 TeV"),   # YODA's macros
 ])
 def test_latex_becomes_tlatex(latex, root):
     assert plot.tlatex(latex) == root
+
+
+def test_a_title_s_lines_each_close_their_math():
+    assert plot.lines_of(r"$a \newline b$") == ["$a$", "$b$"]
+    assert plot.lines_of(r"$a$ x\newline$b$") == ["$a$ x", "$b$"]
+    assert plot.lines_of("no break") == ["no break"]
 
 
 def test_root_names_follow_app_yd2rt():

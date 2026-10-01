@@ -263,8 +263,35 @@ def for_root(document: dict) -> dict:
     return out
 
 
+#: YODA's own text macros (yoda/plotting/mlp_preprocessor.py), so a .plot file reads the same in both backends
+_MACROS = {"GeV": r"\mathrm{GeV}", "TeV": r"\mathrm{TeV}", "MeV": r"\mathrm{MeV}", "pt": r"{p_\mathrm{T}}",
+           "pT": r"{p_\mathrm{T}}", "dfrac": r"\frac", "tfrac": r"\frac"}
+
+
+def lines_of(text: str) -> list[str]:
+    """A label's lines, split at `\\newline` or `\\\\`, each with its math closed: a `$…$` left open
+    across a break is closed before it and reopened after (`$a \\newline b$` → `$a$`, `$b$`)."""
+    lines, open_math = [], False
+    for line in re.split(r"\\newline(?![A-Za-z])|\\\\", text):
+        line = ("$" if open_math else "") + line.strip()
+        open_math = line.count("$") % 2 == 1
+        lines.append(line + ("$" if open_math else ""))
+    return lines
+
+
 def tlatex(text: str) -> str:
-    """`$\\mathrm{d}\\sigma/\\mathrm{d}E_T$ [pb/GeV]` → `d#sigma/d#it{E}_{#it{T}} [pb/GeV]`."""
+    """`$\\mathrm{d}\\sigma/\\mathrm{d}E_T$ [pb/GeV]` → `d#sigma/d#it{E}_{#it{T}} [pb/GeV]`. YODA's macros
+    (`\\GeV`, `\\pT`, …) are understood, and `\\newline` (or `\\\\`) makes ROOT's `#splitline{…}{…}`; a math span
+    left open across the break is closed before it and reopened after (V47)."""
+    text = re.sub(r"\\(" + "|".join(_MACROS) + r")(?![A-Za-z])", lambda m: _MACROS[m[1]], text)
+    lines = [_tlatex_line(line) for line in lines_of(text)]
+    out = lines[-1]
+    for line in reversed(lines[:-1]):
+        out = f"#splitline{{{line}}}{{{out}}}"
+    return out
+
+
+def _tlatex_line(text: str) -> str:
     out = "".join(_italic(part) if i % 2 else part for i, part in enumerate(text.split("$")))
     out = re.sub(r"\\[,;:! ]", " ", out)
     upright = r"\\(?:mathrm|text|textrm|mathit|operatorname|mbox)\s*\{([^{}]*)\}"

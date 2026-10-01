@@ -126,6 +126,12 @@ def _plot_block(page) -> str:
     for key, native in (("title", "Title"), ("x_label", "XLabel"), ("y_label", "YLabel")):
         if key in page.overrides:
             keys[native] = latex(settings[key])
+    from runner.plot import labels_of, lines_of
+    for native, text in labels_of(page.object).items():  # mkhtml draws each line apart: close math per line (V47)
+        if native in ("Title", "LegendTitle", "XLabel", "YLabel") and native not in keys:
+            fixed = "\\newline".join(lines_of(text))
+            if fixed != text:
+                keys[native] = fixed
     if settings["logy"] and not ylo > 0:
         del keys["YMin"]
     for axis in ("x", "y"):                  # no gutter: the range is mkhtml's to choose, as it is ROOT's for Paint

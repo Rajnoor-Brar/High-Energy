@@ -556,8 +556,11 @@ values = [1001, 2001, 3001]
 
 Pages are drawn after the points, from the complete ones, one per `plot_points` cell and histogram,
 to `results/…/plots/root/[<cell>/]<object>.<fmt>`. Titles and axis labels come from the analysis's
-Rivet `.plot` file, converted to TLatex (math letters italic). `hep run … --only plot` or `hep plot
-CONFIG` redraws them without running anything.
+Rivet `.plot` file, converted to TLatex (math letters italic). YODA's macros (`\GeV`, `\TeV`, `\pT`)
+work in both backends, and `\newline` (or `\\`) breaks a title into lines. A `$…$` left open
+across the break is closed and reopened for you, so `LegendTitle=$Q^2<1\ GeV^2 \newline -3.5 < \eta
+< 3.5$` draws two lines in both. `hep run … --only plot` or `hep plot CONFIG` redraws them without
+running anything.
 
 ```toml
 [plot]

@@ -227,6 +227,7 @@ execution and after it, most on the user's instruction.
 | **V44** | **`[plot].use_data = false`** turns the reference data off while `[plot.data]` stays in the file (still checked); with `ratio = true` each page's ratio is over its first curve, the first value of its curve axis (Paint's and mkhtml's own rule without data). | delete the table to drop the data | user, 2026-10-01 |
 | **V45** | **`<P>/<run name>/NN_<cfg label>/<point>`** (supersedes V43's `NN_<run>/<cfg>`): the serial (the configuration's, else `[run]`'s) goes before the configuration's folder, named by its new `label` (the table key when empty or unset). A location, never an identity. | V43 | user, 2026-10-01 |
 | **V46** | **`[run.<cfg>].name` overrides `[run].name`** for that configuration's run folder: `<P>/<name>/NN_<label>/`. | — | user, 2026-10-01 |
+| **V47** | **`.plot` titles with line breaks and YODA's macros, in both backends.** `plot.lines_of` splits at `\newline` or `\\` and closes a `$…$` left open across the break; `tlatex` joins the lines with `#splitline{…}{…}` and expands YODA's own macros (`\GeV`, `\TeV`, `\MeV`, `\pT`, `\pt`, `\dfrac`); the yoda backend writes a title that needed closing into its pages.plot (mkhtml typesets each line apart, so `$a \newline b$` failed with "Extra }, or forgotten $"). Paint sizes the legend header by its lines. | the user's d15–d17 LegendTitle: 3 of 17 yoda pages not drawn, ROOT showing `#newline` | user, 2026-10-01 |
 
 **v1 decisions these overturn:**
 

@@ -221,7 +221,9 @@ namespace Paint {
         const bool right = s.corner.find("right") != std::string::npos, top = s.corner.find("top") != std::string::npos;
         const double dy = s.spacing * look.legend / f.h, sw = s.symbol * look.px / f.w, gap = s.gap * look.px / f.w;
         const double ix = s.insetX * look.px / f.w, iy = s.insetY * look.px / f.h;
-        const double first = title.empty() ? 0.0 : s.spacing * look.header / f.h;       // the header's pitch
+        size_t rows = 1;                                                                // #splitline{a}{b}: two
+        for (auto at = title.find("#splitline"); at != std::string::npos; at = title.find("#splitline", at + 1)) ++rows;
+        const double first = title.empty() ? 0.0 : rows * s.spacing * look.header / f.h;   // the header's pitch
         const double height = first + static_cast<double>(entries.size()) * dy;
         double x0, yTop;                                                                // the outer edge, the top
         if (s.placed) {
