@@ -275,3 +275,20 @@ def test_an_object_value_of_the_wrong_kind_is_refused(scratch):
 
 def test_the_yoda_backend_has_nothing_to_honour_in_a_default(scratch):
     validated(scratch, backend="yoda", style={"legend": {"position": "default"}, "page": {"dpi": "default"}})
+
+
+def test_macros_are_expanded_by_us_in_and_out_of_math():
+    """V48: Rivet's own \\GeV needs \\xspace, which matplotlib's LaTeX does not define."""
+    assert plot.macros(r"$Q^2<1\ \GeV^2$ in \GeV, \pT") == r"$Q^2<1\ \mathrm{GeV}^2$ in GeV, $p_\mathrm{T}$"
+
+
+@pytest.mark.parametrize("curves, expected", [
+    ([[(0, 1, 1.0, 0.0), (1, 2, 1.0, 0.0)]], (0.5, 1.5)),                   # all near 1: the range
+    ([[(0, 1, 2.0, 0.1), (1, 2, 1.0, 0.0)]], (0.5, 1.1 * 2.1)),             # widened, with Paint's 10 %
+    ([[(0, 1, 8.0, 0.0)]], (0.5, 3.0)),                                     # never past the limits
+    ([[(5, 6, 9.0, 0.0)]], (0.5, 1.5)),                                     # a bin outside x is not looked at
+])
+def test_the_yoda_ratio_window_is_paint_s(yoda_backend, curves, expected):
+    reference = [(0, 1, 1.0, 0.0), (1, 2, 1.0, 0.0), (5, 6, 1.0, 0.0)]
+    window = yoda_backend.ratio_window(curves, reference, (0, 2), {"range": [0.5, 1.5], "limits": [0.0, 3.0]})
+    assert window == pytest.approx(expected)

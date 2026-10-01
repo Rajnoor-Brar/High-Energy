@@ -38,7 +38,7 @@ LEGEND = {"top-right": {"LegendAlign": "r"}, "top-left": {"LegendAlign": "l", "L
           "bottom-right": {"LegendAlign": "r", "LegendYPos": "0.4"},
           "bottom-left": {"LegendAlign": "l", "LegendXPos": "0.05", "LegendYPos": "0.4"}}
 _MATH = {"bf": "mathbf", "it": "mathit", "LT": "<", "GT": ">"}
-HONOURED = {("legend", "position"), ("ratio", "divisions")}             # style keys mkhtml can follow
+HONOURED = {("legend", "position"), ("ratio", "divisions"), ("ratio", "range"), ("ratio", "limits")}             # style keys mkhtml can follow
 MARK = "# ratio ticks: ratio.divisions (utils/Env/yoda/backend.py)"
 
 
@@ -57,7 +57,7 @@ def validate(settings: dict, beside_root: bool = False) -> None:
                 if placed or (not beside_root and (table, key) not in HONOURED):
                     name = f"{table}.{key}" if key else table
                     raise HepError(f'{where} {name} cannot be honoured by backend = "yoda"', where=where,
-                                   hint=hint + " (only a legend.position corner and ratio.divisions carry over)")
+                                   hint=hint + " (only a legend.position corner and ratio.divisions, range and limits carry over)")
 
 
 def latex(text: str) -> str:
@@ -117,19 +117,54 @@ def _reference(yoda, page):
     return out
 
 
-def _plot_block(page) -> str:
+def _bins(obj) -> list[tuple[float, float, float, float]]:
+    """(x low, x high, value, error) per bin of a histogram (as drawn: per unit x) or an estimate."""
+    estimate = obj.mkEstimate() if hasattr(obj, "mkEstimate") else obj
+    out = []
+    for i in range(1, estimate.numBins() + 1):
+        b = estimate.bin(i)
+        try:
+            error = b.totalErrAvg()
+        except Exception:                        # an estimate with no error source
+            error = 0.0
+        out.append((b.xMin(), b.xMax(), b.val(), error))
+    return out
+
+
+def ratio_window(curves: list, reference, x: tuple, ratio_style: dict) -> tuple[float, float]:
+    """Paint's rule for the ratio pad (Draw.hh ratioRange), so both backends show the same window:
+    at least `range`, widened to every ratio drawn (0.9 × (r − err), 1.1 × (r + err)) on bins in the
+    x range, never past `limits` (V48). `curves` and `reference` are lists of `_bins`."""
+    lo, hi = ratio_style["range"]
+    by_edges = {(round(a, 9), round(b, 9)): (v, e) for a, b, v, e in reference}
+    for curve in curves:
+        for a, b, value, error in curve:
+            ref = by_edges.get((round(a, 9), round(b, 9)))
+            if ref is None or not ref[0] or not (b > x[0] and a < x[1]):
+                continue
+            r, err = value / ref[0], error / abs(ref[0])
+            if math.isfinite(r):
+                lo, hi = min(lo, 0.9 * (r - err)), max(hi, 1.1 * (r + err))
+    limits = ratio_style["limits"]
+    return max(lo, limits[0]), min(hi, limits[1])
+
+
+def _plot_block(page, window: tuple[float, float] | None = None) -> str:
     settings = page.document["page"]
     (xlo, xhi), (ylo, yhi) = page.ranges["x"], page.ranges["y"]
     keys = {"XMin": f"{xlo:.10g}", "XMax": f"{xhi:.10g}", "YMin": f"{ylo:.10g}", "YMax": f"{yhi:.10g}",
             "LogX": str(int(settings["logx"])), "LogY": str(int(settings["logy"])),
             "RatioPlot": str(int(settings["ratio"])), **LEGEND[page.style["legend"]["position"]]}
+    if window and settings["ratio"]:
+        top = window[1] - 1e-4 * (window[1] - window[0])     # as mkhtml's 1.4999: no tick label at the pad's top
+        keys["RatioPlotYMin"], keys["RatioPlotYMax"] = f"{window[0]:.6g}", f"{top:.6g}"
     for key, native in (("title", "Title"), ("x_label", "XLabel"), ("y_label", "YLabel")):
         if key in page.overrides:
             keys[native] = latex(settings[key])
-    from runner.plot import labels_of, lines_of
+    from runner.plot import labels_of, lines_of, macros
     for native, text in labels_of(page.object).items():  # mkhtml draws each line apart: close math per line (V47)
-        if native in ("Title", "LegendTitle", "XLabel", "YLabel") and native not in keys:
-            fixed = "\\newline".join(lines_of(text))
+        if native in ("Title", "LegendTitle", "XLabel", "YLabel") and native not in keys:   # and our macros (V48)
+            fixed = "\\newline".join(lines_of(macros(text)))
             if fixed != text:
                 keys[native] = fixed
     if settings["logy"] and not ylo > 0:
@@ -195,7 +230,23 @@ def draw(cells: dict, settings: dict, say) -> int:
         if references:
             yoda.write(references, str(work / "reference.yoda"))
             argv += [str(work / "reference.yoda"), "--reflabel", latex(settings.get("data", {}).get("legend", "Data"))]
-        (work / "pages.plot").write_text("\n".join(_plot_block(p) for p in pages), encoding="utf-8")
+        voided, cache = dict(zip(sources, curves)), {}
+
+        def objects(path):
+            if path not in cache:
+                cache[path] = yoda.read(str(path))
+            return cache[path]
+
+        windows = {}
+        for page in [p for p in pages if p.document["page"]["ratio"]]:
+            drawn_curves = [_bins(objects(voided[s])[v]) for s, v in zip(page.sources, page.variants)]
+            if not drawn_curves:
+                continue
+            with_data = page.data and page.ranges.get("data_bins", 0) > 0
+            reference = _bins(_reference(yoda, page)) if with_data else drawn_curves[0]
+            windows[page.name] = ratio_window(drawn_curves + ([reference] if with_data else []), reference,
+                                              page.ranges["x"], page.style["ratio"])
+        (work / "pages.plot").write_text("\n".join(_plot_block(p, windows.get(p.name)) for p in pages), encoding="utf-8")
 
         env = dict(os.environ, RIVET_ANALYSIS_PATH=str(build_root() / "Rivet"),
                    RIVET_DATA_PATH=os.pathsep.join(filter(None, [str(build_root() / "Rivet"), os.environ.get("RIVET_DATA_PATH")])))

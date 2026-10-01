@@ -268,6 +268,18 @@ _MACROS = {"GeV": r"\mathrm{GeV}", "TeV": r"\mathrm{TeV}", "MeV": r"\mathrm{MeV}
            "pT": r"{p_\mathrm{T}}", "dfrac": r"\frac", "tfrac": r"\frac"}
 
 
+_PLAIN = {"GeV": "GeV", "TeV": "TeV", "MeV": "MeV", "pt": "$p_\\mathrm{T}$", "pT": "$p_\\mathrm{T}$",
+          "dfrac": "\\frac", "tfrac": "\\frac"}
+
+
+def macros(text: str) -> str:
+    """YODA's macros expanded by us (V48): `\\mathrm{GeV}` inside `$…$`, `GeV` outside. Rivet's own
+    expansion of `\\GeV` uses `\\xspace`, which LaTeX-typeset matplotlib text does not define."""
+    pattern = re.compile(r"\\(" + "|".join(_MACROS) + r")(?![A-Za-z])")
+    parts = text.split("$")
+    return "$".join(pattern.sub(lambda m: (_MACROS if i % 2 else _PLAIN)[m[1]], part) for i, part in enumerate(parts))
+
+
 def lines_of(text: str) -> list[str]:
     """A label's lines, split at `\\newline` or `\\\\`, each with its math closed: a `$…$` left open
     across a break is closed before it and reopened after (`$a \\newline b$` → `$a$`, `$b$`)."""
@@ -283,8 +295,7 @@ def tlatex(text: str) -> str:
     """`$\\mathrm{d}\\sigma/\\mathrm{d}E_T$ [pb/GeV]` → `d#sigma/d#it{E}_{#it{T}} [pb/GeV]`. YODA's macros
     (`\\GeV`, `\\pT`, …) are understood, and `\\newline` (or `\\\\`) makes ROOT's `#splitline{…}{…}`; a math span
     left open across the break is closed before it and reopened after (V47)."""
-    text = re.sub(r"\\(" + "|".join(_MACROS) + r")(?![A-Za-z])", lambda m: _MACROS[m[1]], text)
-    lines = [_tlatex_line(line) for line in lines_of(text)]
+    lines = [_tlatex_line(line) for line in lines_of(macros(text))]
     out = lines[-1]
     for line in reversed(lines[:-1]):
         out = f"#splitline{{{line}}}{{{out}}}"
