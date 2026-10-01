@@ -68,7 +68,9 @@ Every key that takes a path has **one** convention root. There is no search path
 anything else a tool writes is a product and lives in `results/`. So a HepMC file kept for another
 configuration goes in `[prelim] files`.
 
-**Where a point lives** (`<run>` and `<cfg>` get `NN_` when they have a `serial`):
+**Where a point lives** (V45, V46: `<run>` is `[run].name`, or the configuration's own `name`; `<cfg>` is `NN_<label>` when there is a
+serial, the configuration's if it sets one, else `[run]`'s, and `<label>` is the table key when the
+configuration's `label` is empty or unset):
 
 ```
 output/<P>/<run>/<cfg>/<point>/     cards/  config/  logs/  FIFOs and [prelim] files  provenance.json  .complete
@@ -134,11 +136,11 @@ always targeted explicitly (§8.1).
 
 ```toml
 [run]
-serial        = 3                   # optional: the run directory becomes 03_eic
+serial        = 3                   # optional: every configuration's folder becomes 03_<label> (a configuration may override it)
 name          = "eic"
 project       = "PhotoProduction"
 configuration = "pdf"               # the default; `hep run <config> <configuration>` picks another
-sweep         = false               # true: `hep run <config>` runs every configuration, in turn (§4.1)
+sweep_runs    = false               # true: `hep run <config>` runs every configuration, in turn (§4.1)
 event_count   = 1_000_000           # defaults for every configuration
 threads       = 20
 description   = "EIC photoproduction studies"
@@ -148,11 +150,11 @@ description   = "EIC photoproduction studies"
 |---|---|---|---|
 | `name` | string | **required** | the run's directory name |
 | `project` | string | **required** | the subfolder of `configs/`, `modules/`, `output/`, `results/`; must equal the folder the file is in, when it is under `configs/` |
-| `configuration` | string | **required** unless `sweep` | must name a `[run.<cfg>]` table (C2). Under `sweep` it may be left out; `hep run <config>` then ignores it |
-| `sweep` | boolean | false | `hep run <config>` runs every configuration not `swept = false`, one after another (§4.1) |
+| `configuration` | string | **required** unless `sweep_runs` | must name a `[run.<cfg>]` table (C2). Under `sweep_runs` it may be left out; `hep run <config>` then ignores it |
+| `sweep_runs` | boolean | false | `hep run <config>` runs every configuration not `swept = false`, one after another (§4.1) |
 | `seed_type` | string | `"identity"` | default for configurations: how a point's seeds are chosen, `"identity"`, `"manual"` or `"random"` (02 §8) |
 | `manual_seed` | integer | none | default for configurations: under `seed_type = "manual"`, every point's seed (1 to 899,999,999); ignored otherwise (`--plan` says so) |
-| `serial` | integer | none | a directory prefix `NN_`: **location, never identity** (V12). Changing it starts a fresh location. |
+| `serial` | integer | none | the prefix `NN_` of each configuration's folder, `<name>/NN_<label>`: **location, never identity** (V12). A configuration's `serial` overrides it (V45). Changing it starts a fresh location. |
 | `event_count` | integer | none | default for configurations; one of the two must set it |
 | `threads` | integer | 1 | default for configurations. `0` means every core, **resolved to a number at plan time** |
 | `parallelism` | integer | 1 | default for configurations: how many points run at once (V36). `threads` stays each point's; never part of an identity or a seed, so changing it reruns nothing |
@@ -160,9 +162,9 @@ description   = "EIC photoproduction studies"
 
 Every other table inside `[run]` is a configuration (§5). Any other key is an error (C1).
 
-### 4.1 `sweep`: every configuration, one run after another
+### 4.1 `sweep_runs`: every configuration, one run after another
 
-With `sweep = true`, `hep run <config>` runs each configuration not marked `swept = false`, in the
+With `sweep_runs = true`, `hep run <config>` runs each configuration not marked `swept = false`, in the
 order of the file. Each is **a run of its own**: exactly what `hep run <config> <cfg>` does (its own
 title, blocks, verdict, journal, `points.json` and plots, in its own `<run>/<cfg>/` folder),
 after one header line of its `title`:
@@ -198,8 +200,8 @@ eic · energies: 4 point(s), 1000000 events, 12 threads
 ```toml
 [run.energy_pdf]
 serial      = 3
-name        = "energy_pdf"                   # directory name; defaults to the table key
-title       = "Beams x PDFs"                 # the header line under [run].sweep (§4.1)
+label       = "energy_pdf"                   # folder name (after the serial); defaults to the table key
+title       = "Beams x PDFs"                 # the header line under [run].sweep_runs (§4.1)
 description = "Beams x PDF grid: one page per energy, PDF curves on each"
 event_count = 500_000                        # overrides [run]
 threads     = 20
@@ -224,10 +226,11 @@ prelim      = { fifo = ["events.hepmc"] }    # replaces [prelim] for this config
 | `pre`, `post` | array | `[]` | the form of `tools` (§5.4) |
 | `static` | table | `{}` | merged over `[static]`, key by key (§7) |
 | `prelim` | table | `[prelim]` | **replaces** `[prelim]` whole for this configuration; `{}` means none |
-| `serial` | integer | none | directory prefix `NN_` |
-| `name` | string | the table key | the directory name |
-| `title` | string | the table key | the header line of the run under `[run].sweep`: `run 02 - <title> -` (§4.1) |
-| `swept` | boolean | true | `false` leaves this configuration out of `[run].sweep` (§4.1); `hep run <config> <cfg>` still runs it |
+| `serial` | integer | `[run].serial` | overrides `[run].serial` for this configuration: its points go to `<P>/<run name>/NN_<label>/` (V45) |
+| `name` | string | `[run].name` | the run folder above this configuration's: `<P>/<name>/NN_<label>/` (V46) |
+| `label` | string | the table key | the configuration's folder, after the serial: `NN_<label>`; empty means the table key (V45) |
+| `title` | string | the table key | the header line of the run under `[run].sweep_runs`: `run 02 - <title> -` (§4.1) |
+| `swept` | boolean | true | `false` leaves this configuration out of `[run].sweep_runs` (§4.1); `hep run <config> <cfg>` still runs it |
 | `seed_type` | string | `[run].seed_type` | `"identity"`: from the generator's identity; `"manual"`: exactly the given seed; `"random"`: drawn when the point runs (02 §8) |
 | `manual_seed` | integer | `[run].manual_seed` | the seed of every point under `"manual"`; a quantity targeting `<tool>/seed` gives a point its own |
 | `description` | string | "" | |
@@ -239,6 +242,7 @@ prelim      = { fifo = ["events.hepmc"] }    # replaces [prelim] for this config
   so they need equal value counts (C3). The group is one axis of the grid.
 - Order decides the point names (tags joined in `sweeps` order) and the running order.
 - Every name must be a declared quantity; none may appear twice (C3).
+- A quantity's `exclude = [i, …]` (1-based) leaves those values out of every sweep of it (§8).
 
 ```toml
 sweeps = ["energies", ["pdf", "alphas"], "mpi"]    # 4 × 3 × 2 = 24 points: pdf and alphas zipped
@@ -380,6 +384,7 @@ values = [0.05, 0.10, 0.15, 0.25]
 | `values` | array | **required**, non-empty | scalars or arrays (an energy pair) |
 | `tags` | array of strings | derived | one per value. The default is the value with anything but `A–Za–z0–9.+-` replaced by `-`. Tags name point directories: keep them short and unique. |
 | `labels` | array of strings | the tags | legend text, in ROOT **TLatex** (`e^{-}`, `#sqrt{s}`; V11). Only `_{…}`, `^{…}` and `#<name>` are markup: a bare `_` or `^` is the character (`"PDF4LHC21_40"`), in ROOT and yoda alike (V41). `\_`, `\^` and `\#` also give the character, even before a brace; in TOML write them in single quotes, `'PDF4LHC21\_40'`, since in `"…"` a backslash starts a TOML escape |
+| `exclude` | array of integers | `[]` | values a sweep leaves out, by their **1-based** place (as `static = "#2"` and `--points 2` count): `exclude = [2]` sweeps the others. The remaining points keep their names and identities and are numbered 1… over what is swept. In an entangled group, a value any member excludes leaves the group. `static` may still pick an excluded value. Refused: a place outside 1…len(values), or none left (V42) |
 | `key` | string, or table `{<tag or tool type> = "<key>"}` | none | the native key. A string needs a `target`. A table entry for a tool tag wins over one for its type. |
 | `target` | string or array | none | restricts the consumers (§8.1) |
 | `format` | string | "" | a Python format for the value: `"{}*GeV"` |
@@ -626,6 +631,7 @@ style.legend.position = "bottom-left"
 | `formats` | array | `["pdf"]` | `pdf`, `png`, `svg`, `eps`. mkhtml writes pdf and png always. |
 | `objects` | array of globs | every 1D object | matched against the option-free YODA path (`/photo_eic/d01-x01-y01`) or any variant's path. No object matching is an error. |
 | `ratio` | bool | false | a ratio pad: each curve over the data, or over the first curve when there are no data |
+| `use_data` | bool | true | `false`: the `[plot.data]` table stays in the file but is not drawn, and a `ratio` divides each curve by the page's first curve, the first value of its curve axis (V44) |
 | `y_gutter` | number ≥ 0 or `"default"` | `0.5` | the top of the y axis at (1 + g) × the largest drawn value (on a log axis, g of the decades shown). `0` or `"default"`: no gutter, the tool's own range (V29) |
 | `x_gutter` | number ≥ 0 or `"default"` | `"default"` | widens x by g of its span, symmetrically (in decades on a log axis). `0` or `"default"`: the range the bins give |
 | `logx`, `logy` | bool | the `.plot` file's `LogX`/`LogY` | |
@@ -726,8 +732,8 @@ again. A page's config holds only what the layers changed; `build/Paint.exe PAGE
 | `page.margins.left`, `.right`, `.top`, `.bottom` | `0.16`, `0.032`, `0.066`, `0.11` | fractions of the page around the axes |
 | `text.title` | `10.0` | axis titles |
 | `text.labels` | `8.0` | tick labels |
-| `text.legend` | `10.0` | legend entries |
-| `text.header` | `10.0` | the legend's first line: the page title |
+| `text.legend` | `9.0` | legend entries, in points; the yoda backend follows it (`LegendFontSize`) |
+| `text.header` | `9.0` | the legend's first line: the page title; the yoda backend follows it (`legend.title_fontsize`, V50) |
 | `curves.palette` | `["#EE3311", "#3366FF", "#109618", "#FF9900", "#990099"]` | curve colours in order: `#rrggbb`, ROOT names with offsets (`kBlue+1`) or numbers |
 | `curves.width` | `1.0` | points: steps and error bars |
 | `curves.errors` | `"bars"` | `bars` (at the bin centres), `band`, `none` |
@@ -740,7 +746,7 @@ again. A page's config holds only what the layers changed; `build/Paint.exe PAGE
 | `axes.titles_at_ends` | `true` | x title at the right end, y title at the top; `false` centres them |
 | `axes.title_offset` | `[1.0, 1.55]` | x, y: ROOT's title offsets |
 | `axes.label_offset` | `2.5` | points between an axis and its labels |
-| `legend.position` | `"top-right"` | `top-right`, `top-left`, `bottom-right`, `bottom-left`, or `[x, y]`: the legend's top-right corner in fractions of the frame (then right-aligned) |
+| `legend.position` | `"top-right"` | `top-right`, `top-left`, `bottom-right`, `bottom-left`, `best`, or `[x, y]`: the legend's top-right corner in fractions of the frame (then right-aligned). `best` (V49): Paint takes the corner with the fewest drawn points under the legend; yoda lets matplotlib choose (`loc='best'`). Both choose within the y range they draw, so give headroom with a numeric `y_gutter` (e.g. `0.5`, which on a log axis is half the decades shown) when the legend must not touch the curves |
 | `legend.inset` | `[5.0, 5.0]` | points from the frame's corner (x, y), for a named position |
 | `legend.spacing` | `1.2` | line pitch, × the legend text size |
 | `legend.symbol` | `16.0` | points: the width of the "+" beside an entry |
@@ -751,7 +757,7 @@ again. A page's config holds only what the layers changed; `build/Paint.exe PAGE
 | `ratio.divisions` | `512` | the ratio pad's y ticks, ROOT's `n1 + 100·n2`: at most n1 labelled divisions (0.1 apart on the usual ~0.4–1.5), each cut into n2 by minor ticks; `508` gives 0.2. The yoda backend follows it too |
 | `ratio.decimals` | `true` | labels `1.0, 1.2` rather than `1, 1.2` |
 
-**The yoda backend** honours a `legend.position` corner and `ratio.divisions`. Alone, it refuses
+**The yoda backend** honours a `legend.position` corner (or `best`), `text.legend`, `text.header`, `ratio.divisions`, and `ratio.range` with `ratio.limits` (V48: it works out each page's window by Paint's rule, so both backends show the same window). Alone, it refuses
 `root_style` and every other style key; beside the root backend (`"both"`) those are Paint's to honour and allowed,
 but a legend at `[x, y]` is still refused, because the two page sets would disagree about it.
 
@@ -797,7 +803,7 @@ hep run CONFIG [CONFIGURATION] [--plan] [--points SEL] [--set KEY=VALUE]… [--r
 | Option | Does |
 |---|---|
 | `CONFIG` | `configs/<CONFIG>[.toml]`, or `./path` from the repository root |
-| `CONFIGURATION` | overrides `[run].configuration`; under `[run].sweep`, runs only this one (§4.1) |
+| `CONFIGURATION` | overrides `[run].configuration`; under `[run].sweep_runs`, runs only this one (§4.1) |
 | `--plan` | print everything and run nothing: per point, the values and their consumers, the groups and each tool's argv, what each reads and writes, the prepare steps and whether they are cached, the output and results directories and whether the point is complete; the pre and post stages; the page count |
 | `--points SEL` | run a subset: comma-separated point names, single tags, 1-based indices, or `quantity=tag`. The others keep their state (and `points.json` lists all). Refused under a sweep of several runs: name the configuration. |
 | `--set KEY=VALUE` | override one value of the TOML for this invocation, by dotted key, before anything is checked (repeatable). The value is read as TOML, else as a string: `--set run.event_count=50000`, `--set run.pdf.threads=8`, `--set static.energies=18x275`, `--set 'plot.formats=["png"]'`. |
@@ -810,7 +816,7 @@ The order: pre stage → every point not complete (in point order) → `points.j
 plot stage. A failed point does not stop the others. **Exit codes:** 0 everything done or skipped;
 1 a point, the post stage or a page failed; 2 a config error, before anything ran; 6 stopped by the
 user (Ctrl-C: SIGINT, then SIGTERM, then SIGKILL to the running tools; a second Ctrl-C is the
-default behaviour). Under `[run].sweep` (§4.1), each run has these codes; the command exits 6 if
+default behaviour). Under `[run].sweep_runs` (§4.1), each run has these codes; the command exits 6 if
 one was stopped, else 1 if any failed, else 0.
 
 ### `hep plot`
@@ -820,7 +826,7 @@ hep plot CONFIG [CONFIGURATION] [--set KEY=VALUE]…
 hep plot FILE… [-o DIR] [--labels A,B,…] [--objects GLOB…] [--formats pdf,png] [--ratio] [--style FILE]
 ```
 
-With a config: its pages, as after a run (`--only plot`); under `[run].sweep`, every swept
+With a config: its pages, as after a run (`--only plot`); under `[run].sweep_runs`, every swept
 configuration's, each under its `run NN - <title> -` line. With files (every target ends `.yoda`,
 `.yoda.gz` or `.root`): one page per object any of them holds, one curve per file, or one per point
 of a merged sweep file (labelled from the `points.json` inside it). `-o` defaults to
@@ -834,7 +840,7 @@ hep watch [CONFIG [CONFIGURATION]] [--plain]
 ```
 
 Follows a job from another terminal through its journal, `output/…/<cfg>/status.jsonl`; with no
-config, the most recently written journal; under `[run].sweep` with no configuration, the swept
+config, the most recently written journal; under `[run].sweep_runs` with no configuration, the swept
 configuration's journal written to last. It prints the same blocks as the run, and leaves when the
 run finishes. A run of a sweep names the next run's journal when it finishes, so the watch follows
 on to it, and leaves after the last or on a stop.

@@ -140,7 +140,7 @@ and what it reads and writes**, which its tool folder declares.
 
 ## 5. A run, from command to pages
 
-`runner.cli.run_one` does this for one run, in order. Under `[run].sweep` (V38, 04 §4.1)
+`runner.cli.run_one` does this for one run, in order. Under `[run].sweep_runs` (V38, 04 §4.1)
 `cmd_run` first plans every swept configuration (a config error anywhere exits 2 with nothing run),
 then does all of it for each in turn, after a `run NN - <title> -` line: each is a run of its own,
 planned again at its turn, and a stop starts no more.

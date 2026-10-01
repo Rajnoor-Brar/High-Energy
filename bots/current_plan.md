@@ -1,5 +1,11 @@
 # Current plan
 
+## `exclude` for quantities — **DONE 2026-10-01** (ordered by the user 2026-10-01)
+
+"quantities.<quantity>.exclude = [indices]; such values on indices are excluded when sweeping."
+Decided with the user: 1-based. V42: config.py `QUANTITY_KEYS["exclude"]`, `Quantity.exclude`
+(checked: an int in 1..len, not all); sweep.py `kept`. Tests in test_sweeps.py; 04 §5.1 and §8.
+
 ## Literal `_` in labels, and the TOML backslash error — **DONE 2026-09-30** (asked by the user 2026-09-30)
 
 "escape _ and other characters like \\_, toml error" (their label "PDF4LHC21\\_40\\_pdfas" in double

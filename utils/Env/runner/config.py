@@ -22,9 +22,9 @@ TOP_LEVEL = ("master", "run", "prelim", "static", "tools", "quantities", "plot")
 
 # key → accepted Python types. A tuple of types means any of them.
 RUN_KEYS = {"serial": int, "name": str, "project": str, "configuration": str, "event_count": int,
-            "threads": int, "parallelism": int, "description": str, "sweep": bool, "seed_type": str,
+            "threads": int, "parallelism": int, "description": str, "sweep_runs": bool, "seed_type": str,
             "manual_seed": int}
-CONFIGURATION_KEYS = {"serial": int, "name": str, "title": str, "description": str, "event_count": int,
+CONFIGURATION_KEYS = {"serial": int, "name": str, "label": str, "title": str, "description": str, "event_count": int,
                       "threads": int, "parallelism": int, "swept": bool, "seed_type": str, "manual_seed": int,
                       "sweeps": list, "plot_points": list, "combine": list, "tools": list, "pre": list, "post": list,
                       "static": dict, "prelim": dict}
@@ -34,7 +34,7 @@ SEED_TYPES = ("identity", "manual", "random")
 PRELIM_KEYS = {"fifo": list, "files": list, "commands": list}
 MASTER_KEYS = {"master_toml": str}
 QUANTITY_KEYS = {"values": list, "tags": list, "labels": list, "key": (str, dict), "target": (str, list),
-                 "format": str, "description": str}
+                 "format": str, "description": str, "exclude": list}
 #: Keys any tool table may carry; the rest are tool-specific, checked in `tools` against the tool
 #: folder's [options], or are standard-configuration requests (<tool>_<export>, 04 §9.4).
 TOOL_COMMON = {"tool": str, "baseconfig": (str, list), "input": (str, list), "output_file": (str, list),
@@ -42,7 +42,7 @@ TOOL_COMMON = {"tool": str, "baseconfig": (str, list), "input": (str, list), "ou
                "arguments": list, "consumes": list, "config": dict, "streamable": bool,
                "consumes_events": bool, "shards": int}
 PLOT_KEYS = {"backend": (str, list), "formats": list, "objects": list, "ratio": bool, "y_gutter": (int, float, str),
-             "x_gutter": (int, float, str), "logy": bool, "logx": bool, "auto_range": bool, "void_empty": bool,
+             "x_gutter": (int, float, str), "logy": bool, "logx": bool, "auto_range": bool, "void_empty": bool, "use_data": bool,
              "min_entries": int, "range_pad": int, "root_style": str, "data": dict, "style": dict, "object": dict}
 
 
@@ -76,6 +76,7 @@ class Quantity:
     target: list[str] = field(default_factory=list)
     format: str = ""
     description: str = ""
+    exclude: list[int] = field(default_factory=list)   # 1-based value indices a sweep leaves out (V42)
 
 
 @dataclass
@@ -95,8 +96,9 @@ class Configuration:
     pre: list[list[str]] = field(default_factory=list)   # tools run once before every point
     combine: list[str] = field(default_factory=list)    # swept quantities whose points are merged into one (V35)
     parallelism: int = 1                                # points run at once (V36); never in an identity
-    swept: bool = True                                  # run by a [run].sweep (V38)
+    swept: bool = True                                  # run by [run].sweep_runs (V38)
     title: str = ""                                     # the `run NN - <title> -` header of a sweep
+    run_name: str = ""                                  # <project>/<run_name>/…: [run].name, or this one's own (V46)
     seed_type: str = "identity"                         # SEED_TYPES (V39)
     manual_seed: int | None = None                      # seed_type = "manual": every point's seed
 
@@ -107,7 +109,7 @@ class RunConfig:
     project: str
     name: str
     serial: int | None
-    default_configuration: str | None                  # None only under sweep
+    default_configuration: str | None                  # None only under sweep_runs
     configurations: dict[str, Configuration]
     prelim: dict
     static: dict
@@ -116,12 +118,12 @@ class RunConfig:
     plot: dict
     master_toml: str | None
     raw: dict
-    sweep: bool = False                                 # `hep run` executes every swept configuration (V38)
+    sweep_runs: bool = False                            # `hep run` executes every swept configuration (V38)
 
     def configuration(self, name: str | None) -> Configuration:
         wanted = name or self.default_configuration
         if wanted is None:
-            raise HepError("[run] sweeps its configurations and names none", where=f"{self.path}: [run]",
+            raise HepError("[run] runs every configuration (sweep_runs) and names none", where=f"{self.path}: [run]",
                            hint=f"name one: configurations {', '.join(self.configurations)}")
         if wanted not in self.configurations:
             raise HepError(f"no configuration '{wanted}'", where=f"{self.path}: [run]",
@@ -131,11 +133,11 @@ class RunConfig:
 
     def runs(self, name: str | None) -> list[str]:
         """The configurations `hep run` executes, in order (V38): the one named on the command line,
-        even under sweep; else, under [run].sweep, every configuration not `swept = false`, in the
+        even under sweep_runs; else, under [run].sweep_runs, every configuration not `swept = false`, in the
         order of the file; else [run].configuration."""
         if name:
             return [self.configuration(name).key]
-        if self.sweep:
+        if self.sweep_runs:
             return [key for key, c in self.configurations.items() if c.swept]
         return [self.configuration(None).key]
 
@@ -155,7 +157,7 @@ def _check(table: dict, spec: dict, where: str, *, allow_tables: bool = False, e
     for key, value in table.items():
         types = spec.get(key)
         if allow_tables and isinstance(value, dict) and dict not in (types if isinstance(types, tuple) else (types,)):
-            continue                             # a configuration, even one named like a key ([run.sweep])
+            continue                             # a configuration, even one named like a key ([run.threads])
         if key in spec:
             if isinstance(value, bool) and bool not in (types if isinstance(types, tuple) else (types,)):
                 raise HepError(f"'{key}' must be {_type_name(types)}, not true/false", where=f"{where}.{key}")
@@ -299,7 +301,7 @@ def parse(raw: dict, path: Path) -> RunConfig:
     if not isinstance(run, dict):
         raise HepError("missing [run]", where=where, hint="every run TOML has [run] name, project, configuration")
     _check(run, RUN_KEYS, f"{where}: [run]", allow_tables=True)
-    sweep_on = run.get("sweep") is True                 # [run.sweep] may be a configuration's table
+    sweep_on = run.get("sweep_runs") is True
     for required in ("name", "project") + (() if sweep_on else ("configuration",)):
         if required not in run:
             raise HepError(f"[run] needs '{required}'", where=f"{where}: [run]")
@@ -324,10 +326,17 @@ def parse(raw: dict, path: Path) -> RunConfig:
         for listed in ("tags", "labels"):
             if listed in table and len(table[listed]) != len(values):
                 raise HepError(f"'{listed}' must have one entry per value ({len(values)})", where=f"{at}.{listed}")
+        exclude = table.get("exclude", [])
+        for index in exclude:
+            if isinstance(index, bool) or not isinstance(index, int) or not 1 <= index <= len(values):
+                raise HepError(f"exclude names {index!r}, which is not a value's place", where=f"{at}.exclude",
+                               hint=f"1-based: 1 to {len(values)}, as static \"#2\" and --points 2 count")
+        if len(set(exclude)) == len(values):
+            raise HepError("exclude leaves no value to sweep", where=f"{at}.exclude")
         quantities[name] = Quantity(name=name, values=values, tags=[str(t) for t in table.get("tags", [])],
                                     labels=[str(l) for l in table.get("labels", [])], key=table.get("key"),
                                     target=_as_list(table.get("target")), format=table.get("format", ""),
-                                    description=table.get("description", ""))
+                                    description=table.get("description", ""), exclude=sorted(set(exclude)))
 
     tools: dict[str, Tool] = {}
     for tag, table in raw.get("tools", {}).items():
@@ -393,7 +402,8 @@ def parse(raw: dict, path: Path) -> RunConfig:
         if event_count is None:
             raise HepError("no event_count: set it here or in [run]", where=at)
         configurations[key] = Configuration(
-            key=key, name=table.get("name", key), serial=table.get("serial"),
+            key=key, name=table.get("label") or key, serial=table.get("serial", run.get("serial")),   # V43, V45
+            run_name=table.get("name", run["name"]),                                                 # V46
             swept=table.get("swept", True), title=table.get("title", key),
             seed_type=_seed_type(table.get("seed_type", run.get("seed_type", "identity")),
                                  f"{at}.seed_type" if "seed_type" in table else f"{where}: [run].seed_type"),
@@ -410,7 +420,7 @@ def parse(raw: dict, path: Path) -> RunConfig:
             prelim=local_prelim if local_prelim is not None else prelim)
 
     if sweep_on and not any(c.swept for c in configurations.values()):
-        raise HepError("[run].sweep is on but every configuration has swept = false", where=f"{where}: [run].sweep",
+        raise HepError("[run].sweep_runs is on but every configuration has swept = false", where=f"{where}: [run].sweep_runs",
                        hint="leave one in, or turn the sweep off")
     if "configuration" in run and run["configuration"] not in configurations:
         raise HepError(f"[run].configuration is '{run['configuration']}', which is not a [run.<name>] table",
@@ -429,4 +439,4 @@ def parse(raw: dict, path: Path) -> RunConfig:
     return RunConfig(path=path, project=project, name=run["name"], serial=run.get("serial"),
                      default_configuration=run.get("configuration"), configurations=configurations,
                      prelim=prelim, static=static, tools=tools, quantities=quantities, plot=plot,
-                     master_toml=master.get("master_toml"), raw=raw, sweep=sweep_on)
+                     master_toml=master.get("master_toml"), raw=raw, sweep_runs=sweep_on)

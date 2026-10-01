@@ -1,4 +1,4 @@
-"""`[run].sweep = true` (V38): `hep run` executes every configuration not `swept = false`, in the
+"""`[run].sweep_runs = true` (V38): `hep run` executes every configuration not `swept = false`, in the
 order of the file, each as a run of its own after a `run NN - <title> -` line. All are planned
 before the first starts; a failed run leaves the next to start, a stop starts no more; each run's
 journal names the next, so `hep watch` follows on."""
@@ -23,25 +23,25 @@ CUSTOM = {"tool": "custom", "executable": "/bin/true"}
 
 def several(**changes):
     """Four configurations a, b, c, d; c is left out of a sweep."""
-    return raw(**{"run__sweep": True, "run__configuration": None, "run__one": None, "prelim": None,
+    return raw(**{"run__sweep_runs": True, "run__configuration": None, "run__one": None, "prelim": None,
                   "tools__check": CUSTOM, "run__a": {"tools": ["check"]}, "run__b": {"tools": ["check"], "title": "Bee"},
                   "run__c": {"tools": ["check"], "swept": False}, "run__d": {"tools": ["check"]}, **changes})
 
 
 def test_the_keys_and_their_defaults(scratch):
     run = parse(raw(), scratch)
-    assert run.sweep is False and run.runs(None) == ["one"]
+    assert run.sweep_runs is False and run.runs(None) == ["one"]
     conf = run.configuration(None)
     assert conf.swept is True and conf.title == "one"
     assert parse(raw(run__one__title="PDFs at 27x920"), scratch).configuration(None).title == "PDFs at 27x920"
 
 
 @pytest.mark.parametrize("changes, message", [
-    ({"run__sweep": 1}, "true/false"),
+    ({"run__sweep_runs": 1}, "true/false"),
     ({"run__one__swept": "no"}, "true/false"),
     ({"run__configuration": None}, "needs 'configuration'"),
-    ({"run__sweep": True, "run__one__swept": False}, "every configuration has swept = false"),
-    ({"run__sweep": True, "run__configuration": "nope"}, "not a \\[run.<name>\\] table"),
+    ({"run__sweep_runs": True, "run__one__swept": False}, "every configuration has swept = false"),
+    ({"run__sweep_runs": True, "run__configuration": "nope"}, "not a \\[run.<name>\\] table"),
 ])
 def test_what_is_refused(scratch, changes, message):
     with pytest.raises(HepError, match=message):
@@ -52,19 +52,19 @@ def test_a_sweep_runs_the_swept_configurations_in_the_order_of_the_file(scratch)
     run = parse(several(), scratch)
     assert run.runs(None) == ["a", "b", "d"]
     assert run.runs("c") == ["c"]                                  # named: even one left out of the sweep
-    with pytest.raises(HepError, match="sweeps its configurations and names none"):
+    with pytest.raises(HepError, match="runs every configuration \(sweep_runs\) and names none"):
         run.configuration(None)
-    assert parse(several(run__sweep=False, run__configuration="b"), scratch).runs(None) == ["b"]
+    assert parse(several(run__sweep_runs=False, run__configuration="b"), scratch).runs(None) == ["b"]
 
 
 def test_a_configuration_may_still_be_named_sweep(scratch):
     run = parse(raw(run__sweep={"tools": [["pythia", "rivet"]]}), scratch)
-    assert run.sweep is False and set(run.configurations) == {"one", "sweep"}
+    assert run.sweep_runs is False and set(run.configurations) == {"one", "sweep"}
 
 
 def test_a_sweep_changes_neither_identity_nor_seeds(scratch):
     _, _, alone = plan(raw(), scratch)
-    _, _, swept = plan(raw(run__sweep=True, run__two={"tools": [["pythia", "rivet"]]}), scratch)
+    _, _, swept = plan(raw(run__sweep_runs=True, run__two={"tools": [["pythia", "rivet"]]}), scratch)
     assert record.identity(alone) == record.identity(swept)
     assert record.seed_basis(alone) == record.seed_basis(swept)
 

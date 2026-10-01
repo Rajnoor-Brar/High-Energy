@@ -152,3 +152,55 @@ def test_points_selects_by_tag_index_and_quantity():
     assert [p.index for p in sweep.select_points(run, conf, points, "3,16")] == [3, 16]
     with pytest.raises(HepError, match="matches no point"):
         sweep.select_points(run, conf, points, "nothing")
+
+
+# ── exclude (V42): values a sweep leaves out, by their 1-based place ───────────────────────────
+
+THREE = {"values": [3.0, 3.2, 3.4], "tags": ["pt30", "pt32", "pt34"], "key": {"pythia": "MultipartonInteractions:pT0Ref"}}
+
+
+def swept(scratch, **changes):
+    run = config.parse(raw(**changes), scratch / "t.toml")
+    return sweep.points(run, run.configuration(None))
+
+
+def test_exclude_leaves_values_out_of_the_sweep(scratch):
+    got = swept(scratch, quantities__pt0ref={**THREE, "exclude": [2]}, run__one__sweeps=["pdf", "pt0ref"])
+    assert [p.name for p in got] == ["MSTW08lo_pt30", "MSTW08lo_pt34", "NNPDF23lo_pt30", "NNPDF23lo_pt34"]
+    assert [p.index for p in got] == [1, 2, 3, 4]                     # numbered over what is swept
+    assert got[1].choice == {"pdf": 0, "pt0ref": 2}                    # the value keeps its own place
+
+
+def test_an_entangled_group_loses_the_value_any_of_its_quantities_excludes(scratch):
+    alphas = {"values": [0.118, 0.130], "tags": ["as118", "as130"], "key": {"pythia": "SigmaProcess:alphaSvalue"},
+              "exclude": [1]}
+    got = swept(scratch, quantities__alphas=alphas, run__one__sweeps=[["pdf", "alphas"]])
+    assert [p.name for p in got] == ["NNPDF23lo_as130"]
+
+
+def test_a_static_value_may_still_be_an_excluded_one(scratch):
+    _, _, p = plan(raw(quantities__pt0ref={**THREE, "exclude": [2]}, static={"pt0ref": "pt32"}), scratch)
+    assert p.values["pt0ref"] == 1
+
+
+def test_exclude_changes_no_remaining_point(scratch):
+    _, _, before = plan(raw(quantities__pt0ref=THREE, run__one__sweeps=["pt0ref"]), scratch)
+    _, _, after = plan(raw(quantities__pt0ref={**THREE, "exclude": [2, 3]}, run__one__sweeps=["pt0ref"]), scratch)
+    assert (before.point.name, before.identity) == (after.point.name, after.identity)
+
+
+@pytest.mark.parametrize("exclude, message", [
+    ([0], "not a value's place"), ([4], "not a value's place"), ([True], "not a value's place"),
+    (["pt32"], "not a value's place"), ([1, 2, 3], "leaves no value"),
+])
+def test_what_exclude_refuses(scratch, exclude, message):
+    with pytest.raises(HepError, match=message):
+        swept(scratch, quantities__pt0ref={**THREE, "exclude": exclude}, run__one__sweeps=["pt0ref"])
+
+
+def test_an_entangled_group_with_nothing_left_is_refused(scratch):
+    alphas = {"values": [0.118, 0.130], "tags": ["as118", "as130"], "key": {"pythia": "SigmaProcess:alphaSvalue"},
+              "exclude": [2]}
+    with pytest.raises(HepError, match="no value"):
+        swept(scratch, quantities__alphas=alphas, quantities__pdf={**raw()["quantities"]["pdf"], "exclude": [1]},
+              run__one__sweeps=[["pdf", "alphas"]])

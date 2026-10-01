@@ -104,7 +104,8 @@ $(basename $(1)).so: $(call lib_of,$(1))
 endef
 
 # A Rivet plugin, and its .info/.plot/.yoda as real targets so an edit re-copies them (00/B44).
-# rivet-build gets the shared-header paths (L20) and, when the .info says `Requires: ONNX`, ONNX.
+# rivet-build gets the shared-header paths (L20) and, when the .info says `Requires: ONNX`, ONNX. It runs a
+# make of its own, so its line starts with `+`: that make shares our -j job slots.
 define side_rule
 $(BUILD)/Rivet/$(call ana_of,$(1)).$(2): $(call side_of,$(1),$(2))
 	@mkdir -p $$(@D)
@@ -113,7 +114,7 @@ endef
 define rivet_rule
 $(call out_of,$(1)): $(1)
 	@mkdir -p $$(@D) $(BUILD)/deps
-	rivet-build $$(abspath $$@) $(abspath $(1)) -I$(abspath utils) $(if $(filter modules/%,$(1)),-I$(abspath modules/$(call proj_of,$(1)))) \
+	+rivet-build $$(abspath $$@) $(abspath $(1)) -I$(abspath utils) $(if $(filter modules/%,$(1)),-I$(abspath modules/$(call proj_of,$(1)))) \
 	    -DHEKIT_WITH_HEPMC=1 -MMD -MP -MF$(abspath $(call depfile,$(1))) \
 	    $(if $(shell grep -ls 'Requires:.*ONNX' $(call side_of,$(1),info) /dev/null),$$(FLAGS_onnx))
 	@sed -i '1s|^[^:]*:[[:space:]]*[^[:space:]]*\.cc|$$@:|' $(call depfile,$(1))

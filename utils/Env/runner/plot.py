@@ -40,7 +40,7 @@ from .sweep import axes, label_of, tag_of
 
 BACKENDS = ("root", "yoda")
 FORMATS = ("pdf", "png", "svg", "eps")
-LEGENDS = ("top-right", "top-left", "bottom-right", "bottom-left")
+LEGENDS = ("top-right", "top-left", "bottom-right", "bottom-left", "best")
 DATA_KEYS = ("file", "legend", "map")
 OBJECT_KEYS = ("title", "x_label", "y_label", "logx", "logy", "y_gutter", "x_gutter", "ratio", "style")
 OBJECT_TYPES = {"title": str, "x_label": str, "y_label": str, "logx": bool, "logy": bool, "ratio": bool}
@@ -263,8 +263,46 @@ def for_root(document: dict) -> dict:
     return out
 
 
+#: YODA's own text macros (yoda/plotting/mlp_preprocessor.py), so a .plot file reads the same in both backends
+_MACROS = {"GeV": r"\mathrm{GeV}", "TeV": r"\mathrm{TeV}", "MeV": r"\mathrm{MeV}", "pt": r"{p_\mathrm{T}}",
+           "pT": r"{p_\mathrm{T}}", "dfrac": r"\frac", "tfrac": r"\frac"}
+
+
+_PLAIN = {"GeV": "GeV", "TeV": "TeV", "MeV": "MeV", "pt": "$p_\\mathrm{T}$", "pT": "$p_\\mathrm{T}$",
+          "dfrac": "\\frac", "tfrac": "\\frac"}
+
+
+def macros(text: str) -> str:
+    """YODA's macros expanded by us (V48): `\\mathrm{GeV}` inside `$…$`, `GeV` outside. Rivet's own
+    expansion of `\\GeV` uses `\\xspace`, which LaTeX-typeset matplotlib text does not define."""
+    pattern = re.compile(r"\\(" + "|".join(_MACROS) + r")(?![A-Za-z])")
+    parts = text.split("$")
+    return "$".join(pattern.sub(lambda m: (_MACROS if i % 2 else _PLAIN)[m[1]], part) for i, part in enumerate(parts))
+
+
+def lines_of(text: str) -> list[str]:
+    """A label's lines, split at `\\newline` or `\\\\`, each with its math closed: a `$…$` left open
+    across a break is closed before it and reopened after (`$a \\newline b$` → `$a$`, `$b$`)."""
+    lines, open_math = [], False
+    for line in re.split(r"\\newline(?![A-Za-z])|\\\\", text):
+        line = ("$" if open_math else "") + line.strip()
+        open_math = line.count("$") % 2 == 1
+        lines.append(line + ("$" if open_math else ""))
+    return lines
+
+
 def tlatex(text: str) -> str:
-    """`$\\mathrm{d}\\sigma/\\mathrm{d}E_T$ [pb/GeV]` → `d#sigma/d#it{E}_{#it{T}} [pb/GeV]`."""
+    """`$\\mathrm{d}\\sigma/\\mathrm{d}E_T$ [pb/GeV]` → `d#sigma/d#it{E}_{#it{T}} [pb/GeV]`. YODA's macros
+    (`\\GeV`, `\\pT`, …) are understood, and `\\newline` (or `\\\\`) makes ROOT's `#splitline{…}{…}`; a math span
+    left open across the break is closed before it and reopened after (V47)."""
+    lines = [_tlatex_line(line) for line in lines_of(macros(text))]
+    out = lines[-1]
+    for line in reversed(lines[:-1]):
+        out = f"#splitline{{{line}}}{{{out}}}"
+    return out
+
+
+def _tlatex_line(text: str) -> str:
     out = "".join(_italic(part) if i % 2 else part for i, part in enumerate(text.split("$")))
     out = re.sub(r"\\[,;:! ]", " ", out)
     upright = r"\\(?:mathrm|text|textrm|mathit|operatorname|mbox)\s*\{([^{}]*)\}"
@@ -450,7 +488,9 @@ def pages(run, configuration, plans) -> list[Page]:
                    complete[0].res.parent / "plots" / "root" / f"{configuration.name}.root", out_dir / "merged.sha256",
                    complete[0].out.parent / "points.json")
 
-    data = settings.get("data", {})
+    # use_data = false (V44): the [plot.data] table stays but is not drawn; a ratio then divides by
+    # each page's first curve, the first value of its curve axis
+    data = settings.get("data", {}) if settings.get("use_data", True) is not False else {}
     data_file = source = None
     if data:
         source = data_source(data["file"], run)

@@ -4,7 +4,7 @@
 // base.toml (beside this file) is the one place a default lives. Paint finds it from its own
 // executable (build/Paint.exe → ../utils/Apps/Paint/base.toml), else under $HEKIT_ROOT. A page's
 // [style] names only what it changes, in base.toml's tables; a key base.toml does not have, or a
-// value of another type, is an error. `legend.position` is a corner name or [x, y].
+// value of another type, is an error. `legend.position` is a corner name, "best" or [x, y].
 
 #include <toml++/toml.hpp>
 
@@ -159,7 +159,7 @@ namespace Paint {
             s.placed = true, s.corner = "top-right";
         } else {
             s.corner = text(t, "legend.position");
-            oneOf(s.corner, {"top-right", "top-left", "bottom-right", "bottom-left"}, "legend.position");
+            oneOf(s.corner, {"top-right", "top-left", "bottom-right", "bottom-left", "best"}, "legend.position");
         }
         std::tie(s.insetX, s.insetY) = pair(at(t, "legend.inset"), "legend.inset");
         s.spacing = number(t, "legend.spacing"), s.symbol = number(t, "legend.symbol"), s.gap = number(t, "legend.gap");

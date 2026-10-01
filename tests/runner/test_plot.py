@@ -62,9 +62,20 @@ def test_keys_no_backend_honours_are_errors(scratch, table, message):
     (r"$Q^2 \le 1$ GeV$^2$", "#it{Q}^{2} #leq 1 GeV^{2}"),
     (r"$m(p\pi^-)$ [GeV]", "#it{m}(#it{p}#pi^{-}) [GeV]"),
     ("plain text", "plain text"),
+    (r"$Q^2<1\ GeV^2 \newline -3.5 < \eta < 3.5$",                         # V47: math open across the break
+     "#splitline{#it{Q}^{2}<1 #it{GeV}^{2}}{-3.5 < #eta < 3.5}"),
+    (r"$Q^2 < 1$ GeV$^2$\newline$-3.5 < \eta < 3.5$", "#splitline{#it{Q}^{2} < 1 GeV^{2}}{-3.5 < #eta < 3.5}"),
+    (r"a \\ b \\ c", "#splitline{a}{#splitline{b}{c}}"),                    # LaTeX's \\, three lines
+    (r"$\pT$ [\GeV], $\sqrt{s} = 13\,\TeV$", "{#it{p}_{T}} [GeV], #sqrt{#it{s}} = 13 TeV"),   # YODA's macros
 ])
 def test_latex_becomes_tlatex(latex, root):
     assert plot.tlatex(latex) == root
+
+
+def test_a_title_s_lines_each_close_their_math():
+    assert plot.lines_of(r"$a \newline b$") == ["$a$", "$b$"]
+    assert plot.lines_of(r"$a$ x\newline$b$") == ["$a$ x", "$b$"]
+    assert plot.lines_of("no break") == ["no break"]
 
 
 def test_root_names_follow_app_yd2rt():
@@ -264,3 +275,40 @@ def test_an_object_value_of_the_wrong_kind_is_refused(scratch):
 
 def test_the_yoda_backend_has_nothing_to_honour_in_a_default(scratch):
     validated(scratch, backend="yoda", style={"legend": {"position": "default"}, "page": {"dpi": "default"}})
+
+
+def test_macros_are_expanded_by_us_in_and_out_of_math():
+    """V48: Rivet's own \\GeV needs \\xspace, which matplotlib's LaTeX does not define."""
+    assert plot.macros(r"$Q^2<1\ \GeV^2$ in \GeV, \pT") == r"$Q^2<1\ \mathrm{GeV}^2$ in GeV, $p_\mathrm{T}$"
+
+
+@pytest.mark.parametrize("curves, expected", [
+    ([[(0, 1, 1.0, 0.0), (1, 2, 1.0, 0.0)]], (0.5, 1.5)),                   # all near 1: the range
+    ([[(0, 1, 2.0, 0.1), (1, 2, 1.0, 0.0)]], (0.5, 1.1 * 2.1)),             # widened, with Paint's 10 %
+    ([[(0, 1, 8.0, 0.0)]], (0.5, 3.0)),                                     # never past the limits
+    ([[(5, 6, 9.0, 0.0)]], (0.5, 1.5)),                                     # a bin outside x is not looked at
+])
+def test_the_yoda_ratio_window_is_paint_s(yoda_backend, curves, expected):
+    reference = [(0, 1, 1.0, 0.0), (1, 2, 1.0, 0.0), (5, 6, 1.0, 0.0)]
+    window = yoda_backend.ratio_window(curves, reference, (0, 2), {"range": [0.5, 1.5], "limits": [0.0, 3.0]})
+    assert window == pytest.approx(expected)
+
+
+def test_a_best_legend_lets_matplotlib_choose(yoda_backend, scratch):
+    """V49: mkhtml anchors the legend at a corner; "best" leaves the spot to matplotlib."""
+    script = scratch / "page.py"
+    script.write_text("ax.add_artist(ax.legend(legend_items,\n    loc='upper right',\n"
+                      "    bbox_to_anchor=(0.97, 0.97),markerfirst=False))\n", encoding="utf-8")
+    assert yoda_backend.best_legend(script) and "loc='best',markerfirst=False))" in script.read_text()
+    assert not yoda_backend.best_legend(script)                          # once only
+
+
+def test_yoda_sizes_the_legend_title_by_text_header(yoda_backend):
+    """V50: matplotlib sizes a legend title from legend.title_fontsize (else font.size), not from the
+    entries; the backend sets both, from text.legend and text.header."""
+    from types import SimpleNamespace
+    page = SimpleNamespace(document={"page": {"logx": False, "logy": False, "ratio": False}}, overrides={},
+                           ranges={"x": (0, 1), "y": (0, 1)}, object="/photo_eic/d01-x01-y01",
+                           style={"legend": {"position": "top-right"}, "text": {"legend": 7.0, "header": 8.5}})
+    block = yoda_backend._plot_block(page)
+    assert "LegendFontSize=7; plt.rcParams['legend.title_fontsize'] = 8.5" in block

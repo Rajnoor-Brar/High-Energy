@@ -300,8 +300,15 @@ def location(serial: int | None, name: str) -> str:
     return f"{serial:02d}_{name}" if serial is not None else name
 
 
+def run_dir(run, configuration) -> Path:
+    """<project>/<name>/<NN_><label> (V45, V46): `name` is [run]'s, or the configuration's own; the
+    configuration's folder is its `label` (its table key when empty or unset), after one serial, the
+    configuration's if it has one, else [run]'s."""
+    return Path(run.project) / (configuration.run_name or run.name) / location(configuration.serial, configuration.name)
+
+
 def point_dirs(run, configuration, point) -> tuple[Path, Path]:
-    tail = Path(run.project) / location(run.serial, run.name) / location(configuration.serial, configuration.name) / point.name
+    tail = run_dir(run, configuration) / point.name
     return output_root() / tail, results_root() / tail
 
 

@@ -197,3 +197,24 @@ def test_a_swept_analysis_option_is_a_curve_not_a_page(scratch):
     assert [c["raw"] for c in first["curve"]] == [c["object"].replace("/", "/RAW/", 1) for c in first["curve"]]
     said = []
     assert plot.draw(run, configuration, plans, said.append) == 0, said
+
+
+def test_use_data_false_draws_no_data_and_divides_by_the_first_curve(stage):
+    """V44: the [plot.data] table stays but is not drawn; the ratio's reference is each page's first
+    curve (the first value of its curve axis)."""
+    run, configuration, plans = stage
+    run.plot["use_data"] = False
+    pages = plot.pages(run, configuration, plans)
+    documents = {p.name: tomllib.loads(p.config.read_text()) for p in pages}
+    assert not any("data" in d for d in documents.values())
+    d01 = documents["em/d01-x01-y01"]
+    assert d01["page"]["ratio"] is True and d01["page"]["ratio_label"] == "Ratio"
+    assert d01["curve"][0]["label"] == "MSTW 2008 LO"
+    assert plot.draw(run, configuration, plans, lambda line: None) == 0
+
+
+def test_a_best_legend_is_drawn(stage):
+    """V49: Paint takes the corner with the fewest drawn points under the legend."""
+    run, configuration, plans = stage
+    run.plot["style"] = {**run.plot.get("style", {}), "legend": {"position": "best"}}
+    assert plot.draw(run, configuration, plans, lambda line: None) == 0

@@ -48,14 +48,14 @@ The terminal shows the running tools, then one block:
 
 ```
 ── point 1/1: point ── ok after 42.3 s
-   done → results/PhotoProduction/03_eic/single/point
+   done → results/PhotoProduction/eic/03_single/point
 ```
 
 | Look in | For |
 |---|---|
-| `results/PhotoProduction/03_eic/single/point/` | `photo.yoda`, `photo.root`: the products |
-| `results/PhotoProduction/03_eic/single/plots/root/` | the pages (`d01-x01-y01.pdf`, …) and `single.root`, the sweep in one file |
-| `output/PhotoProduction/03_eic/single/point/` | `cards/`, `logs/`, `provenance.json`, `.complete` |
+| `results/PhotoProduction/eic/03_single/point/` | `photo.yoda`, `photo.root`: the products |
+| `results/PhotoProduction/eic/03_single/plots/root/` | the pages (`d01-x01-y01.pdf`, …) and `single.root`, the sweep in one file |
+| `output/PhotoProduction/eic/03_single/point/` | `cards/`, `logs/`, `provenance.json`, `.complete` |
 
 Run the same command again and nothing happens: the point is complete with the same identity. Change
 anything that decides the result (a card, an event count, a binary) and it runs again.
@@ -495,7 +495,7 @@ point's block whole when it ends (in the order they finish). `--plan` prints the
 
 ```bash
 hep plot a.yoda b.yoda --labels "Tune A,Tune B" --ratio --objects "/MC_JETS/*"
-hep plot results/PhotoProduction/03_eic/01_pdf/plots/root/pdf.root      # a sweep: a curve per point
+hep plot results/PhotoProduction/eic/01_pdf/plots/root/pdf.root      # a sweep: a curve per point
 ```
 
 No run TOML: one page per object any file holds, one curve per file (or per point of a merged
@@ -508,7 +508,7 @@ want:
 
 ```toml
 [run]
-sweep = true                     # hep run eic: every configuration, in the order of the file
+sweep_runs = true                # hep run eic: every configuration, in the order of the file
 
 [run.pdf]
 title = "Proton PDFs"            # the header line: run 01 - Proton PDFs -
@@ -523,7 +523,7 @@ last one costs nothing. A failed run lets the next one start, and Ctrl-C stops e
 `hep watch` follows from one run to the next. That's what a shell loop can't do: in
 `for c in …; do hep run eic $c; done`, a Ctrl-C only ends the current run (hep exits 6 and bash
 carries on) and a typo in a later configuration shows up hours in. `hep run eic pdf` still runs
-only `pdf`, and `--set run.sweep=false` turns the sweep off for one call.
+only `pdf`, and `--set run.sweep_runs=false` turns the sweep off for one call.
 
 ### 4.21 Exact seeds, random seeds, and repeating a run
 
@@ -556,8 +556,11 @@ values = [1001, 2001, 3001]
 
 Pages are drawn after the points, from the complete ones, one per `plot_points` cell and histogram,
 to `results/…/plots/root/[<cell>/]<object>.<fmt>`. Titles and axis labels come from the analysis's
-Rivet `.plot` file, converted to TLatex (math letters italic). `hep run … --only plot` or `hep plot
-CONFIG` redraws them without running anything.
+Rivet `.plot` file, converted to TLatex (math letters italic). YODA's macros (`\GeV`, `\TeV`, `\pT`)
+work in both backends, and `\newline` (or `\\`) breaks a title into lines. A `$…$` left open
+across the break is closed and reopened for you, so `LegendTitle=$Q^2<1\ GeV^2 \newline -3.5 < \eta
+< 3.5$` draws two lines in both. `hep run … --only plot` or `hep plot CONFIG` redraws them without
+running anything.
 
 ```toml
 [plot]
