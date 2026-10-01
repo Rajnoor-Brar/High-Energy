@@ -11,6 +11,9 @@
 //   Q2MAX        photon virtuality cut in GeV^2        (default 1.0)
 //   ETMIN        jet E_T threshold in GeV               (default 5.0)
 //   ETMIN2       higher E_T threshold for d03 in GeV    (default 10.0)
+//
+// d01, d04–d10, d13, d14: dsigma/dE_T^jet; d02, d03, d11, d12: dsigma/deta^jet; d18: dsigma/d|eta^jet|
+// (kT, E_T > ETMIN); d19: dN/dpT of kT jets, normalised; d15–d17: charged particles.
 //   ETAMAX       jet |eta| acceptance                   (default 3.5)
 //   R            jet radius for kT, anti-kT, SISCone    (default 1.0)
 //   CHETAMAX     charged-particle |eta| acceptance      (default 3.5)
@@ -47,8 +50,8 @@ namespace Rivet {
       _ymin    = getOption<double>("YMIN", 0.1992);
       _ymax    = getOption<double>("YMAX", 0.8483);
       _q2max   = getOption<double>("Q2MAX", 1.0);
-      _etmin   = getOption<double>("ETMIN", 17.0);
-      _etmin2  = getOption<double>("ETMIN2", 21.0);
+      _etmin   = getOption<double>("ETMIN", 5.0);
+      _etmin2  = getOption<double>("ETMIN2", 10.0);
       _etamax  = getOption<double>("ETAMAX", 3.5);
       const double chEtaMax = getOption<double>("CHETAMAX", 3.5);
       const double chPtMin  = getOption<double>("CHPTMIN", 0.1);
@@ -112,6 +115,9 @@ namespace Rivet {
       book(_h_11, "d15-x01-y01", ptEdges);          // charged-particle pT
       book(_h_12, "d16-x01-y01", nchEdges);         // charged multiplicity
       book(_h_13, "d17-x01-y01", 28, -3.5, 3.5);    // charged-particle eta
+
+      book(_h_1b, "d18-x01-y01", 14, 0.0, 3.5);      // kT |eta|, ET > ETMIN
+      book(_h_14, "d19-x01-y01", etEdges);          // kT jet pT, all eta (dN/dpT, per jet)
     }
 
     void analyze(const Event& event) {
@@ -145,26 +151,30 @@ namespace Rivet {
         _h_13->fill(p.eta());
       }
 
+      // E_T histograms are filled with the jet's E_T, as cut. The E_T recombination scheme makes
+      // massless jets, so it equals their pT; d19 is the pT spectrum itself, per jet.
       for (const Jet& jet : jets) {
-        const double eta = orientation*jet.eta();
-        _h_1->fill(jet.pt());
+        const double eta = orientation*jet.eta(), et = jet.Et();
+        _h_1->fill(et);
         _h_1a->fill(eta);
-        if (jet.pt() > _etmin2*GeV) _h_2a->fill(eta);
-        if      (eta < 0)   _h_2->fill(jet.pt());
-        else if (eta < 1)   _h_3->fill(jet.pt());
-        else if (eta < 1.5) _h_4->fill(jet.pt());
-        else if (eta < 2)   _h_5->fill(jet.pt());
-        else if (eta < 2.5) _h_9->fill(jet.pt());
-        else if (eta < 3)   _h_10->fill(jet.pt());
-        else                _h_6->fill(jet.pt());
+        _h_1b->fill(fabs(eta));
+        _h_14->fill(jet.pt());
+        if (et > _etmin2*GeV) _h_2a->fill(eta);
+        if      (eta < 0)   _h_2->fill(et);
+        else if (eta < 1)   _h_3->fill(et);
+        else if (eta < 1.5) _h_4->fill(et);
+        else if (eta < 2)   _h_5->fill(et);
+        else if (eta < 2.5) _h_9->fill(et);
+        else if (eta < 3)   _h_10->fill(et);
+        else                _h_6->fill(et);
       }
 
       for (const Jet& jet : jets_akt) {
-        _h_7->fill(jet.pt());
+        _h_7->fill(jet.Et());
         _h_3a->fill(orientation*jet.eta());
       }
       for (const Jet& jet : jets_sis) {
-        _h_8->fill(jet.pt());
+        _h_8->fill(jet.Et());
         _h_4a->fill(orientation*jet.eta());
       }
     }
@@ -172,8 +182,9 @@ namespace Rivet {
     void finalize() {
       const double sf = crossSection()/picobarn/sumOfWeights();
       for (Histo1DPtr h : {_h_1, _h_2, _h_3, _h_4, _h_5, _h_6, _h_7, _h_8, _h_9, _h_10,
-                           _h_1a, _h_2a, _h_3a, _h_4a})
+                           _h_1a, _h_2a, _h_3a, _h_4a, _h_1b})
         scale(h, sf);
+      normalize(_h_14);
       normalize(_h_11);
       normalize(_h_12);
       normalize(_h_13);
@@ -184,13 +195,13 @@ namespace Rivet {
   private:
 
     double _wmin = -1, _wmax = -1, _ymin = 0.1992, _ymax = 0.8483;
-    double _q2max = 1.0, _etmin = 17.0, _etmin2 = 21.0, _etamax = 3.5;
+    double _q2max = 1.0, _etmin =5.0, _etmin2 = 10.0, _etamax = 3.5;
     bool _useW = false;
 
     /// @name Histograms
     /// @{
-    Histo1DPtr _h_1, _h_2, _h_3, _h_4, _h_5, _h_6, _h_7, _h_8, _h_9, _h_10, _h_11, _h_12, _h_13,
-               _h_1a, _h_2a, _h_3a, _h_4a;
+    Histo1DPtr _h_1, _h_2, _h_3, _h_4, _h_5, _h_6, _h_7, _h_8, _h_9, _h_10, _h_11, _h_12, _h_13, _h_14,
+               _h_1a, _h_2a, _h_3a, _h_4a, _h_1b;
     /// @}
   };
 
