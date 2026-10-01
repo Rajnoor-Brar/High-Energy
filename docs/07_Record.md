@@ -225,6 +225,7 @@ execution and after it, most on the user's instruction.
 | **V42** | **`[quantities.<q>].exclude = [i, …]`**: values a sweep leaves out, by their 1-based place (the user's choice, matching `static = "#2"` and `--points`). `sweep.kept` filters each axis; an entangled group loses a value any member excludes; `static` is unaffected. Remaining points keep their names and identities, so nothing reruns. | — | user, 2026-10-01 |
 | **V43** | **One serial, before the run's name**: `<P>/NN_<run name>/<cfg name>/<point>`, NN the configuration's `serial` if it sets one, else `[run]`'s (`tools.run_dir`). Was `<P>/NN_<run>/NN_<cfg>/`. A location, never an identity: existing results stay where they are, and a configuration whose folder moved runs again in the new place. | two serials, `03_eic/01_pdf` | user, 2026-10-01 |
 | **V44** | **`[plot].use_data = false`** turns the reference data off while `[plot.data]` stays in the file (still checked); with `ratio = true` each page's ratio is over its first curve, the first value of its curve axis (Paint's and mkhtml's own rule without data). | delete the table to drop the data | user, 2026-10-01 |
+| **V45** | **`<P>/<run name>/NN_<cfg label>/<point>`** (supersedes V43's `NN_<run>/<cfg>`): the serial (the configuration's, else `[run]`'s) goes before the configuration's folder, named by its new `label` (the table key when empty or unset). `[run.<cfg>].name` is replaced by `label` and refused with the spelling. A location, never an identity. | V43 | user, 2026-10-01 |
 
 **v1 decisions these overturn:**
 

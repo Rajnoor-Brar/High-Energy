@@ -48,14 +48,14 @@ The terminal shows the running tools, then one block:
 
 ```
 ── point 1/1: point ── ok after 42.3 s
-   done → results/PhotoProduction/03_eic/single/point
+   done → results/PhotoProduction/eic/03_single/point
 ```
 
 | Look in | For |
 |---|---|
-| `results/PhotoProduction/03_eic/single/point/` | `photo.yoda`, `photo.root`: the products |
-| `results/PhotoProduction/03_eic/single/plots/root/` | the pages (`d01-x01-y01.pdf`, …) and `single.root`, the sweep in one file |
-| `output/PhotoProduction/03_eic/single/point/` | `cards/`, `logs/`, `provenance.json`, `.complete` |
+| `results/PhotoProduction/eic/03_single/point/` | `photo.yoda`, `photo.root`: the products |
+| `results/PhotoProduction/eic/03_single/plots/root/` | the pages (`d01-x01-y01.pdf`, …) and `single.root`, the sweep in one file |
+| `output/PhotoProduction/eic/03_single/point/` | `cards/`, `logs/`, `provenance.json`, `.complete` |
 
 Run the same command again and nothing happens: the point is complete with the same identity. Change
 anything that decides the result (a card, an event count, a binary) and it runs again.
@@ -495,7 +495,7 @@ point's block whole when it ends (in the order they finish). `--plan` prints the
 
 ```bash
 hep plot a.yoda b.yoda --labels "Tune A,Tune B" --ratio --objects "/MC_JETS/*"
-hep plot results/PhotoProduction/01_eic/pdf/plots/root/pdf.root      # a sweep: a curve per point
+hep plot results/PhotoProduction/eic/01_pdf/plots/root/pdf.root      # a sweep: a curve per point
 ```
 
 No run TOML: one page per object any file holds, one curve per file (or per point of a merged

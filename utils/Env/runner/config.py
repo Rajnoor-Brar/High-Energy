@@ -24,7 +24,7 @@ TOP_LEVEL = ("master", "run", "prelim", "static", "tools", "quantities", "plot")
 RUN_KEYS = {"serial": int, "name": str, "project": str, "configuration": str, "event_count": int,
             "threads": int, "parallelism": int, "description": str, "sweep_runs": bool, "seed_type": str,
             "manual_seed": int}
-CONFIGURATION_KEYS = {"serial": int, "name": str, "title": str, "description": str, "event_count": int,
+CONFIGURATION_KEYS = {"serial": int, "label": str, "title": str, "description": str, "event_count": int,
                       "threads": int, "parallelism": int, "swept": bool, "seed_type": str, "manual_seed": int,
                       "sweeps": list, "plot_points": list, "combine": list, "tools": list, "pre": list, "post": list,
                       "static": dict, "prelim": dict}
@@ -369,6 +369,9 @@ def parse(raw: dict, path: Path) -> RunConfig:
         if not isinstance(table, dict):
             continue
         at = f"{where}: [run.{key}]"
+        if "name" in table:
+            raise HepError("a configuration's folder name is its label now", where=f"{at}.name",
+                           hint=f'label = "{table["name"]}"  (results/<project>/<run>/<serial>_<label>/, V45)')
         _check(table, CONFIGURATION_KEYS, at)
         if "tools" not in table:
             raise HepError("a configuration needs tools = [...]", where=at)
@@ -401,7 +404,7 @@ def parse(raw: dict, path: Path) -> RunConfig:
         if event_count is None:
             raise HepError("no event_count: set it here or in [run]", where=at)
         configurations[key] = Configuration(
-            key=key, name=table.get("name", key), serial=table.get("serial", run.get("serial")),   # V43
+            key=key, name=table.get("label") or key, serial=table.get("serial", run.get("serial")),   # V43, V45
             swept=table.get("swept", True), title=table.get("title", key),
             seed_type=_seed_type(table.get("seed_type", run.get("seed_type", "identity")),
                                  f"{at}.seed_type" if "seed_type" in table else f"{where}: [run].seed_type"),

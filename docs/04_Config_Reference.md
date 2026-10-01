@@ -68,8 +68,9 @@ Every key that takes a path has **one** convention root. There is no search path
 anything else a tool writes is a product and lives in `results/`. So a HepMC file kept for another
 configuration goes in `[prelim] files`.
 
-**Where a point lives** (V43: `<run>` is `NN_<run name>` when there is a serial, the configuration's
-if it sets one, else `[run]`'s; `<cfg>` is the configuration's name alone):
+**Where a point lives** (V45: `<run>` is the run's `name`; `<cfg>` is `NN_<label>` when there is a
+serial, the configuration's if it sets one, else `[run]`'s, and `<label>` is the table key when the
+configuration's `label` is empty or unset):
 
 ```
 output/<P>/<run>/<cfg>/<point>/     cards/  config/  logs/  FIFOs and [prelim] files  provenance.json  .complete
@@ -135,7 +136,7 @@ always targeted explicitly (§8.1).
 
 ```toml
 [run]
-serial        = 3                   # optional: the run directory becomes 03_eic (a configuration may override it)
+serial        = 3                   # optional: every configuration's folder becomes 03_<label> (a configuration may override it)
 name          = "eic"
 project       = "PhotoProduction"
 configuration = "pdf"               # the default; `hep run <config> <configuration>` picks another
@@ -153,7 +154,7 @@ description   = "EIC photoproduction studies"
 | `sweep_runs` | boolean | false | `hep run <config>` runs every configuration not `swept = false`, one after another (§4.1) |
 | `seed_type` | string | `"identity"` | default for configurations: how a point's seeds are chosen, `"identity"`, `"manual"` or `"random"` (02 §8) |
 | `manual_seed` | integer | none | default for configurations: under `seed_type = "manual"`, every point's seed (1 to 899,999,999); ignored otherwise (`--plan` says so) |
-| `serial` | integer | none | the prefix `NN_` of the run's directory, `NN_<name>`: **location, never identity** (V12). A configuration's `serial` overrides it (V43). Changing it starts a fresh location. |
+| `serial` | integer | none | the prefix `NN_` of each configuration's folder, `<name>/NN_<label>`: **location, never identity** (V12). A configuration's `serial` overrides it (V45). Changing it starts a fresh location. |
 | `event_count` | integer | none | default for configurations; one of the two must set it |
 | `threads` | integer | 1 | default for configurations. `0` means every core, **resolved to a number at plan time** |
 | `parallelism` | integer | 1 | default for configurations: how many points run at once (V36). `threads` stays each point's; never part of an identity or a seed, so changing it reruns nothing |
@@ -199,7 +200,7 @@ eic · energies: 4 point(s), 1000000 events, 12 threads
 ```toml
 [run.energy_pdf]
 serial      = 3
-name        = "energy_pdf"                   # directory name; defaults to the table key
+label       = "energy_pdf"                   # folder name (after the serial); defaults to the table key
 title       = "Beams x PDFs"                 # the header line under [run].sweep_runs (§4.1)
 description = "Beams x PDF grid: one page per energy, PDF curves on each"
 event_count = 500_000                        # overrides [run]
@@ -225,8 +226,8 @@ prelim      = { fifo = ["events.hepmc"] }    # replaces [prelim] for this config
 | `pre`, `post` | array | `[]` | the form of `tools` (§5.4) |
 | `static` | table | `{}` | merged over `[static]`, key by key (§7) |
 | `prelim` | table | `[prelim]` | **replaces** `[prelim]` whole for this configuration; `{}` means none |
-| `serial` | integer | `[run].serial` | overrides `[run].serial` for this configuration: its points go to `<P>/NN_<run name>/<cfg>/` (V43) |
-| `name` | string | the table key | the directory name |
+| `serial` | integer | `[run].serial` | overrides `[run].serial` for this configuration: its points go to `<P>/<run name>/NN_<label>/` (V45) |
+| `label` | string | the table key | the folder name, after the serial: `NN_<label>`; empty means the table key (V45; was `name`) |
 | `title` | string | the table key | the header line of the run under `[run].sweep_runs`: `run 02 - <title> -` (§4.1) |
 | `swept` | boolean | true | `false` leaves this configuration out of `[run].sweep_runs` (§4.1); `hep run <config> <cfg>` still runs it |
 | `seed_type` | string | `[run].seed_type` | `"identity"`: from the generator's identity; `"manual"`: exactly the given seed; `"random"`: drawn when the point runs (02 §8) |
