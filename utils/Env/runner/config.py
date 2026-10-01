@@ -42,7 +42,7 @@ TOOL_COMMON = {"tool": str, "baseconfig": (str, list), "input": (str, list), "ou
                "arguments": list, "consumes": list, "config": dict, "streamable": bool,
                "consumes_events": bool, "shards": int}
 PLOT_KEYS = {"backend": (str, list), "formats": list, "objects": list, "ratio": bool, "y_gutter": (int, float, str),
-             "x_gutter": (int, float, str), "logy": bool, "logx": bool, "auto_range": bool, "void_empty": bool,
+             "x_gutter": (int, float, str), "logy": bool, "logx": bool, "auto_range": bool, "void_empty": bool, "use_data": bool,
              "min_entries": int, "range_pad": int, "root_style": str, "data": dict, "style": dict, "object": dict}
 
 

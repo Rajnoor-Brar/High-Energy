@@ -450,7 +450,9 @@ def pages(run, configuration, plans) -> list[Page]:
                    complete[0].res.parent / "plots" / "root" / f"{configuration.name}.root", out_dir / "merged.sha256",
                    complete[0].out.parent / "points.json")
 
-    data = settings.get("data", {})
+    # use_data = false (V44): the [plot.data] table stays but is not drawn; a ratio then divides by
+    # each page's first curve, the first value of its curve axis
+    data = settings.get("data", {}) if settings.get("use_data", True) is not False else {}
     data_file = source = None
     if data:
         source = data_source(data["file"], run)

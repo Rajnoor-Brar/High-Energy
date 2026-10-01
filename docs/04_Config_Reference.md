@@ -629,6 +629,7 @@ style.legend.position = "bottom-left"
 | `formats` | array | `["pdf"]` | `pdf`, `png`, `svg`, `eps`. mkhtml writes pdf and png always. |
 | `objects` | array of globs | every 1D object | matched against the option-free YODA path (`/photo_eic/d01-x01-y01`) or any variant's path. No object matching is an error. |
 | `ratio` | bool | false | a ratio pad: each curve over the data, or over the first curve when there are no data |
+| `use_data` | bool | true | `false`: the `[plot.data]` table stays in the file but is not drawn, and a `ratio` divides each curve by the page's first curve, the first value of its curve axis (V44) |
 | `y_gutter` | number ≥ 0 or `"default"` | `0.5` | the top of the y axis at (1 + g) × the largest drawn value (on a log axis, g of the decades shown). `0` or `"default"`: no gutter, the tool's own range (V29) |
 | `x_gutter` | number ≥ 0 or `"default"` | `"default"` | widens x by g of its span, symmetrically (in decades on a log axis). `0` or `"default"`: the range the bins give |
 | `logx`, `logy` | bool | the `.plot` file's `LogX`/`LogY` | |
