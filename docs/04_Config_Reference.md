@@ -732,8 +732,8 @@ again. A page's config holds only what the layers changed; `build/Paint.exe PAGE
 | `page.margins.left`, `.right`, `.top`, `.bottom` | `0.16`, `0.032`, `0.066`, `0.11` | fractions of the page around the axes |
 | `text.title` | `10.0` | axis titles |
 | `text.labels` | `8.0` | tick labels |
-| `text.legend` | `10.0` | legend entries |
-| `text.header` | `10.0` | the legend's first line: the page title |
+| `text.legend` | `9.0` | legend entries, in points; the yoda backend follows it (`LegendFontSize`, for the title too) |
+| `text.header` | `9.0` | the legend's first line: the page title |
 | `curves.palette` | `["#EE3311", "#3366FF", "#109618", "#FF9900", "#990099"]` | curve colours in order: `#rrggbb`, ROOT names with offsets (`kBlue+1`) or numbers |
 | `curves.width` | `1.0` | points: steps and error bars |
 | `curves.errors` | `"bars"` | `bars` (at the bin centres), `band`, `none` |
@@ -757,7 +757,7 @@ again. A page's config holds only what the layers changed; `build/Paint.exe PAGE
 | `ratio.divisions` | `512` | the ratio pad's y ticks, ROOT's `n1 + 100·n2`: at most n1 labelled divisions (0.1 apart on the usual ~0.4–1.5), each cut into n2 by minor ticks; `508` gives 0.2. The yoda backend follows it too |
 | `ratio.decimals` | `true` | labels `1.0, 1.2` rather than `1, 1.2` |
 
-**The yoda backend** honours a `legend.position` corner, `ratio.divisions`, and `ratio.range` with `ratio.limits` (V48: it works out each page's window by Paint's rule, so both backends show the same window). Alone, it refuses
+**The yoda backend** honours a `legend.position` corner (or `best`), `text.legend`, `ratio.divisions`, and `ratio.range` with `ratio.limits` (V48: it works out each page's window by Paint's rule, so both backends show the same window). Alone, it refuses
 `root_style` and every other style key; beside the root backend (`"both"`) those are Paint's to honour and allowed,
 but a legend at `[x, y]` is still refused, because the two page sets would disagree about it.
 
