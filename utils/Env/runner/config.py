@@ -34,7 +34,7 @@ SEED_TYPES = ("identity", "manual", "random")
 PRELIM_KEYS = {"fifo": list, "files": list, "commands": list}
 MASTER_KEYS = {"master_toml": str}
 QUANTITY_KEYS = {"values": list, "tags": list, "labels": list, "key": (str, dict), "target": (str, list),
-                 "format": str, "description": str}
+                 "format": str, "description": str, "exclude": list}
 #: Keys any tool table may carry; the rest are tool-specific, checked in `tools` against the tool
 #: folder's [options], or are standard-configuration requests (<tool>_<export>, 04 §9.4).
 TOOL_COMMON = {"tool": str, "baseconfig": (str, list), "input": (str, list), "output_file": (str, list),
@@ -76,6 +76,7 @@ class Quantity:
     target: list[str] = field(default_factory=list)
     format: str = ""
     description: str = ""
+    exclude: list[int] = field(default_factory=list)   # 1-based value indices a sweep leaves out (V42)
 
 
 @dataclass
@@ -324,10 +325,17 @@ def parse(raw: dict, path: Path) -> RunConfig:
         for listed in ("tags", "labels"):
             if listed in table and len(table[listed]) != len(values):
                 raise HepError(f"'{listed}' must have one entry per value ({len(values)})", where=f"{at}.{listed}")
+        exclude = table.get("exclude", [])
+        for index in exclude:
+            if isinstance(index, bool) or not isinstance(index, int) or not 1 <= index <= len(values):
+                raise HepError(f"exclude names {index!r}, which is not a value's place", where=f"{at}.exclude",
+                               hint=f"1-based: 1 to {len(values)}, as static \"#2\" and --points 2 count")
+        if len(set(exclude)) == len(values):
+            raise HepError("exclude leaves no value to sweep", where=f"{at}.exclude")
         quantities[name] = Quantity(name=name, values=values, tags=[str(t) for t in table.get("tags", [])],
                                     labels=[str(l) for l in table.get("labels", [])], key=table.get("key"),
                                     target=_as_list(table.get("target")), format=table.get("format", ""),
-                                    description=table.get("description", ""))
+                                    description=table.get("description", ""), exclude=sorted(set(exclude)))
 
     tools: dict[str, Tool] = {}
     for tag, table in raw.get("tools", {}).items():

@@ -39,9 +39,20 @@ def axes(configuration) -> list[list[str]]:
     return [entry if isinstance(entry, list) else [entry] for entry in configuration.sweeps]
 
 
+def kept(run, group: list[str]) -> list[int]:
+    """The value indices an axis sweeps: all but those its quantities `exclude` (1-based, V42). An
+    entangled group moves together, so a value excluded by any of its quantities leaves the group."""
+    dropped = {i - 1 for name in group for i in run.quantities[name].exclude}
+    indices = [i for i in range(len(run.quantities[group[0]].values)) if i not in dropped]
+    if not indices:
+        raise HepError(f"exclude leaves the entangled group {group} no value", where=f"{run.path}",
+                       hint="its quantities' exclude lists together cover every value")
+    return indices
+
+
 def points(run, configuration) -> list[Point]:
     groups = axes(configuration)
-    ranges = [range(len(run.quantities[group[0]].values)) for group in groups]
+    ranges = [kept(run, group) for group in groups]
     page_axes = [i for i, group in enumerate(groups) if set(group) & set(configuration.plot_points)]
     out: list[Point] = []
     for number, combination in enumerate(itertools.product(*ranges), start=1):
