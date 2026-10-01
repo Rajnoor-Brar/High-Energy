@@ -68,7 +68,8 @@ Every key that takes a path has **one** convention root. There is no search path
 anything else a tool writes is a product and lives in `results/`. So a HepMC file kept for another
 configuration goes in `[prelim] files`.
 
-**Where a point lives** (`<run>` and `<cfg>` get `NN_` when they have a `serial`):
+**Where a point lives** (V43: `<run>` is `NN_<run name>` when there is a serial, the configuration's
+if it sets one, else `[run]`'s; `<cfg>` is the configuration's name alone):
 
 ```
 output/<P>/<run>/<cfg>/<point>/     cards/  config/  logs/  FIFOs and [prelim] files  provenance.json  .complete
@@ -134,7 +135,7 @@ always targeted explicitly (§8.1).
 
 ```toml
 [run]
-serial        = 3                   # optional: the run directory becomes 03_eic
+serial        = 3                   # optional: the run directory becomes 03_eic (a configuration may override it)
 name          = "eic"
 project       = "PhotoProduction"
 configuration = "pdf"               # the default; `hep run <config> <configuration>` picks another
@@ -152,7 +153,7 @@ description   = "EIC photoproduction studies"
 | `sweep_runs` | boolean | false | `hep run <config>` runs every configuration not `swept = false`, one after another (§4.1) |
 | `seed_type` | string | `"identity"` | default for configurations: how a point's seeds are chosen, `"identity"`, `"manual"` or `"random"` (02 §8) |
 | `manual_seed` | integer | none | default for configurations: under `seed_type = "manual"`, every point's seed (1 to 899,999,999); ignored otherwise (`--plan` says so) |
-| `serial` | integer | none | a directory prefix `NN_`: **location, never identity** (V12). Changing it starts a fresh location. |
+| `serial` | integer | none | the prefix `NN_` of the run's directory, `NN_<name>`: **location, never identity** (V12). A configuration's `serial` overrides it (V43). Changing it starts a fresh location. |
 | `event_count` | integer | none | default for configurations; one of the two must set it |
 | `threads` | integer | 1 | default for configurations. `0` means every core, **resolved to a number at plan time** |
 | `parallelism` | integer | 1 | default for configurations: how many points run at once (V36). `threads` stays each point's; never part of an identity or a seed, so changing it reruns nothing |
@@ -224,7 +225,7 @@ prelim      = { fifo = ["events.hepmc"] }    # replaces [prelim] for this config
 | `pre`, `post` | array | `[]` | the form of `tools` (§5.4) |
 | `static` | table | `{}` | merged over `[static]`, key by key (§7) |
 | `prelim` | table | `[prelim]` | **replaces** `[prelim]` whole for this configuration; `{}` means none |
-| `serial` | integer | none | directory prefix `NN_` |
+| `serial` | integer | `[run].serial` | overrides `[run].serial` for this configuration: its points go to `<P>/NN_<run name>/<cfg>/` (V43) |
 | `name` | string | the table key | the directory name |
 | `title` | string | the table key | the header line of the run under `[run].sweep_runs`: `run 02 - <title> -` (§4.1) |
 | `swept` | boolean | true | `false` leaves this configuration out of `[run].sweep_runs` (§4.1); `hep run <config> <cfg>` still runs it |

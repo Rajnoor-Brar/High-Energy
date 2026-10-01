@@ -495,7 +495,7 @@ point's block whole when it ends (in the order they finish). `--plan` prints the
 
 ```bash
 hep plot a.yoda b.yoda --labels "Tune A,Tune B" --ratio --objects "/MC_JETS/*"
-hep plot results/PhotoProduction/03_eic/01_pdf/plots/root/pdf.root      # a sweep: a curve per point
+hep plot results/PhotoProduction/01_eic/pdf/plots/root/pdf.root      # a sweep: a curve per point
 ```
 
 No run TOML: one page per object any file holds, one curve per file (or per point of a merged

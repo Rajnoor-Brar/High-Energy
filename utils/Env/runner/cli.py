@@ -96,8 +96,7 @@ def build_plans(args, key: str | None) -> Planned:
 
 def journal_path(run, configuration) -> Path:
     """output/<P>/<run>/<cfg>/status.jsonl: a run's journal, which hep watch follows."""
-    return (output_root() / run.project / tools.location(run.serial, run.name)
-            / tools.location(configuration.serial, configuration.name) / "status.jsonl")
+    return output_root() / tools.run_dir(run, configuration) / "status.jsonl"
 
 
 def header(number: int, configuration) -> str:

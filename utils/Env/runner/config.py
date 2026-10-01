@@ -401,7 +401,7 @@ def parse(raw: dict, path: Path) -> RunConfig:
         if event_count is None:
             raise HepError("no event_count: set it here or in [run]", where=at)
         configurations[key] = Configuration(
-            key=key, name=table.get("name", key), serial=table.get("serial"),
+            key=key, name=table.get("name", key), serial=table.get("serial", run.get("serial")),   # V43
             swept=table.get("swept", True), title=table.get("title", key),
             seed_type=_seed_type(table.get("seed_type", run.get("seed_type", "identity")),
                                  f"{at}.seed_type" if "seed_type" in table else f"{where}: [run].seed_type"),
