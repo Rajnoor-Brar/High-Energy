@@ -34,8 +34,8 @@ Two more folders are not tools in a chain:
 - **Paint** (`utils/Apps/Paint/`) is driven by the plot stage, never named in `tools` (§17).
 
 **Not tools at all.** *Providers* (LHAPDF, FeynRules, SARAH) are plan-time checks: a mapping with
-`check = "lhapdf"` (a bare set name) or `"pythia_pdf"` (`LHAPDF6:<set>`) refuses an uninstalled PDF
-set (C10). *Analysis algorithms* (FastJet, ROOT
+`check = "lhapdf:bare"` (a bare set name) or `"lhapdf:pythia"` (`LHAPDF6:<set>`, or one of Pythia's own
+sets, checked against its PDFSelection.xml) refuses an uninstalled PDF set (C10, `utils/Env/lhapdf/provider.py`, V60). *Analysis algorithms* (FastJet, ROOT
 libraries) are `// requires:` names in a source ([06 §2](06_Developer_Guide.md#2-the-build)). A
 *detector simulation* with no command line of its own (Geant4) is a module program with
 `// requires: geant4`. *Statistics* (RooFit, pyhf, uproot, scikit-learn) are custom tools, usually
@@ -111,6 +111,7 @@ output_file = "photo.yoda"
   from `rivet --version`.
 - **Exports** `rivet_analyses`: `analyses` (with this point's options applied, e.g.
   `photo_eic:R=0.4`) and `plugin_path` (`build/Rivet`).
+- **Its own code** is `utils/Env/rivet/render.py`'s `options` hook (V60): the analyses with their options, the `.info` check, `{analyses}` for the argv; the runner core names no tool.
 - Status by filters: `Event N (` → progress, `ERROR`/`Exception` → error, `WARN` → warning (the
   "unvalidated" warning ignored). Ledger: L7, L9, L10, L19.
 

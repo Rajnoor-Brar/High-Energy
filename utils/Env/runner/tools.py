@@ -33,12 +33,13 @@ from .sweep import label_of, tag_of
 ENV = Path(__file__).resolve().parents[1]                 # utils/Env
 
 FOLDER_SECTIONS = {
-    "tool": {"category", "executable", "streamable", "status", "consumes_events", "produces_events"},
+    "tool": {"category", "executable", "streamable", "status", "consumes_events", "produces_events", "config_file",
+             "config_always"},
     "card": {"style", "ext", "comment", "bools", "seed", "seed_parallel", "seed_range", "line", "footer",
              "drop", "trailing", "drop_inside_braces", "merge", "repeatable", "owned"},
     "command": {"argv", "env", "cwd"},
     "options": None,                                      # free: the schema of tool-specific keys
-    "outputs": {"products", "event_count", "sidecar", "written", "deal"},
+    "outputs": {"products", "event_count", "sidecar", "written", "deal", "combines"},
     "exports": None,
     "identity": {"files", "version"},
     "prepare": {"argv", "marker", "ignore", "key"},
@@ -78,6 +79,12 @@ class Folder:
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module
+
+    def hook(self, name: str):
+        """A function of the folder's render.py, or None (V60): the folder's own code, called by name."""
+        if not (self.dir / "render.py").is_file():
+            return None
+        return getattr(self.plugin, name, None)
 
     @property
     def filters(self) -> list[dict]:
@@ -292,6 +299,7 @@ class Step:
     prepare_needed: bool = False       # in the chain, or asked for by an export with needs_prepare
     sidecar_written: int | None = None # [outputs] written = "requested": the runner writes the sidecar
     card_origins: dict = field(default_factory=dict)   # card key → where the point card's value came from (V59)
+    placeholders: dict = field(default_factory=dict)   # argv placeholders a folder's hook gives (V60)
 
 
 @dataclass
@@ -339,7 +347,7 @@ def point_dirs(run, configuration, point) -> tuple[Path, Path]:
 def _check_options(tool, folder: Folder, where: str) -> None:
     schema = folder.spec.get("options", {})
     for key, value in tool.extra.items():
-        if EXPORT.match(key) and tool.tool in ("custom", "module") and EXPORT.match(key).group("tool") in folders():
+        if EXPORT.match(key) and folder.get("tool", "config_file") and EXPORT.match(key).group("tool") in folders():
             continue
         if key not in schema:
             raise HepError(f"unknown key '{key}' for a {folder.name} tool", where=where,
@@ -355,8 +363,9 @@ def _check_options(tool, folder: Folder, where: str) -> None:
 
 
 def _export_requests(run, tool) -> dict[str, str]:
-    """custom/module: `<tool>_<export> = true | "<tag>"` → {request key: referenced tag} (C13)."""
-    if tool.tool not in ("custom", "module"):
+    """A folder with [tool] config_file (custom, module): `<tool>_<export> = true | "<tag>"` → {request key:
+    referenced tag} (C13)."""
+    if not folder_of(tool).get("tool", "config_file"):
         return {}
     out = {}
     for key, value in tool.extra.items():
@@ -543,8 +552,9 @@ def plan_point(run, configuration, point, master: dict, *, post: dict | None = N
     alternatives = [v for name in selectors if name in run.quantities for v in run.quantities[name].values
                     if isinstance(v, str) and v in run.tools]
     builtin = {name: _builtin_value(run, name, values[name]) for name in qmod.BUILTIN if name in values}   # V56
+    configured = {t for t in rendered_tags if folder_of(run.tools[t]).get("tool", "config_file")}
     consumers = qmod.consumer_table(run, master, [n for n in values if n not in selectors and n not in builtin],
-                                    rendered_tags, alternatives)
+                                    rendered_tags, alternatives, configured)
     consumers.update({name: [] for name in selectors if name in values})   # it chooses the tool itself
     consumers.update({name: [] for name in builtin})                        # it is the point's events or threads
 
@@ -751,7 +761,7 @@ def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
         elif mapping.form == "flag":
             flags.extend([mapping.key, native(value, bools, mapping.format)])
         elif mapping.form == "option":
-            options.setdefault(mapping.analysis, {})[mapping.key] = native(value, ["1", "0"], mapping.format)
+            options.setdefault(mapping.analysis, {})[mapping.key] = native(value, bools, mapping.format)
         elif mapping.form == "config":
             config_values[mapping.key] = value
         elif mapping.form == "seed":
@@ -818,29 +828,21 @@ def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
         raise HepError(f"{folder.name} has no card, but quantities set native keys on it: {', '.join(lines)}",
                        where=f"[tools.{step.tag}]", hint="target an option or a config key instead")
 
-    # analysis-style tools (rivet): analyses with their options
-    if "analyses" in tool.extra:
-        common = {k: native(v, ["1", "0"]) for k, v in tool.extra.get("options", {}).items()}
-        rendered = []
-        for analysis in tool.extra["analyses"]:
-            base, *inline = analysis.split(":")
-            merged = dict(common)                                  # the table's, for every analysis …
-            merged.update(item.partition("=")[::2] for item in inline)   # … the analysis's own, written inline …
-            merged.update(options.get(base, {}))                   # … and the point's quantities, most specific last
-            rendered.append(":".join([base, *(f"{k}={v}" for k, v in sorted(merged.items()))]))
-        unknown = set(options) - {a.split(":")[0] for a in tool.extra["analyses"]}
-        if unknown:
-            raise HepError(f"options target analyses not run by {step.tag}: {', '.join(sorted(unknown))}",
-                           where=f"[tools.{step.tag}]")
-        _check_declared_options(step, rendered)
-        step.identity_parts["analyses"] = rendered
-        step.config_data = {"analyses": rendered}
+    # a folder's own options hook (rivet: its analyses and their options, V60)
+    hook = folder.hook("options")
+    if hook is not None:
+        given = hook(dict(tool.extra), options, {"tag": step.tag, "bools": bools, "native": native,
+                                                 "info_dirs": _info_dirs(folder)})
+        step.identity_parts.update(given.get("identity", {}))
+        if "config_data" in given:
+            step.config_data = given["config_data"]
+        step.placeholders = dict(given.get("placeholders", {}))
         for pattern in folder.get("identity", "files", []):
-            for analysis in rendered:
-                path = Path(expand(pattern, {"repo": str(repo_root()), "exe": str(step.exe),
-                                             "analysis": analysis.split(":")[0]}, folder.name))
-                if path.is_file():
-                    step.identity_parts.setdefault("files_sha256", {})[str(path)] = sha256_file(path)
+            for name, values in given.get("identity_values", {}).items():
+                for value in values:
+                    path = Path(expand(pattern, {"repo": str(repo_root()), "exe": str(step.exe), name: value}, folder.name))
+                    if path.is_file():
+                        step.identity_parts.setdefault("files_sha256", {})[str(path)] = sha256_file(path)
     step.identity_parts["_flags"] = flags
 
 
@@ -922,36 +924,6 @@ def _info_dirs(folder: Folder) -> list[Path]:
     return dirs
 
 
-def _check_declared_options(step: Step, rendered: list[str]) -> None:
-    """C9 (L19): each analysis has a .info, and every option it is given is declared there."""
-    dirs = _info_dirs(step.folder)
-    if not dirs:
-        return
-    for analysis in rendered:
-        name, *options = analysis.split(":")
-        info = next((d / f"{name}.info" for d in dirs if (d / f"{name}.info").is_file()), None)
-        if info is None:
-            raise HepError(f"no analysis '{name}' (no {name}.info)", where=f"[tools.{step.tag}].analyses",
-                           hint=f"searched {', '.join(str(d) for d in dirs)}; a project plugin needs `hep build`")
-        declared, inside = set(), False
-        for raw in info.read_text(encoding="utf-8", errors="replace").splitlines():
-            if re.match(r"^Options:", raw):
-                inside = True
-                continue
-            if inside:
-                match = re.match(r"^\s*-\s*([A-Za-z0-9_]+)=", raw)
-                if match:
-                    declared.add(match.group(1))
-                elif raw.strip() and not raw.startswith((" ", "\t", "-")):
-                    break
-        for option in options:
-            key = option.split("=")[0]
-            if key not in declared:
-                raise HepError(f"'{name}' does not declare the option {key}", where=f"[tools.{step.tag}]",
-                               hint=(f"declared: {', '.join(sorted(declared)) or 'none'} (in {info}). Rivet ignores "
-                                     "an undeclared option silently, so the curves would be identical (L19)"))
-
-
 def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
     folder, tool = step.folder, step.tool
     context: dict[str, Any] = {
@@ -972,7 +944,7 @@ def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
         "q:": {name: str(run.quantities[name].values[i]) for name, i in plan.values.items()},
         "cards": [str(p) for p in step.card_base] + ([str(step.card_point)] if step.card_point else []),
         "card": str(step.card_combined or ""),
-        "analyses": [x for a in step.identity_parts.get("analyses", []) for x in ("-a", a)],
+        **step.placeholders,
         **plan.context,
     }
     # every option the tool folder declares is a placeholder too: its value, or empty when unset
@@ -1004,19 +976,16 @@ def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
                 values["path"] = expand(declared["path"], {"prepared": str(source.prepare_dir or ""),
                                                            "card": str(source.card_combined or "")},
                                         f"{source.folder.name}/tool.toml [exports.{export}]")
-            for give in declared.get("gives", []):
-                if give == "analyses":
-                    values["analyses"] = source.identity_parts.get("analyses", [])
-                elif give == "plugin_path":
-                    values["plugin_path"] = str(repo_root() / "build" / "Rivet")
+            for give, template in declared.get("values", {}).items():   # V60: data, not names in the core
+                if template.startswith("identity:"):
+                    values[give] = source.identity_parts.get(template[len("identity:"):], [])
                 else:
-                    raise HepError(f"{source.folder.name} export '{export}' gives unknown '{give}'",
-                                   where=f"{source.folder.name}/tool.toml")
+                    values[give] = expand(template, {"repo": str(repo_root())}, f"{source.folder.name}/tool.toml [exports.{export}]")
             standard[key] = values
         step.identity_parts.setdefault("exports", {})[key] = plan.rendered[tag].identity_parts
     context["std:"] = {k: v.get("path", "") for k, v in standard.items()}
 
-    if tool.tool in ("custom", "module"):
+    if folder.get("tool", "config_file"):
         data = dict(tool.config or {})
         consumed = {k: v for k, v in step.identity_parts.get("config_values", {}).items()}
         quantities_table = {k: v for k, v in consumed.items() if k in run.quantities}
@@ -1031,7 +1000,7 @@ def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
             data["quantities"] = quantities_table
         if standard:
             data["standard"] = standard
-        if data or tool.config is not None or tool.tool == "module":   # a kit program always takes one
+        if data or tool.config is not None or folder.get("tool", "config_always"):   # a kit program always takes one
             step.config_path = plan.out / "config" / f"{step.tag}.toml"
             step.config_data = data
             step.identity_parts["config"] = tomli_w.dumps(data)

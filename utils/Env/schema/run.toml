@@ -308,6 +308,11 @@ doc  = "its event count is checked against the producer's"
 type = "table"
 doc  = "native card settings, as written: \"HeavyIon:mode\" = 1 (over the base card, under quantities)"
 
+[tool.cores]
+type = "int"
+min  = 1
+doc  = "cores it keeps busy, for --plan's note (default: estimated)"
+
 [tool.shards]
 type    = "int"
 min     = 1

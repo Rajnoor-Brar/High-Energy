@@ -89,6 +89,7 @@ half whose layering was not had nine cycles.)
 | 0 | `errors.py` | `HepError(message, where, hint)`, `did_you_mean` |
 | 0 | `paths.py` | the repository root (by markers, or `$HEKIT_ROOT`), the `configs/`, `output/` and `results/` roots, the path rules (04 §2) |
 | 0 | `schema.py` | the run TOML's schema, `utils/Env/schema/run.toml`: every key's type, choices, bounds, default and inheritance; checking a table against it; the editor schema (V55) |
+| 0 | `hepfiles.py` | reading YODA text (objects, `/RAW` twins, counters; `.gz` too) and Rivet's data directories, once (V60) |
 | 1 | `config.py` | load the TOML, `--set`, the strict schema check; the typed model (`RunConfig`, `Configuration`, `Tool`, `Quantity`) |
 | 1 | `quantities.py` | the master TOML, static values and selectors, who consumes what (C7), provider checks (C10) |
 | 1 | `sweep.py` | points from `sweeps` (grid and zip), point names, pages, `--points` |
@@ -103,7 +104,7 @@ half whose layering was not had nine cycles.)
 | 5 | `cli.py` | `argparse`: `run`, `plot`, `watch`; the order of events |
 
 A **tool plugin** (`utils/Env/<tool>/render.py`, a plot backend's `backend.py`) may import only
-`PLUGINS_MAY_IMPORT` (`errors`, `paths`, `quantities` and `labels`), and never another plugin. The runner is standard library only,
+`PLUGINS_MAY_IMPORT` (`errors`, `paths`, `quantities`, `labels` and `hepfiles`), and never another plugin. The runner is standard library only,
 plus `tomli_w` for writing TOML and, lazily, `yaml` (Sherpa's plugin) and `uproot` (the Delphes
 count); `rich` for the live view is optional.
 

@@ -2,6 +2,8 @@
 # arguments; its [tools.<tag>.config], consumed quantities and standard-configuration requests are
 # written to config/<tag>.toml and passed as the first argument.
 [tool]
+config_file     = true             # its table's config, consumed quantities and standard configurations are
+                                   # written to config/<tag>.toml, its first argument; it may ask for exports (V60)
 category = "custom"
 status   = "none"
 

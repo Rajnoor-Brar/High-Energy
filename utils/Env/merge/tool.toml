@@ -19,6 +19,7 @@ equivalent = { kind = "flag", flag = "-e", default = true }
 
 [outputs]
 products = ["yoda"]
+combines = ["yoda"]                  # combine (V35) merges the points' YODA products with this folder (V60)
 
 [identity]
 version = ["rivet", "--version"]

@@ -9,10 +9,8 @@ from __future__ import annotations
 
 import functools
 import re
-import subprocess
-from pathlib import Path
 
-from .paths import build_root
+from . import hepfiles
 
 # ── LaTeX ($…$ in Rivet .plot files) → ROOT TLatex (V11) ──────────────────────────────────────
 
@@ -89,13 +87,7 @@ def _tlatex_line(text: str) -> str:
 @functools.cache
 def _plot_blocks(analysis: str) -> tuple:
     """The `# BEGIN PLOT` blocks of an analysis's .plot file: build/Rivet first, then Rivet's own."""
-    places = [build_root() / "Rivet"]
-    try:
-        found = subprocess.run(["rivet-config", "--datadir"], capture_output=True, text=True, timeout=30)
-        places += [Path(p) for p in found.stdout.strip().split(":") if p]
-    except (OSError, subprocess.SubprocessError):
-        pass
-    for place in places:
+    for place in hepfiles.rivet_dirs():
         path = place / f"{analysis}.plot"
         if not path.is_file():
             continue

@@ -190,6 +190,7 @@ Every section and key is checked when the folders load: an unknown one is an err
 | | `status` | `standard`, `filters`, `none` (default none) |
 | | `consumes_events` | its product's event count is checked against its input's producer sidecar |
 | | `produces_events` | an event generator: its identity is the seed basis, and its `[outputs] sidecar` is its sidecar |
+| | `config_file`, `config_always` | its table's `config`, consumed quantities and standard-configuration requests go to `config/<tag>.toml`, its first argument, and it may ask for exports (custom, module); `config_always`: even when empty (module) (V60) |
 | `[card]` | `style` | `append` (base cards then the point card: last wins), `render` (`render.py` writes the whole card), `none` (no card; values become flags or options). |
 | | `ext`, `comment` | the card's extension and comment marker (`cmnd`, `!`) |
 | | `bools` | how true and false are written (default `["true", "false"]`; Pythia `["on", "off"]`) |
@@ -207,13 +208,14 @@ Every section and key is checked when the folders load: an unknown one is an err
 | | `event_count` | how a count is read back: `yoda:<path>` (a counter's entries), `json:<key>` (the product's report), `root:<tree>` (a tree's entries) |
 | | `sidecar` | where a producer's sidecar is (`"{output}.json"`) |
 | | `written` | `"requested"`: it always makes what it is asked for or fails, so the runner writes the sidecar after exit 0 |
+| | `combines` | product suffixes this folder merges for `combine` (V35): `["yoda"]` in `merge` (V60) |
 | | `deal` | `true`: its `{outputs}` may hold a deal group (`A+B+C`: each event to one member), so it can feed a sharded tool; its sidecar must then carry `written_per_output` |
 | `[prepare]` | `argv` | the prepare step (`{repo}`, `{exe}`, `{card}`, `{prepare_card}`, `{prepared}`, `{out}`), run in the cache entry |
 | | `marker` | a file the step must leave; the `.prepared` stamp is written only then |
 | | `ignore` | card keys left out of the cache key (`EVENTS`, `n_events`, `seed`) |
 | | `key` | `"card"` (default) or `"base"`: key on the base cards only |
 | `[exports.<name>]` | `alias = "card"` | `<tool>_<name>` is `<tool>_card` |
-| | `gives` | values handed over: `analyses`, `plugin_path` |
+| | `values` | values handed over: a template (`plugin_path = "{repo}/build/Rivet"`), or `"identity:<part>"` for a part of the tool's identity (`analyses = "identity:analyses"`) (V60) |
 | | `path` | a path handed over (`{prepared}`, `{card}`) |
 | | `needs_prepare` | asking for it runs the prepare step on demand |
 | `[identity]` | `files` | files whose sha256 enters the identity (`{repo}`, `{exe}`, `{analysis}`) |
@@ -230,7 +232,7 @@ Every section and key is checked when the folders load: an unknown one is an err
 For a card that is a tree, a script, or a launch file. Plain functions:
 
 ```python
-from runner.errors import HepError        # errors, paths and quantities only (test_imports.py)
+from runner.errors import HepError        # PLUGINS_MAY_IMPORT only (runner/__init__.py, test_imports.py)
 
 def card(bases: list[str], overrides: list, context: dict) -> str:
     """The whole point card, before seeds. `bases` are the base cards' texts in order; each override
@@ -240,7 +242,17 @@ def card(bases: list[str], overrides: list, context: dict) -> str:
 def prepare_card(lines: list[str], bases: list[str], context: dict) -> str:   # optional
     """The card the prepare step reads ({prepare_card}), from the final point card's lines
     (seeds included); context has prepared, base_paths and tag."""
+
+def options(extra: dict, targeted: dict, context: dict) -> dict:             # optional (V60)
+    """A tool's own handling of its table's keys (rivet: its analyses and their options). `targeted`:
+    analysis → {option: value} from quantities; context has tag, bools, native, info_dirs. Returns
+    identity (parts), config_data, placeholders (for argv) and identity_values (the names
+    [identity] files expands, e.g. {"analysis": [...]})."""
 ```
+
+A provider (`utils/Env/<name>/provider.py`, V60) is a folder with no `tool.toml` and one function,
+`check(form, value, where)`, which a mapping names as `check = "<name>:<form>"` (`lhapdf:pythia`).
+`tests/runner/test_imports.py` fails if a core module names a tool or a provider.
 
 A value a `render.py` receives arrives through a plain `key` mapping (the master's or a quantity's);
 the key means what the plugin says (a YAML path for Sherpa, a SINDARIN variable for Whizard). Refuse

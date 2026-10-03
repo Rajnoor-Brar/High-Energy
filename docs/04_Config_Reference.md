@@ -108,7 +108,7 @@ same form:
 [quantities.pythia.compatible_quantities]           # [quantities.<tool>.compatible_quantities]
 sqrts    = { key = "Beams:eCM" }                      # the card line  Beams:eCM = value
 energies = { keys = ["Beams:eA", "Beams:eB"] }        # an array value spread over several keys, in order
-pdf      = { key = "PDF:pSet", check = "pythia_pdf" }  # the value as written; a provider check (C10)
+pdf      = { key = "PDF:pSet", check = "lhapdf:pythia" }  # the value as written; a provider check (C10)
 
 [quantities.herwig.compatible_quantities]
 seed_offset = { flag = "-x" }                         # a command-line argument instead of a card line
@@ -116,8 +116,8 @@ seed_offset = { flag = "-x" }                         # a command-line argument 
 
 Each entry takes **exactly one** of `key`, `keys`, `flag` (`format` and `check` are additions).
 `check` is a provider check (C10), with the `lhapdf install <set>` line to type when a set is not
-under `LHAPDF_DATA_PATH`. `"lhapdf"` takes a bare set name, `<set>[/member]`, as Sherpa does.
-`"pythia_pdf"` takes the value exactly as Pythia's `PDF:pSet` reads it (V40: no prefix is added):
+under `LHAPDF_DATA_PATH`. `"lhapdf:bare"` takes a bare set name, `<set>[/member]`, as Sherpa does.
+`"lhapdf:pythia"` takes the value exactly as Pythia's `PDF:pSet` reads it (V40: no prefix is added; a number must be one of Pythia's own sets, V60):
 `"LHAPDF6:<set>[/member]"`, whose set must be installed; one of Pythia's own set numbers (`13`); or
 a grid file. A bare name that is an installed LHAPDF set is refused with the `LHAPDF6:` spelling,
 since Pythia would read it as a file. A tool with a `render.py` takes plain `key` mappings and
@@ -504,6 +504,7 @@ analyses    = ["photo_eic"]        # a key of the rivet folder's [options]
 | `arguments` | array | `[]` | custom and module: argv after the config; placeholders (§10) |
 | `consumes` | array of names | `[]` | custom and module: quantities written into the config |
 | `config` | table | none | custom and module: `[tools.<tag>.config]`, extracted to a file (§9.2) |
+| `cores` | integer ≥ 1 | estimated | how many cores it keeps busy, for `--plan`'s note and the crowded warning (V60); an integrated program is estimated as the generator's threads and one more |
 
 Every other key is **tool-specific**, checked against the tool folder's `[options]` schema (type
 and `required`), or, for custom and module tools, a standard-configuration request (§9.4). An

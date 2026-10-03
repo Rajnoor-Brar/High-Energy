@@ -126,8 +126,9 @@ def static_values(run, configuration) -> dict[str, int]:
     return out
 
 
-def mappings(run, master: dict, name: str, tags: list[str]) -> list[Mapping]:
-    """Every way quantity `name` reaches the tools `tags` of this configuration."""
+def mappings(run, master: dict, name: str, tags: list[str], configured: set = frozenset()) -> list[Mapping]:
+    """Every way quantity `name` reaches the tools `tags` of this configuration. `configured`: the tags whose
+    folder writes a config file ([tool] config_file: custom, module), where a target lands as a config key."""
     quantity = run.quantities[name]
     out: list[Mapping] = []
     if quantity.target:
@@ -147,7 +148,7 @@ def mappings(run, master: dict, name: str, tags: list[str]) -> list[Mapping]:
                     raise HepError(f"target '{target}' is an analysis option: give its name in key",
                                    where=f"{run.path}: [quantities.{name}]")
                 out.append(Mapping(tag, "option", key, quantity.format, analysis=rest))
-            elif tool.tool in ("custom", "module"):
+            elif tag in configured:
                 out.append(Mapping(tag, "config", key or name, quantity.format))
             elif key:
                 out.append(Mapping(tag, "key", key, quantity.format))
@@ -185,7 +186,7 @@ def builtin_mappings(master: dict, run, tags: list[str], name: str) -> list[Mapp
 
 
 def consumer_table(run, master: dict, active: list[str], tags: list[str],
-                   alternatives: list[str] = ()) -> dict[str, list[Mapping]]:
+                   alternatives: list[str] = (), configured: set = frozenset()) -> dict[str, list[Mapping]]:
     """quantity → mappings, and rule C7: an active quantity must reach at least one tool.
 
     In a chain that chooses a tool by a quantity (`"@generator"`, V19), a value that only another
@@ -193,8 +194,8 @@ def consumer_table(run, master: dict, active: list[str], tags: list[str],
     it reaches a tool in this configuration, just not in this point's chain."""
     table = {}
     for name in active:
-        found = mappings(run, master, name, tags)
-        if not found and alternatives and mappings(run, master, name, list(alternatives)):
+        found = mappings(run, master, name, tags, configured)
+        if not found and alternatives and mappings(run, master, name, list(alternatives), configured):
             table[name] = []
             continue
         if not found:
@@ -249,45 +250,23 @@ def check_shapes(quantity, where: str) -> None:
 
 # ── providers: things a value needs installed (02 §4, category 1) ─────────────────────────────
 
-LHAPDF_PREFIXES = ("LHAPDF6:", "LHAPDF5:")
-
-
-def _lhapdf_dirs() -> list[str]:
-    import os
-    return [d for d in os.environ.get("LHAPDF_DATA_PATH", "").split(":") if d]
-
-
-def _lhapdf_installed(name: str) -> bool:
-    return any((Path(d) / name / f"{name}.info").is_file() for d in _lhapdf_dirs())
+@functools.cache
+def _provider(name: str):
+    """utils/Env/<name>/provider.py (V60): a provider's checks, loaded by name."""
+    import importlib.util
+    path = repo_root() / "utils" / "Env" / name / "provider.py"
+    if not path.is_file():
+        raise HepError(f"no provider '{name}'", hint=f"expected {path}")
+    spec = importlib.util.spec_from_file_location(f"hep_provider_{name}", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def check_provider(kind: str, value, where: str) -> None:
-    """Refuse at plan time a value whose provider is missing (C10).
-
-    * "lhapdf": the value is a bare LHAPDF set name ("<set>[/member]", Sherpa's PDF_SET).
-    * "pythia_pdf": Pythia's PDF:pSet, written as the user gives it (no prefix is added): an
-      internal set number, "LHAPDF6:<set>[/member]" (the set must be installed), or a grid file.
-      A bare name that is an installed LHAPDF set is refused: Pythia would read it as a file."""
-    text = str(value)
-    if kind == "lhapdf":
-        if text.startswith(LHAPDF_PREFIXES):
-            raise HepError(f"'{text}': this tool takes the bare LHAPDF set name", where=where,
-                           hint=f"write '{text.split(':', 1)[1]}'")
-        _require_set(text.split("/")[0], where)
-    elif kind == "pythia_pdf":
-        if isinstance(value, int) and not isinstance(value, bool) or text.isdigit():
-            return                                              # one of Pythia's internal sets
-        if text.startswith(LHAPDF_PREFIXES):
-            _require_set(text.split(":", 1)[1].split("/")[0], where)
-        elif _lhapdf_installed(text.split("/")[0]):
-            raise HepError(f"PDF:pSet = '{text}' is an LHAPDF set, which Pythia reads only as LHAPDF6:{text}",
-                           where=where, hint=f"write the value as \"LHAPDF6:{text}\"")
-    else:
-        raise HepError(f"unknown provider check '{kind}'", where=where)
-
-
-def _require_set(name: str, where: str) -> None:
-    if not _lhapdf_installed(name):
-        raise HepError(f"the PDF set '{name}' is not installed", where=where,
-                       hint=f"lhapdf install {name}   (searched LHAPDF_DATA_PATH: {', '.join(_lhapdf_dirs()) or 'unset'})")
-
+    """Refuse at plan time a value whose provider is missing (C10): `check = "<provider>:<form>"` in a tool
+    folder's quantities.toml, e.g. "lhapdf:pythia" (utils/Env/lhapdf/provider.py)."""
+    provider, _, form = kind.partition(":")
+    if not form:
+        raise HepError(f"a provider check is '<provider>:<form>', not '{kind}'", where=where)
+    _provider(provider).check(form, value, where)

@@ -99,9 +99,19 @@ def run(post: tools.PointPlan | None, every: list, run_config, configuration, *,
 
 # ── combine: the points that differ only in the combined quantities, merged (V35) ──────────────
 
+def _combiner() -> tuple[str, tuple[str, ...]]:
+    """The tool folder that merges points (V60: [outputs] combines = ["yoda"], the merge folder), and the
+    product suffixes it merges."""
+    for name, folder in tools.folders().items():
+        if folder.get("outputs", "combines"):
+            return name, tuple("." + s for s in folder.get("outputs", "combines"))
+    raise HepError("no tool folder says [outputs] combines: nothing can merge the points")
+
+
 def _yoda_product(plan) -> tuple[str, object] | None:
+    suffixes = _combiner()[1]
     for interface in plan.interfaces.values():
-        if interface.kind == "product" and not interface.shard and interface.path.suffix == ".yoda":
+        if interface.kind == "product" and not interface.shard and interface.path.suffix in suffixes:
             return interface.name, interface.path
     return None
 
@@ -138,7 +148,7 @@ def plan_combined(run, configuration, master: dict, plans: list) -> list[tools.P
             raise HepError("combine merges the points' YODA product, and these points have none", where=where)
         product = found[0][0]
         source = f"{product} of the combined points"           # not the product's own name: the output is
-        stage_run = replace(run, tools={**run.tools, MERGE_TAG: Tool(tag=MERGE_TAG, tool="merge", input=[source],
+        stage_run = replace(run, tools={**run.tools, MERGE_TAG: Tool(tag=MERGE_TAG, tool=_combiner()[0], input=[source],
                                                                       output_file=[product])})
         plan = tools.plan_point(stage_run, stage, Point(index=number, name=name, stage=COMBINED), master,
                                 post={"manifest": manifest, "products": {source: [(m.point.name, f[1])

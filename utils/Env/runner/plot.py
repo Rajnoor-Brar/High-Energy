@@ -24,7 +24,6 @@ import fnmatch
 import hashlib
 import importlib.util
 import json
-import re
 import subprocess
 import tomllib
 from dataclasses import dataclass, field, replace
@@ -32,7 +31,7 @@ from pathlib import Path
 
 import tomli_w
 
-from . import schema
+from . import hepfiles, schema
 from .errors import HepError, did_you_mean
 from .labels import labels_of, lines_of, macros, root_text, tlatex  # noqa: F401 (tlatex et al. re-exported)
 from .paths import build_root, output_root, repo_root, resolve, results_root
@@ -56,7 +55,7 @@ def formats_of(settings: dict) -> list[str]:
     return ["pdf"] if value == DEFAULT else list(value)
 STYLE_CHOICES = {"page.font": ("serif", "sans", "mono"), "curves.errors": ("bars", "band", "none"),
                  "legend.position": LEGENDS}
-COUNTERS = ("/_XSEC", "/_EVTCOUNT")
+COUNTERS = hepfiles.COUNTERS
 
 
 @dataclass
@@ -234,19 +233,13 @@ def base_of(path: str) -> str:
 
 
 def objects_of(yoda: Path) -> list[str]:
-    """The 1D objects of a YODA file that get pages: the nominal weight only (Sherpa writes a
-    variation per extra weight, as /x[EXTRA__MEWeight])."""
-    text = yoda.read_text(encoding="utf-8", errors="replace")
-    found = re.findall(r"^BEGIN YODA_(?:ESTIMATE1D|HISTO1D|SCATTER2D)_V\d+ (\S+)$", text, re.M)
-    return [p for p in found if not p.startswith(("/RAW/", "/TMP/")) and p not in COUNTERS
-            and not p.endswith("]")]            # /x[EXTRA__NTrials]: a weight variation, not a page
+    """The 1D objects of a YODA file that get pages (hepfiles.objects: .gz too)."""
+    return hepfiles.objects(yoda)
 
 
 def raws_of(yoda: Path) -> set[str]:
-    """The /RAW Histo1D twins a YODA file has, whose entries App_yd2rt keeps. A ratio made in
-    finalize has none (or an Estimate1D one), and gets no min_entries."""
-    text = yoda.read_text(encoding="utf-8", errors="replace")
-    return set(re.findall(r"^BEGIN YODA_HISTO1D_V\d+ (/RAW/\S+)$", text, re.M))    # entries: Histo1D only
+    """The /RAW Histo1D twins a YODA file has, whose entries App_yd2rt keeps (hepfiles.raw_twins)."""
+    return hepfiles.raw_twins(yoda)
 
 
 def _sha(path: Path) -> str:
@@ -275,12 +268,7 @@ def data_source(name: str, run) -> Path:
     build/Rivet for ours), which every installation has; anything else is under datasets/."""
     if name.startswith("rivet:"):
         analysis = name.split(":", 1)[1]
-        places = [build_root() / "Rivet"]
-        try:
-            found = subprocess.run(["rivet-config", "--datadir"], capture_output=True, text=True, timeout=30)
-            places += [Path(p) for p in found.stdout.strip().split(":") if p]
-        except (OSError, subprocess.SubprocessError):
-            pass
+        places = hepfiles.rivet_dirs()
         for place in places:
             for candidate in (place / f"{analysis}.yoda", place / f"{analysis}.yoda.gz"):
                 if candidate.is_file():
@@ -613,10 +601,10 @@ def files(targets: list[str], outdir: Path | None, *, labels: list[str] | None =
         tags = {i: f"f{i}" for i, _ in yodas}
         merged = merge({tags[i]: p for i, p in yodas}, work / "files.root", work / "files.sha256")
         for i, p in yodas:
-            raws = raws_of(p) if not p.name.endswith(".gz") else set()
+            raws = raws_of(p)
             found = {o: (f"{tags[i]}/{root_name(o)}",
                          f"{tags[i]}/RAW/{root_name(o)}" if "/RAW" + o in raws else None)
-                     for o in (objects_of(p) if not p.name.endswith(".gz") else _gz_objects(p))}
+                     for o in objects_of(p)}
             curves[i] = [(labels[i] if labels else p.name.split(".")[0], merged, found)]
     for i, p in enumerate(paths):
         if curves[i] is None:
@@ -646,10 +634,3 @@ def files(targets: list[str], outdir: Path | None, *, labels: list[str] | None =
             say(f"plot: {rel} failed: {_why(done)}")
     say(f"plot: {len(pages_of) - failed} of {len(pages_of)} page(s), {len(curves)} curve(s) → {outdir}")
     return failed
-
-
-def _gz_objects(path: Path) -> list[str]:
-    import gzip
-    text = gzip.open(path, "rt", encoding="utf-8", errors="replace").read()
-    found = re.findall(r"^BEGIN YODA_(?:ESTIMATE1D|HISTO1D|SCATTER2D)_V\d+ (\S+)$", text, re.M)
-    return [p for p in found if not p.startswith(("/RAW/", "/TMP/")) and p not in COUNTERS and not p.endswith("]")]

@@ -339,6 +339,11 @@
       "description": "native card settings, as written: \"HeavyIon:mode\" = 1 (over the base card, under quantities)",
       "type": "object"
      },
+     "cores": {
+      "description": "cores it keeps busy, for --plan's note (default: estimated)",
+      "type": "integer",
+      "minimum": 1
+     },
      "shards": {
       "description": "K processes on a share of the events each",
       "type": "integer",
