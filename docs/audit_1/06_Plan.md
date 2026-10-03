@@ -289,6 +289,10 @@ The goal: one event stream, runtime state off disk, and the housekeeping a daily
 
 ## Later
 
+- **F8 (on the agenda, the user 2026-10-03):** `--more N`, more statistics for complete points. The
+  user's choice so far: N more replica values of a combined seed quantity, merged by the combine and kept
+  in a runner-owned `output/…/<cfg>/more.toml`. To be circled back to after the phases: the seeding
+  conventions themselves may change, and replicas may not be needed.
 - **F9:** a Slurm/HTCondor executor, after P5 S1. Jobs run with `--journal` on a shared filesystem.
 - **K15:** a `HEKIT_*` rename, if wanted.
 
@@ -333,4 +337,4 @@ wait for the last steps of the last phase; meanwhile the code accepts what those
 | P2 | S1 S2 S3 | done: S1 (V58), S2 (V59), S3 (V62: option A, the run's beam order into each card's slots) |
 | P3 | S1 S2 S3 | done: S1 (V60), S2 (V61: tables as data, one plugin loader, twins merged, filters key), S3 (V63: PythiaRun.hh, one stage runner, Step.flags) |
 | P4 | S1 S2 S3 | S1 (V64: batch mode; B4b dropped, see V64) done; S2: B5 (V65), F7 placeholders (V66), per-value styles (V67), normalise (V68), bands (V69), index page (V70) done: S2 complete; S3: the B4c note (notes/B4c.md); decided B, "mpl", matching mkhtml until verified; S4: built (V71), pixel-identical to mkhtml, ~18× faster; awaiting the user's verification |
-| P5 | S1 S2 S3 | S1 (V72: one event stream, watch socket, --journal, --logs), S2 (V73 C++ kit; V74 CLI, housekeeping, hepkit) done; S3: B8 decided B, built (V75: auto, pipelined sweep); F8, the rest of F10, B7 next |
+| P5 | S1 S2 S3 | S1 (V72: one event stream, watch socket, --journal, --logs), S2 (V73 C++ kit; V74 CLI, housekeeping, hepkit) done; S3: B8 decided B, built (V75: auto, pipelined sweep); F8 on the agenda (Later); the rest of F10, B7 (all but hep_env.sh) next |
