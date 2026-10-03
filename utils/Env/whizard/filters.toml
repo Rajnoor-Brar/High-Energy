@@ -20,6 +20,3 @@ emit  = "error"
 [[rule]]
 match = '^\*\*\* WARNING'
 emit  = "warn"
-
-[defaults]
-last_line = true

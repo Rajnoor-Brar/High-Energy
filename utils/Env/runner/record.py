@@ -6,7 +6,7 @@ docs/02_Architecture.md §8 and §12.
   (before seeds), argv, extracted config, analyses and files, plus threads and events. It is
   computed before the seeds are written into the cards, and the seeds are then derived from it.
 * Seeds (`seed_type`, V39): the threads of a point use base … base+threads−1, and the base is
-  - "identity" (the default): 1 + int(basis[:12], 16) mod (9e8 − threads). The basis is the
+  - "identity" (the default): lo + int(basis[:12], 16) mod (hi − lo + 1 − threads), [lo, hi] the point's seed range (V54). The basis is the
     generator's own identity (the `produces_events` steps: their cards, binaries and replica
     values), so the same generator setup gives the same events in any configuration: the chain's
     point and an integrated program's (P4 S1). Without a seeded step it is the point's identity.
@@ -35,9 +35,8 @@ from pathlib import Path
 
 from .errors import HepError
 from .paths import repo_root
-from .tools import PointPlan, version_of
+from .tools import DEFAULT_SEED_RANGE, PointPlan, version_of
 
-SEED_RANGE = 900_000_000
 
 
 def identity(plan: PointPlan) -> str:
@@ -74,14 +73,17 @@ def manual_seed_of(plan: PointPlan) -> int:
     if seed is None:
         raise HepError("seed_type is manual but this point has no seed", where=where,
                        hint="set manual_seed in [run] or [run.<cfg>], or sweep a quantity targeting <tool>/seed")
-    if isinstance(seed, bool) or not isinstance(seed, int) or not 1 <= seed <= SEED_RANGE - plan.threads:
-        raise HepError(f"the seed {seed!r} is not an integer from 1 to {SEED_RANGE - plan.threads:,}", where=where,
-                       hint=f"with threads = {plan.threads} the point uses seed … seed + {plan.threads - 1}")
+    lo, hi = plan.seed_range
+    if isinstance(seed, bool) or not isinstance(seed, int) or not lo <= seed <= hi - plan.threads:
+        raise HepError(f"the seed {seed!r} is not an integer from {lo:,} to {hi - plan.threads:,}", where=where,
+                       hint=f"with threads = {plan.threads} the point uses seed … seed + {plan.threads - 1}; the range is "
+                            "its generators' [card] seed_range")
     return seed
 
 
-def seed_of(identity_hex: str, threads: int) -> int:
-    return 1 + int(identity_hex[:12], 16) % (SEED_RANGE - threads)
+def seed_of(identity_hex: str, threads: int, seed_range: tuple[int, int] = DEFAULT_SEED_RANGE) -> int:
+    lo, hi = seed_range
+    return lo + int(identity_hex[:12], 16) % (hi - lo + 1 - threads)
 
 
 def seed_basis(plan: PointPlan, replica: bool = True) -> str:
@@ -130,14 +132,16 @@ def assign_seeds(plans: list[PointPlan], rerun: frozenset[str] = frozenset()) ->
             taken.append((plan.seed, plan.seed + plan.threads))
     for plan in [p for p in plans if p.seed_type == "random" and not p.seed]:
         plan.seed_kept = False
-        while not clear(base := 1 + secrets.randbelow(SEED_RANGE - plan.threads), plan.threads):
+        lo, hi = plan.seed_range
+        while not clear(base := lo + secrets.randbelow(hi - lo + 1 - plan.threads), plan.threads):
             pass
         taken.append((base, base + plan.threads))
         plan.seed = base
     for plan in sorted([p for p in plans if p.seed_type == "identity"], key=lambda p: p.identity):
-        base = seed_of(seed_basis(plan), plan.threads)
+        lo, hi = plan.seed_range
+        base = seed_of(seed_basis(plan), plan.threads, plan.seed_range)
         while not clear(base, plan.threads):
-            base = 1 + (base + plan.threads - 1) % (SEED_RANGE - plan.threads)
+            base = lo + (base - lo + plan.threads) % (hi - lo + 1 - plan.threads)
         taken.append((base, base + plan.threads))
         plan.seed = base
 

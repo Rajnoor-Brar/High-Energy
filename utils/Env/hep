@@ -51,6 +51,9 @@ case "$cmd" in
         done
         exec make -C "$root" --no-print-directory "${jobs[@]}" "${goals[@]}"
         ;;
+    make)
+        exec make -C "$root" --no-print-directory "$@"
+        ;;
     ""|-h|--help|help)
         usage
         ;;

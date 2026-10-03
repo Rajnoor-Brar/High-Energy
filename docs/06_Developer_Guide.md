@@ -190,12 +190,14 @@ Every section and key is checked when the folders load: an unknown one is an err
 | | `status` | `standard`, `filters`, `none` (default none) |
 | | `consumes_events` | its product's event count is checked against its input's producer sidecar |
 | | `produces_events` | an event generator: its identity is the seed basis, and its `[outputs] sidecar` is its sidecar |
-| `[card]` | `style` | `append` (base cards then the point card: last wins), `render` (`render.py` writes the whole card), `none` (no card; values become flags or options). `prepend` is reserved and refused (F12). |
+| `[card]` | `style` | `append` (base cards then the point card: last wins), `render` (`render.py` writes the whole card), `none` (no card; values become flags or options). |
 | | `ext`, `comment` | the card's extension and comment marker (`cmnd`, `!`) |
 | | `bools` | how true and false are written (default `["true", "false"]`; Pythia `["on", "off"]`) |
 | | `line` | one value's line (default `"{key} = {value}"`; `"set {key} {value}"` for ThePEG and Tcl) |
 | | `footer` | lines after the values (placeholders `{output_name}`, `{tag}`, `{input}`); a line whose placeholders are all empty is left out |
 | | `seed`, `seed_parallel` | seed lines, after everything (`{seed}`; `{seeds}`, the block, only at threads > 1) |
+| | `seed_range` | `[lo, hi]`: the seeds the tool accepts (default `[1, 900_000_000]`, Pythia's); a point's seeds come from the intersection over its seeded steps (V54) |
+| | `drop`, `trailing`, `drop_inside_braces` | how the combined card leaves out a base card's comments (V54): `drop` a full-line comment (a regex; default: a line starting with `comment`), `trailing` a comment after a value, `drop_inside_braces = false` keeps comment-looking lines inside `{ … }` (Tcl) |
 | `[command]` | `argv` | the argv template (04 §10); default `["{exe}"]` |
 | | `env` | extra environment (`RIVET_ANALYSIS_PATH = "{repo}/build/Rivet"`) |
 | | `cwd` | where it runs (default the point's output directory; Whizard: `{prepared}`) |

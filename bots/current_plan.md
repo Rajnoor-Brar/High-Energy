@@ -5,8 +5,10 @@ is the state. Finished plans and task logs are in [archive.md](archive.md); deci
 
 ## Now
 
-- **audit 1, P0** (ordered 2026-10-03): S1 test isolation (V52) and S2 the manual, record and bots
-  (V53 and docs) built; the slow suite waits until the user's zeus_validation run ends. Next: S3.
+- **audit 1, P0** (ordered 2026-10-03): S1 (V52), S2 (V53), S3 (V54) done, fast suite green. Held
+  until the user's run ends: the slow suite, and S3's C++/Rivet items (K3, K4, K7, K8, K10's define,
+  yd2rt's dead parameter). A rebuilt App_Pythia, App_yd2rt, InprocJets or Rivet plugin changes the
+  identity of every point that ran it: ask before.
 - `configs/PhotoProduction/` stays untouched until the last steps of the last phase (user, 2026-10-03).
 
 ## Standing constraints

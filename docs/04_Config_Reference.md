@@ -56,7 +56,7 @@ Every key that takes a path has **one** convention root. There is no search path
 | `hep run <config>`, `hep plot <config>` | `configs/`, `.toml` optional | `PhotoProduction/eic` → `configs/PhotoProduction/eic.toml` |
 | `[master].master_toml` | `configs/<project>/` | `master.toml` |
 | `[tools.*].baseconfig` | `configs/<project>/` | `photo_ep.cmnd` |
-| `[tools.*].executable` | `build/<project>/`; if nothing is there, a command of that name on `PATH` | `Lambda.exe` → `build/Lambda/Lambda.exe`; `python3` |
+| `[tools.*].executable` | `build/<project>/`, which must exist; `path:<command>` asks for a command on `PATH` by name (V54) | `Lambda.exe` → `build/Lambda/Lambda.exe`; `path:python3` |
 | `[tools.*].status = "filters:<file>"` | `configs/<project>/` | `filters:fit_filters.toml` |
 | `[prelim].fifo`, `[prelim].files` | the point's **output** directory | `events.hepmc` |
 | `[tools.*].input` | a `[prelim]` name or another tool's `output_file` by name; otherwise a path under the point's output directory | `events.hepmc` |
@@ -153,7 +153,7 @@ description   = "EIC photoproduction studies"
 | `configuration` | string | **required** unless `sweep_runs` | must name a `[run.<cfg>]` table (C2). Under `sweep_runs` it may be left out; `hep run <config>` then ignores it |
 | `sweep_runs` | boolean | false | `hep run <config>` runs every configuration not `swept = false`, one after another (§4.1) |
 | `seed_type` | string | `"identity"` | default for configurations: how a point's seeds are chosen, `"identity"`, `"manual"` or `"random"` (02 §8) |
-| `manual_seed` | integer | none | default for configurations: under `seed_type = "manual"`, every point's seed (1 to 899,999,999); ignored otherwise (`--plan` says so) |
+| `manual_seed` | integer | none | default for configurations: under `seed_type = "manual"`, every point's seed (from 1 to the point's generators' `[card] seed_range`: 899,999,999 for Pythia, checked when the point is planned, V54); ignored otherwise (`--plan` says so) |
 | `serial` | integer | none | the prefix `NN_` of each configuration's folder, `<name>/NN_<label>`: **location, never identity** (V12). A configuration's `serial` overrides it (V45). Changing it starts a fresh location. |
 | `event_count` | integer | none | default for configurations; one of the two must set it |
 | `threads` | integer | 1 | default for configurations. `0` means every core, **resolved to a number at plan time** |
@@ -461,7 +461,7 @@ analyses    = ["photo_eic"]        # a key of the rivet folder's [options]
 | `streamable` | bool | the folder's | may it read a FIFO? |
 | `consumes_events` | bool | the folder's | is its event count checked against the producer's sidecar? |
 | `shards` | integer ≥ 1 | 1 | K > 1: K processes of this tool, each on a share of the events, merged into its `output_file` by the folder's merge tool (V31; rivet, [05 §3.1](05_Tools_Reference.md#31-sharded-rivet-shards--k)). The chain is unchanged. |
-| `executable` | string | the folder's | custom and module: bare → `build/<project>/<name>`, else `PATH` |
+| `executable` | string | the folder's | custom and module: bare → `build/<project>/<name>` (must be built); `path:<command>` → `PATH` |
 | `arguments` | array | `[]` | custom and module: argv after the config; placeholders (§10) |
 | `consumes` | array of names | `[]` | custom and module: quantities written into the config |
 | `config` | table | none | custom and module: `[tools.<tag>.config]`, extracted to a file (§9.2) |
@@ -806,6 +806,8 @@ hep run CONFIG [CONFIGURATION] [--plan] [--points SEL] [--set KEY=VALUE]… [--r
                                [--only pre|post|plot] [--plain]
 ```
 
+Options and positionals may come in any order (`hep run eic --plain pdf`, V54).
+
 | Option | Does |
 |---|---|
 | `CONFIG` | `configs/<CONFIG>[.toml]`, or `./path` from the repository root |
@@ -855,8 +857,10 @@ on to it, and leaves after the last or on a stop.
 
 ```
 hep build [TARGET…] [--tests] [--clean] [--configure] [-j N]
-make <path>/<X>.exe | <path>/<x>.so | all | tests | test | test-slow | configure | list | clean
+hep make <path>/<X>.exe | <path>/<x>.so | all | tests | test | test-slow | configure | list | clean
 ```
+
+`hep make …` is `make …` from the repository root, wherever it is typed (V54).
 
 `hep build` is `make all` from the repository root (every module program, Rivet plugin and app, and
 Herwig's repository), on every core by default. `--tests` adds the C++ tests, `--clean` empties

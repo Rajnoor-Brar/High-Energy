@@ -314,7 +314,7 @@ The goal: one event stream, runtime state off disk, and the housekeeping a daily
 
 | Phase | Steps | State |
 |---|---|---|
-| P0 | S1 S2 S3 | S1 (V52) and S2 (V53, docs, bots) done, fast suite green; the slow suite waits for the user's run. S3 next |
+| P0 | S1 S2 S3 | S1 (V52), S2 (V53), S3 (V54) done; held: the C++ and Rivet items of S3 (K3, K4, K7, K8, K10's define, yd2rt's dead parameter), which rebuild binaries in the user's points' identities |
 | P1 | S1 S2 S3 | not started |
 | P2 | S1 S2 S3 | not started |
 | P3 | S1 S2 S3 | not started |

@@ -70,6 +70,9 @@ def build_root() -> Path:
     return repo_root() / "build"
 
 
+#: Keys whose root is the point's own directory: resolve() is always given it (`root=`).
+POINT_KEYS = ("prelim", "input", "output")
+
 #: The convention root of each path-taking key, as a function of the project (04 §2).
 ROOTS = {
     "config":     lambda project: configs_root(),
@@ -99,6 +102,8 @@ def resolve(value: str, key: str, *, project: str = "", root: Path | None = None
     if value.startswith("./"):
         return repo_root() / value[2:]
     if root is None:
+        if key in POINT_KEYS:
+            raise HepError(f"'{key}' paths are under a point's directory, which was not given", where=where)
         if key not in ROOTS:
             raise HepError(f"no convention root for key '{key}'", where=where)
         root = ROOTS[key](project)

@@ -275,8 +275,11 @@ alone (their cards without comments, base cards, binaries, replica values) with 
 a detector simulation or an analysis downstream does not move it.
 
 ```
-base  = 1 + int(basis[:12], 16) mod (9·10⁸ − threads)        threads use base … base + threads − 1
+base  = lo + int(basis[:12], 16) mod (hi − lo + 1 − threads)    threads use base … base + threads − 1
 ```
+
+`[lo, hi]` is the point's seed range: the intersection of its seeded tools' `[card] seed_range`
+(V54), by default Pythia's 1 … 9·10⁸, which every seed came from before.
 
 Blocks are checked for overlap across the whole plan, and a clash moves up by `threads` (L4), so two
 points of one plan never share events. Across configurations, **the same generator set-up gives the

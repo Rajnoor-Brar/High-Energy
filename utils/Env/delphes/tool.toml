@@ -14,6 +14,7 @@ consumes_events = true
 style   = "append"                  # Tcl: a later `set` wins
 ext     = "tcl"
 comment = "#"
+drop_inside_braces = false         # Tcl: a "#" line inside { … } can be a list element
 line    = "set {key} {value}"
 seed    = ["set RandomSeed {seed}"]
 

@@ -85,8 +85,8 @@ output_file = "photo.yoda"
 
 - **Runs** `rivet -o <partial output> -a <analysis[:options]>… <input>`, with
   `RIVET_ANALYSIS_PATH = build/Rivet`.
-- **Options**, in increasing precedence: inline (`NAME:OPT=V`), `options`, then quantities
-  targeting `"<tag>/<analysis>"`. Each analysis must have a `.info` (`build/Rivet/`, then
+- **Options**, in increasing precedence (the parent→child rule, V54): `options` (every analysis), the
+  analysis's own inline `NAME:OPT=V`, then quantities targeting `"<tag>/<analysis>"`. Each analysis must have a `.info` (`build/Rivet/`, then
   `rivet-config --datadir`), and every option it is given must be declared in the `.info`'s
   `Options:` (C9, L19). A quantity's option aimed at an analysis the tool does not run is an error.
 - **Consumes** nothing through the master: beams and energies come from the events (L9).

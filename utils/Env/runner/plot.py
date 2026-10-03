@@ -36,6 +36,7 @@ from .errors import HepError, did_you_mean
 from .labels import labels_of, lines_of, macros, root_text, tlatex  # noqa: F401 (tlatex et al. re-exported)
 from .paths import build_root, output_root, repo_root, resolve, results_root
 from .record import is_complete
+from .tools import sha256_file
 from .sweep import axes, label_of, tag_of
 
 BACKENDS = ("root", "yoda")
@@ -292,7 +293,7 @@ def raws_of(yoda: Path) -> set[str]:
 
 
 def _sha(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return sha256_file(path)
 
 
 def convert(yoda: Path, target: Path) -> Path:

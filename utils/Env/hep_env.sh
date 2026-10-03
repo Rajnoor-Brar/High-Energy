@@ -136,7 +136,7 @@ hep_cd() {
 }
 hep_help() {
     cat << HLP
-hep run | watch | build   the framework (hep --help)
+hep run | plot | watch | build | make   the framework (hep --help)
 HEP environment commands:
   hep_status             installed tool versions
   hep_refresh            reload the environment from scratch

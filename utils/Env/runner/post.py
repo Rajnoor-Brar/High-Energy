@@ -45,7 +45,7 @@ def plan_pre(run, configuration, master: dict, points: list) -> tools.PointPlan 
     manifest = tools.point_dirs(run, configuration, Point(index=-1, name=PRE))[0].parent / "points.json"
     pre = tools.plan_point(run, stage, Point(index=-1, name=PRE), master, post={"manifest": manifest, "products": {}})
     pre.identity = record.identity(pre)
-    tools.finalise(pre, record.seed_of(pre.identity, pre.threads))
+    tools.finalise(pre, record.seed_of(pre.identity, pre.threads, pre.seed_range))
     return pre
 
 
@@ -76,7 +76,7 @@ def plan(run, configuration, master: dict, plans: list) -> tools.PointPlan | Non
                             post={"manifest": manifest, "products": products})
     post.upstream = [p.identity for p in plans]
     post.identity = record.identity(post)
-    tools.finalise(post, record.seed_of(post.identity, post.threads))
+    tools.finalise(post, record.seed_of(post.identity, post.threads, post.seed_range))
     return post
 
 
@@ -146,7 +146,7 @@ def plan_combined(run, configuration, master: dict, plans: list) -> list[tools.P
         plan.point = replace(plan.point, choice=choice)
         plan.upstream = [m.identity for m in members]
         plan.identity = record.identity(plan)
-        tools.finalise(plan, record.seed_of(plan.identity, plan.threads))
+        tools.finalise(plan, record.seed_of(plan.identity, plan.threads, plan.seed_range))
         out.append(plan)
     return out
 

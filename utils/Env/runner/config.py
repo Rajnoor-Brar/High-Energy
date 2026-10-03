@@ -180,8 +180,10 @@ def _seed_type(value: str, where: str) -> str:
 
 
 def _manual_seed(value: int | None, where: str) -> int | None:
-    if value is not None and not 1 <= value < 900_000_000:          # Pythia's range (record.SEED_RANGE)
-        raise HepError(f"manual_seed {value} is out of range", where=where, hint="1 to 899,999,999")
+    """At least 1 here; the upper bound is the point's generators' `[card] seed_range` (V54), checked
+    when the point is planned."""
+    if value is not None and value < 1:
+        raise HepError(f"manual_seed {value} is out of range", where=where, hint="a seed is at least 1")
     return value
 
 

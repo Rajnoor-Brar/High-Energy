@@ -417,7 +417,7 @@ How it is built: [05 §18](05_Tools_Reference.md#18-modulehh). → `eic inproc`.
 ```toml
 [tools.fit]
 tool        = "custom"
-executable  = "python3"                           # nothing under build/<P>/: a command on PATH
+executable  = "path:python3"                      # a command on PATH, asked for by name (V54)
 arguments   = ["./modules/Lambda/fit_mass.py", "{in:lambda.root}", "{partial:output}"]   # your script
 input       = "lambda.root"
 output_file = "fit.json"

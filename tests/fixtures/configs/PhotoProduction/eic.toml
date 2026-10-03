@@ -159,7 +159,7 @@ output_file = "delphes.root"
 
 [tools.jets_reco]             # a custom analysis at detector level
 tool        = "custom"
-executable  = "python3"
+executable  = "path:python3"            # V54: PATH by name
 arguments   = ["{repo}/modules/PhotoProduction/delphes_jets.py", "{input}", "{partial:output}"]
 input       = "delphes.root"
 output_file = "jets_reco.json"

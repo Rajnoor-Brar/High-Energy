@@ -47,7 +47,6 @@ def test_the_keys_and_where_they_win(scratch):
 @pytest.mark.parametrize("changes, message", [
     ({"run__seed_type": "fixed"}, "one of identity, manual, random"),
     ({"run__manual_seed": 0}, "out of range"),
-    ({"run__one__manual_seed": 900_000_000}, "out of range"),
     ({"run__seed_type": 3}, "must be a string"),
 ])
 def test_what_is_refused_when_read(scratch, changes, message):
@@ -149,3 +148,20 @@ def test_stages_keep_the_identity_rule(scratch):
     conf = run.configuration(None)
     groups = post.plan_combined(run, conf, quantities.load_master(run.project, run.master_toml), build(data, scratch))
     assert groups and all(g.seed_type == "identity" and record.seed_rule(g) == "generator" for g in groups)
+
+
+def test_a_manual_seed_past_the_generators_range_is_refused_when_planned(scratch):
+    """The upper bound is the point's generators' [card] seed_range (V54): Pythia's 9·10⁸ here."""
+    data = raw(run__seed_type="manual", run__one__manual_seed=900_000_000)
+    with pytest.raises(HepError, match="not an integer from 1 to 899,999,999"):
+        build(data, scratch)
+
+
+def test_the_seed_range_is_the_intersection_of_the_seeded_folders(scratch):
+    [p] = build(raw(), scratch)
+    assert p.seed_range == (1, 900_000_000) == tools.DEFAULT_SEED_RANGE
+    fake = lambda spec: type("S", (), {"folder": tools.Folder("x", scratch, spec)})()
+    narrow = fake({"card": {"seed": ["s {seed}"], "seed_range": [10, 1000]}})
+    unseeded = fake({"card": {"seed_range": [5, 6]}})                      # writes no seed: does not count
+    assert tools.seed_range_of([narrow, unseeded]) == (10, 1000)
+

@@ -46,6 +46,18 @@ def test_an_analysis_option_quantity_reaches_rivet(scratch):
     assert p.point.name == "r07"
 
 
+
+def test_an_inline_analysis_option_beats_the_tables_options(scratch):
+    """Child over parent: `analyses = ["photo_eic:R=0.4"]` is the analysis's own value, and the table's
+    `options` (for every analysis) give way to it; a quantity, the point's value, is last."""
+    data = raw(tools__rivet__analyses=["photo_eic:R=0.4"], tools__rivet__options={"R": 1.0, "ETMIN": 6})
+    _, _, p = plan(data, scratch)
+    assert "photo_eic:ETMIN=6:R=0.4" in p.rendered["rivet"].argv
+    data["run"]["one"]["sweeps"] = ["radius"]
+    data["quantities"]["radius"] = {"target": "rivet/photo_eic", "key": "R", "values": [0.7], "tags": ["r07"]}
+    _, _, p = plan(data, scratch)
+    assert "photo_eic:ETMIN=6:R=0.7" in p.rendered["rivet"].argv
+
 # ── C6: connections ────────────────────────────────────────────────────────────────────────────
 
 def test_c6_a_fifo_into_a_non_streamable_tool_is_refused(scratch):
@@ -157,3 +169,44 @@ def test_a_custom_tool_gets_its_config_and_consumed_quantities(scratch):
     written = tomllib.loads(p.writes[p.rendered["fit"].config_path])
     assert written == {"model": "gauss", "quantities": {"pdf": "LHAPDF6:MSTW2008lo68cl"}}
     assert p.rendered["fit"].argv[-1] == f"{p.res}/fit.json"
+
+
+# ── V54: an executable is built, or asked for on PATH by name ─────────────────────────────────
+
+def test_a_bare_executable_must_be_built_and_never_falls_back_to_path(scratch):
+    data = raw(run__one__tools=[["pythia", "rivet"], "probe"], tools__probe={"tool": "custom", "executable": "true"})
+    with pytest.raises(HepError, match="is not built") as caught:
+        plan(data, scratch)
+    assert 'path:true' in caught.value.hint
+
+
+def test_path_prefix_takes_the_command_from_path(scratch):
+    data = raw(run__one__tools=[["pythia", "rivet"], "probe"], tools__probe={"tool": "custom", "executable": "path:true"})
+    _, _, p = plan(data, scratch)
+    assert p.rendered["probe"].exe.name == "true" and p.rendered["probe"].exe.is_absolute()
+    data["tools"]["probe"]["executable"] = "path:no-such-command-here"
+    with pytest.raises(HepError, match="is not a command on PATH"):
+        plan(data, scratch)
+
+
+def test_the_combined_card_carries_the_base_settings_without_comments(scratch):
+    """V54: the card that runs is the base's settings, under one `! from <base>` line, then the point card."""
+    _, _, p = plan(raw(), scratch)
+    step = p.rendered["pythia"]
+    combined = p.writes[step.card_combined].splitlines()
+    base = step.card_base[0]
+    assert combined[0] == f"! from {base}"
+    settings = [line for line in combined[1:] if not line.startswith("!")]
+    assert settings and all(line.strip() and line.strip()[0].isalnum() for line in settings)
+    assert not any(" ! " in line for line in settings)                         # trailing comments gone
+    kept = [l.split("!")[0].rstrip() for l in base.read_text().splitlines() if l.strip()[:1].isalnum()]
+    assert settings[:len(kept)] == kept                                        # every setting, in order
+
+
+def test_a_tcl_comment_line_inside_braces_is_kept(scratch):
+    from runner import tools
+    card = scratch / "c.tcl"
+    card.write_text("# top\nset ExecutionPath {\n  A\n#  B\n}\n\n# end\nset X 1  # not a comment in Tcl\n")
+    folder = tools.folders()["delphes"]
+    assert tools.clean_base(card, folder) == [f"# from {card}", "set ExecutionPath {", "  A", "#  B", "}",
+                                              "set X 1  # not a comment in Tcl"]
