@@ -129,6 +129,7 @@ class RunConfig:
     master_toml: str | None
     raw: dict
     sweep_runs: bool = False                            # `hep run` executes every swept configuration (V38)
+    sets: list = field(default_factory=list)            # the --set overrides it was loaded with (V77: provenance)
     included: dict = field(default_factory=dict)        # "<section>.<name>" → the [master].include file it came from
 
     def configuration(self, name: str | None) -> Configuration:
@@ -361,6 +362,7 @@ def load(name: str, *, sets: list[str] = ()) -> RunConfig:
     apply_sets(raw, list(sets))
     run = parse(raw, path)
     run.included = included
+    run.sets = list(sets)
     return run
 
 

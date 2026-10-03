@@ -100,6 +100,7 @@ half whose layering was not had nine cycles.)
 | 3 | `execute.py` | `[prelim]`, prepare steps, groups as supervised process groups, the count checks, settling products |
 | 3 | `status.py` | the status and output pipes, read on a thread per tool; the filter rules; a failed tool's tail |
 | 3 | `record.py` | identity, seeds, skip, provenance, `points.json` |
+| 3 | `results.py` | a run's results from Python, read from `points.json` (V77) |
 | 4 | `watch.py` | the reducer of events (`State`), the live and plain views, `hep watch` |
 | 4 | `plot.py` | the plot stage: the merged sweep, page configs, the style layers, Paint and the other backends; `hep plot` on files |
 | 4 | `post.py` | the pre and post stages |

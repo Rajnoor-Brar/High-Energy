@@ -102,3 +102,36 @@ def test_plot_takes_a_config_and_overlay_takes_files():
     with pytest.raises(HepError, match="is not a YODA or ROOT file"):
         cli.cmd_overlay(argparse.Namespace(files=["a.yoda", "notes.txt"], output=None, labels=None, objects=[],
                                            formats="png", ratio=False, style=None))
+
+
+def test_results_load_reads_the_manifest(trees):
+    """V77: runner.results reads points.json, plans nothing."""
+    import json
+    from runner import results
+    p = planned("PhotoProduction/eic", "pdf")
+    from runner import record
+    path = p.every[0].out.parent / "points.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(record.points_manifest(p.every, p.run, p.configuration), default=str))
+    points = results.load("PhotoProduction/eic", "pdf")
+    assert [q.name for q in points] == [q.point.name for q in p.every]
+    first = points[0]
+    assert first.values["pdf"].tag == "MSTW08lo" and first.values["pdf"].swept and not first.complete
+    assert first.yoda() == p.every[0].res / "photo.yoda"
+    assert set(results.runs("PhotoProduction/eic")) == {"pdf"}
+    with pytest.raises(HepError, match="no results yet"):
+        results.load("PhotoProduction/eic", "single")
+
+
+def test_reproduce_refuses_a_setup_that_changed(trees, capsys):
+    """V77: a provenance whose identity is not today's plan's is a different point."""
+    import json
+    p = planned("PhotoProduction/eic", "single")
+    point = p.every[0]
+    point.out.mkdir(parents=True)
+    (point.out / "provenance.json").write_text(json.dumps({
+        "config_file": str(p.run.path), "configuration": "single", "point": point.point.name, "run": "eic",
+        "project": "PhotoProduction", "identity": "0" * 64, "seed": 1, "sets": []}))
+    with pytest.raises(HepError, match="not reproduced"):
+        cli.cmd_reproduce(argparse.Namespace(provenance=str(point.out), anyway=False, plain=True))
+    assert "changed since it ran" in capsys.readouterr().out

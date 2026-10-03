@@ -27,7 +27,7 @@ from pathlib import Path
 from . import config as configmod
 from . import execute, house, plot, post, record, sweep, tools
 from .errors import HepError
-from .paths import output_root
+from .paths import output_root, results_root
 from .quantities import load_master
 from .events import Bus, Hub, Journal, RunBus, greeting, connect, hubs
 from .watch import follow_events, follow_file, view
@@ -79,6 +79,11 @@ def parser() -> argparse.ArgumentParser:
     state = commands.add_parser("status", help="each configuration's points: complete, stale, incomplete or to run")
     state.add_argument("config", nargs="?", help="one config (default: every config)")
     state.add_argument("configuration", nargs="?", help="one configuration of it")
+
+    again = commands.add_parser("reproduce", help="run a finished point again, from its provenance, beside it")
+    again.add_argument("provenance", help="output/…/<point>/provenance.json")
+    again.add_argument("--anyway", action="store_true", help="run it even though the setup changed since")
+    again.add_argument("--plain", action="store_true", help="plain lines instead of the live view")
 
     clean = commands.add_parser("clean", help="remove what the runner made and no plan uses (output/ only)")
     clean.add_argument("config", nargs="?", help="one config (default: every config, and the unused caches)")
@@ -689,6 +694,89 @@ def cmd_clean(args) -> int:
     return 0
 
 
+def cmd_reproduce(args) -> int:
+    """`hep reproduce output/…/<point>/provenance.json` (V77, F10): the point again, exactly as it ran,
+    into output/<P>/.reproduce/<identity>/ (its own output/ and results/), never over the original; then
+    each product compared with the original's. The setup must still be the one that ran (the identity
+    the provenance records), else it says what changed (--why) and stops, unless --anyway. A random
+    seed is the recorded one; any other seed follows from the identity, as it did."""
+    import hashlib
+    path = Path(args.provenance)
+    if path.is_dir():
+        path = path / "provenance.json"
+    try:
+        record_ = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise HepError(f"cannot read {path}: {error}", hint="give a finished point's provenance.json")
+    config_file, key, name = record_["config_file"], record_["configuration"], record_["point"]
+    given = list(record_.get("sets", []))                     # the --set overrides it ran with
+    planned = build_plans(argparse.Namespace(config=config_file, set=given, points=None, rerun=False, only=None), key)
+    plan = next((p for p in planned.every if p.point.name == name), None)
+    if plan is None:
+        raise HepError(f"configuration '{key}' has no point '{name}' any more", where=config_file)
+    if plan.identity != record_["identity"]:
+        print(f"the setup of {name} changed since it ran ({record_['identity'][:12]} → {plan.identity[:12]}):")
+        for line in record.why(plan):
+            print(f"  {line}")
+        if not args.anyway:
+            raise HepError("not reproduced: this would be a different point", hint="--anyway runs today's setup with its seed")
+    where = output_root() / record_["project"] / ".reproduce" / record_["identity"][:12]
+    sets = []
+    if planned.configuration.seed_type == "random":
+        sets = ["--set", f'run.{key}.seed_type="manual"', "--set", f"run.{key}.manual_seed={record_['seed']}"]
+    argv = [sys.executable, str(Path(__file__).resolve().parents[1] / "run"), "run", config_file, key,
+            "--points", name, "--rerun", *[x for item in given for x in ("--set", item)], *sets,
+            *(["--plain"] if args.plain else [])]
+    env = dict(os.environ, HEKIT_OUTPUT=str(where / "output"), HEKIT_RESULTS=str(where / "results"))
+    print(f"reproducing {record_['run']} · {key} · {name} (seed {record_['seed']}) in {where}", flush=True)
+    code = subprocess.run(argv, env=env).returncode
+    if code != 0:
+        return code
+    original, again_ = plan.res, where / "results" / plan.res.relative_to(results_root())
+
+    same = True
+    for made in sorted(f for f in again_.rglob("*") if f.is_file() and not f.name.endswith(".json")):
+        rel = made.relative_to(again_)
+        before = original / rel
+        verdict = same_contents(before, made) if before.is_file() else "missing in the original"
+        same = same and verdict in ("identical", "the same values")
+        print(f"  {rel}: {verdict}")
+    return 0 if same else 1
+
+
+def same_contents(a: Path, b: Path) -> str:
+    """Two products compared by what they hold (V77): a YODA file object by object (values and errors),
+    a ROOT file histogram by histogram (uproot), anything else byte for byte. Bytes alone differ for
+    the same physics: a sharded Rivet's merge order and ROOT's write times are in the files."""
+    import hashlib
+    if hashlib.sha256(a.read_bytes()).digest() == hashlib.sha256(b.read_bytes()).digest():
+        return "identical"
+    try:
+        if a.name.endswith((".yoda", ".yoda.gz")):
+            import yoda
+
+            def table(path):
+                out = {}
+                for key, obj in yoda.read(str(path)).items():
+                    vals = [obj.vals()] if hasattr(obj, "vals") else []
+                    errs = [obj.errs()] if hasattr(obj, "errs") else []
+                    out[key] = (obj.type(), repr(vals), repr(errs))
+                return out
+            return "the same values" if table(a) == table(b) else "differs"
+        if a.suffix == ".root":
+            import numpy as np
+            import uproot
+
+            def histograms(path):
+                with uproot.open(path) as file:
+                    return {k: np.asarray(file[k].values()).tolist() for k in file.keys(cycle=False)
+                            if hasattr(file[k], "values") and callable(getattr(file[k], "values"))}
+            return "the same values" if histograms(a) == histograms(b) else "differs"
+    except ImportError:
+        return "differs in bytes (not read: no yoda/uproot)"
+    return "differs"
+
+
 def parse(argv: list[str]) -> argparse.Namespace:
     """The command line, with options and positionals in any order (`hep run eic --plain pdf`, V54):
     argparse's intermixed parsing does not take subcommands, so the subcommand's own parser reads the rest."""
@@ -724,6 +812,8 @@ def main(argv: list[str]) -> int:
             return cmd_status(args)
         if args.command == "clean":
             return cmd_clean(args)
+        if args.command == "reproduce":
+            return cmd_reproduce(args)
         return cmd_watch(args)
     except HepError as error:
         print(error.render(), file=sys.stderr)

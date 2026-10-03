@@ -957,6 +957,29 @@ and leaves when the job's process ends; under `[run].sweep_runs` the job is one 
 follows it from run to run. `--file` follows a `--journal` run's status file instead (a finished run's,
 too): it leaves when the run finishes, or follows on to the next run's journal in a sweep.
 
+### `hep reproduce`
+
+```
+hep reproduce output/<P>/<run>/<cfg>/<point>/provenance.json [--anyway] [--plain]
+```
+
+Runs a finished point again (V77), exactly as it ran: its config, its configuration, its `--set`
+overrides (the provenance records them) and its seed (a `random` seed is the recorded one; any other
+seed follows from the identity, as it did). It runs into `output/<P>/.reproduce/<identity>/` (its own
+`output/` and `results/`), never over the original, then compares each product with the original's: a
+YODA file object by object, a ROOT file histogram by histogram, anything else byte for byte (`identical`,
+`the same values`, `differs`; exit 1 if any differs). If the setup has changed since (the identity is not
+the one the provenance records) it prints what changed, as `--why`, and stops; `--anyway` runs today's
+setup with the recorded seed.
+
+### Reading results from Python
+
+`runner.results.load(CONFIG, CONFIGURATION)` (V77) reads a configuration's `points.json` and returns its
+points: `name`, `values` (each quantity's `tag`, `label`, `value`, `swept`), `products` (name → path),
+`results`, `output`, `complete`, `identity`, `seed`, and `yoda()` / `root()` for the product of that
+kind; `results.runs(CONFIG)` gives every configuration that has run. It plans nothing, so it needs no tool
+installed: for notebooks and statistics tools, with `utils/Env` on `sys.path`.
+
 ### `hep build` and `make`
 
 ```

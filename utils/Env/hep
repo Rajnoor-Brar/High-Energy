@@ -25,6 +25,7 @@ usage: hep <command> [options]
   explain <key>                    a run TOML key: type, default and meaning (plot.y_gutter, …)
   status [<config> [<cfg>]]        each configuration's points: complete, stale, incomplete, to run
   clean [<config>] [--dry-run]     remove what the runner made and no plan uses (lists, then asks)
+  reproduce <provenance.json>      run a finished point again, beside it, and compare its products
   build [targets…]                 compile module programs, apps and Rivet plugins (make all)
         --tests                    also build the C++ tests
         --clean                    empty build/ first
@@ -38,7 +39,7 @@ EOF
 cmd=${1-}
 [ $# -gt 0 ] && shift
 case "$cmd" in
-    run|watch|plot|overlay|check|ls|explain|status|clean)
+    run|watch|plot|overlay|check|ls|explain|status|clean|reproduce)
         exec python3 "$here/run" "$cmd" "$@"
         ;;
     build)

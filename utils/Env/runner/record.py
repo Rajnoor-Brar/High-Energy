@@ -257,7 +257,7 @@ def provenance(plan: PointPlan, run, configuration, started: str, finished: str,
     return {
         "point": plan.point.name,
         "run": run.name, "project": run.project, "configuration": configuration.key,
-        "config_file": str(run.path),
+        "config_file": str(run.path), "sets": list(getattr(run, "sets", [])),    # what reproduces it (V77)
         "values": {name: {"index": index, "tag": _tag(run, name, index), "value": run.quantities[name].values[index]}
                    for name, index in plan.values.items()},
         "identity": plan.identity, "seed": plan.seed, "threads": plan.threads, "events": plan.events,
