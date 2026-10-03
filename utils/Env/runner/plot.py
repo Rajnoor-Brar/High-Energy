@@ -78,6 +78,7 @@ class Page:
     style: dict = field(default_factory=dict)       # base.toml with the page's [style] over it
     plots: Path | None = None                        # results/…/plots: a backend draws into plots/<its name>/
     overlay: str = ""                                # [plot.overlay.<name>]: curves are several objects (V51)
+    bands: list = field(default_factory=list)        # per curve: its band members' (YODA, object), V69
 
 
 def backend(name: str):
@@ -318,9 +319,7 @@ def pages(run, configuration, plans) -> list[Page]:
     complete = [p for p in plans if is_complete(p) and yoda_of(p)]
     if not complete:
         return []
-    groups = [g for g in axes(configuration) if not set(g) & set(configuration.combine)]   # merged away (V35)
-    page_groups = [g for g in groups if set(g) & set(configuration.plot_points)]
-    curve_groups = [g for g in groups if g not in page_groups]
+    page_groups, curve_groups = axes_of(configuration)
 
     variants: dict[str, dict[str, list[str]]] = {}      # point → base path → its full paths
     raws = {plan.point.name: raws_of(yoda_of(plan)) for plan in complete}
@@ -352,6 +351,10 @@ def pages(run, configuration, plans) -> list[Page]:
         source = data_source(data["file"], run)
         data_file = convert(source, output_root() / run.project / ".cache" / "datasets" / f"{source.stem}.root")
 
+    band = settings.get("band", [])
+    check_band(run, configuration)
+    line_groups = [g for g in curve_groups if not set(g) & set(band)]     # what tells a band curve from another
+
     by_page: dict[str, list] = {}
     for plan in complete:
         key = "_".join(tag_of(run.quantities[g[0]], plan.point.choice[g[0]]) for g in page_groups)
@@ -376,16 +379,21 @@ def pages(run, configuration, plans) -> list[Page]:
             reference = data.get("map", {}).get(short) if data else None
             curves = [(plan, full) for plan in members for full in variants.get(plan.point.name, {}).get(path, [])]
             fill = page_fill([plan for plan, _ in curves] or members)
+            folded = _banded(curves, curve_groups, band, lambda p, f: variants[p.point.name][path].index(f))
+            envelope = f" ({', '.join(band)} envelope)" if band else ""
             page, override = page_settings(settings, path, rel, res_dir / rel, reference is not None, fill=fill)
             several = {plan.point.name for plan, _ in curves if len(variants[plan.point.name][path]) > 1}
             layer = merge_style(style, override.get("style", {}))
             document = {"page": page, "style": layer, "curve": [
                 {"file": str(merged), "object": f"{plan.point.name}/{root_name(full)}",
                  **({"raw": f"{plan.point.name}/RAW/{root_name(full)}"} if "/RAW" + full in raws[plan.point.name] else {}),
-                 "label": _curve_label(run, plan, curve_groups, curve_fill(plan))
-                          + (f" [{full.strip('/').split('/')[0].partition(':')[2]}]" if plan.point.name in several else ""),
-                 **({"style": look} if (look := _curve_look(run, plan, curve_groups)) else {})}
-                for plan, full in curves]}
+                 "label": _curve_label(run, plan, line_groups, curve_fill(plan))
+                          + (f" [{full.strip('/').split('/')[0].partition(':')[2]}]" if plan.point.name in several else "")
+                          + (envelope if folded_members else ""),
+                 **({"style": look} if (look := _curve_look(run, plan, line_groups)) else {}),
+                 **({"band": [{"file": str(merged), "object": f"{m.point.name}/{root_name(f)}"} for m, f in folded_members]}
+                    if folded_members else {})}
+                for plan, full, folded_members in folded]}
             if reference:
                 document["data"] = {"file": str(data_file), "object": root_name(reference),
                                     "label": canonical(fill(data.get("legend", "Data")))}
@@ -393,7 +401,8 @@ def pages(run, configuration, plans) -> list[Page]:
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(tomli_w.dumps(for_root(document)), encoding="utf-8")
             made.append(Page(rel, config, res_dir / rel, cell=key, object=path, document=document,
-                             sources=[yoda_of(plan) for plan, _ in curves], variants=[full for _, full in curves],
+                             sources=[yoda_of(plan) for plan, _, _ in folded], variants=[full for _, full, _ in folded],
+                             bands=[[(yoda_of(m), f) for m, f in ms] for _, _, ms in folded],
                              data=(source, reference) if reference else None,
                              overrides={k for k, v in override.items() if v != DEFAULT},
                              style=merge_style(base, layer), plots=res_dir.parent))
@@ -439,6 +448,24 @@ def texts_of(run, plan, cell: str) -> dict[str, str]:
     for step in plan.rendered.values():
         out.update(step.texts)
     return out
+
+
+def axes_of(configuration) -> tuple[list, list]:
+    """The sweep's axes that make pages (plot_points) and those that make curves; a combined axis is
+    merged away (V35) and is neither."""
+    groups = [g for g in axes(configuration) if not set(g) & set(configuration.combine)]
+    pages_ = [g for g in groups if set(g) & set(configuration.plot_points)]
+    return pages_, [g for g in groups if g not in pages_]
+
+
+def check_band(run, configuration) -> None:
+    """V69: [plot].band names curve axes of the configuration (checked at plan time too)."""
+    curve_groups = axes_of(configuration)[1]
+    for name in run.plot.get("band", []) if run.plot else ():
+        if not any(name in g for g in curve_groups):
+            raise HepError(f"[plot].band names {name}, which is not a curve axis of {configuration.key}",
+                           where=f"{run.path}: [plot].band",
+                           hint=f"curve axes: {', '.join(g[0] for g in curve_groups) or 'none'} (swept, not plot_points or combined)")
 
 
 def check_texts(run, plans) -> None:
@@ -548,6 +575,25 @@ def page_settings(settings: dict, path: str, rel: str, output: Path, with_data: 
 
 def _gutter(value):
     return value if value == "default" else float(value)
+
+
+def _banded(curves: list, curve_groups: list, band: list, of_plan) -> list:
+    """V69: the page's curves with the band quantities folded: one curve per value of the other curve
+    axes (and per variant of the object, `of_plan(plan, full)` its place), the band axes' first value,
+    with the others as its members. Without `band`: every curve, no members."""
+    if not band:
+        return [(plan, full, []) for plan, full in curves]
+    banded = [g for g in curve_groups if set(g) & set(band)]
+    rest = [g for g in curve_groups if g not in banded]
+    groups: dict = {}
+    for plan, full in curves:
+        key = (tuple(plan.point.choice[g[0]] for g in rest), of_plan(plan, full))
+        groups.setdefault(key, []).append((plan, full))
+    out = []
+    for members in groups.values():
+        members.sort(key=lambda pf: tuple(pf[0].point.choice[g[0]] for g in banded))
+        out.append((*members[0], members[1:]))
+    return out
 
 
 def _curve_look(run, plan, curve_groups) -> dict:

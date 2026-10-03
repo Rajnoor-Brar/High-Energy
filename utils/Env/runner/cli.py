@@ -99,7 +99,8 @@ def build_plans(args, key: str | None) -> Planned:
     for plan in plans:
         tools.finalise(plan, plan.seed)
         tools.check_cards(plan)                  # the tools read their cards (V59), cached by text
-    plot.check_texts(run, plans)                 # a placeholder typo costs no point run (V66)
+    plot.check_texts(run, plans)                 # a placeholder typo costs no point run (V66) …
+    plot.check_band(run, configuration)          # … nor a band's (V69)
     return Planned(run, configuration, plans, [p for p in plans if p.point.index in chosen],
                    post.plan(run, configuration, master, plans), pre_plan,
                    post.plan_combined(run, configuration, master, plans))

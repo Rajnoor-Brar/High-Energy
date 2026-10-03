@@ -62,10 +62,15 @@ namespace {
             return {1, error.what()};
         }
         std::vector<Paint::Series> curves;
+        std::vector<std::vector<Paint::Series>> members;      // V69: each curve's band members
         Paint::Series data;
         bool haveData = false;
         try {
-            for (const auto& source : page.curves) curves.push_back(Paint::load(source, false));
+            for (const auto& source : page.curves) {
+                curves.push_back(Paint::load(source, false));
+                members.emplace_back();
+                for (const auto& member : source.band) members.back().push_back(Paint::load(member, false));
+            }
             if (page.hasData) data = Paint::load(page.data, true), haveData = true;
         } catch (const std::exception& error) {
             return {4, error.what()};
@@ -76,6 +81,7 @@ namespace {
         if ((page.voidEmpty || page.minEntries > 0) && mask.empty() && curves.size() > 1)
             status.log("warn", page.name + ": curves differ in binning; nothing voided");
         Paint::applyVoid(curves, mask);
+        for (auto& band : members) Paint::applyVoid(band, mask);
 
         // align the reference data to the MC edges, or drop it
         if (haveData && !Paint::alignTo(data, curves.front())) {
@@ -86,12 +92,20 @@ namespace {
         // normalise (V68): after the void and the alignment, so the area is the drawn bins'
         if (page.normalise) {
             for (auto& c : curves) Paint::normalise(c);
+            for (auto& band : members)
+                for (auto& m : band) Paint::normalise(m);
             if (haveData) Paint::normalise(data);
         }
+        for (size_t c = 0; c < curves.size(); ++c)                 // the envelope of what is drawn (V69)
+            if (!members[c].empty() && !Paint::envelope(curves[c], members[c]))
+                status.log("warn", page.name + ": a band member's binning differs from its curve's; no band");
 
         // ranges
         std::vector<const Paint::Series*> all;
         for (const auto& c : curves) all.push_back(&c);
+        for (size_t c = 0; c < curves.size(); ++c)                 // a band's extremes are drawn too
+            if (!curves[c].bandLo.empty())
+                for (const auto& m : members[c]) all.push_back(&m);
         if (haveData) all.push_back(&data);
         Paint::Range x = page.autoRange ? Paint::autoRange(all, page.rangePad) : Paint::fullRange(all);
         if (!std::isfinite(x.lo) || !std::isfinite(x.hi)) x = Paint::fullRange(all);

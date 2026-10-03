@@ -326,3 +326,16 @@ def test_normalise_is_area_or_false(v1):
                                    "curve": [{"file": str(curves[0]), "object": "photo_eic/d01-x01-y01", "label": "a"}]}))
     done = subprocess.run([str(PAINT), str(path), "--dump-ranges"], capture_output=True, text=True, encoding="utf-8")
     assert done.returncode == 1 and "normalise" in done.stdout + done.stderr
+
+
+def test_a_band_curve_spans_its_members(v1):
+    """V69: a curve's band members widen the range to their envelope; a member of other bins is no band."""
+    where, (a, b) = v1
+    alone = v1_page(where, [b])
+    path = where / "band.toml"
+    document = {"page": {"name": "v1", "output": str(where / "band"), "auto_range": True},
+                "curve": [{"file": str(b), "object": "photo_eic/d01-x01-y01", "label": "b",
+                           "band": [{"file": str(a), "object": "photo_eic/d01-x01-y01"}]}]}
+    path.write_text(tomli_w.dumps(document))
+    assert alone["largest"] == pytest.approx(4.0) and dump(path)["largest"] == pytest.approx(5.0)
+    assert subprocess.run([str(PAINT), str(path)], capture_output=True).returncode == 0

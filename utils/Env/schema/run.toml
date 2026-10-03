@@ -347,6 +347,11 @@ default    = ["pdf"]
 default_ok = true
 doc        = "the pages' formats"
 
+[plot.band]
+type  = "list"
+items = "str"
+doc   = "curve-axis quantities drawn as one curve, their first value, with the min–max envelope of all their values (V69)"
+
 [plot.objects]
 type       = "list"
 items      = "str"

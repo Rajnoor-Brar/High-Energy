@@ -203,16 +203,29 @@ namespace Paint {
     // Steps per run of finite bins, with their errors as bars at the centres, a band, or nothing.
     inline void curve(const Series& s, const Pen& pen, const Look& look, Keep& keep, const std::string& id) {
         const int colourIndex = pen.colour;
+        const bool band = !s.bandLo.empty();
+        if (band) {                                     // V69: the members' envelope, shaded in the curve's colour
+            auto* g = keep.hold(new TGraphAsymmErrors());
+            int n = 0;
+            for (size_t i = 0; i < s.size(); ++i) {
+                if (!std::isfinite(s.y[i]) || !std::isfinite(s.bandLo[i]) || !std::isfinite(s.bandHi[i])) continue;
+                const double x = 0.5 * (s.lo[i] + s.hi[i]);
+                g->SetPoint(n, x, s.y[i]);
+                g->SetPointError(n++, x - s.lo[i], s.hi[i] - x, s.y[i] - s.bandLo[i], s.bandHi[i] - s.y[i]);
+            }
+            g->SetFillColorAlpha(colourIndex, 0.3), g->SetLineWidth(0), g->SetMarkerSize(0);
+            if (n) g->Draw("2");
+        }
         for (TH1D* h : segments(s, keep, id)) {
             h->SetLineColor(colourIndex), h->SetLineWidth(pen.width), h->SetLineStyle(pen.line);
             h->Draw("HIST ][ SAME");                    // ][: a run does not drop to the axis at its ends
-            if (look.s.errors == "band") {
+            if (look.s.errors == "band" && !band) {
                 auto* band = static_cast<TH1D*>(keep.hold(h->Clone()));
                 band->SetFillColorAlpha(colourIndex, 0.25), band->SetLineWidth(0), band->SetMarkerSize(0);
                 band->Draw("E2 SAME");
             }
         }
-        if (look.s.errors != "bars") return;
+        if (look.s.errors != "bars" || band) return;   // a band curve shows its envelope, not its own errors
         auto* bars = points(s, keep, false);
         bars->SetLineColor(colourIndex), bars->SetLineWidth(pen.width), bars->SetMarkerSize(0);
         bars->Draw("PZ");
@@ -396,11 +409,24 @@ namespace Paint {
             std::vector<std::pair<size_t, Series>> ratios;     // each curve over the reference, on its bins
             for (size_t c = 0; c < curves.size(); ++c) {
                 Series ratio = reference;
+                ratio.bandLo.clear(), ratio.bandHi.clear();     // the reference's band is not this curve's
                 for (size_t i = 0; i < reference.size(); ++i) {
                     const auto [value, error] = rebinned(curves[c], reference.lo[i], reference.hi[i]);
                     const bool ok = std::isfinite(value) && std::isfinite(reference.y[i]) && reference.y[i] != 0.0;
                     ratio.y[i] = ok ? value / reference.y[i] : std::numeric_limits<double>::quiet_NaN();
                     ratio.err[i] = ok ? error / std::fabs(reference.y[i]) : 0.0;
+                }
+                if (!curves[c].bandLo.empty()) {               // the band over the reference too (V69)
+                    Series lo = curves[c], hi = curves[c];
+                    lo.y = curves[c].bandLo, hi.y = curves[c].bandHi;
+                    ratio.bandLo.assign(reference.size(), std::numeric_limits<double>::quiet_NaN());
+                    ratio.bandHi = ratio.bandLo;
+                    for (size_t i = 0; i < reference.size(); ++i) {
+                        if (!std::isfinite(reference.y[i]) || reference.y[i] == 0.0) continue;
+                        ratio.bandLo[i] = rebinned(lo, reference.lo[i], reference.hi[i]).first / reference.y[i];
+                        ratio.bandHi[i] = rebinned(hi, reference.lo[i], reference.hi[i]).first / reference.y[i];
+                        if (ratio.bandLo[i] > ratio.bandHi[i]) std::swap(ratio.bandLo[i], ratio.bandHi[i]);
+                    }
                 }
                 ratios.emplace_back(c, ratio);
             }

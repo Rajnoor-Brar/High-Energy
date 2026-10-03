@@ -692,6 +692,7 @@ style.legend.position = "bottom-left"
 | `logx`, `logy` | bool | the `.plot` file's `LogX`/`LogY` | |
 | `auto_range` | bool | true | trim x to the bins with content, in curves and data |
 | `range_pad` | integer | 0 | whole bins kept either side of the filled ones |
+| `band` | array of quantity names | none | curve axes drawn as an envelope (V69): per value of the other curve axes, one curve, the band quantity's first value, with the min–max of all its values shaded around it in the curve's colour (the usual PDF or scale band). Its legend entry ends `(<q> envelope)`; its own statistical errors are not drawn. A name that is not a curve axis of the configuration (swept, not `plot_points`, not combined) is refused at plan time. The yoda backend draws the same envelope as mkhtml's error band |
 | `normalise` | `"area"` or false | false | `"area"` (V68): every curve, and the data, scaled to unit area, Σ value × bin width over the bins drawn (after voiding and the data's alignment), so pages compare shapes. Both backends scale the same way. The y label stays the `.plot`'s: set `y_label` (e.g. `"$1/\sigma\,\mathrm{d}\sigma/\mathrm{d}E_T$"`) on the pages it applies to. `[plot.object."<glob>"]` and overlays may set it for theirs |
 | `void_empty` | bool | false | blank a bin that is zero in **every** curve |
 | `min_entries` | integer | 0 | blank a bin that fewer raw entries went into, in **any** curve (read from the `/RAW` twin; objects without one are not voided this way) |

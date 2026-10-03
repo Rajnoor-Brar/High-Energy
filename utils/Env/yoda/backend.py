@@ -73,9 +73,20 @@ def _voided(yoda, source: Path, pages: list, target: Path) -> Path:
     changed = False
     for page in pages:
         voided, area = page.ranges.get("voided", []), page.document["page"].get("normalise") == "area"
-        for path in {v for s, v in zip(page.sources, page.variants) if s == source} if voided or area else ():
+        mine = [(v, b) for s, v, b in zip(page.sources, page.variants, page.bands or [[]] * len(page.sources)) if s == source]
+        for path, members in mine if voided or area or any(b for _, b in mine) else ():
             changed |= bool(voided) and _void(objects[path], voided, source)
             changed |= area and _normalise(objects[path])        # after the void: the drawn bins' area, as Paint
+            if members:                                          # V69: the members, made the same way
+                drawn = []
+                for member, variant in members:
+                    copy = yoda.read(str(member))[variant]
+                    if voided:
+                        _void(copy, voided, member)
+                    if area:
+                        _normalise(copy)
+                    drawn.append(copy)
+                changed |= _envelope(objects[path], drawn)
     if not changed:
         return source
     yoda.write(list(objects.values()), str(target))
@@ -88,6 +99,18 @@ def _void(estimate, voided: list, source: Path) -> bool:
     for index in voided:
         estimate.bin(index).setVal(float("nan"))
         estimate.bin(index).rmErrs()
+    return True
+
+
+def _envelope(estimate, members: list) -> bool:
+    """V69: a band curve's errors become its members' min–max envelope around it, which mkhtml draws as
+    the curve's error band (ErrorBand=1), as Paint draws its envelope."""
+    for i in range(1, estimate.numBins() + 1):
+        b = estimate.bin(i)
+        values = [b.val()] + [m.bin(i).val() for m in members]
+        b.rmErrs()
+        if all(math.isfinite(v) for v in values):
+            b.setErr((min(values) - b.val(), max(values) - b.val()))
     return True
 
 
@@ -358,6 +381,7 @@ def _cell(yoda, pages: list, work: Path, outdir: Path, settings: dict, say) -> i
     sources = list(dict.fromkeys(s for page in pages for s in page.sources))
     label_of = {s: c["label"].split(" [")[0] for page in pages for s, c in zip(page.sources, page.document["curve"])}
     look_of = {s: c.get("style", {}) for page in pages for s, c in zip(page.sources, page.document["curve"])}
+    banded = {s for page in pages for s, c in zip(page.sources, page.document["curve"]) if c.get("band")}
     labels = [label_of[s] for s in sources]
     curves = [_voided(yoda, source, pages, work / f"{i:02d}_{source.parent.name}.yoda")
               for i, source in enumerate(sources)]
@@ -366,6 +390,7 @@ def _cell(yoda, pages: list, work: Path, outdir: Path, settings: dict, say) -> i
     argv += [x for f in (["pdf"] if formats == "default" else formats) if FORMATS[f] for x in ("-f", FORMATS[f])]
     argv += [] if any(p.document["page"]["ratio"] for p in pages) else ["--no-ratio"]
     argv += [f"{path}:Title={mathtext(label)}" + _pen(look_of[source])
+             + (":ErrorBand=1:ErrorBars=0" if source in banded else "")
              for path, label, source in zip(curves, labels, sources)]
 
     references = [_reference(yoda, page) for page in pages if page.data and page.ranges.get("data_bins", 0) > 0]

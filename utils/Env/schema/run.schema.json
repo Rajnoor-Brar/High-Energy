@@ -472,6 +472,13 @@
       "pdf"
      ]
     },
+    "band": {
+     "description": "curve-axis quantities drawn as one curve, their first value, with the min–max envelope of all their values (V69)",
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
     "objects": {
      "description": "YODA path globs that get pages (default: every 1D object)",
      "anyOf": [

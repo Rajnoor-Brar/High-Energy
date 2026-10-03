@@ -22,6 +22,7 @@ namespace Paint {
         std::string file, object, raw, label;
         std::string colour, line;            // a curve's own (V67: a quantity value's style); "": the style's
         double width = 0;                    // points; 0: the style's
+        std::vector<Source> band;            // V69: the members whose envelope is drawn around this curve
     };
 
     struct Page {
@@ -105,6 +106,11 @@ namespace Paint {
                         source.line != "dotted" && source.line != "dashdot")
                         throw std::runtime_error(path + ": a curve's style.line must be solid, dashed, dotted or dashdot");
                 }
+                if (const auto* members = c["band"].as_array())
+                    for (const auto& m : *members)
+                        if (const auto* t = m.as_table())
+                            source.band.push_back({(*t)["file"].value_or(std::string("")), (*t)["object"].value_or(std::string("")),
+                                                   (*t)["raw"].value_or(std::string("")), ""});
                 page.curves.push_back(source);
             }
         }

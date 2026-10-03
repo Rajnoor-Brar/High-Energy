@@ -405,3 +405,33 @@ def test_a_cited_placeholder_is_checked_before_any_point_runs(scratch):
     with pytest.raises(HepError, match=r"cites \{opt:ETMN\}") as error:
         plot.check_texts(run, [p])
     assert "opt:ETMIN" in error.value.hint
+
+
+def test_a_band_folds_its_axis_into_one_curve_per_other_value():
+    """V69: per value of the other curve axes (and variant), the band axis's first value with the rest as members."""
+    from types import SimpleNamespace as P
+    plans = [P(point=P(name=f"{e}_{p}", choice={"energy": e, "pdf": p})) for e in (0, 1) for p in (2, 0, 1)]
+    curves = [(plan, "/a/d01") for plan in plans]
+    folded = plot._banded(curves, [["energy"], ["pdf"]], ["pdf"], lambda plan, full: 0)
+    assert [(c.point.name, [m.point.name for m, _ in ms]) for c, _, ms in folded] == [
+        ("0_0", ["0_1", "0_2"]), ("1_0", ["1_1", "1_2"])]
+    assert [len(ms) for _, _, ms in plot._banded(curves, [["energy"], ["pdf"]], [], lambda *a: 0)] == [0] * 6
+
+
+def test_a_band_must_be_a_curve_axis(scratch):
+    from helpers import plan
+    run, conf, _ = plan(raw(run__one__sweeps=["pdf"], run__one__plot_points=["pdf"], plot={"band": ["pdf"]}), scratch)
+    with pytest.raises(HepError, match="not a curve axis"):
+        plot.check_band(run, conf)
+    run, conf, _ = plan(raw(run__one__sweeps=["pdf"], plot={"band": ["pdf"]}), scratch)
+    plot.check_band(run, conf)
+
+
+def test_the_yoda_backend_draws_the_envelope_as_the_errors(yoda_backend):
+    import yoda
+    central, low, high = (yoda.BinnedEstimate1D([0.0, 1.0, 2.0], "/x") for _ in range(3))
+    for estimate, values in ((central, (2.0, 1.0)), (low, (1.5, float("nan"))), (high, (3.0, 1.0))):
+        for i, v in enumerate(values, start=1):
+            estimate.bin(i).setVal(v), estimate.bin(i).setErr(0.1)
+    assert yoda_backend._envelope(central, [low, high])
+    assert central.bin(1).errDownUp("") == (-0.5, 1.0) and not central.bin(2).sources()   # a NaN member: no band
