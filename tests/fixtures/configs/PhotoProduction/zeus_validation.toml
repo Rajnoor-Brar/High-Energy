@@ -50,14 +50,14 @@ output_file = "zeus.root"
 [quantities.energies]
 values = [[41, 5], [100, 10], [275, 18], [920, 27.5]]
 tags   = ["5x41", "10x100", "18x275", "27x920"]
-labels = ["5x41 GeV (#sqrt{s} = 28.6 GeV)", "10x100 GeV (#sqrt{s} = 63.2 GeV)",
-          "18x275 GeV (#sqrt{s} = 140.7 GeV)", "27.5x920 GeV (#sqrt{s} = 318.1 GeV)"]
+labels = ['5x41 GeV ($\sqrt{s}$ = 28.6 GeV)', '10x100 GeV ($\sqrt{s}$ = 63.2 GeV)',
+          '18x275 GeV ($\sqrt{s}$ = 140.7 GeV)', '27.5x920 GeV ($\sqrt{s}$ = 318.1 GeV)']
 
 [quantities.lepton]
 key    = { pythia = "Beams:idB" }
 values = [11, -11]
 tags   = ["em", "ep"]
-labels = ["e^{-}", "e^{+}"]
+labels = ["$e^{-}$", "$e^{+}$"]
 
 [quantities.pdf]
 values = ["LHAPDF6:MSTW2008lo68cl", "LHAPDF6:NNPDF23_lo_as_0130_qed", "LHAPDF6:NNPDF23_nlo_as_0119_qed", "LHAPDF6:PDF4LHC21_40"]   # V40: as Pythia reads them

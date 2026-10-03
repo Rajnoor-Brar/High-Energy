@@ -503,18 +503,16 @@ sweep, labelled from its `points.json`). Pages go to `results/plots/<first file>
 
 ### 4.20 Every configuration, one run after another
 
-To run all of a TOML's configurations in one go, turn the sweep on and leave out the ones you don't
-want:
+To run several of a TOML's configurations in one go, list them (or say `true` for all):
 
 ```toml
 [run]
-sweep_runs = true                # hep run eic: every configuration, in the order of the file
+sweep_runs = ["pdf", "energies"]   # hep run eic: these, in this order (true: every one, in file order)
 
 [run.pdf]
-title = "Proton PDFs"            # the header line: run 01 - Proton PDFs -
+title = "Proton PDFs"              # the header line: run 01 - Proton PDFs -
 
-[run.delphes]
-swept = false                    # not in the sweep; hep run eic delphes still runs it
+[run.delphes]                      # not listed: hep run eic delphes still runs it
 ```
 
 Each configuration is an ordinary run, with its own title, blocks, verdict and folder, exactly as

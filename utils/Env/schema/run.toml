@@ -79,9 +79,10 @@ type = "str"
 doc  = "what the run is for"
 
 [run.sweep_runs]
-type    = "bool"
+type    = "bool|list"
+items   = "str"
 default = false
-doc     = "hep run runs every configuration not swept = false, in turn"
+doc     = "hep run runs every configuration in turn (true), or these, in this order (V79: [\"a\", \"b\"])"
 
 [run.notify]
 type    = "str"

@@ -11,10 +11,7 @@
 ! file, and later settings win): Main:numberOfEvents, Parallelism:numThreads and Random:seed.
 ! Main:numberOfEvents counts next() attempts, not written events: failed events never reach the
 ! output (about 2 % at 5x41 GeV, 1e-4 at 27x920).
-Main:numberOfEvents = 100000
 Main:timesAllowErrors = 40          ! abort run after this many flawed events
-Random:setSeed = on
-Random:seed = 0                     ! 0 = time-based; sweeps write an explicit seed
 
 ! Beams: proton A along +z, lepton B
 Beams:frameType = 2                 ! beams with different energies

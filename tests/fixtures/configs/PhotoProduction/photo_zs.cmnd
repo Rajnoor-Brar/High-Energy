@@ -16,10 +16,7 @@
 ! Run control. The runner writes the event count, the thread count and the seeds for every point
 ! (the configuration's event_count; seeds from the point's identity), so these are only what a
 ! hand-run of this card would get.
-Main:numberOfEvents = 200000
 !Main:timesAllowErrors = 40          ! abort after this many flawed events
-Random:setSeed = on
-Random:seed = 0                     ! 0 = time-based; the runner writes an explicit seed
 
 ! Beams: proton A along +z, positron B — the HERA configuration ZEUS measured.
 ! [static] pins the same values (energies = "27x920", lepton = "ep"); stated here too, so the card

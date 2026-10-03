@@ -460,3 +460,24 @@ def test_mpl_is_a_backend_and_both_is_still_root_and_yoda(scratch):
     mpl = plot.backend("mpl")
     from yoda.plotting.mlp_preprocessor import preprocess
     assert mpl._raw(preprocess(r"$a$\newline$b$")) == "$a$\n$b$" and mpl.INDEX
+
+
+@pytest.mark.parametrize("label, latex", [
+    ("E_{T} > 4 GeV", "$E_{T}$ > 4 GeV"), ("#hat{p}_{T} > 2 GeV", r"$\hat{p}_{T}$ > 2 GeV"),
+    ("p_{T0}^{ref} = 3.0 GeV", r"$p_{T0}^{\mathrm{ref}}$ = 3.0 GeV"), ("anti-k_{T}", "anti-$k_{T}$"),
+    ("27x920 GeV (#sqrt{s} = 318.1 GeV)", r"27x920 GeV ($\sqrt{s}$ = 318.1 GeV)"), ("e^{-}", "$e^{-}$"),
+    ("MPI_{on}", r"$\mathrm{MPI}_{\mathrm{on}}$"), ("MSTW 2008 LO", "MSTW 2008 LO"), ("PDF4LHC21_40", "PDF4LHC21_40")])
+def test_natural_latex_is_what_a_physicist_writes(label, latex):
+    """V79: the configs' migration. Symbols in math, one letter italic, words upright; plain text as is."""
+    from runner import labels
+    assert labels.natural(label) == latex
+
+
+def test_a_tlatex_label_in_a_run_toml_is_refused_with_its_latex(scratch):
+    """V79 (B5, break and migrate)."""
+    with pytest.raises(HepError, match="is TLatex") as error:
+        parse(raw(quantities__pdf__labels=["E_{T} > 4", "b"]), scratch)
+    assert "$E_{T}$ > 4" in error.value.hint and "hep migrate" in error.value.hint
+    with pytest.raises(HepError, match="is TLatex"):
+        validated(scratch, overlay={"o": {"objects": ["d01-*"], "labels": ["k_{T}"]}})
+    validated(scratch, title="$E_T$ jets", data={"file": "zeus_eic.yoda", "legend": "ZEUS", "map": {"d01-x01-y01": "/REF/X/d01"}})

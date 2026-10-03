@@ -70,8 +70,14 @@
      "type": "string"
     },
     "sweep_runs": {
-     "description": "hep run runs every configuration not swept = false, in turn",
-     "type": "boolean",
+     "description": "hep run runs every configuration in turn (true), or these, in this order (V79: [\"a\", \"b\"])",
+     "type": [
+      "boolean",
+      "array"
+     ],
+     "items": {
+      "type": "string"
+     },
      "default": false
     },
     "notify": {

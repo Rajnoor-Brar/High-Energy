@@ -36,7 +36,7 @@ def sweep_config(scratch: Path, d_static: str = "{}", b_nap: str = "no") -> Path
 [run]
 name        = "sw"
 project     = "PhotoProduction"
-sweep_runs  = true
+sweep_runs  = ["a", "b", "d"]                # V79: c is not in the sweep
 event_count = 1
 
 [run.a]
@@ -48,7 +48,6 @@ tools  = ["check"]
 static = {{ fail = "bad", nap = "{b_nap}" }}
 
 [run.c]
-swept = false
 tools = ["check"]
 
 [run.d]

@@ -59,7 +59,7 @@ labels = ["18x275 GeV", "27x920 GeV"]
 [quantities.beams]
 values = [[2212, -11], [2212, 11]]
 tags   = ["ep", "em"]
-labels = ["e^{+}p", "e^{-}p"]
+labels = ["$e^{+}$p", "$e^{-}$p"]
 
 [quantities.pdf]
 values = ["NNPDF23_lo_as_0130_qed", "MSTW2008lo68cl"]

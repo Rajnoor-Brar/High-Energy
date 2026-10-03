@@ -77,20 +77,20 @@ labels = ["seed 1", "seed 2", "seed 3", "seed 4", "seed 5"]
 key    = { pythia = "MultipartonInteractions:pT0Ref" }
 values = [2.8, 3.0, 3.2, 3.4]
 tags   = ["pt28", "pt30", "pt32", "pt34"]
-labels = ["p_{T0}^{ref} = 2.8 GeV", "p_{T0}^{ref} = 3.0 GeV", "p_{T0}^{ref} = 3.2 GeV",
-          "p_{T0}^{ref} = 3.4 GeV"]
+labels = ['$p_{T0}^{\mathrm{ref}}$ = 2.8 GeV', '$p_{T0}^{\mathrm{ref}}$ = 3.0 GeV',
+          '$p_{T0}^{\mathrm{ref}}$ = 3.2 GeV', '$p_{T0}^{\mathrm{ref}}$ = 3.4 GeV']
 
 [quantities.energies]
 values = [[41, 5], [100, 10], [275, 18], [920, 27.5]]
 tags   = ["5x41", "10x100", "18x275", "27x920"]
-labels = ["5x41 GeV (#sqrt{s} = 28.6 GeV)", "10x100 GeV (#sqrt{s} = 63.2 GeV)",
-          "18x275 GeV (#sqrt{s} = 140.7 GeV)", "27.5x920 GeV (#sqrt{s} = 318.1 GeV)"]
+labels = ['5x41 GeV ($\sqrt{s}$ = 28.6 GeV)', '10x100 GeV ($\sqrt{s}$ = 63.2 GeV)',
+          '18x275 GeV ($\sqrt{s}$ = 140.7 GeV)', '27.5x920 GeV ($\sqrt{s}$ = 318.1 GeV)']
 
 [quantities.lepton]
 key    = { pythia = "Beams:idB" }
 values = [11, -11]
 tags   = ["em", "ep"]
-labels = ["e^{-}", "e^{+}"]
+labels = ["$e^{-}$", "$e^{+}$"]
 
 # ── plot (as zeus_validation.toml) ─────────────────────────────────────────────────────────────────
 

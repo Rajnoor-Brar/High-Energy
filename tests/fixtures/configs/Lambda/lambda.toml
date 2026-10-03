@@ -113,14 +113,14 @@ target = ["lamriv/Lamriv", "lambda"]
 key    = { lamriv = "MASSTOL", lambda = "mass_tolerance" }
 values = [0.05, 0.10, 0.15, 0.25]
 tags   = ["m050", "m100", "m150", "m250"]
-labels = ["#pm 50 MeV", "#pm 100 MeV", "#pm 150 MeV", "#pm 250 MeV"]
+labels = ['$\pm$ 50 MeV', '$\pm$ 100 MeV', '$\pm$ 150 MeV', '$\pm$ 250 MeV']
 
 [quantities.costheta]
 target = ["lamriv/Lamriv", "lambda"]
 key    = { lamriv = "COSTHETATOL", lambda = "cos_theta_tolerance" }
 values = [0.0, 0.05, 0.2]
 tags   = ["noct", "ct005", "ct020"]
-labels = ["no cos#theta* cut", "|cos#theta* + 1| < 0.05", "|cos#theta* + 1| < 0.2"]
+labels = ['no cos$\theta$* cut', '|cos$\theta$* + 1| < 0.05', '|cos$\theta$* + 1| < 0.2']
 
 [quantities.set]
 target = "lamriv/Lamriv"
