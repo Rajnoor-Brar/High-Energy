@@ -435,3 +435,17 @@ def test_the_yoda_backend_draws_the_envelope_as_the_errors(yoda_backend):
             estimate.bin(i).setVal(v), estimate.bin(i).setErr(0.1)
     assert yoda_backend._envelope(central, [low, high])
     assert central.bin(1).errDownUp("") == (-0.5, 1.0) and not central.bin(2).sources()   # a NaN member: no band
+
+
+def test_the_root_pages_get_an_index(scratch):
+    """V70: a section per cell, each page by its PNG (linked to its PDF), else an embedded PDF."""
+    for name in ("cell_a/d01.png", "cell_a/d01.pdf", "cell_b/d01.pdf"):
+        (scratch / name).parent.mkdir(parents=True, exist_ok=True)
+        (scratch / name).write_bytes(b"x")
+    index = plot.write_index(scratch, "run <1>", [("cell_a", "cell_a/d01", scratch / "cell_a" / "d01"),
+                                                  ("cell_b", "cell_b/d01", scratch / "cell_b" / "d01"),
+                                                  ("cell_b", "cell_b/gone", scratch / "cell_b" / "gone")])
+    text = index.read_text(encoding="utf-8")
+    assert "<title>run &lt;1&gt;</title>" in text and text.count("<h2>") == 2
+    assert '<a href="cell_a/d01.pdf"><img src="cell_a/d01.png"' in text
+    assert '<object data="cell_b/d01.pdf"' in text and "gone" not in text

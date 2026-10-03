@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import fnmatch
 import hashlib
+import html
 import json
 import re
 import subprocess
@@ -640,6 +641,44 @@ def _why(done: subprocess.CompletedProcess) -> str:
     return f"exit {done.returncode}"
 
 
+def write_index(where: Path, title: str, pages: list[tuple[str, str, Path]]) -> Path:
+    """V70: <where>/index.html, the ROOT pages as mkhtml's index is the yoda backend's: a section per
+    plot_points cell, each page shown by its PNG or SVG (an embedded PDF otherwise) and linked to every
+    format drawn. `pages`: (cell, name, output without extension), in order."""
+    def rel(path: Path) -> str:
+        return html.escape(str(path.relative_to(where)) if path.is_relative_to(where) else str(path), quote=True)
+
+    body, cells = [], {}
+    for cell, name, output in pages:
+        cells.setdefault(cell, []).append((name, output))
+    for cell, members in cells.items():
+        if cell:
+            body.append(f"<h2>{html.escape(cell)}</h2>")
+        body.append('<div class="grid">')
+        for name, output in members:
+            made = [output.with_name(f"{output.name}.{f}") for f in FORMATS]
+            made = [m for m in made if m.is_file()]
+            shown = next((m for m in made if m.suffix in (".png", ".svg")), None)
+            pdf = next((m for m in made if m.suffix == ".pdf"), None)
+            if shown:
+                view = f'<a href="{rel(pdf or shown)}"><img src="{rel(shown)}" alt="{html.escape(name)}"></a>'
+            elif pdf:
+                view = f'<object data="{rel(pdf)}" type="application/pdf"><a href="{rel(pdf)}">{html.escape(name)}</a></object>'
+            else:
+                continue
+            links = " ".join(f'<a href="{rel(m)}">{m.suffix[1:]}</a>' for m in made)
+            body.append(f"<figure>{view}<figcaption>{html.escape(name.rsplit('/', 1)[-1])} · {links}</figcaption></figure>")
+        body.append("</div>")
+    index = where / "index.html"
+    index.write_text(
+        "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><title>" + html.escape(title) + "</title><style>"
+        "body{font-family:sans-serif;margin:1.5em}.grid{display:flex;flex-wrap:wrap;gap:1em}"
+        "figure{margin:0;width:22em}img,object{width:100%;height:auto;min-height:18em;border:1px solid #ddd}"
+        "figcaption{font-size:.85em;color:#444}</style></head><body><h1>" + html.escape(title) + "</h1>\n"
+        + "\n".join(body) + "\n</body></html>\n", encoding="utf-8")
+    return index
+
+
 def for_backend(page: Page, name: str) -> Page:
     """The page as another backend draws it: into results/…/plots/<name>/ instead of Paint's root/."""
     return replace(page, output=page.plots / name / page.name) if page.plots else page
@@ -674,6 +713,9 @@ def draw(run, configuration, plans, say) -> int:
     if "root" in names:
         where = todo[0].config.parent if "/" not in todo[0].name else todo[0].config.parent.parent
         say(f"plot: {len(todo) - failed} of {len(todo)} page(s) drawn; configs in {where}")
+        drawn = [(p.cell, p.name, p.output) for p in todo if outcomes[str(p.config)][0]]
+        if drawn:                                            # V70: the ROOT pages' own index
+            write_index(todo[0].plots / "root", f"{run.name} · {configuration.label}", drawn)
     if others and failed:
         todo = [p for p in todo if p.ranges]                 # a page Paint could not read has no ranges
     for name in others:
@@ -778,9 +820,14 @@ def files(targets: list[str], outdir: Path | None, *, labels: list[str] | None =
         config.parent.mkdir(parents=True, exist_ok=True)
         config.write_text(tomli_w.dumps(for_root(document)), encoding="utf-8")
         written[str(config)] = rel
+    drawn = []
     for config, (ok, why) in _paint(paint, [Path(c) for c in written]).items():
         if not ok:
             failed += 1
             say(f"plot: {written[config]} failed: {why}")
+        else:
+            drawn.append(("", written[config], outdir / written[config]))
+    if drawn:
+        write_index(outdir, "hep plot", drawn)                 # V70
     say(f"plot: {len(pages_of) - failed} of {len(pages_of)} page(s), {len(curves)} curve(s) → {outdir}")
     return failed
