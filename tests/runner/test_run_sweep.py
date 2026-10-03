@@ -225,3 +225,15 @@ def test_an_unchanged_toml_is_planned_once(sweep_file, monkeypatch):
     assert cli.cmd_run(args_for(sweep_file)) == 0
     assert given and all(isinstance(p, cli.Planned) for p in given)
 
+
+
+def test_notify_desktop_sends_one_note_and_never_fails(scratch, monkeypatch):
+    """V76: [run] notify = "desktop" calls notify-send with the verdict; without it, nothing."""
+    sent = []
+    monkeypatch.setattr(cli.shutil, "which", lambda name: "/usr/bin/notify-send")
+    monkeypatch.setattr(cli.subprocess, "Popen", lambda argv, **kw: sent.append(argv))
+    run = parse(raw(run__notify="desktop"), scratch)
+    assert cli.notify(run, 1) and sent[-1][-1].endswith(": a point failed")
+    assert not cli.notify(parse(raw(), scratch), 0) and len(sent) == 1
+    with pytest.raises(HepError, match="one of none, desktop"):
+        parse(raw(run__notify="email"), scratch)

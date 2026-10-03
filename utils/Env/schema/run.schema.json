@@ -74,6 +74,15 @@
      "type": "boolean",
      "default": false
     },
+    "notify": {
+     "description": "\"desktop\": a notify-send when hep run ends, with its verdict (V76)",
+     "type": "string",
+     "enum": [
+      "none",
+      "desktop"
+     ],
+     "default": "none"
+    },
     "seed_type": {
      "description": "how seeds are chosen",
      "type": "string",
@@ -394,6 +403,13 @@
      "labels": {
       "description": "one per value: legend text",
       "type": "array"
+     },
+     "shape": {
+      "description": "a user quantity's value shape, as the vocabulary's: \"pdg\", \"float|int\", [\"float\", \"float\"] (V76)",
+      "type": [
+       "string",
+       "array"
+      ]
      },
      "styles": {
       "description": "one per value: its curves' look, { colour, line, width } (V67)",

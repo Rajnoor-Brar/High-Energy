@@ -79,6 +79,7 @@ class Quantity:
     tags: list[str] = field(default_factory=list)
     labels: list[str] = field(default_factory=list)
     styles: list[dict] = field(default_factory=list)   # one per value: its curves' look (V67)
+    shape: str | list = ""                             # its values' shape, the vocabulary's grammar (V76)
     key: str | dict | None = None
     target: list[str] = field(default_factory=list)
     format: str = ""
@@ -415,6 +416,7 @@ def parse(raw: dict, path: Path) -> RunConfig:
         quantity = Quantity(name=name, values=values, tags=[str(t) for t in table.get("tags", [])],
                                     labels=[str(l) for l in table.get("labels", [])], key=table.get("key"),
                                     styles=[{k: v for k, v in s.items() if v != DEFAULT} for s in table.get("styles", [])],
+                                    shape=table.get("shape", ""),
                                     target=_as_list(table.get("target")), format=table.get("format", ""),
                                     description=table.get("description", ""), exclude=sorted(set(exclude)))
         check_shapes(quantity, at)                                          # V58: the vocabulary's shape

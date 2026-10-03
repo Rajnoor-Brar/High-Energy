@@ -14,7 +14,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import signal
+import subprocess
 import threading
 import time
 import tomllib
@@ -245,11 +247,28 @@ def cmd_run(args) -> int:
         bus = Bus()
         hub = Hub({"config": str(run.path), "run": run.name, "configurations": keys})
         bus.subscribe(hub)
+    code = 2
     try:
-        return _runs(args, run, keys, stopper, bus)
+        code = _runs(args, run, keys, stopper, bus)
+        return code
     finally:
         if bus is not None:
             hub.close()
+            notify(run, code)
+
+
+def notify(run, code: int) -> bool:
+    """[run] notify = "desktop" (V76): a notify-send when the command ends, for runs of hours. Never
+    fails the run: no notify-send, or no desktop, and it says nothing."""
+    if run.raw.get("run", {}).get("notify", "none") != "desktop" or not shutil.which("notify-send"):
+        return False
+    verdict = {0: "done", 1: "a point failed", 2: "a config error", 6: "stopped"}.get(code, f"exit {code}")
+    try:
+        subprocess.Popen(["notify-send", "--app-name=hep", f"hep run {run.name}", f"{run.path.name}: {verdict}"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    except OSError:
+        return False
+    return True
 
 
 def _runs(args, run, keys: list[str], stopper: execute.Stopper, bus) -> int:

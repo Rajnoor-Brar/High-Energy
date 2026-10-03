@@ -83,6 +83,12 @@ type    = "bool"
 default = false
 doc     = "hep run runs every configuration not swept = false, in turn"
 
+[run.notify]
+type    = "str"
+choices = ["none", "desktop"]
+default = "none"
+doc     = "\"desktop\": a notify-send when hep run ends, with its verdict (V76)"
+
 [run.seed_type]
 type    = "str"
 choices = ["identity", "manual", "random"]
@@ -227,6 +233,10 @@ doc   = "one per value: folder and point names"
 [quantity.labels]
 type  = "list"
 doc   = "one per value: legend text"
+
+[quantity.shape]
+type = "str|list"
+doc  = "a user quantity's value shape, as the vocabulary's: \"pdg\", \"float|int\", [\"float\", \"float\"] (V76)"
 
 [quantity.styles]
 type  = "list"

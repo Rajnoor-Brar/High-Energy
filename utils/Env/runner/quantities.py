@@ -229,6 +229,15 @@ def _fits(value, shape) -> bool:
     return False
 
 
+def _check_shape_text(shape, where: str) -> None:
+    kinds = {"float", "int", "pdg", "str", "bool"}
+    parts = shape if isinstance(shape, list) else [shape]
+    for part in parts:
+        if not isinstance(part, str) or not set(part.split("|")) <= kinds:
+            raise HepError(f"shape {shape!r} is not one", where=where,
+                           hint='"float", "int", "pdg", "str" or "bool", several joined by "|", or a list of them')
+
+
 def _shape_text(shape) -> str:
     names = {"float": "a number", "int": "an integer", "pdg": "a PDG id", "str": "a string", "bool": "true or false"}
     if isinstance(shape, list):
@@ -238,8 +247,15 @@ def _shape_text(shape) -> str:
 
 def check_shapes(quantity, where: str) -> None:
     """A quantity the vocabulary names takes values of its shape (V58): `energies = [[275, 18]]`, not
-    `[275, 18]` or `[[275]]`. A quantity it does not name is the user's own, unchecked."""
+    `[275, 18]` or `[[275]]`. A quantity of the user's own may state its shape (`shape = "pdg"`, V76),
+    in the same grammar; else it is unchecked."""
     entry = vocabulary().get(quantity.name)
+    if quantity.shape:
+        if entry is not None and quantity.shape != entry["shape"]:
+            raise HepError(f"[quantities.{quantity.name}] says shape = {quantity.shape!r}; the vocabulary's is "
+                           f"{entry['shape']!r}", where=where, hint="leave it out: a vocabulary quantity's shape is its own")
+        _check_shape_text(quantity.shape, f"{where}.shape")
+        entry = {"shape": quantity.shape}
     if entry is None:
         return
     for place, value in enumerate(quantity.values, start=1):
