@@ -167,7 +167,7 @@ description   = "EIC photoproduction studies"
 | `name` | string | **required** | the run's directory name |
 | `project` | string | **required** | the subfolder of `configs/`, `modules/`, `output/`, `results/`; must equal the folder the file is in, when it is under `configs/` |
 | `configuration` | string | **required** unless `sweep_runs` | must name a `[run.<cfg>]` table (C2). Under `sweep_runs` it may be left out; `hep run <config>` then ignores it |
-| `sweep_runs` | boolean | false | `hep run <config>` runs every configuration not `swept = false`, one after another (§4.1) |
+| `sweep_runs` | boolean or array | false | `true`: `hep run <config>` runs every configuration, one after another, in the order of the file; `["a", "b"]` (V79): these, in this order (§4.1) |
 | `seed_type` | string | `"identity"` | default for configurations: how a point's seeds are chosen, `"identity"`, `"manual"` or `"random"` (02 §8) |
 | `notify` | string | `"none"` | `"desktop"` (V76): a desktop notification (`notify-send`) when `hep run` ends, with its verdict; never fails a run |
 | `manual_seed` | integer | none | default for configurations: under `seed_type = "manual"`, every point's seed (from 1 to the point's generators' `[card] seed_range`: 899,999,999 for Pythia, checked when the point is planned, V54); ignored otherwise (`--plan` says so) |
@@ -181,8 +181,10 @@ Every other table inside `[run]` is a configuration (§5). Any other key is an e
 
 ### 4.1 `sweep_runs`: every configuration, one run after another
 
-With `sweep_runs = true`, `hep run <config>` runs each configuration not marked `swept = false`, in the
-order of the file. Each is **a run of its own**: exactly what `hep run <config> <cfg>` does (its own
+With `sweep_runs = true`, `hep run <config>` runs every configuration, in the order of the file; with a
+list, `sweep_runs = ["pdf", "energies"]` (V79), those, in the list's order (a name that is not a
+configuration, or one named twice, is refused). `[run.<cfg>].swept` is gone: the list says it, and
+`hep migrate` rewrites a file that still has it. Each is **a run of its own**: exactly what `hep run <config> <cfg>` does (its own
 title, blocks, verdict, journal, `points.json` and plots, in its own `<run>/<cfg>/` folder),
 after one header line of its `title`:
 
@@ -211,7 +213,7 @@ eic · energies: 4 point(s), 1000000 events, 12 threads
 - **A failed run leaves the next to start.** Ctrl-C stops the running runs (exit 6, as always) and
   **starts no more**.
 - The exit code: 6 if a run was stopped; else 1 if any failed; else 0.
-- `hep run <config> <cfg>` runs just that one, whether or not the sweep is on or it is `swept`.
+- `hep run <config> <cfg>` runs just that one, whether or not the sweep is on or lists it.
 - `--plan` prints every run's plan under its header; `--rerun`, `--set` and `--only plot` apply to
   each; `--only pre|post` skips the runs without that stage. `--points` is refused: its tags belong
   to one configuration, so name it (`hep run eic pdf --points …`).
@@ -244,7 +246,7 @@ prelim      = { fifo = ["events.hepmc"] }    # replaces [prelim] for this config
 
 A configuration's value is **its own, else the one it `extends`'s (in turn), else `[run.defaults]`'s,
 else `[run]`'s, else the default** (V56); `"default"` in a layer is the next layer's value (V55).
-`label`, `title`, `extends` and `swept` are each configuration's own, and `[run.defaults]` refuses
+`label`, `title` and `extends` are each configuration's own, and `[run.defaults]` refuses
 them; `defaults` is never a configuration. `hep run CONFIG --show-config` prints every value with the
 layer it came from.
 
@@ -276,7 +278,6 @@ label       = "PDFs_100M"
 | `name` | string | `[run].name` | the run folder above this configuration's: `<P>/<name>/NN_<label>/` (V46) |
 | `label` | string | the table key | the configuration's folder, after the serial: `NN_<label>`; empty means the table key (V45) |
 | `title` | string | the table key | the header line of the run under `[run].sweep_runs`: `run 02 - <title> -` (§4.1) |
-| `swept` | boolean | true | `false` leaves this configuration out of `[run].sweep_runs` (§4.1); `hep run <config> <cfg>` still runs it |
 | `seed_type` | string | `[run].seed_type` | `"identity"`: from the generator's identity; `"manual"`: exactly the given seed; `"random"`: drawn when the point runs (02 §8) |
 | `manual_seed` | integer | `[run].manual_seed` | the seed of every point under `"manual"`; a quantity targeting `<tool>/seed` gives a point its own |
 | `description` | string | "" | |
@@ -957,6 +958,27 @@ it lives: with no config, the latest job started on this machine; with one, the 
 and leaves when the job's process ends; under `[run].sweep_runs` the job is one process, so the watch
 follows it from run to run. `--file` follows a `--journal` run's status file instead (a finished run's,
 too): it leaves when the run finishes, or follows on to the next run's journal in a sweep.
+
+### `hep migrate`
+
+```
+hep migrate [CONFIG…] [--apply]
+```
+
+Rewrites run TOMLs, and the base cards they name, in the forms the runner takes today (V79): a diff of
+each file by default, the files written with `--apply` (with no config, every config). By line, so
+comments and layout stay:
+- labels (`labels`, `title`, `title_left`, `title_right`, `legend_header`, `x_label`, `y_label`,
+  `legend`) from TLatex to LaTeX, as a physicist writes it: `E_{T} > 4 GeV` → `$E_{T}$ > 4 GeV`,
+  `p_{T0}^{ref}` → `$p_{T0}^{\mathrm{ref}}$` (one-letter symbols italic, words upright). A TLatex
+  label is refused otherwise, with that LaTeX as the hint;
+- `swept = false` → `sweep_runs = ["a", "b", …]`, the configurations the sweep ran, in its order;
+- a custom tool's bare `executable` that is not built but is a command on PATH → `"path:<name>"` (V54);
+- a base card's lines for keys the runner sets (its folder's `[card] owned`: events, threads, seeds),
+  which the plan already said were not used. That changes the card, so the points' identities: they
+  rerun.
+
+It reads each config leniently (the old forms included) before writing anything, and strictly after.
 
 ### `hep reproduce`
 

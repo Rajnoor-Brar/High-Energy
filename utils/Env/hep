@@ -26,6 +26,7 @@ usage: hep <command> [options]
   status [<config> [<cfg>]]        each configuration's points: complete, stale, incomplete, to run
   clean [<config>] [--dry-run]     remove what the runner made and no plan uses (lists, then asks)
   reproduce <provenance.json>      run a finished point again, beside it, and compare its products
+  migrate [<config>…] [--apply]    rewrite run TOMLs and cards in today's forms (a diff by default)
   build [targets…]                 compile module programs, apps and Rivet plugins (make all)
         --tests                    also build the C++ tests
         --clean                    empty build/ first
@@ -39,7 +40,7 @@ EOF
 cmd=${1-}
 [ $# -gt 0 ] && shift
 case "$cmd" in
-    run|watch|plot|overlay|check|ls|explain|status|clean|reproduce)
+    run|watch|plot|overlay|check|ls|explain|status|clean|reproduce|migrate)
         exec python3 "$here/run" "$cmd" "$@"
         ;;
     build)

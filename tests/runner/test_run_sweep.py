@@ -23,10 +23,10 @@ CUSTOM = {"tool": "custom", "executable": "/bin/true"}
 
 
 def several(**changes):
-    """Four configurations a, b, c, d; c is left out of a sweep."""
-    return raw(**{"run__sweep_runs": True, "run__configuration": None, "run__one": None, "prelim": None,
+    """Four configurations a, b, c, d; the sweep runs a, b and d (V79: sweep_runs lists them)."""
+    return raw(**{"run__sweep_runs": ["a", "b", "d"], "run__configuration": None, "run__one": None, "prelim": None,
                   "tools__check": CUSTOM, "run__a": {"tools": ["check"]}, "run__b": {"tools": ["check"], "title": "Bee"},
-                  "run__c": {"tools": ["check"], "swept": False}, "run__d": {"tools": ["check"]}, **changes})
+                  "run__c": {"tools": ["check"]}, "run__d": {"tools": ["check"]}, **changes})
 
 
 def test_the_keys_and_their_defaults(scratch):
@@ -38,10 +38,11 @@ def test_the_keys_and_their_defaults(scratch):
 
 
 @pytest.mark.parametrize("changes, message", [
-    ({"run__sweep_runs": 1}, "true or false"),
-    ({"run__one__swept": "no"}, "true or false"),
+    ({"run__sweep_runs": 1}, "must be true or false or a list"),
+    ({"run__one__swept": False}, "swept is gone"),                  # V79: sweep_runs lists the members
     ({"run__configuration": None}, "needs 'configuration'"),
-    ({"run__sweep_runs": True, "run__one__swept": False}, "every configuration has swept = false"),
+    ({"run__sweep_runs": ["one", "nope"]}, "names 'nope', which is not a"),
+    ({"run__sweep_runs": ["one", "one"]}, "names a configuration twice"),
     ({"run__sweep_runs": True, "run__configuration": "nope"}, "not a \\[run.<name>\\] table"),
 ])
 def test_what_is_refused(scratch, changes, message):
@@ -49,10 +50,12 @@ def test_what_is_refused(scratch, changes, message):
         parse(raw(**changes), scratch)
 
 
-def test_a_sweep_runs_the_swept_configurations_in_the_order_of_the_file(scratch):
+def test_a_sweep_runs_its_listed_configurations_in_its_order(scratch):
     run = parse(several(), scratch)
     assert run.runs(None) == ["a", "b", "d"]
     assert run.runs("c") == ["c"]                                  # named: even one left out of the sweep
+    assert parse(several(run__sweep_runs=["d", "a"]), scratch).runs(None) == ["d", "a"]
+    assert parse(several(run__sweep_runs=True), scratch).runs(None) == ["a", "b", "c", "d"]   # true: every one
     with pytest.raises(HepError, match=r"runs every configuration \(sweep_runs\) and names none"):
         run.configuration(None)
     assert parse(several(run__sweep_runs=False, run__configuration="b"), scratch).runs(None) == ["b"]

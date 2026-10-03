@@ -129,6 +129,7 @@ class RunConfig:
     master_toml: str | None
     raw: dict
     sweep_runs: bool = False                            # `hep run` executes every swept configuration (V38)
+    sweep_list: list = field(default_factory=list)      # sweep_runs = ["a", "b"]: these, in this order (V79)
     sets: list = field(default_factory=list)            # the --set overrides it was loaded with (V77: provenance)
     included: dict = field(default_factory=dict)        # "<section>.<name>" → the [master].include file it came from
 
@@ -149,6 +150,8 @@ class RunConfig:
         order of the file; else [run].configuration."""
         if name:
             return [self.configuration(name).key]
+        if self.sweep_list:
+            return [self.configuration(key).key for key in self.sweep_list]
         if self.sweep_runs:
             return [key for key, c in self.configurations.items() if c.swept]
         return [self.configuration(None).key]
@@ -356,17 +359,18 @@ def _with_includes(raw: dict, path: Path) -> tuple[dict, dict]:
     return _over(merged, raw), included
 
 
-def load(name: str, *, sets: list[str] = ()) -> RunConfig:
+def load(name: str, *, sets: list[str] = (), strict: bool = True) -> RunConfig:
+    """A run TOML, checked. `strict=False` (hep migrate only, V79) still reads the forms it rewrites."""
     path = config_file(name)
     raw, included = _with_includes(_read(path), path)
     apply_sets(raw, list(sets))
-    run = parse(raw, path)
+    run = parse(raw, path, strict=strict)
     run.included = included
     run.sets = list(sets)
     return run
 
 
-def parse(raw: dict, path: Path) -> RunConfig:
+def parse(raw: dict, path: Path, strict: bool = True) -> RunConfig:
     where = str(path)
     sections = schema.sections()
     for key in raw:
@@ -381,7 +385,13 @@ def parse(raw: dict, path: Path) -> RunConfig:
     if not isinstance(run, dict):
         raise HepError("missing [run]", where=where, hint="every run TOML has [run] name, project, configuration")
     schema.check(run, "run", f"{where}: [run]", subtables=True)
-    sweep_on = run.get("sweep_runs") is True
+    sweep_on = run.get("sweep_runs") is True or (isinstance(run.get("sweep_runs"), list) and bool(run["sweep_runs"]))
+    if strict:                                  # V79: the forms hep migrate rewrites
+        for key, table in run.items():
+            if isinstance(table, dict) and "swept" in table:
+                raise HepError(f"[run.{key}].swept is gone (V79): [run].sweep_runs lists the configurations it runs",
+                               where=f"{where}: [run.{key}].swept",
+                               hint="sweep_runs = [\"a\", \"b\"], in the order to run them; hep migrate rewrites this file")
     for required in ("name", "project") + (() if sweep_on else ("configuration",)):
         if required not in run:
             raise HepError(f"[run] needs '{required}'", where=f"{where}: [run]")
@@ -422,6 +432,8 @@ def parse(raw: dict, path: Path) -> RunConfig:
                                     target=_as_list(table.get("target")), format=table.get("format", ""),
                                     description=table.get("description", ""), exclude=sorted(set(exclude)))
         check_shapes(quantity, at)                                          # V58: the vocabulary's shape
+        if strict:
+            no_tlatex(quantity.labels, f"{at}.labels")
         quantities[name] = quantity
 
     tools: dict[str, Tool] = {}
@@ -529,6 +541,15 @@ def parse(raw: dict, path: Path) -> RunConfig:
             prelim=_own_prelim(chain, prelim, origins),                     # replaced whole: its chain's interfaces
             origins=origins)
 
+    if isinstance(run.get("sweep_runs"), list):            # V79: the members, in order
+        listed = run["sweep_runs"]
+        for name in listed:
+            if name not in configurations:
+                raise HepError(f"[run].sweep_runs names '{name}', which is not a [run.<name>] table",
+                               where=f"{where}: [run].sweep_runs", hint=did_you_mean(name, configurations) or
+                               f"configurations: {', '.join(configurations)}")
+        if len(set(listed)) != len(listed):
+            raise HepError("[run].sweep_runs names a configuration twice", where=f"{where}: [run].sweep_runs")
     if sweep_on and not any(c.swept for c in configurations.values()):
         raise HepError("[run].sweep_runs is on but every configuration has swept = false", where=f"{where}: [run].sweep_runs",
                        hint="leave one in, or turn the sweep off")
@@ -542,18 +563,46 @@ def parse(raw: dict, path: Path) -> RunConfig:
     if "legend" in plot:
         raise HepError("[plot].legend is now part of the style", where=f"{where}: [plot].legend",
                        hint=f'[plot.style] legend.position = "{plot["legend"]}" (or in the root_style file)')
-    check_plot(plot, f"{where}: [plot]")
+    check_plot(plot, f"{where}: [plot]", strict=strict)
 
     return RunConfig(path=path, project=project, name=run["name"], serial=run.get("serial"),
                      default_configuration=run.get("configuration"), configurations=configurations,
                      prelim=prelim, static=static, tools=tools, quantities=quantities, plot=plot,
-                     master_toml=master.get("master_toml"), raw=raw, sweep_runs=sweep_on)
+                     master_toml=master.get("master_toml"), raw=raw, sweep_runs=sweep_on,
+                     sweep_list=list(run["sweep_runs"]) if isinstance(run.get("sweep_runs"), list) else [])
 
 
-def check_plot(plot: dict, where: str) -> None:
+TEXT_KEYS = ("labels", "title", "title_left", "title_right", "legend_header", "x_label", "y_label", "legend")
+
+
+def no_tlatex(value, where: str) -> None:
+    """V79 (B5, break and migrate): a label is LaTeX. One written in TLatex is refused, with the LaTeX
+    for it (labels.natural, what hep migrate writes)."""
+    from .labels import is_tlatex, natural
+    for text in value if isinstance(value, list) else [value]:
+        if isinstance(text, str) and is_tlatex(text):
+            raise HepError(f"'{text}' is TLatex; labels are LaTeX (V65, V79)", where=where,
+                           hint=f"write '{natural(text)}', or run hep migrate on the file")
+
+
+def _plot_texts(table: dict, where: str) -> None:
+    for key in TEXT_KEYS:
+        if key in table:
+            no_tlatex(table[key], f"{where}.{key}")
+    for child in ("object", "overlay"):
+        for name, sub in table.get(child, {}).items() if isinstance(table.get(child), dict) else ():
+            if isinstance(sub, dict):
+                _plot_texts(sub, f'{where}.{child}."{name}"')
+    if isinstance(table.get("data"), dict):
+        _plot_texts(table["data"], f"{where}.data")
+
+
+def check_plot(plot: dict, where: str, strict: bool = True) -> None:
     """[plot] and its children against the schema, when the file is read (C11, V55): every key, type and
     bound of [plot], [plot.data], [plot.object."<glob>"] and [plot.overlay.<name>]. What needs the style
     (base.toml) or a backend is plot.validate's."""
+    if strict:
+        _plot_texts(plot, where)
     schema.check(plot, "plot", where)
     schema.check(plot.get("data", {}), "data", f"{where}.data")
     for glob, table in plot.get("object", {}).items():

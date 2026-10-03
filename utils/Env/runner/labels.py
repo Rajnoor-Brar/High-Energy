@@ -121,6 +121,40 @@ def from_tlatex(text: str) -> str:
     return " ".join(word(w) for w in text.split(" "))
 
 
+_SYMBOL = re.compile(r"""
+    (?:\#[A-Za-z]+(?:\{(?:[^{}]|\{[^{}]*\})*\})*      # a #command with its arguments: #hat{p}, #sqrt{s}
+     | [A-Za-z][A-Za-z0-9]*)                              # or a word
+    (?:[_^]\{(?:[^{}]|\{[^{}]*\})*\})*                  # and its sub- and superscripts
+    """, re.X)
+
+
+def natural(text: str) -> str:
+    r"""TLatex → LaTeX as a physicist writes it (V79, the user's choice for migrating configs): each
+    symbol (a word with `_{…}`/`^{…}`, or a `#command{…}`) becomes math, the rest stays text; a one-letter
+    symbol is italic, as LaTeX sets it, and a longer word upright: `E_{T} > 4 GeV` → `$E_{T}$ > 4 GeV`,
+    `p_{T0}^{ref}` → `$p_{T0}^{\mathrm{ref}}$`, `anti-k_{T}` → `anti-$k_{T}$`, `#sqrt{s}` → `$\sqrt{s}$`.
+    Unlike from_tlatex() it changes the look (italic letters); a label without TLatex is returned as is."""
+    if not is_tlatex(text):
+        return text
+    inverse = latex()["mathtext"]
+
+    def words(inner: str) -> str:                         # a run of two letters or more is upright
+        return re.sub(r"(?<![\\A-Za-z])([A-Za-z]{2,})(?![A-Za-z])", r"\\mathrm{\1}", inner)
+
+    def symbol(match: re.Match) -> str:
+        token = match[0]
+        if not _TLATEX.search(token):
+            return token
+        out = re.sub(r"#([A-Za-z]+)", lambda m: inverse[m[1]] if m[1] in inverse and not inverse[m[1]].isalpha()
+                     else "\\" + inverse.get(m[1], m[1]), token)
+        out = re.sub(r"\{([^{}]*)\}", lambda m: "{" + words(m[1]) + "}", out)
+        base = re.match(r"[A-Za-z]{2,}(?=[_^{]|$)", out)
+        if base:                                          # MPI_{on}: a word, upright
+            out = "\\mathrm{" + base[0] + "}" + out[base.end():]
+        return f"${out}$"
+    return _SYMBOL.sub(symbol, text)
+
+
 def mathtext(text: str) -> str:
     """A LaTeX label as matplotlib draws it (the yoda backend, V65): YODA's macros expanded, `<` and `>`
     of the text set as math (LaTeX's text font prints > as ¿), the escapes \\_ \\^ \\# of the text the

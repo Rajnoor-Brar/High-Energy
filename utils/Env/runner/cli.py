@@ -81,6 +81,10 @@ def parser() -> argparse.ArgumentParser:
     state.add_argument("configuration", nargs="?", help="one configuration of it")
     state.add_argument("--stack", action="store_true", help="the software stack instead: each package's version (V78)")
 
+    move = commands.add_parser("migrate", help="rewrite run TOMLs and their cards in today's forms (a diff, or --apply)")
+    move.add_argument("configs", nargs="*", metavar="CONFIG", help="configs to migrate (default: every config)")
+    move.add_argument("--apply", action="store_true", help="write the changes (default: print the diff)")
+
     again = commands.add_parser("reproduce", help="run a finished point again, from its provenance, beside it")
     again.add_argument("provenance", help="output/…/<point>/provenance.json")
     again.add_argument("--anyway", action="store_true", help="run it even though the setup changed since")
@@ -702,6 +706,29 @@ def cmd_clean(args) -> int:
     return 0
 
 
+def cmd_migrate(args) -> int:
+    """`hep migrate [CONFIG…] [--apply]` (V79): the diff of each file today's forms change, or (--apply)
+    the files rewritten. Configs are read as they are (the forms the runner now refuses included)."""
+    from . import migrate
+    names = list(args.configs) or house.config_names()
+    for name in names:                       # every one must read, leniently, before anything is written
+        configmod.load(name, strict=False)
+    changes = migrate.plan(names)
+    for path, (old, new) in changes.items():
+        sys.stdout.write(migrate.diff(path, old, new))
+    if not changes:
+        print("nothing to migrate")
+        return 0
+    if args.apply:
+        migrate.apply(changes)
+        print(f"migrated {len(changes)} file(s)")
+        for name in names:                   # and now they read strictly
+            configmod.load(name)
+        return 0
+    print(f"{len(changes)} file(s) to migrate (a dry run: --apply writes them)")
+    return 0
+
+
 def cmd_reproduce(args) -> int:
     """`hep reproduce output/…/<point>/provenance.json` (V77, F10): the point again, exactly as it ran,
     into output/<P>/.reproduce/<identity>/ (its own output/ and results/), never over the original; then
@@ -822,6 +849,8 @@ def main(argv: list[str]) -> int:
             return cmd_clean(args)
         if args.command == "reproduce":
             return cmd_reproduce(args)
+        if args.command == "migrate":
+            return cmd_migrate(args)
         return cmd_watch(args)
     except HepError as error:
         print(error.render(), file=sys.stderr)

@@ -205,7 +205,9 @@ def test_the_combined_card_holds_each_key_once(scratch):
     settings = json.loads(p.writes[step.card_combined.with_suffix(".json")])
     assert settings["Main:numberOfEvents"] == {"value": "10", "from": "built-in events"}
     assert settings["PhaseSpace:pTHatMin"]["from"].startswith("photo_ep.cmnd:")
-    assert any("which the runner sets" in note for note in p.notes) is ("Random:seed" in step.card_base[0].read_text(encoding="utf-8"))
+    card = step.card_base[0].read_text(encoding="utf-8")                 # a setting line, not a comment's mention
+    assert any("which the runner sets" in note for note in p.notes) is any(
+        line.startswith("Random:seed") for line in card.splitlines())
 
 
 def test_repeatable_commands_are_kept_every_time(scratch):
