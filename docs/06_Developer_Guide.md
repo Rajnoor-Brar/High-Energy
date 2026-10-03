@@ -33,7 +33,7 @@ the framework's business.
 
 ## 2. The build
 
-`Makefile` (160 lines), `utils/Env/flags.sh`, and `hep build` = `make all`. No CMake (V6).
+`Makefile`, `utils/Env/flags.sh`, and `hep build` = `make all`. No CMake (V6).
 
 ### 2.1 The rules
 
@@ -102,8 +102,8 @@ The package and its ranks are [02 §3.1](02_Architecture.md#31-the-runner). The 
 
 | Type | Module | Holds |
 |---|---|---|
-| `RunConfig` | `config` | the parsed run TOML: `path`, `project`, `name`, `serial`, `default_configuration`, `configurations`, `prelim`, `static`, `tools`, `quantities`, `plot`, `master_toml`, `raw` |
-| `Configuration` | `config` | one `[run.<cfg>]`: `key`, `name`, `serial`, `description`, `event_count`, `threads` (resolved), `sweeps`, `plot_points`, `tools`/`pre`/`post` (lists of groups), `static` (merged), `prelim` |
+| `RunConfig` | `config` | the parsed run TOML: `path`, `project`, `name`, `serial`, `default_configuration` (None under `sweep_runs`), `configurations`, `prelim`, `static`, `tools`, `quantities`, `plot`, `master_toml`, `raw`, `sweep_runs` |
+| `Configuration` | `config` | one `[run.<cfg>]`: `key` (its table key), `name` (its folder: `label`, else the key), `run_name` (`[run.<cfg>].name`, else `[run].name`), `serial`, `title`, `description`, `event_count`, `threads` (resolved), `parallelism`, `sweeps`, `plot_points`, `combine`, `tools`/`pre`/`post` (lists of groups), `static` (merged), `prelim`, `swept`, `seed_type`, `manual_seed` |
 | `Tool`, `Quantity` | `config` | one table each; a tool's folder-specific keys and export requests are in `Tool.extra` |
 | `Point` | `sweep` | `index` (1-based; −1 pre, 0 post), `name`, `choice` (quantity → value index), `page` |
 | `Mapping` | `quantities` | how one quantity reaches one tool: `tag`, `form` (`key`, `keys`, `flag`, `option`, `config`, `seed`), `key`, `format`, `analysis`, `check` |
@@ -161,7 +161,7 @@ else `secrets`, unless named in `rerun`), identity (as before). `PointPlan.seed_
 points (`plan_point` without `post=`), so stages keep the identity rule.
 
 **Where a check lives**: C1–C5 and C12 in `config`/`paths`; C7, C8, C10 in `quantities` and
-`tools._render`; C6, C9, C13 in `tools`; C11 in `sweep`; the plot checks in `plot.validate`.
+`tools._render`; C6, C9, C13 in `tools`; C11 in `sweep`; C14 in `config`; the plot checks in `plot.validate`.
 Everything raises `HepError(message, where=…, hint=…)`; nothing else prints error text.
 
 ---
@@ -190,12 +190,14 @@ Every section and key is checked when the folders load: an unknown one is an err
 | | `status` | `standard`, `filters`, `none` (default none) |
 | | `consumes_events` | its product's event count is checked against its input's producer sidecar |
 | | `produces_events` | an event generator: its identity is the seed basis, and its `[outputs] sidecar` is its sidecar |
-| `[card]` | `style` | `append` (base cards then the point card: last wins), `render` (`render.py` writes the whole card), `none` (no card; values become flags or options). `prepend` is reserved and refused (F12). |
+| `[card]` | `style` | `append` (base cards then the point card: last wins), `render` (`render.py` writes the whole card), `none` (no card; values become flags or options). |
 | | `ext`, `comment` | the card's extension and comment marker (`cmnd`, `!`) |
 | | `bools` | how true and false are written (default `["true", "false"]`; Pythia `["on", "off"]`) |
 | | `line` | one value's line (default `"{key} = {value}"`; `"set {key} {value}"` for ThePEG and Tcl) |
 | | `footer` | lines after the values (placeholders `{output_name}`, `{tag}`, `{input}`); a line whose placeholders are all empty is left out |
 | | `seed`, `seed_parallel` | seed lines, after everything (`{seed}`; `{seeds}`, the block, only at threads > 1) |
+| | `seed_range` | `[lo, hi]`: the seeds the tool accepts (default `[1, 900_000_000]`, Pythia's); a point's seeds come from the intersection over its seeded steps (V54) |
+| | `drop`, `trailing`, `drop_inside_braces` | how the combined card leaves out a base card's comments (V54): `drop` a full-line comment (a regex; default: a line starting with `comment`), `trailing` a comment after a value, `drop_inside_braces = false` keeps comment-looking lines inside `{ … }` (Tcl) |
 | `[command]` | `argv` | the argv template (04 §10); default `["{exe}"]` |
 | | `env` | extra environment (`RIVET_ANALYSIS_PATH = "{repo}/build/Rivet"`) |
 | | `cwd` | where it runs (default the point's output directory; Whizard: `{prepared}`) |
@@ -353,16 +355,21 @@ make test-slow      # real generators and plots: the gates (about 6 min)
 
 | Suite | Holds |
 |---|---|
-| `tests/runner/` | the runner, fast: one bad config per rule (`test_config.py`), plans and connections (`test_plan.py`), paths, sweeps and the point-count gate (`test_sweeps.py`), the import ranks (`test_imports.py`), status, plot checks and the style layers (`test_plot.py`), each tool folder's cards (`test_module.py`, `test_generators.py`, `test_process_generators.py`), and the manual (`test_docs.py`) |
-| `tests/integration/` | real processes: App_Pythia, App_yd2rt, Paint, the plot stage, `hep plot`, post and pre, failure injection; `@pytest.mark.slow` for the physics gates |
+| `tests/runner/` | the runner, fast: one bad config per rule (`test_config.py`), plans and connections (`test_plan.py`), paths, sweeps and the point-count gate (`test_sweeps.py`), the import ranks (`test_imports.py`), status (`test_status.py`), plot checks and the style layers (`test_plot.py`), each tool folder's cards (`test_module.py`, `test_generators.py`, `test_process_generators.py`), seeds (`test_seeds.py`), shards, `combine`, `parallelism` and `sweep_runs` (`test_shards.py`, `test_combine.py`, `test_parallel.py`, `test_run_sweep.py`), and the manual (`test_docs.py`) |
+| `tests/integration/` | real processes: App_Pythia, App_yd2rt, Paint, the plot stage, `hep plot`, post and pre (`test_post.py`), failure injection (`test_failures.py`); `@pytest.mark.slow` for the physics gates (`test_gates_*.py`, `test_*_p4.py`) |
 | `tests/cxx/` | `Status.hh` and the module kit |
+| `tests/fixtures/configs/` | the run TOMLs and cards the tests load by name (`PhotoProduction/eic`, …), frozen from `configs/` (V52). Change one only with the test that needs it |
+| `tests/support.py`, `tests/runner/helpers.py` | the shared helpers: `support.hep` / `hep_ok` run `hep` with outputs under a scratch folder; `helpers.raw`, `parse`, `plan`, `plans_of`, `plans` build and plan configs |
 | `tests/reference/` | **data only**: `legacy_run/` (the legacy Pythia → FIFO → `rivet` pipeline's cards, frozen base card and YODAs, at one thread, seed 12345) and `point_counts.toml` (the legacy point and page counts). **Never regenerate them.** |
 
 **Rules** (also in `bots/BOT.md`):
 
-- **Tests never write into `results/` or `configs/`.** `tests/conftest.py` points `HEKIT_RESULTS`
-  and `HEKIT_OUTPUT` into `output/tests/`, and a session guard fails the run if anything under
-  `results/` or `configs/` changed. Use the `scratch` fixture for files.
+- **Tests never read or write the user's `configs/` and `results/`** (V52). `tests/conftest.py` sets
+  `HEKIT_RESULTS` and `HEKIT_OUTPUT` to `output/tests/` and `HEKIT_CONFIGS` to `tests/fixtures/configs/`,
+  unconditionally, and the basetemp to `output/tests/pytest/` wherever pytest starts. The session guard
+  fails the run if `tests/fixtures/` or `tests/reference/` changed (content hashes); a change under
+  `results/`, `configs/` or `modules/`, which the user may be editing meanwhile, is listed at the end
+  instead. Use the `scratch` fixture for files, and `support.hep` to run `hep`.
 - **Name `encoding="utf-8"`** on every text read and write, and on subprocess output: reading a YODA
   resets `LC_ALL` to `C` (L17), and `make` runs in an ASCII locale.
 - **A fake has the real type** (L26): build configs with `helpers.raw(**changes)` (dotted keys as
@@ -390,7 +397,9 @@ in 05. Change a key, and the test says which page to update.
 - **Keys a consumer cannot honour are errors**, in configs, styles and backends.
 - **Citations**: code cites this manual by section (`04 §9.4`) and the record by id (`L18`, `V22`,
   `C7`, `00/B5`). A new lesson learned by running something becomes a ledger row; a new decision a
-  V-row. Ids are never reused.
+  V-row. Ids are never reused. Audit ids (`docs/audit_1/`: C, F, L, B, K, which overlap the record's own C, F
+  and L) are cited only there and in `bots/`, written "audit C6"; code and this manual cite the V-row an
+  audit item lands as.
 - **Docstrings carry the reasoning**: a module opens with what it owns and why its shape is what it
   is.
 - **Python**: `from __future__ import annotations`, type hints, dataclasses for anything with more

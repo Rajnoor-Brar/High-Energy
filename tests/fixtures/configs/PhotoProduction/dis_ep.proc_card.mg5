@@ -1,0 +1,4 @@
+# dis_ep.proc_card.mg5 — MadGraph ep neutral-current DIS at LO (a chain check, P4 S3).
+# The proton first, so it is beam 1 as in eic.toml's [E_p, E_e]. The runner adds `output`.
+import model sm
+generate p e- > e- j

@@ -171,7 +171,7 @@ def _plot_block(page, window: tuple[float, float] | None = None) -> str:
     for key, native in (("x_label", "XLabel"), ("y_label", "YLabel")):
         if key in page.overrides or overlay:              # an overlay's path has no .plot of its own
             keys[native] = latex(settings[key])
-    from runner.plot import labels_of, lines_of, macros, tlatex
+    from runner.labels import labels_of, lines_of, macros, tlatex
     own = labels_of(page.object)
     if settings.get("legend_header", "") != tlatex(own.get("LegendTitle", "")):   # [plot], a child or an overlay's
         keys["LegendTitle"] = latex(settings.get("legend_header", ""))

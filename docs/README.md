@@ -20,7 +20,7 @@ hep run PhotoProduction/eic energy_pdf            # run: 16 points, 4 pages per 
 | [01_Philosophy.md](01_Philosophy.md) | everyone | what the framework is, its principles and what each buys, what it refuses, where it came from |
 | [02_Architecture.md](02_Architecture.md) | everyone | the model; components; a run from command to pages; connections; identity, seeds and skip; the prepare cache; status; failures; provenance; the plot stage; where files go |
 | [03_User_Guide.md](03_User_Guide.md) | users | set up, a first run, the anatomy of a run TOML, **the pipelines** as recipes, plots and style, reruns, when something fails, a new project |
-| [04_Config_Reference.md](04_Config_Reference.md) | users | **every accepted key**, its default and checks; paths; quantities and consumers; placeholders; `[plot]` and the style; the validation rules C1–C13; the commands; the files the runner writes |
+| [04_Config_Reference.md](04_Config_Reference.md) | users | **every accepted key**, its default and checks; paths; quantities and consumers; placeholders; `[plot]` and the style; the validation rules C1–C14; the commands; the files the runner writes |
 | [05_Tools_Reference.md](05_Tools_Reference.md) | users, developers | every standard tool; the plot backends; App_Pythia, App_yd2rt and Paint; `Module.hh`; the status protocol; filter rules |
 | [06_Developer_Guide.md](06_Developer_Guide.md) | developers | the layout, the build, the runner inside, the tool-folder contract, adding a tool or a backend, C++, tests, conventions |
 | [07_Record.md](07_Record.md) | everyone | the brief, the decisions (V), the knowledge ledger (L), findings (F), v1's findings and decisions, risks, what has been verified, the budget, the glossary |

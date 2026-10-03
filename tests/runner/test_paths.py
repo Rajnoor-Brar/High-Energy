@@ -10,6 +10,7 @@ from runner import paths
 from runner.errors import HepError
 
 REPO = Path(__file__).resolve().parents[2]
+FIXTURES = REPO / "tests" / "fixtures" / "configs"
 
 
 def test_the_repository_is_found_by_its_markers():
@@ -24,7 +25,7 @@ def test_hekit_root_must_be_the_repository(monkeypatch, scratch):
 
 def test_a_bare_name_takes_its_keys_convention_root():
     assert paths.resolve("photo_ep.cmnd", "baseconfig", project="PhotoProduction") == \
-        REPO / "configs" / "PhotoProduction" / "photo_ep.cmnd"
+        FIXTURES / "PhotoProduction" / "photo_ep.cmnd"
     assert paths.resolve("Lambda.exe", "executable", project="Lambda") == REPO / "build" / "Lambda" / "Lambda.exe"
     assert paths.resolve("zeus_eic.yoda", "data") == REPO / "datasets" / "zeus_eic.yoda"
 
@@ -51,7 +52,7 @@ def test_an_explicit_root_wins():
 
 
 def test_config_lookup_makes_toml_optional(scratch):
-    target = REPO / "configs" / "PhotoProduction" / "eic.toml"
+    target = FIXTURES / "PhotoProduction" / "eic.toml"
     assert paths.config_file("PhotoProduction/eic") == target
     assert paths.config_file("PhotoProduction/eic.toml") == target
     with pytest.raises(HepError, match="no run config"):
@@ -61,3 +62,14 @@ def test_config_lookup_makes_toml_optional(scratch):
 def test_tests_write_into_output_tests():
     assert "output/tests" in str(paths.results_root())
     assert "output/tests" in str(paths.output_root())
+
+
+def test_tests_read_frozen_configs_not_the_users():
+    assert paths.configs_root() == FIXTURES
+
+
+def test_configs_root_is_the_repositorys_without_the_variable(monkeypatch):
+    monkeypatch.delenv("HEKIT_CONFIGS")
+    assert paths.configs_root() == REPO / "configs"
+    assert paths.resolve("photo_ep.cmnd", "baseconfig", project="PhotoProduction") == \
+        REPO / "configs" / "PhotoProduction" / "photo_ep.cmnd"

@@ -1,5 +1,9 @@
 # Intent — ideas worth building, and loose ends
 
+> Since 2026-10-03 the order of work is [docs/audit_1/06_Plan.md](../docs/audit_1/06_Plan.md); several ideas here are
+> scheduled there (U3/U7/U8/U9, CF2, CF3 as audit F5, F7, F4, F10, F2, B9). The ids here are this file's own:
+> T (throughput), U (commands), CF (configuration), P (provenance), and F10–F14, which are the record's findings.
+
 Collected on 2026-09-27 while reading every document before the doc set was replaced: v1's design
 set (at `rework/v1-final`: `docs/rework/`, `docs/post_rework/`, `GUIDE.md`, `MAP.md`), v1's
 retrospective (`docs/rework_v1/`), and the rework v2 plan and phase logs (`docs/rework_v2/`, in git
@@ -35,10 +39,10 @@ file holds what might be.
 
 | # | Idea | Source | Cost | Why |
 |---|---|---|---|---|
-| C1 | **Refuse a v1 config by name.** A file with `schema`, `[study.*]`, `[generator]` or `[quantity.*]` gets "this is a v1 (hekit) run TOML" with a hint (`git show HEAD:<file>`, or the translation table), instead of "unknown section [schema]". | 2026-09-27: `eic.toml` was reverted to v1 by accident | tiny | the error then says what happened |
-| C2 | **Shared blocks between run TOMLs** (`[master] include = [...]`, tables deep-merged), e.g. the ZEUS `[plot.data.map]` and the tool tables that `eic.toml` and `zeus_validation.toml` both carry. | v1 `extends` (03_Configuration §2) | medium: precedence, where errors point | one data map, one tool setup |
-| C3 | **`--explain KEY`**: where a resolved value came from (master, quantity, static, `--set`; base.toml, root_style, `[plot.style]`, object style). | v1 `hep plan --explain` | small-medium | the layers are four deep for style |
-| C4 | A machine file (threads, per host). | v1 machine.toml | small | lab PC (20 threads) and Mac |
+| CF1 | **Refuse a v1 config by name.** A file with `schema`, `[study.*]`, `[generator]` or `[quantity.*]` gets "this is a v1 (hekit) run TOML" with a hint (`git show HEAD:<file>`, or the translation table), instead of "unknown section [schema]". | 2026-09-27: `eic.toml` was reverted to v1 by accident | tiny | the error then says what happened |
+| CF2 | **Shared blocks between run TOMLs** (`[master] include = [...]`, tables deep-merged), e.g. the ZEUS `[plot.data.map]` and the tool tables that `eic.toml` and `zeus_validation.toml` both carry. | v1 `extends` (03_Configuration §2) | medium: precedence, where errors point | one data map, one tool setup |
+| CF3 | **`--explain KEY`**: where a resolved value came from (master, quantity, static, `--set`; base.toml, root_style, `[plot.style]`, object style). | v1 `hep plan --explain` | small-medium | the layers are four deep for style |
+| CF4 | A machine file (threads, per host). | v1 machine.toml | small | lab PC (20 threads) and Mac |
 
 ## 4. Provenance
 
@@ -57,7 +61,7 @@ file holds what might be.
 
 | # | What | Fix |
 |---|---|---|
-| F10 | `status_client.py` is in the runner's rank table (`__init__.py`, `test_imports.py`) and was documented for Python custom tools, but it does not exist. | write it (~30 lines: the envelope to `$HEP_STATUS_FD`), or drop it from the table; the manual shows the protocol inline |
+| F10 | ~~`status_client.py` is in the runner's rank table but does not exist.~~ | **closed by V53** (dropped from the one rank table) |
 | F11 | The master mapping form `render = "fn"` is described in `master.toml`'s header, but `tools._render` refuses it ("render mappings arrive with their tool"). Render tools take plain `key` mappings and apply them in `render.py`. | drop `render` from the header, or implement it |
 | F12 | Card style `"prepend"` is accepted by the folder check (`CARD_STYLES`) but raises when used; Whizard's point-card-first dialect is `render.py`. | remove it from `CARD_STYLES` |
 | F13 | `filters.toml`'s `[defaults] last_line = true` is never read: the last log line is always shown. | drop the table from the folders |

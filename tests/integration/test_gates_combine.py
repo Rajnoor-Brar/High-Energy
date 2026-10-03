@@ -4,14 +4,11 @@ the PDF, drawn from the merged files."""
 
 from __future__ import annotations
 
-import os
-import subprocess
 import tomllib
-from pathlib import Path
 
 import pytest
 
-REPO = Path(__file__).resolve().parents[2]
+from support import hep
 yoda = pytest.importorskip("yoda")
 
 pytestmark = pytest.mark.slow
@@ -63,9 +60,7 @@ objects = ["*d01-x01-y01"]
 def test_each_pdf_is_its_seeds_merged_and_drawn_as_one_curve(scratch):
     config = scratch / "seeds.toml"
     config.write_text(RUN, encoding="utf-8")
-    env = dict(os.environ, HEKIT_OUTPUT=str(scratch / "output"), HEKIT_RESULTS=str(scratch / "results"))
-    done = subprocess.run(["python3", str(REPO / "utils" / "Env" / "run"), "run", str(config), "--plain"], env=env,
-                          capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=1800)
+    done = hep(scratch, config)
     assert done.returncode == 0, done.stdout[-2000:] + done.stderr[-2000:]
     assert "── combined: MSTW08lo" in done.stdout
     results = scratch / "results" / "PhotoProduction" / "seeds" / "one"

@@ -74,6 +74,7 @@ class Planned:
 
 def build_plans(args, key: str | None) -> Planned:
     run = configmod.load(args.config, sets=args.set)
+    plot.validate(run)                       # before anything is planned (V54): a [plot] typo costs no planning
     configuration = run.configuration(key)
     master = load_master(run.project, run.master_toml)
     points = sweep.points(run, configuration)
@@ -88,7 +89,6 @@ def build_plans(args, key: str | None) -> Planned:
     record.assign_seeds(plans, frozenset(p.point.name for p in plans if again and p.point.index in chosen))
     for plan in plans:
         tools.finalise(plan, plan.seed)
-    plot.validate(run)
     return Planned(run, configuration, plans, [p for p in plans if p.point.index in chosen],
                    post.plan(run, configuration, master, plans), pre_plan,
                    post.plan_combined(run, configuration, master, plans))
@@ -171,8 +171,8 @@ def catch_signals(stopper: execute.Stopper) -> None:
 def cmd_run(args) -> int:
     """One run; or, under [run].sweep_runs, every swept configuration as a run of its own, one after
     another (V38). Each is exactly `hep run CONFIG <cfg>`, after a `run NN - <title> -` line. All are
-    planned before the first starts, so a config error anywhere exits 2 with nothing run; each is
-    planned again at its turn, so edits made meanwhile count. A failed run leaves the next to
+    planned before the first starts, so a config error anywhere exits 2 with nothing run; one is
+    planned again at its turn only if the TOML was edited meanwhile, so edits still count. A failed run leaves the next to
     start; a stop starts no more."""
     run = configmod.load(args.config, sets=args.set)
     keys = run.runs(args.configuration)
@@ -182,10 +182,11 @@ def cmd_run(args) -> int:
     if args.points:
         raise HepError("--points picks points of one configuration, and this sweep runs several",
                        where=f"{run.path}: [run].sweep_runs", hint=f"name it: hep run {args.config} <configuration> --points …")
-    skipped = {}
+    skipped, ahead = {}, {}
+    stamp = run.path.stat().st_mtime_ns
     for key in keys:
         try:
-            planned = build_plans(args, key)
+            ahead[key] = planned = build_plans(args, key)
         except HepError as error:
             error.message = f"configuration '{key}': {error.message}"
             raise
@@ -202,8 +203,10 @@ def cmd_run(args) -> int:
             print(("\n" if number > 1 else "") + header(number, run.configurations[key]))
             print(skipped[key])
             continue
-        try:
-            code = run_one(args, key, stopper, number=number, following=following)
+        try:                                 # planned again only if the TOML was edited meanwhile (V38, V54)
+            unchanged = run.path.stat().st_mtime_ns == stamp
+            code = run_one(args, key, stopper, number=number, following=following,
+                           planned=ahead[key] if unchanged else None)
         except HepError as error:            # the TOML was edited since the check: this run fails alone
             print(("\n" if number > 1 else "") + header(number, run.configurations[key]))
             print(error.render(), file=sys.stderr)
@@ -225,12 +228,13 @@ def not_run(path: Path, title: str, message: str, following: Path | None) -> Non
     journal.close()
 
 
-def run_one(args, key: str, stopper: execute.Stopper, *, number: int = 0, following: Path | None = None) -> int:
+def run_one(args, key: str, stopper: execute.Stopper, *, number: int = 0, following: Path | None = None,
+            planned: Planned | None = None) -> int:
     """One run: the pre stage, every point not complete, the combined groups, the post stage and the
     plots. In a sweep of runs, `number` is its place (a `run NN - <title> -` line first), and
     `following` is the next run's journal, named in this one's `run finished` record so that hep
     watch follows on."""
-    planned = build_plans(args, key)
+    planned = planned or build_plans(args, key)
     run, configuration, every, plans = planned.run, planned.configuration, planned.every, planned.plans
     post_plan, pre_plan, combined = planned.post, planned.pre, planned.combined
     title_line = header(number, configuration) if number else ""
@@ -361,8 +365,20 @@ def cmd_watch(args) -> int:
     return follow(journal, plain=args.plain)
 
 
+def parse(argv: list[str]) -> argparse.Namespace:
+    """The command line, with options and positionals in any order (`hep run eic --plain pdf`, V54):
+    argparse's intermixed parsing does not take subcommands, so the subcommand's own parser reads the rest."""
+    top = parser()
+    commands = next(a for a in top._actions if isinstance(a, argparse._SubParsersAction))
+    if argv and argv[0] in commands.choices:
+        args = commands.choices[argv[0]].parse_intermixed_args(argv[1:])
+        args.command = argv[0]
+        return args
+    return top.parse_args(argv)                  # --help, or an unknown command: argparse's own message
+
+
 def main(argv: list[str]) -> int:
-    args = parser().parse_args(argv)
+    args = parse(argv)
     try:
         if args.command == "run":
             return cmd_run(args)

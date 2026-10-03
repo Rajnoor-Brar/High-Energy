@@ -33,7 +33,8 @@ ENV = Path(__file__).resolve().parents[1]                 # utils/Env
 
 FOLDER_SECTIONS = {
     "tool": {"category", "executable", "streamable", "status", "consumes_events", "produces_events"},
-    "card": {"style", "ext", "comment", "bools", "seed", "seed_parallel", "line", "footer"},
+    "card": {"style", "ext", "comment", "bools", "seed", "seed_parallel", "seed_range", "line", "footer",
+             "drop", "trailing", "drop_inside_braces"},
     "command": {"argv", "env", "cwd"},
     "options": None,                                      # free: the schema of tool-specific keys
     "outputs": {"products", "event_count", "sidecar", "written", "deal"},
@@ -43,8 +44,11 @@ FOLDER_SECTIONS = {
     "checks": {"info_dirs", "info_dirs_command", "files"},
     "shard": {"merge"},
 }
-CARD_STYLES = ("append", "prepend", "none", "render")
+CARD_STYLES = ("append", "none", "render")
 EXPORT = re.compile(r"^(?P<tool>[a-z0-9]+)_(?P<export>[a-z0-9_]+)$")
+#: Seeds a folder accepts unless its [card] seed_range says otherwise (V54): Pythia's, 1 … 9·10⁸, which
+#: every seed was drawn from before, so an existing point keeps its seeds.
+DEFAULT_SEED_RANGE = (1, 900_000_000)
 
 
 # ── tool folders ───────────────────────────────────────────────────────────────────────────────
@@ -167,27 +171,42 @@ def native(value: Any, bools: list[str], fmt: str = "") -> str:
     return str(value)
 
 
+_HASHES: dict[tuple, str] = {}
+
+
 def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with open(path, "rb") as handle:
-        for block in iter(lambda: handle.read(1 << 20), b""):
-            digest.update(block)
-    return digest.hexdigest()
+    """A file's sha256, once per process for each (path, size, mtime): a plan hashes every binary and
+    base card of every point, and a sweep has many points with one App_Pythia (V54)."""
+    info = Path(path).stat()
+    key = (str(path), info.st_size, info.st_mtime_ns)
+    if key not in _HASHES:
+        digest = hashlib.sha256()
+        with open(path, "rb") as handle:
+            for block in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(block)
+        _HASHES[key] = digest.hexdigest()
+    return _HASHES[key]
 
 
 def executable_of(tool, folder: Folder, project: str) -> Path:
-    """A folder's executable (`{repo}` expanded, else PATH), or a custom table's (04 §2: bare →
-    build/<project>/<name>; when that does not exist, a command on PATH, shown by --plan)."""
+    """A folder's executable (`{repo}` expanded, else PATH), or a custom table's (04 §2): bare →
+    build/<project>/<name>, which must exist; `path:<command>` → that command on PATH, asked for by
+    name. A bare name never falls back to PATH (V54): a missing build would run a system binary."""
     if tool.executable:
-        candidate = resolve(tool.executable, "executable", project=project, where=f"[tools.{tool.tag}].executable")
-        if candidate.exists() or "/" in tool.executable:
-            return candidate
-        found = shutil.which(tool.executable)
-        if found:
+        where = f"[tools.{tool.tag}].executable"
+        if tool.executable.startswith("path:"):
+            command = tool.executable[len("path:"):]
+            found = shutil.which(command)
+            if not found:
+                raise HepError(f"'{command}' is not a command on PATH", where=where, hint="load_hep first")
             return Path(found)
-        raise HepError(f"executable '{tool.executable}' is neither {candidate} nor a command on PATH",
-                       where=f"[tools.{tool.tag}].executable",
-                       hint=f"build it (make modules/{project}/{Path(tool.executable).stem}.cc → .exe)")
+        candidate = resolve(tool.executable, "executable", project=project, where=where)
+        if candidate.exists():
+            return candidate
+        on_path = "/" not in tool.executable and shutil.which(tool.executable)
+        raise HepError(f"executable '{tool.executable}' is not built: {candidate}", where=where,
+                       hint=(f"for the command on PATH write executable = \"path:{tool.executable}\"" if on_path
+                             else f"build it (make modules/{project}/{Path(tool.executable).stem}.cc → .exe)"))
     template = folder.get("tool", "executable")
     if not template:
         raise HepError(f"[tools.{tool.tag}] needs executable = \"...\"", where=f"[tools.{tool.tag}]")
@@ -205,7 +224,8 @@ def executable_of(tool, folder: Folder, project: str) -> Path:
     return Path(found)
 
 
-_VERSIONS: dict[str, str] = {}
+_VERSIONS: dict[str, str] = {}                      # a folder's version command → its first line
+_OUTPUTS: dict[str, str] = {}                       # [checks] info_dirs_command → its output
 
 
 def version_of(folder: Folder) -> str:
@@ -294,6 +314,7 @@ class PointPlan:
     seed_type: str = "identity"                             # a point's seed rule (V39); stages keep identity
     manual_seed: int | None = None
     seed_kept: bool = False                                 # random: a complete point's seed, from its provenance
+    seed_range: tuple[int, int] = DEFAULT_SEED_RANGE        # what every seeded step accepts (V54)
 
 
 def location(serial: int | None, name: str) -> str:
@@ -490,9 +511,8 @@ def plan_point(run, configuration, point, master: dict, *, post: dict | None = N
     groups_tags = _resolve_chain(run, configuration, point)
     run, configuration, groups_tags, deal, shard_products = _shard(run, configuration, groups_tags, out)
     chain = [tag for group in groups_tags for tag in group]
-    for tag in chain:
-        if run.tools[tag].tool not in folders():
-            folder_of(run.tools[tag])
+    for tag in chain:                                  # every table names a standard tool (or refuses)
+        folder_of(run.tools[tag])
 
     # standard-configuration requests pull in tables that are configured but not run (V21)
     requests = {tag: _export_requests(run, run.tools[tag]) for tag in chain}
@@ -574,7 +594,23 @@ def plan_point(run, configuration, point, master: dict, *, post: dict | None = N
             plan.rendered[tag].prepare_needed = True   # a chain step always runs its prepare (cached)
 
     plan.groups = [[plan.rendered[tag] for tag in group] for group in groups_tags]
+    plan.seed_range = seed_range_of(plan.rendered.values())
     return plan
+
+
+def seed_range_of(steps) -> tuple[int, int]:
+    """The seeds every seeded step accepts: the intersection of their folders' [card] seed_range (a
+    step is seeded when its folder writes seed lines or its argv takes {seed})."""
+    lo, hi = DEFAULT_SEED_RANGE
+    for step in steps:
+        if not (step.folder.get("card", "seed") or any("{seed}" in a for a in step.folder.get("command", "argv", []))):
+            continue
+        a, b = step.folder.get("card", "seed_range", DEFAULT_SEED_RANGE)
+        lo, hi = max(lo, int(a)), min(hi, int(b))
+    if hi - lo < 1:
+        raise HepError(f"the seeded tools of this point accept no common seed range ({lo} … {hi})",
+                       hint="see their folders' [card] seed_range")
+    return lo, hi
 
 
 def _outputs(plan: PointPlan, step: Step, run) -> None:
@@ -744,8 +780,6 @@ def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
         step.identity_parts["base_sha256"] = [sha256_file(b) for b in step.card_base]
         step.identity_parts["card"] = [line for line in step.card_lines if line not in redundant]
         _prepare_key(plan, step, run)
-    elif style == "prepend":
-        raise HepError(f"card style '{style}' arrives with the {folder.name} tool folder (P4 S3)", where=folder.name)
     elif lines:
         raise HepError(f"{folder.name} has no card, but quantities set native keys on it: {', '.join(lines)}",
                        where=f"[tools.{step.tag}]", hint="target an option or a config key instead")
@@ -756,9 +790,9 @@ def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
         rendered = []
         for analysis in tool.extra["analyses"]:
             base, *inline = analysis.split(":")
-            merged = dict(item.partition("=")[::2] for item in inline)
-            merged.update(common)
-            merged.update(options.get(base, {}))
+            merged = dict(common)                                  # the table's, for every analysis …
+            merged.update(item.partition("=")[::2] for item in inline)   # … the analysis's own, written inline …
+            merged.update(options.get(base, {}))                   # … and the point's quantities, most specific last
             rendered.append(":".join([base, *(f"{k}={v}" for k, v in sorted(merged.items()))]))
         unknown = set(options) - {a.split(":")[0] for a in tool.extra["analyses"]}
         if unknown:
@@ -845,12 +879,12 @@ def _info_dirs(folder: Folder) -> list[Path]:
     command = folder.get("checks", "info_dirs_command")
     if command:
         key = " ".join(command)
-        if key not in _VERSIONS:
+        if key not in _OUTPUTS:
             try:
-                _VERSIONS[key] = subprocess.run(command, capture_output=True, text=True, timeout=30).stdout.strip()
+                _OUTPUTS[key] = subprocess.run(command, capture_output=True, text=True, timeout=30).stdout.strip()
             except (OSError, subprocess.SubprocessError):
-                _VERSIONS[key] = ""
-        dirs += [Path(d) for d in _VERSIONS[key].split(":") if d]
+                _OUTPUTS[key] = ""
+        dirs += [Path(d) for d in _OUTPUTS[key].split(":") if d]
     return dirs
 
 
@@ -1054,12 +1088,33 @@ def finalise(plan: PointPlan, seed: int) -> None:
                     lines, [b.read_text(encoding="utf-8") for b in step.card_base],
                     {"prepared": prepared, "base_paths": [str(b) for b in step.card_base], "tag": step.tag})
             continue
-        combined = "".join(b.read_text(encoding="utf-8") for b in step.card_base) + "\n" + point_text
+        combined = "\n".join(line for base in step.card_base for line in clean_base(base, step.folder)) + "\n" + point_text
         plan.writes[step.card_point] = point_text
         plan.writes[step.card_combined] = combined
     for step in plan.rendered.values():
         if step.config_path is not None:
             plan.writes[step.config_path] = tomli_w.dumps(step.config_data or {})
+
+
+def clean_base(base: Path, folder: Folder) -> list[str]:
+    """A base card's lines as the combined card carries them (V54): its settings, without blank lines or
+    comments, under one `<comment> from <base>` line. [card] drop is a full-line comment (a regex),
+    trailing a comment after a value; drop_inside_braces = false keeps comment-looking lines inside
+    { … } (Tcl: there they can be list elements)."""
+    comment = folder.get("card", "comment", "#")
+    drop = re.compile(folder.get("card", "drop", r"^\s*" + re.escape(comment)))
+    trailing = folder.get("card", "trailing")
+    trailing = re.compile(trailing) if trailing else None
+    inside = folder.get("card", "drop_inside_braces", True)
+    out, depth = [f"{comment} from {base}"], 0
+    for raw in base.read_text(encoding="utf-8").splitlines():
+        line = raw.rstrip()
+        if not line.strip() or ((inside or depth == 0) and drop.match(line)):
+            pass
+        else:
+            out.append(trailing.sub("", line) if trailing else line)
+        depth = max(0, depth + line.count("{") - line.count("}"))
+    return out
 
 
 def _unsharded(tag: str, plan: PointPlan) -> str:

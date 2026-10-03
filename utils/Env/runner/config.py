@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from .errors import HepError, did_you_mean
-from .paths import config_file, repo_root
+from .paths import config_file, configs_root
 
 TOP_LEVEL = ("master", "run", "prelim", "static", "tools", "quantities", "plot")
 
@@ -180,8 +180,10 @@ def _seed_type(value: str, where: str) -> str:
 
 
 def _manual_seed(value: int | None, where: str) -> int | None:
-    if value is not None and not 1 <= value < 900_000_000:          # Pythia's range (record.SEED_RANGE)
-        raise HepError(f"manual_seed {value} is out of range", where=where, hint="1 to 899,999,999")
+    """At least 1 here; the upper bound is the point's generators' `[card] seed_range` (V54), checked
+    when the point is planned."""
+    if value is not None and value < 1:
+        raise HepError(f"manual_seed {value} is out of range", where=where, hint="a seed is at least 1")
     return value
 
 
@@ -308,7 +310,7 @@ def parse(raw: dict, path: Path) -> RunConfig:
             raise HepError(f"[run] needs '{required}'", where=f"{where}: [run]")
     project = run["project"]
     # A config under configs/<X>/ belongs to project X; one given as ./path elsewhere (tests) need not.
-    if path.parent.parent == repo_root() / "configs" and path.parent.name != project:
+    if path.parent.parent == configs_root() and path.parent.name != project:
         raise HepError(f"[run].project is '{project}' but the file is in configs/{path.parent.name}/",
                        where=f"{where}: [run].project", hint="they must match")
 
@@ -403,7 +405,7 @@ def parse(raw: dict, path: Path) -> RunConfig:
         if event_count is None:
             raise HepError("no event_count: set it here or in [run]", where=at)
         configurations[key] = Configuration(
-            key=key, name=table.get("label") or key, serial=table.get("serial", run.get("serial")),   # V43, V45
+            key=key, name=table.get("label") or key, serial=table.get("serial", run.get("serial")),   # V45
             run_name=table.get("name", run["name"]),                                                 # V46
             swept=table.get("swept", True), title=table.get("title", key),
             seed_type=_seed_type(table.get("seed_type", run.get("seed_type", "identity")),

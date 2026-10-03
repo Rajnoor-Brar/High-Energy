@@ -8,7 +8,7 @@
 [tool]
 category        = "event-generator"
 executable      = "Sherpa"
-status          = "filters"
+status          = "none"            # no filters.toml yet: its log's last line is shown
 produces_events = true
 
 [card]

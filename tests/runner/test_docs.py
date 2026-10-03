@@ -168,3 +168,12 @@ def test_every_cited_id_is_in_the_record():
                 continue
             bad.append(f"{path.relative_to(REPO)}: {ident}: {line.strip()[:100]}")
     assert not bad, "ids the record does not have:\n  " + "\n  ".join(bad)
+
+
+def test_the_rank_table_in_02_is_the_runners():
+    """02 §3.1's table of modules and ranks is runner/__init__.py's RANKS, row for row."""
+    from runner import RANKS
+    section = text(NUMBERED["02"]).split("### 3.1 The runner", 1)[1].split("\n### ", 1)[0]
+    rows = {m: int(r) for r, m in re.findall(r"^\| (\d) \| `(\w+)\.py` \|", section, re.M)}
+    assert rows == RANKS
+

@@ -9,11 +9,14 @@ produces_events = true
 style   = "append"                  # the point card is read after the base cards: last wins
 ext     = "cmnd"
 comment = "!"
+drop    = '^\s*[^A-Za-z0-9\s]'   # Pythia reads a line only when it starts with a letter or digit
+trailing = '\s+!.*$'
 bools   = ["on", "off"]
 # Seeds from the point's identity (02 §8). Random:seed is always written, so a serial Pythia in an
 # integrated program is seeded too; PythiaParallel reads Parallelism:seeds (L4).
 seed          = ["Random:setSeed = on", "Random:seed = {seed}"]
 seed_parallel = ["Parallelism:seeds = {{{seeds}}}"]
+seed_range    = [1, 900_000_000]  # Pythia's Random:seed and Parallelism:seeds (L4)
 # A shower of an LHE file from an earlier group (MadGraph): the base card sets Beams:frameType = 4.
 # Without an input the line is left out, so a generation card is unchanged.
 footer        = ["Beams:LHEF = {input}"]

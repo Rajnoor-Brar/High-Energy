@@ -5,14 +5,12 @@ histograms, each time a point runs, and records the seed it used."""
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 from pathlib import Path
 
 import pytest
 
-REPO = Path(__file__).resolve().parents[2]
-HEP = REPO / "utils" / "Env" / "hep"
+from support import hep
 yoda = pytest.importorskip("yoda")
 
 pytestmark = pytest.mark.slow
@@ -47,9 +45,7 @@ output_file = "photo.yoda"
 
 
 def run(config: Path, where: Path, *args: str) -> subprocess.CompletedProcess:
-    env = dict(os.environ, HEKIT_OUTPUT=str(where / "output"), HEKIT_RESULTS=str(where / "results"))
-    return subprocess.run([str(HEP), "run", str(config), *args, "--plain"], cwd=REPO, env=env, capture_output=True,
-                          text=True, encoding="utf-8", errors="replace", timeout=1800)
+    return hep(where, config, *args)
 
 
 def config(scratch: Path, seed_type: str) -> Path:

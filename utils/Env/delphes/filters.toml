@@ -13,6 +13,3 @@ phase = "init"
 [[rule]]
 match = '(?:\*\* ERROR|ERROR:|Error in)'
 emit  = "error"
-
-[defaults]
-last_line = true

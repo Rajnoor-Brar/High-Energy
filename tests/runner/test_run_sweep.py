@@ -52,7 +52,7 @@ def test_a_sweep_runs_the_swept_configurations_in_the_order_of_the_file(scratch)
     run = parse(several(), scratch)
     assert run.runs(None) == ["a", "b", "d"]
     assert run.runs("c") == ["c"]                                  # named: even one left out of the sweep
-    with pytest.raises(HepError, match="runs every configuration \(sweep_runs\) and names none"):
+    with pytest.raises(HepError, match=r"runs every configuration \(sweep_runs\) and names none"):
         run.configuration(None)
     assert parse(several(run__sweep_runs=False, run__configuration="b"), scratch).runs(None) == ["b"]
 
@@ -113,9 +113,11 @@ def args_for(path: Path, **changes):
                               "only": None, "rerun": False, "plain": True, **changes})
 
 
-def fake_runs(monkeypatch, codes: dict, calls: list):
-    def run_one(args, key, stopper, *, number=0, following=None):
+def fake_runs(monkeypatch, codes: dict, calls: list, given: list | None = None):
+    def run_one(args, key, stopper, *, number=0, following=None, planned=None):
         calls.append((key, number, following.parent.name if following else None))
+        if given is not None:
+            given.append(planned)
         outcome = codes.get(key, 0)
         if isinstance(outcome, Exception):
             raise outcome
@@ -214,3 +216,12 @@ def test_watch_follows_one_run_to_the_next(scratch, monkeypatch):
     text = captured.getvalue()
     assert text.index("run 01 - a -") < text.index("── point 1/1: p ── ok after 5.0s") < text.index("run 02 - b -")
     assert "── point 1/1: q ── ok after 2.5s" in text and "old" not in text
+
+
+def test_an_unchanged_toml_is_planned_once(sweep_file, monkeypatch):
+    """V54: each run starts from the plan made up front, unless the TOML was edited since."""
+    calls, given = [], []
+    fake_runs(monkeypatch, {}, calls, given)
+    assert cli.cmd_run(args_for(sweep_file)) == 0
+    assert given and all(isinstance(p, cli.Planned) for p in given)
+

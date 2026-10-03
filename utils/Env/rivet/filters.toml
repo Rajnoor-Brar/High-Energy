@@ -19,6 +19,3 @@ emit  = "ignore"
 [[rule]]
 match = '\bWARN\b'
 emit  = "warn"
-
-[defaults]
-last_line = true

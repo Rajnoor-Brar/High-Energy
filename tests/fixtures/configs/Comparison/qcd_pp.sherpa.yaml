@@ -1,0 +1,19 @@
+# qcd_pp.sherpa.yaml — Sherpa 3: pp → QCD 2→2 at LO, jets above 20 GeV (the comparison's region).
+# BEAMS and BEAM_ENERGIES come from the plan (beams, sqrts), EVENTS and RANDOM_SEED from the runner.
+# Both PDF keys are set: the MPI model falls back to an uninstalled set otherwise (L12).
+PDF_LIBRARY: [LHAPDFSherpa, LHAPDFSherpa]
+PDF_SET: [NNPDF23_lo_as_0130_qed, NNPDF23_lo_as_0130_qed]
+MPI_PDF_LIBRARY: [LHAPDFSherpa, LHAPDFSherpa]
+MPI_PDF_SET: [NNPDF23_lo_as_0130_qed, NNPDF23_lo_as_0130_qed]
+ME_GENERATORS: [Comix]
+SCALES: METS{H_T2/4}{H_T2/4}{H_T2/4}
+EVENT_GENERATION_MODE: Weighted
+PROCESSES:
+  - 93 93 -> 93 93:
+      Order: {QCD: 2, EW: 0}
+SELECTORS:
+  - NJetFinder:
+      N: 2
+      PTMin: 20.0
+      R: 0.4
+      Exp: -1

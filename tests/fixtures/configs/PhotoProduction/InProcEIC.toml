@@ -1,0 +1,250 @@
+# InProcEIC.toml — eic.toml with Pythia and Rivet in one process (InprocJets, V33).
+#
+#   hep run PhotoProduction/InProcEIC                the configuration named in [run] (pdf)
+#   hep run PhotoProduction/InProcEIC energy_pdf     another one
+#   hep run PhotoProduction/InProcEIC radius --plan  look before running
+#
+# The same physics set-up as eic.toml: base card photo_ep.cmnd, the same quantities, statics and
+# configurations, photo_eic. Instead of App_Pythia → FIFO → rivet, one program
+# (modules/PhotoProduction/InprocJets.cc) runs PythiaParallel and its Rivets, and hands each event to
+# Rivet as an in-memory HepMC3::GenEvent: no HepMC text, no FIFO. It gets the pythia table's point
+# card (seeds included) and the rivet table's analyses with their options (radius's R) as standard
+# configurations (04 §9.4); those two tables are configured here but never run.
+#
+# Left out: eic's `inproc` (this whole file is that) and `delphes` (a file chain: it needs the events
+# outside the process).
+#
+# Seeds follow the generator's card, base card, binary, threads and event count (V22): with the same
+# event_count and threads as eic.toml, a point here and the same point there are the same events.
+#
+# Speed: `rivet_threads` Rivets, each on its own thread, merged at the end (V34); they need the
+# SISCone patch (L29, utils/Env/patches/), without which the program refuses more than one.
+# Measured, 200k events of `single` with start-up: 12 + 1 Rivet 112 s, 12 + 12 Rivets 20.7 s,
+# 10 + 14 19.3 s; eic.toml's chain with 12 + 10 shards 29.0 s.
+#
+# Physics notes carried over from eic.toml:
+#   * Photon:ProcessType 0 and 1 give identical events with this card; the direct contribution needs
+#     its own card (00/B13), so the `process` configuration is a null comparison.
+#   * The base card's pTHatMin = 6 GeV sits above photo_eic's lowest jet ET bins, which biases them
+#     (00/B27). The `pthatmin` configuration measures that.
+#   * photo_eic's ETMIN/ETMIN2 defaults are 17/21 GeV in the source (its .info still says 5/10).
+
+[run]
+serial        = 1
+name          = "inproc_eic"
+project       = "PhotoProduction"
+configuration = "pdf"
+event_count   = 1_000_000
+threads       = 12            # Pythia's; as eic.toml, so the same seeds (10 + 14 Rivets is 7% faster)
+
+[run.single]
+description = "One run at the static point (27x920 e+p), in one process"
+sweeps      = []
+tools       = ["inproc", "yd2rt"]
+
+[run.pdf]
+serial      = 1
+description = "Proton-PDF comparison at the static beams, in one process"
+sweeps      = ["pdf"]
+tools       = ["inproc", "yd2rt"]
+
+[run.energies]
+serial      = 2
+description = "Beam-energy comparison at the static PDF, in one process"
+sweeps      = ["energies"]
+tools       = ["inproc", "yd2rt"]
+
+[run.energy_pdf]
+serial      = 3
+description = "Beams x PDF grid: one page per energy, PDF curves on each, in one process"
+sweeps      = ["energies", "pdf"]
+plot_points = ["energies"]
+tools       = ["inproc", "yd2rt"]
+
+[run.mpi]
+serial      = 4
+description = "MPI pT0Ref scan at 18x275 with MPI on, in one process"
+sweeps      = ["pt0ref"]
+tools       = ["inproc", "yd2rt"]
+static      = { energies = "18x275" }
+
+[run.mpi_onoff]
+serial      = 5
+description = "MPI on vs off at 18x275, in one process"
+sweeps      = ["mpi"]
+tools       = ["inproc", "yd2rt"]
+static      = { energies = "18x275" }
+
+[run.mpi_grid]
+serial      = 6
+description = "pT0Ref x MPI grid: one page per MPI setting, pT0Ref curves on each, in one process"
+sweeps      = ["pt0ref", "mpi"]
+plot_points = ["mpi"]
+tools       = ["inproc", "yd2rt"]
+static      = { energies = "18x275" }
+
+[run.pthatmin]
+serial      = 7
+description = "Generation-cut stability at the static beams (00/B27), in one process"
+sweeps      = ["pthatmin"]
+tools       = ["inproc", "yd2rt"]
+
+[run.process]
+serial      = 8
+description = "Photon:ProcessType 0 vs 1 at 18x275: a null comparison with this card (00/B13), in one process"
+sweeps      = ["process"]
+tools       = ["inproc", "yd2rt"]
+static      = { energies = "18x275" }
+
+[run.radius]
+serial      = 9
+description = "Jet radius R at 18x275, in one process (the option reaches Rivet through rivet_analyses)"
+sweeps      = ["radius"]
+tools       = ["inproc", "yd2rt"]
+static      = { energies = "18x275" }
+
+[run.replicas]
+serial      = 10
+description = "Three seed replicas at the static point, merged after them by rivet-merge (post), in one process"
+sweeps      = ["replica"]
+tools       = ["inproc"]
+post        = ["merge"]
+
+# No [prelim]: the events never leave the process.
+
+[static]
+energies = "27x920"
+lepton   = "ep"
+pdf      = "NNPDF23lo"
+pt0ref   = "pt32"
+mpi      = "mpi"
+
+# ── tools ──────────────────────────────────────────────────────────────────────────────────────────
+
+[tools.inproc]                # the integrated program (V21, V33)
+tool           = "module"
+executable     = "InprocJets.exe"
+output_file    = "photo.yoda"
+pythia_cmnd    = true         # [tools.pythia]'s point card: sweeps and seeds included
+rivet_analyses = true         # [tools.rivet]'s analyses (options included) and the plugin path
+
+[tools.inproc.config]
+engine        = "parallel"    # PythiaParallel as App_Pythia runs it; "serial": one Pythia8::Pythia
+rivet_threads = 12            # Rivets on threads of their own, merged at the end (V34, L29)
+
+[tools.pythia]                # configured, not run: exported to inproc as pythia_cmnd
+tool        = "pythia"
+baseconfig  = "photo_ep.cmnd"
+output_file = "events.hepmc"
+
+[tools.rivet]                 # configured, not run: exported to inproc as rivet_analyses
+tool        = "rivet"
+input       = "events.hepmc"
+analyses    = ["photo_eic"]
+output_file = "photo.yoda"
+
+[tools.yd2rt]
+tool        = "yd2rt"
+input       = "photo.yoda"
+output_file = "photo.root"
+
+[tools.merge]                 # post: photo.yoda of every point → one YODA with their statistics
+tool        = "merge"
+input       = "photo.yoda"
+output_file = "merged.yoda"
+
+# ── quantities (as eic.toml) ───────────────────────────────────────────────────────────────────────
+
+[quantities.energies]
+values = [[41, 5], [100, 10], [275, 18], [920, 27.5]]     # [E_p, E_e]: beam A is the proton
+tags   = ["5x41", "10x100", "18x275", "27x920"]
+labels = ["5x41 GeV (#sqrt{s} = 28.6 GeV)", "10x100 GeV (#sqrt{s} = 63.2 GeV)",
+          "18x275 GeV (#sqrt{s} = 140.7 GeV)", "27x920 GeV (#sqrt{s} = 318.1 GeV)"]
+
+[quantities.lepton]
+key    = { pythia = "Beams:idB" }
+values = [11, -11]
+tags   = ["em", "ep"]
+labels = ["e^{-}", "e^{+}"]
+
+[quantities.pdf]
+values = ["LHAPDF6:MSTW2008lo68cl", "LHAPDF6:NNPDF23_lo_as_0130_qed", "LHAPDF6:NNPDF23_nlo_as_0119_qed", "LHAPDF6:PDF4LHC21_40"]
+tags   = ["MSTW08lo", "NNPDF23lo", "NNPDF23nlo", "PDF4LHC21"]
+labels = ["MSTW 2008 LO", "NNPDF 2.3 QCD+QED LO", "NNPDF 2.3 QCD+QED NLO", "PDF4LHC21"]
+
+[quantities.pt0ref]
+key    = { pythia = "MultipartonInteractions:pT0Ref" }
+values = [3.0, 3.2, 3.4]
+tags   = ["pt30", "pt32", "pt34"]
+labels = ["p_{T0}^{ref} = 3.0 GeV", "p_{T0}^{ref} = 3.2 GeV", "p_{T0}^{ref} = 3.4 GeV"]
+
+[quantities.mpi]
+key    = { pythia = "PartonLevel:MPI" }
+values = [true, false]
+tags   = ["mpi", "nompi"]
+labels = ["MPI on", "MPI off"]
+
+[quantities.pthatmin]
+key    = { pythia = "PhaseSpace:pTHatMin" }
+values = [2.0, 3.0, 4.0, 6.0]
+tags   = ["pth2", "pth3", "pth4", "pth6"]
+labels = ["#hat{p}_{T} > 2 GeV", "#hat{p}_{T} > 3 GeV", "#hat{p}_{T} > 4 GeV", "#hat{p}_{T} > 6 GeV"]
+
+[quantities.process]
+key    = { pythia = "Photon:ProcessType" }
+values = [0, 1]
+tags   = ["allproc", "resolved"]
+labels = ["resolved + direct", "resolved"]
+
+[quantities.radius]
+target = "rivet/photo_eic"    # an analysis option: reaches InprocJets in [standard.rivet_analyses]
+key    = "R"
+values = [0.4, 0.7, 1.0]
+tags   = ["r04", "r07", "r10"]
+labels = ["R = 0.4", "R = 0.7", "R = 1.0"]
+
+[quantities.replica]
+target = "pythia/seed"        # enters the generator's identity, so its seed block; renders nothing
+values = [1, 2, 3]
+tags   = ["s1", "s2", "s3"]
+labels = ["seed 1", "seed 2", "seed 3"]
+
+[quantities.etmin]
+target = "rivet/photo_eic"
+key    = "ETMIN"
+values = [4.0, 5.0, 6.0]
+tags   = ["et4", "et5", "et6"]
+labels = ["E_{T} > 4 GeV", "E_{T} > 5 GeV", "E_{T} > 6 GeV"]
+
+# ── plot (as eic.toml) ─────────────────────────────────────────────────────────────────────────────
+
+[plot]
+backend     = "root"
+formats     = ["pdf", "png"]
+ratio       = true
+y_gutter    = 0.5
+auto_range  = true
+void_empty  = false
+min_entries = 1
+
+[plot.data]
+file   = "rivet:ZEUS_2012_I1116258"     # Rivet's own ZEUS 2012 tables (the same numbers as datasets/zeus_eic.yoda)
+legend = "ZEUS 2012"
+
+# Explicit, never matched by name (00/B5, L18). A physics match, not a numbering coincidence:
+# photo_eic books the same d-numbers as ZEUS_2012_I1116258 because it was written against that
+# measurement. Meaningful at 27x920, which IS HERA kinematics; at EIC energies the ratio becomes a
+# statement about beam energy. d13–d17 have no ZEUS counterpart.
+[plot.data.map]
+"d01-x01-y01" = "/REF/ZEUS_2012_I1116258/d01-x01-y01"   # ET, kT, all eta
+"d02-x01-y01" = "/REF/ZEUS_2012_I1116258/d02-x01-y01"   # eta, kT, ET > ETMIN
+"d03-x01-y01" = "/REF/ZEUS_2012_I1116258/d03-x01-y01"   # eta, kT, ET > ETMIN2
+"d04-x01-y01" = "/REF/ZEUS_2012_I1116258/d04-x01-y01"   # ET, kT, eta < 0
+"d05-x01-y01" = "/REF/ZEUS_2012_I1116258/d05-x01-y01"   # ET, kT, 0 < eta < 1
+"d06-x01-y01" = "/REF/ZEUS_2012_I1116258/d06-x01-y01"   # ET, kT, 1 < eta < 1.5
+"d07-x01-y01" = "/REF/ZEUS_2012_I1116258/d07-x01-y01"   # ET, kT, 1.5 < eta < 2
+"d08-x01-y01" = "/REF/ZEUS_2012_I1116258/d08-x01-y01"   # ET, kT, eta > 3
+"d09-x01-y01" = "/REF/ZEUS_2012_I1116258/d09-x01-y01"   # ET, anti-kT, all eta
+"d10-x01-y01" = "/REF/ZEUS_2012_I1116258/d10-x01-y01"   # ET, SISCone, all eta
+"d11-x01-y01" = "/REF/ZEUS_2012_I1116258/d11-x01-y01"   # eta, anti-kT
+"d12-x01-y01" = "/REF/ZEUS_2012_I1116258/d12-x01-y01"   # eta, SISCone

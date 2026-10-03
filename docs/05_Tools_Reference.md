@@ -24,7 +24,7 @@ runner discovers the folders and names none of them.
 | `module` | analysis application | your `Module.hh` program | none | yes | standard | the report's `events` | — | — |
 | `delphes` | detector simulation | `DelphesHepMC3` | `.tcl`, append (`set`) | **no** (L11) | filters | the `Delphes` tree | — | `card`, `tcl` |
 | `herwig` | event generator | `Herwig run` | `.in`, append (`set`) | — (writes) | filters | produces: runner-written sidecar | `Herwig read` | `card`, `in`, `run` |
-| `sherpa` | event generator | `Sherpa` | `.yaml`, render (merge) | — (writes) | filters | produces: runner-written sidecar | integration | `card`, `yaml`, `results` |
+| `sherpa` | event generator | `Sherpa` | `.yaml`, render (merge) | — (writes) | none | produces: runner-written sidecar | integration | `card`, `yaml`, `results` |
 | `whizard` | process generator | `whizard` | `.sin`, render | — (writes) | filters | produces: runner-written sidecar | integration | `card`, `sin` |
 | `madgraph` | process generator | `mg5_aMC` | launch script, render | — (writes a file) | filters | produces: runner-written sidecar | process directory | `card`, `proc`, `process` |
 
@@ -85,8 +85,8 @@ output_file = "photo.yoda"
 
 - **Runs** `rivet -o <partial output> -a <analysis[:options]>… <input>`, with
   `RIVET_ANALYSIS_PATH = build/Rivet`.
-- **Options**, in increasing precedence: inline (`NAME:OPT=V`), `options`, then quantities
-  targeting `"<tag>/<analysis>"`. Each analysis must have a `.info` (`build/Rivet/`, then
+- **Options**, in increasing precedence (the parent→child rule, V54): `options` (every analysis), the
+  analysis's own inline `NAME:OPT=V`, then quantities targeting `"<tag>/<analysis>"`. Each analysis must have a `.info` (`build/Rivet/`, then
   `rivet-config --datadir`), and every option it is given must be declared in the `.info`'s
   `Options:` (C9, L19). A quantity's option aimed at an analysis the tool does not run is an error.
 - **Consumes** nothing through the master: beams and energies come from the events (L9).

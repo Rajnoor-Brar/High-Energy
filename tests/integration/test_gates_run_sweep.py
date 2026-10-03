@@ -6,7 +6,6 @@ config error anywhere stops everything before it starts; Ctrl-C starts no more r
 from __future__ import annotations
 
 import json
-import os
 import signal
 import stat
 import subprocess
@@ -15,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-REPO = Path(__file__).resolve().parents[2]
-HEP = REPO / "utils" / "Env" / "hep"
+import support
+from support import HEP, REPO, env
 
 pytestmark = pytest.mark.slow
 
@@ -76,13 +75,8 @@ tags   = ["no", "yes"]
     return config
 
 
-def env(where: Path) -> dict:
-    return dict(os.environ, HEKIT_OUTPUT=str(where / "output"), HEKIT_RESULTS=str(where / "results"))
-
-
 def hep(config: Path, where: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run([str(HEP), "run", str(config), *args, "--plain"], cwd=REPO, env=env(where),
-                          capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600)
+    return support.hep(where, config, *args, timeout=600)
 
 
 def base(where: Path) -> Path:
