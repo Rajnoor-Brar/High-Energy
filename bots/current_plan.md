@@ -1,5 +1,12 @@
 # Current plan
 
+## Audit of `utils/` — **DONE 2026-10-03** (asked by the user 2026-10-03, /tech-debt)
+
+- docs/audit_1/: README (summary, top ten), 01 conflicts (C1–C17), 02 missing features (F1–F10),
+  03 lean code (L1–L14; L14 = clean appended cards, Pythia cards parsed and merged, added 2026-10-03 at the user's suggestion), 04 bold proposals (B1–B9), 05 backlog (45 items scored, phases 0–5).
+- No code changed. Nothing is ordered yet: every item waits for the user's choice.
+- Extended the same day: 07_Consistency.md (K1–K15, the whole framework) and **06_Plan.md** (P0–P5, 2–3 steps each; the user's decisions: "default" = keep it as it is, runtime state off disk unless flagged, B3/B5 committed, B4c/B8 to discuss, a positional beam convention, break-and-migrate configs). Progress is tracked in 06's table.
+
 ## Titles, legend header, overlays, parent→child options — **DONE 2026-10-03** as V51 (ordered 2026-10-03)
 
 - `[plot].title`, `.title_left`, `.title_right`, `.legend_header` for every page; `[plot.<hist>].<same>`
