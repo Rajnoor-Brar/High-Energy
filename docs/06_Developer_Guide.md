@@ -352,7 +352,9 @@ Add the name to `plot.BACKENDS`. **A key the backend cannot honour is an error**
 
 - **A few headers only.** A helper a second program needs goes into `utils/` as one more header;
   until then it lives in `modules/<P>/`. `Status.hh` and `Module.hh` were the first; `PythiaRun.hh`
-  (V63: σ combination, stamping, seed check, chunking) is App_Pythia's and the integrated programs'. v1's libraries (`Phys`, `ML`, …) come back from git only when a
+  (V63: σ combination, stamping, seed check, chunking) is App_Pythia's and the integrated programs';
+  `Kit.hh` (V73: `Kit::Exit`, the one exit-code table; `Kit::Args`; `Kit::Json::Object` and `Flat`, the
+  sidecars' and reports' writer and reader) is every app's and module program's. v1's libraries (`Phys`, `ML`, …) come back from git only when a
   program needs them, as a deliberate copy (V7).
 - **A header holds one PascalCase namespace**, checked against the installed toolchain first: X11
   `#define`s `Status` (so `Status.hh` guards it), and Delphes declares a global `class Event`.

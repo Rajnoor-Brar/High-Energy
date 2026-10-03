@@ -21,8 +21,9 @@
 // a path prefix instead (/27x920_MSTW08lo/photo_eic/d01-x01-y01): one YODA file for the sweep.
 //
 // The output is the non-temporary ROOT file of the brief (§Plotting): a product in results/.
-// Exit codes (02 §11): 0 ok, 2 usage, 4 input, 5 output.
+// Exit codes: utils/Kit.hh's one table (V73): 0 ok, 2 usage, 4 input, 5 output.
 
+#include "Kit.hh"
 #include "Status.hh"
 
 #include "YODA/BinnedEstimate.h"
@@ -52,7 +53,7 @@
 
 namespace {
 
-    enum Exit { Ok = 0, Usage = 2, Input = 4, Output = 5 };
+    using Kit::Ok, Kit::Usage, Kit::Input, Kit::Output;   // V73
 
     double finite(double value) { return std::isfinite(value) ? value : 0.0; }
 
@@ -232,20 +233,19 @@ namespace {
 }  // namespace
 
 int main(int argc, char** argv) {
-    std::vector<std::string> positional, select;
-    std::string pointsFile;
-    bool keepRaw = false, merge = false, bad = false;
-    for (int i = 1; i < argc; ++i) {
-        const std::string arg = argv[i];
-        if (arg == "--keep-raw") keepRaw = true;
-        else if (arg == "--merge") merge = true;
-        else if (arg == "--select" && i + 1 < argc) select.push_back(argv[++i]);
-        else if (arg == "--points" && i + 1 < argc) pointsFile = argv[++i];
-        else if (!merge && positional.size() >= 2 && arg.rfind("-", 0) != 0) select.push_back(arg);
-        else if (arg.rfind("-", 0) == 0) bad = true;
-        else positional.push_back(arg);
+    const Kit::Args args(argc, argv, {"select", "points"}, {"keep-raw", "merge"});
+    if (!args.ok()) {
+        if (!args.error().empty()) std::fprintf(stderr, "App_yd2rt: %s\n", args.error().c_str());
+        return usage();
     }
-    if (bad || (!merge && positional.size() != 2) || (merge && positional.size() < 2)) return usage();
+    const bool keepRaw = args.has("keep-raw"), merge = args.has("merge");
+    std::vector<std::string> positional = args.positional(), select = args.all("select");
+    const std::string pointsFile = args.get("points");
+    if (!merge && positional.size() > 2) {            // a plain conversion's GLOBs follow IN and OUT
+        select.insert(select.end(), positional.begin() + 2, positional.end());
+        positional.resize(2);
+    }
+    if ((!merge && positional.size() != 2) || (merge && positional.size() < 2)) return usage();
     Status::Reporter status;
 
     // the inputs: (name, path); a plain conversion has one, with no name

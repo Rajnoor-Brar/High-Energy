@@ -40,12 +40,14 @@
 // the HepMC text (28 kB an event) is shared among the outputs rather than done by one thread. One
 // writer holding one lock capped this app at ~2,200 events/s whatever its thread count (measured
 // 2026-09-29: 4 threads 17.7 s, 20 threads 20.5 s for 40k events).
-// Exit codes (02 §11): 0 ok, 1 card/config, 2 usage, 3 init, 5 output, 6 stopped, 70 internal.
+// Exit codes: utils/Kit.hh's one table (V73): 0 ok, 1 its card, 2 usage, 3 init, 5 output, 6 stopped,
+// 70 internal.
 
 #define HEPMC3_USE_COMPRESSION 1
 #define HEPMC3_Z_SUPPORT 1
 #define HEPMC3_ZSTD_SUPPORT 1
 
+#include "Kit.hh"
 #include "PythiaRun.hh"
 #include "Status.hh"
 
@@ -74,7 +76,7 @@
 
 namespace {
 
-    enum Exit { Ok = 0, Card = 1, Usage = 2, Init = 3, Output = 5, Stopped = 6, Internal = 70 };
+    using Kit::Ok, Kit::Config, Kit::Usage, Kit::Init, Kit::Output, Kit::Stopped, Kit::Internal;   // V73: Config is its card
 
     // ── signals: the first stops within a chunk, the second is the default (it kills) ──────────
     std::atomic<bool> stopRequested{false};
@@ -118,21 +120,13 @@ namespace {
 
     Args parse(int argc, char** argv) {
         Args args;
-        std::vector<std::string> positional;
-        for (int i = 1; i < argc; ++i) {
-            const std::string arg = argv[i];
-            auto value = [&]() -> std::string {
-                if (i + 1 >= argc) throw std::invalid_argument(arg + " needs a value");
-                return argv[++i];
-            };
-            if (arg == "--threads") args.threads = std::stoi(value());
-            else if (arg == "--events") args.events = std::stol(value());
-            else if (arg == "--seeds") for (const auto& s : split(value(), ',')) args.seeds.push_back(std::stol(s));
-            else if (arg == "--sidecar") args.sidecar = value();
-            else if (arg == "-h" || arg == "--help") throw std::invalid_argument("");
-            else if (arg.rfind("--", 0) == 0) throw std::invalid_argument("unknown option " + arg);
-            else positional.push_back(arg);
-        }
+        const Kit::Args given(argc, argv, {"threads", "events", "seeds", "sidecar"});
+        if (!given.ok()) throw std::invalid_argument(given.error());
+        if (given.has("threads")) args.threads = std::stoi(given.get("threads"));
+        if (given.has("events")) args.events = std::stol(given.get("events"));
+        for (const auto& s : split(given.get("seeds"), ',')) args.seeds.push_back(std::stol(s));
+        args.sidecar = given.get("sidecar");
+        const std::vector<std::string>& positional = given.positional();
         if (positional.size() < 2) throw std::invalid_argument("need OUTPUT and at least one CARD");
         for (const auto& item : split(positional[0], ',')) {
             args.groups.push_back(split(item, '+'));
@@ -159,15 +153,6 @@ namespace {
         return std::make_unique<HepMC3::WriterAscii>(path);
     }
 
-    void writeSidecar(const std::string& path, const std::string& json) {
-        const std::string partial = path + ".part";
-        {
-            std::ofstream out(partial);
-            out << json;
-        }
-        std::rename(partial.c_str(), path.c_str());
-    }
-
     // One output: its writer, the lock that serialises it, and how many events it took.
     struct Sink {
         std::string path;
@@ -182,24 +167,11 @@ namespace {
         std::atomic<unsigned long> next{0};
     };
 
-    std::string jsonList(const std::vector<std::string>& items) {
-        std::string out = "[";
-        for (size_t i = 0; i < items.size(); ++i) out += (i ? ", " : "") + Status::quote(items[i]);
-        return out + "]";
-    }
     // {"<path>": <events>, …}: what the count check of each consumer compares with (a shard takes a share)
-    std::string perOutput(const std::vector<std::unique_ptr<Sink>>& sinks) {
-        std::string out = "{";
-        for (size_t i = 0; i < sinks.size(); ++i)
-            out += (i ? ", " : "") + Status::quote(sinks[i]->path) + ": " + std::to_string(sinks[i]->written.load());
-        return out + "}";
-    }
-
-    template <class T>
-    std::string jsonNumbers(const std::vector<T>& items) {
-        std::string out = "[";
-        for (size_t i = 0; i < items.size(); ++i) out += (i ? ", " : "") + std::to_string(items[i]);
-        return out + "]";
+    Kit::Json::Object perOutput(const std::vector<std::unique_ptr<Sink>>& sinks) {
+        Kit::Json::Object out;
+        for (const auto& sink : sinks) out.add(sink->path, sink->written.load());
+        return out;
     }
 
 }  // namespace
@@ -223,7 +195,7 @@ int main(int argc, char** argv) {
     for (const auto& card : args.cards) {
         if (!pythia.readFile(card)) {
             status.log("error", "could not read card " + card + " (missing file or rejected setting)");
-            return Card;
+            return Config;
         }
     }
     if (args.threads >= 0) pythia.readString("Parallelism:numThreads = " + std::to_string(args.threads));
@@ -239,7 +211,7 @@ int main(int argc, char** argv) {
     const std::vector<int> seeds = pythia.settings.mvec("Parallelism:seeds");
     if (const std::string wrong = PythiaRun::checkSeeds(pythia.settings, threads); !wrong.empty()) {   // L4
         status.log("error", wrong);
-        return Card;
+        return Config;
     }
     const long requested = pythia.settings.mode("Main:numberOfEvents");
 
@@ -361,34 +333,21 @@ int main(int argc, char** argv) {
     pythia.stat();
 
     const bool stopped = stopRequested.load();
-    std::ostringstream json;
-    json.precision(12);
-    json << "{\n"
-         << "  \"tool\": \"App_Pythia\",\n"
-         << "  \"pythia_version\": " << PYTHIA_VERSION << ",\n"
-         << "  \"requested\": " << requested << ",\n"
-         << "  \"attempted\": " << attempted << ",\n"
-         << "  \"accepted\": " << accepted << ",\n"
-         << "  \"written\": " << written.load() << ",\n"
-         << "  \"write_failures\": " << writeFailures.load() << ",\n"
-         << "  \"sigma_pb\": " << xs.pb << ",\n"
-         << "  \"sigma_err_pb\": " << xs.errPb << ",\n"
-         << "  \"sum_w\": " << sumW << ",\n"
-         << "  \"threads\": " << threads << ",\n"
-         << "  \"seeds\": " << jsonNumbers(seeds) << ",\n"
-         << "  \"random_seed\": " << pythia.settings.mode("Random:seed") << ",\n"
-         << "  \"outputs\": " << jsonList(args.outputs) << ",\n"
-         << "  \"written_per_output\": " << perOutput(sinks) << ",\n"
-         << "  \"cards\": " << jsonList(args.cards) << ",\n"
-         << "  \"stopped\": " << (stopped ? "true" : "false") << "\n"
-         << "}\n";
-    writeSidecar(args.sidecar, json.str());
+    Kit::Json::Object()
+        .add("tool", "App_Pythia")
+        .raw("pythia_version", Kit::Json::number(PYTHIA_VERSION, 12))
+        .add("requested", requested).add("attempted", attempted).add("accepted", accepted)
+        .add("written", written.load()).add("write_failures", writeFailures.load())
+        .add("sigma_pb", xs.pb).add("sigma_err_pb", xs.errPb).add("sum_w", sumW)
+        .add("threads", threads).numbers("seeds", seeds).add("random_seed", pythia.settings.mode("Random:seed"))
+        .add("outputs", args.outputs).add("written_per_output", perOutput(sinks)).add("cards", args.cards)
+        .add("stopped", stopped)
+        .write(args.sidecar);
 
     status.xsec(xs.pb, xs.errPb, true);
     status.progress(written, requested, rate(), true);
-    status.summary("\"written\": " + std::to_string(written.load()) + ", \"attempted\": " + std::to_string(attempted) +
-                   ", \"accepted\": " + std::to_string(accepted) + ", \"sidecar\": " + Status::quote(args.sidecar) +
-                   ", \"outputs\": " + jsonList(args.outputs));
+    status.summary(Kit::Json::Object().add("written", written.load()).add("attempted", attempted).add("accepted", accepted)
+                       .add("sidecar", args.sidecar).add("outputs", args.outputs).fields());
 
     if (failure) {
         try {

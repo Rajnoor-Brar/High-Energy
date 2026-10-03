@@ -412,7 +412,8 @@ reader went away first), even when both exits are seen in one poll.
 the run with exit 6: the point is left partial, and rerunning the same command resumes, since
 finished points are skipped. A second Ctrl-C is the default behaviour.
 
-**Exit codes of our apps** (App_Pythia, App_yd2rt, Paint, module programs):
+**Exit codes of our apps** (App_Pythia, App_yd2rt, Paint, module programs), one table, `Kit::Exit` in
+`utils/Kit.hh` (V73):
 
 | Code | Meaning |
 |---|---|

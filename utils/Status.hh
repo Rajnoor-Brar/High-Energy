@@ -18,6 +18,8 @@
 #error "Status is a macro here (X11's Xlib.h defines it): include Status.hh before any X11 header"
 #endif
 
+#include "Kit.hh"
+
 #include <atomic>
 #include <cerrno>
 #include <chrono>
@@ -32,34 +34,8 @@
 
 namespace Status {
 
-    // A JSON string literal, escaped.
-    inline std::string quote(const std::string& text) {
-        std::string out = "\"";
-        for (char c : text) {
-            switch (c) {
-                case '"':  out += "\\\""; break;
-                case '\\': out += "\\\\"; break;
-                case '\n': out += "\\n";  break;
-                case '\t': out += "\\t";  break;
-                case '\r': out += "\\r";  break;
-                default:
-                    if (static_cast<unsigned char>(c) < 0x20) {
-                        char buffer[8];
-                        std::snprintf(buffer, sizeof buffer, "\\u%04x", c);
-                        out += buffer;
-                    } else {
-                        out += c;
-                    }
-            }
-        }
-        return out + "\"";
-    }
-
-    inline std::string number(double value) {
-        char buffer[32];
-        std::snprintf(buffer, sizeof buffer, "%.10g", value);
-        return buffer;
-    }
+    using Kit::Json::number;                   // V73: the kit's, one JSON writer
+    using Kit::Json::quote;
 
     class Reporter {
       public:
