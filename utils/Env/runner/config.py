@@ -17,7 +17,7 @@ from typing import Any
 
 from . import schema
 from .errors import HepError, did_you_mean
-from .paths import config_file, configs_root
+from .paths import config_file, configs_root, resolve
 
 #: How a point's seeds are chosen (V39, 02 §8); the schema's [run.seed_type].choices.
 SEED_TYPES = tuple(schema.keys("run")["seed_type"]["choices"])
@@ -60,7 +60,7 @@ class Quantity:
 @dataclass
 class Configuration:
     key: str
-    name: str
+    label: str                                      # its folder: [run.<cfg>].label, else the table key (V45)
     serial: int | None
     description: str
     event_count: int
@@ -76,9 +76,10 @@ class Configuration:
     parallelism: int = 1                                # points run at once (V36); never in an identity
     swept: bool = True                                  # run by [run].sweep_runs (V38)
     title: str = ""                                     # the `run NN - <title> -` header of a sweep
-    run_name: str = ""                                  # <project>/<run_name>/…: [run].name, or this one's own (V46)
+    run_folder: str = ""                                # <project>/<run_folder>/…: [run.<cfg>].name, else [run].name (V46)
     seed_type: str = "identity"                         # SEED_TYPES (V39)
     manual_seed: int | None = None                      # seed_type = "manual": every point's seed
+    origins: dict = field(default_factory=dict)         # key → where its value came from (--show-config, V56)
 
 
 @dataclass
@@ -97,6 +98,7 @@ class RunConfig:
     master_toml: str | None
     raw: dict
     sweep_runs: bool = False                            # `hep run` executes every swept configuration (V38)
+    included: dict = field(default_factory=dict)        # "<section>.<name>" → the [master].include file it came from
 
     def configuration(self, name: str | None) -> Configuration:
         wanted = name or self.default_configuration
@@ -121,6 +123,63 @@ class RunConfig:
 
 
 # ── checking ───────────────────────────────────────────────────────────────────────────────────
+
+#: [run.defaults]: keys every configuration shares (V56); a reserved name, never a configuration.
+DEFAULTS = "defaults"
+#: Each configuration's own: never taken from the one it extends, [run.defaults] or [run].
+OWN = ("label", "title", "extends", "swept")
+
+
+def _layers(run: dict, where: str) -> dict[str, list[tuple[str, dict]]]:
+    """Each configuration's layers, most specific first (V56): its own table, the ones it `extends`, in
+    turn, then [run.defaults]. [run] and the schema's defaults come after, in `inherited`."""
+    tables = {k: v for k, v in run.items() if isinstance(v, dict)}
+    defaults = tables.pop(DEFAULTS, None)
+    if defaults is not None:
+        schema.check(defaults, "configuration", f"{where}: [run.{DEFAULTS}]")
+        own = [k for k in OWN if k in defaults]
+        if own:
+            raise HepError(f"[run.{DEFAULTS}] sets {', '.join(own)}, which each configuration has of its own",
+                           where=f"{where}: [run.{DEFAULTS}]", hint="set them in the configurations")
+    out = {}
+    for key, table in tables.items():
+        schema.check(table, "configuration", f"{where}: [run.{key}]")
+        chain, seen, parent = [(f"[run.{key}]", table)], {key}, table.get("extends")
+        while parent:
+            if parent not in tables:
+                raise HepError(f"extends names '{parent}', which is not a configuration", where=f"{where}: [run.{chain[-1][0][5:-1]}].extends",
+                               hint=did_you_mean(parent, tables) or f"configurations: {', '.join(tables)}")
+            if parent in seen:
+                raise HepError(f"extends goes round in a circle: {' → '.join([*seen, parent])}", where=f"{where}: [run.{key}].extends")
+            seen.add(parent)
+            chain.append((f"[run.{parent}]", tables[parent]))
+            parent = tables[parent].get("extends")
+        if defaults is not None:
+            chain.append((f"[run.{DEFAULTS}]", defaults))
+        out[key] = chain
+    return out
+
+
+def _deep(base: dict, over: dict) -> dict:
+    """`over` merged into `base`, tables recursively, anything else replaced; a "default" keeps base's."""
+    out = dict(base)
+    for key, value in over.items():
+        if value == DEFAULT:
+            continue
+        out[key] = _deep(out[key], value) if isinstance(value, dict) and isinstance(out.get(key), dict) else value
+    return out
+
+
+def _own_prelim(chain, prelim: dict, origins: dict) -> dict:
+    """A configuration's [prelim] is the nearest layer's, whole, else the file's: the interfaces belong to
+    one chain (eic's delphes writes a file where the default chain has a FIFO), so they are not merged."""
+    for origin, layer in chain:
+        if isinstance(layer.get("prelim"), dict):
+            origins["prelim"] = origin
+            return layer["prelim"]
+    origins["prelim"] = "[prelim]"
+    return prelim
+
 
 def _as_list(value) -> list:
     if value is None:
@@ -204,17 +263,74 @@ def apply_sets(raw: dict, sets: list[str]) -> None:
 
 # ── loading ────────────────────────────────────────────────────────────────────────────────────
 
-def load(name: str, *, sets: list[str] = ()) -> RunConfig:
-    path = config_file(name)
+def _read(path: Path) -> dict:
     try:
-        raw = tomllib.loads(path.read_text(encoding="utf-8"))
+        return tomllib.loads(path.read_text(encoding="utf-8"))
+    except OSError:
+        raise HepError("cannot read the file", where=str(path)) from None
     except tomllib.TOMLDecodeError as error:
         escape = "escape" in str(error).lower() or "'\\'" in str(error)
         raise HepError(f"not valid TOML: {error}", where=str(path),
                        hint="in a \"…\" string a backslash starts a TOML escape: write the label in single quotes, "
-                            "'PDF4LHC21\\_40', or double the backslash, \"PDF4LHC21\\\\_40\"" if escape else None)
+                            "'PDF4LHC21\\_40', or double the backslash, \"PDF4LHC21\\\\_40\"" if escape else None) from None
+
+
+#: How an included file's sections meet the file's (V56): whole entries replace for quantities and tools
+#: (a redefined quantity takes nothing of the included one), keys for [static], tables recursively else.
+ENTRIES = ("quantities", "tools")
+
+
+def _over(base: dict, over: dict) -> dict:
+    out = dict(base)
+    for section, value in over.items():
+        if section in ENTRIES and isinstance(value, dict):
+            out[section] = {**out.get(section, {}), **value}
+        elif section == "run" and isinstance(value, dict):          # configurations whole, [run] keys one by one
+            out[section] = {**out.get(section, {}), **value}
+        elif isinstance(value, dict) and isinstance(out.get(section), dict):
+            out[section] = _deep(out[section], value)
+        else:
+            out[section] = value
+    return out
+
+
+def _with_includes(raw: dict, path: Path) -> tuple[dict, dict]:
+    """[master].include = ["common.toml"]: the run starts from those files' tables, in order, and its own
+    win (V56). Returns the merged tables and which included file gave each quantity, tool and configuration."""
+    names = _as_list(raw.get("master", {}).get("include"))
+    if not names:
+        return raw, {}
+    project = raw.get("run", {}).get("project")
+    if not project:
+        raise HepError("[master].include needs [run].project in the file itself", where=f"{path}: [master].include")
+    merged, included = {}, {}
+    for name in names:
+        source = resolve(name, "master", project=project, where=f"{path}: [master].include")
+        if source.suffix != ".toml":
+            source = source.with_name(source.name + ".toml")
+        part = _read(source)
+        if "master" in part:
+            raise HepError("an included file has no [master] of its own (includes do not nest)", where=str(source))
+        for section in ENTRIES:
+            included.update({f"{section}.{key}": source.name for key in part.get(section, {})})
+        included.update({f"run.{key}": source.name for key, v in part.get("run", {}).items() if isinstance(v, dict)})
+        merged = _over(merged, part)
+    for section in ENTRIES:                                           # the file's own entries are its own
+        for key in raw.get(section, {}):
+            included.pop(f"{section}.{key}", None)
+    for key, value in raw.get("run", {}).items():
+        if isinstance(value, dict):
+            included.pop(f"run.{key}", None)
+    return _over(merged, raw), included
+
+
+def load(name: str, *, sets: list[str] = ()) -> RunConfig:
+    path = config_file(name)
+    raw, included = _with_includes(_read(path), path)
     apply_sets(raw, list(sets))
-    return parse(raw, path)
+    run = parse(raw, path)
+    run.included = included
+    return run
 
 
 def parse(raw: dict, path: Path) -> RunConfig:
@@ -295,30 +411,46 @@ def parse(raw: dict, path: Path) -> RunConfig:
                            where=f"{where}: [static]", hint=did_you_mean(name, quantities))
 
     configurations: dict[str, Configuration] = {}
-    for key, table in run.items():
-        if not isinstance(table, dict):
-            continue
+    for key, chain in _layers(run, where).items():
+        table = chain[0][1]
         at = f"{where}: [run.{key}]"
-        schema.check(table, "configuration", at)
+        origins: dict[str, str] = {}
 
-        def inherited(name: str):
-            """This configuration's value, else [run]'s (\"default\" in the child: [run]'s, V55), else the
-            schema's default."""
-            value = table.get(name, DEFAULT)
-            if value == DEFAULT:
-                value = run.get(name, DEFAULT)
-            return schema.default("run", name) if value == DEFAULT else value
+        def inherited(name: str, fallback=None):
+            """The most specific layer's value (V56): own, extended, [run.defaults], then [run]; a
+            "default" in a layer is the next one's (V55); else the schema's default."""
+            layers = chain[:1] if name in OWN else chain
+            if name in schema.keys("run"):
+                layers = [*layers, ("[run]", run)]
+            for origin, layer in layers:
+                if name in layer and layer[name] != DEFAULT:
+                    origins[name] = origin
+                    return layer[name]
+            origins[name] = "default"
+            value = schema.default("configuration", name, schema.default("run", name))
+            return fallback if value is None else value
 
-        if "tools" not in table:
-            raise HepError("a configuration needs tools = [...]", where=at)
-        sweeps = _sweeps(table.get("sweeps", []), f"{at}.sweeps", quantities)
+        def merged(name: str, base: dict) -> dict:
+            """A table merged through the layers, parent first ([static], [prelim])."""
+            out = dict(base)
+            for origin, layer in reversed(chain):
+                if isinstance(layer.get(name), dict):
+                    out = _deep(out, layer[name])
+                    origins[name] = origin
+            return out
+
+        tools_entries = inherited("tools")
+        if tools_entries is None:
+            raise HepError("a configuration needs tools = [...]", where=at,
+                           hint="here, in the configuration it extends, or in [run.defaults]")
+        sweeps = _sweeps(inherited("sweeps", []), f"{at}.sweeps", quantities)
         swept = {n for entry in sweeps for n in (entry if isinstance(entry, list) else [entry])}
-        plot_points = table.get("plot_points", [])
+        plot_points = inherited("plot_points", [])
         for name in plot_points:
             if name not in swept:
                 raise HepError(f"plot_points names '{name}', which is not swept here", where=f"{at}.plot_points",
                                hint="pages are cells of the grid of swept quantities (04 §5.2)")
-        combine = table.get("combine", [])
+        combine = inherited("combine", [])
         axes = {entry for entry in sweeps if isinstance(entry, str)}
         for name in combine:                                                # C14
             if name not in axes:
@@ -328,30 +460,32 @@ def parse(raw: dict, path: Path) -> RunConfig:
             if name in plot_points:
                 raise HepError(f"'{name}' is both combined and a page axis (plot_points)", where=f"{at}.combine",
                                hint="a combined quantity's points become one curve: it cannot also make pages")
-        local_static = table.get("static", {})
+        local_static = merged("static", {})
         for name in local_static:
             if name not in quantities:
                 raise HepError(f"static sets '{name}', which is not a [quantities.<q>] table", where=f"{at}.static",
                                hint=did_you_mean(name, quantities))
-        local_prelim = table.get("prelim")
-        if local_prelim is not None:
-            schema.check(local_prelim, "prelim", f"{at}.prelim")
+        for _, layer in chain:
+            if isinstance(layer.get("prelim"), dict):
+                schema.check(layer["prelim"], "prelim", f"{at}.prelim")
         event_count = inherited("event_count")
         if event_count is None:
             raise HepError("no event_count: set it here or in [run]", where=at)
+        static_values = {k: v for k, v in _deep(static, local_static).items() if v != DEFAULT}   # top-level "default": unset
         configurations[key] = Configuration(
-            key=key, name=table.get("label") or key, serial=inherited("serial"),                     # V45
-            run_name=table.get("name", run["name"]),                                                 # V46
+            key=key, label=table.get("label") or key, serial=inherited("serial"),                     # V45
+            run_folder=inherited("name") or run["name"],                                              # V46
             swept=table.get("swept", schema.default("configuration", "swept")), title=table.get("title", key),
             seed_type=inherited("seed_type"), manual_seed=inherited("manual_seed"),
-            description=table.get("description", ""), event_count=int(event_count),
+            description=inherited("description", ""), event_count=int(event_count),
             threads=_resolved_threads(int(inherited("threads"))), parallelism=int(inherited("parallelism")),
             sweeps=sweeps, plot_points=list(plot_points), combine=list(combine),
-            tools=_groups(table["tools"], f"{at}.tools", tools),
-            post=_groups(table.get("post", []), f"{at}.post", tools),
-            pre=_groups(table.get("pre", []), f"{at}.pre", tools),
-            static={**static, **local_static},
-            prelim=local_prelim if local_prelim is not None else prelim)
+            tools=_groups(tools_entries, f"{at}.tools", tools),
+            post=_groups(inherited("post", []), f"{at}.post", tools),
+            pre=_groups(inherited("pre", []), f"{at}.pre", tools),
+            static=static_values,
+            prelim=_own_prelim(chain, prelim, origins),                     # replaced whole: its chain's interfaces
+            origins=origins)
 
     if sweep_on and not any(c.swept for c in configurations.values()):
         raise HepError("[run].sweep_runs is on but every configuration has swept = false", where=f"{where}: [run].sweep_runs",

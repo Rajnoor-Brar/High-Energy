@@ -355,7 +355,7 @@ def pages(run, configuration, plans) -> list[Page]:
     out_dir = complete[0].out.parent / "plots"
     res_dir = complete[0].res.parent / "plots" / "root"          # Paint's; another backend's: for_backend
     merged = merge({p.point.name: yoda_of(p) for p in complete},
-                   complete[0].res.parent / "plots" / "root" / f"{configuration.name}.root", out_dir / "merged.sha256",
+                   complete[0].res.parent / "plots" / "root" / f"{configuration.label}.root", out_dir / "merged.sha256",
                    complete[0].out.parent / "points.json")
 
     # use_data = false (V44): the [plot.data] table stays but is not drawn; a ratio then divides by

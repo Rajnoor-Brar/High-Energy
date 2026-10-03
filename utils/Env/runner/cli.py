@@ -35,6 +35,8 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("config", help="configs/<Project>/<name>[.toml], or ./path from the repo root")
     run.add_argument("configuration", nargs="?", help="overrides [run].configuration; under [run].sweep_runs, runs only it")
     run.add_argument("--plan", action="store_true", help="print the plan; run nothing")
+    run.add_argument("--show-config", action="store_true",
+                     help="print each configuration's resolved values and where each came from; run nothing")
     run.add_argument("--points", metavar="SEL", help="run a subset: tags, indices or quantity=tag")
     run.add_argument("--set", metavar="KEY=VALUE", action="append", default=[],
                      help="override one value for this invocation (repeatable)")
@@ -176,6 +178,10 @@ def cmd_run(args) -> int:
     start; a stop starts no more."""
     run = configmod.load(args.config, sets=args.set)
     keys = run.runs(args.configuration)
+    if getattr(args, "show_config", False):
+        for line in show_config(run, keys):
+            print(line)
+        return 0
     stopper = execute.Stopper()
     if len(keys) == 1:
         return run_one(args, keys[0], stopper)
@@ -217,6 +223,37 @@ def cmd_run(args) -> int:
             return 6
         failed = failed or code != 0
     return 1 if failed else 0
+
+
+def show_config(run, keys: list[str]) -> list[str]:
+    """--show-config (V56): every resolved value of each configuration with the layer it came from: its
+    own table, one it extends, [run.defaults], [run], or the schema's default; and what [master].include
+    gave the file."""
+    from . import schema
+    order = [k for k in schema.keys("configuration") if k not in ("extends",)]
+    lines = []
+    for key in keys:
+        configuration = run.configurations[key]
+        lines.append(f"run {run.name} ({run.path}) · configuration {key}")
+        fields = {"serial": configuration.serial, "name": configuration.run_folder, "label": configuration.label,
+                  "title": configuration.title, "description": configuration.description,
+                  "event_count": configuration.event_count, "threads": configuration.threads,
+                  "parallelism": configuration.parallelism, "swept": configuration.swept,
+                  "seed_type": configuration.seed_type, "manual_seed": configuration.manual_seed,
+                  "sweeps": configuration.sweeps, "plot_points": configuration.plot_points,
+                  "combine": configuration.combine, "tools": configuration.tools, "pre": configuration.pre,
+                  "post": configuration.post, "static": configuration.static, "prelim": configuration.prelim}
+        width = max(map(len, order))
+        for name in order:
+            value = fields.get(name)
+            if value in (None, [], {}, "") and name not in configuration.origins:
+                continue
+            own = run.raw.get("run", {}).get(key, {})
+            origin = configuration.origins.get(name, f"[run.{key}]" if name in own else "default")
+            lines.append(f"  {name:{width}s} = {json.dumps(value, default=str):40s} {origin}")
+    for entry, source in sorted(run.included.items()):
+        lines.append(f"  included {entry} from {source}")
+    return lines
 
 
 def not_run(path: Path, title: str, message: str, following: Path | None) -> None:

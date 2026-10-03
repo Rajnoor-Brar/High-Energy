@@ -9,6 +9,16 @@
     "master_toml": {
      "description": "a project master overlaid on utils/Env/master.toml (configs/<Project>/…)",
      "type": "string"
+    },
+    "include": {
+     "description": "run TOMLs whose tables this one starts from (configs/<Project>/…); this file wins",
+     "type": [
+      "string",
+      "array"
+     ],
+     "items": {
+      "type": "string"
+     }
     }
    },
    "additionalProperties": false
@@ -81,6 +91,10 @@
    "additionalProperties": {
     "type": "object",
     "properties": {
+     "extends": {
+      "description": "another configuration this one starts from; its own keys win",
+      "type": "string"
+     },
      "serial": {
       "description": "this configuration's NN_ (else [run]'s)",
       "anyOf": [

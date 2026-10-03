@@ -87,11 +87,13 @@ when nothing is swept. Two points with the same name are an error (C11).
 ```toml
 [master]
 master_toml = "master.toml"      # optional: configs/<project>/master.toml overlays the framework's
+include     = ["common.toml"]    # optional: run TOMLs whose tables this one starts from (V56)
 ```
 
 | Key | Type | Default | Notes |
 |---|---|---|---|
 | `master_toml` | string (path) | none | overlays `utils/Env/master.toml` key by key: an entry for a (tool, quantity) pair replaces the framework's. The file must exist. |
+| `include` | string or array (paths) | none | files under `configs/<project>/` (`.toml` optional) whose tables the run starts from, in order; **this file wins** (V56). A quantity, tool table or configuration of the file replaces the included one whole; `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively. An included file has no `[master]` of its own. `--show-config` lists what came from where. |
 
 A master TOML maps a **quantity name** to what it means for one **tool type**:
 
@@ -198,6 +200,10 @@ eic · energies: 4 point(s), 1000000 events, 12 threads
 ## 5. `[run.<configuration>]`
 
 ```toml
+[run.defaults]                               # optional (V56): keys every configuration starts from
+tools       = [["pythia", "rivet"], "yd2rt"]
+threads     = 20
+
 [run.energy_pdf]
 serial      = 3
 label       = "energy_pdf"                   # folder name (after the serial); defaults to the table key
@@ -214,9 +220,27 @@ static      = { energies = "18x275" }        # this configuration's own static v
 prelim      = { fifo = ["events.hepmc"] }    # replaces [prelim] for this configuration
 ```
 
+A configuration's value is **its own, else the one it `extends`'s (in turn), else `[run.defaults]`'s,
+else `[run]`'s, else the default** (V56); `"default"` in a layer is the next layer's value (V55).
+`label`, `title`, `extends` and `swept` are each configuration's own, and `[run.defaults]` refuses
+them; `defaults` is never a configuration. `hep run CONFIG --show-config` prints every value with the
+layer it came from.
+
+```toml
+[run.pdfs]
+sweeps      = ["pdf"]
+event_count = 10_000_000
+
+[run.pdfs_100M]
+extends     = "pdfs"                         # everything of pdfs, then these
+event_count = 100_000_000
+label       = "PDFs_100M"
+```
+
 | Key | Type | Default | Notes |
 |---|---|---|---|
-| `tools` | array | **required** | §5.3 |
+| `extends` | string | none | another configuration this one starts from (chains are followed; a circle is refused) |
+| `tools` | array | **required** (here or in a layer) | §5.3 |
 | `sweeps` | array | `[]` | §5.1; `[]` is one point |
 | `plot_points` | array of strings | `[]` | §5.2 |
 | `combine` | array of strings | `[]` | swept quantities whose points are merged into one curve (§5.5) |
@@ -224,8 +248,8 @@ prelim      = { fifo = ["events.hepmc"] }    # replaces [prelim] for this config
 | `threads` | integer | `[run].threads`, else 1 | `0` = every core |
 | `parallelism` | integer | `[run].parallelism`, else 1 | points at once; `--plan` and the run's title say about how many cores that is, and warn past the machine's |
 | `pre`, `post` | array | `[]` | the form of `tools` (§5.4) |
-| `static` | table | `{}` | merged over `[static]`, key by key (§7) |
-| `prelim` | table | `[prelim]` | **replaces** `[prelim]` whole for this configuration; `{}` means none |
+| `static` | table | `{}` | merged over `[static]` and the layers', key by key (§7); a `"default"` keeps the layer below's |
+| `prelim` | table | `[prelim]` | the nearest layer's **replaces** `[prelim]` whole for this configuration (its chain's interfaces); `{}` means none |
 | `serial` | integer | `[run].serial` | overrides `[run].serial` for this configuration: its points go to `<P>/<run name>/NN_<label>/` (V45) |
 | `name` | string | `[run].name` | the run folder above this configuration's: `<P>/<name>/NN_<label>/` (V46) |
 | `label` | string | the table key | the configuration's folder, after the serial: `NN_<label>`; empty means the table key (V45) |
@@ -433,7 +457,15 @@ seed block. Seeds are never written by hand (02 §8).
 ### 8.3 Built-in quantities
 
 `events` (the configuration's `event_count`) and `threads` are provided by the runner and reach a
-tool only through the master (the table in §3). They need no consumer and are never declared.
+tool only through the master (the table in §3). They need no consumer. Declared as quantities, they
+can be swept or set statically (V56): each point then has that event count or thread count in place
+of the configuration's, and it reaches the tools as the built-in does.
+
+```toml
+[quantities.events]
+values = [10_000_000, 25_000_000, 50_000_000]
+tags   = ["010M", "025M", "050M"]
+```
 
 ---
 
@@ -815,6 +847,7 @@ Options and positionals may come in any order (`hep run eic --plain pdf`, V54).
 |---|---|
 | `CONFIG` | `configs/<CONFIG>[.toml]`, or `./path` from the repository root |
 | `CONFIGURATION` | overrides `[run].configuration`; under `[run].sweep_runs`, runs only this one (§4.1) |
+| `--show-config` | print each configuration's resolved values and the layer each came from (its own, `extends`, `[run.defaults]`, `[run]`, default), and what `[master].include` gave; run nothing (V56) |
 | `--plan` | print everything and run nothing: per point, the values and their consumers, the groups and each tool's argv, what each reads and writes, the prepare steps and whether they are cached, the output and results directories and whether the point is complete; the pre and post stages; the page count |
 | `--points SEL` | run a subset: comma-separated point names, single tags, 1-based indices, or `quantity=tag`. The others keep their state (and `points.json` lists all). Refused under a sweep of several runs: name the configuration. |
 | `--set KEY=VALUE` | override one value of the TOML for this invocation, by dotted key, before anything is checked (repeatable). The value is read as TOML, else as a string: `--set run.event_count=50000`, `--set run.pdf.threads=8`, `--set static.energies=18x275`, `--set 'plot.formats=["png"]'`. |

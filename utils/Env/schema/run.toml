@@ -27,6 +27,11 @@ order = ["master", "run", "prelim", "static", "tools", "quantities", "plot"]
 type = "str"
 doc  = "a project master overlaid on utils/Env/master.toml (configs/<Project>/…)"
 
+[master.include]
+type  = "str|list"
+items = "str"
+doc   = "run TOMLs whose tables this one starts from (configs/<Project>/…); this file wins"
+
 # ── [run] ────────────────────────────────────────────────────────────────────────────────────
 
 [run.name]
@@ -91,6 +96,13 @@ inherit = true
 doc     = "seed_type = manual: every point's seed"
 
 # ── [run.<cfg>] ──────────────────────────────────────────────────────────────────────────────
+# A configuration's value is its own, else the one it `extends` (and so on), else [run.defaults]'s (a
+# table of these keys shared by every configuration), else [run]'s, else the default here. label,
+# title, extends and swept are each configuration's own.
+
+[configuration.extends]
+type = "str"
+doc  = "another configuration this one starts from; its own keys win"
 
 [configuration.serial]
 type       = "int"

@@ -310,12 +310,26 @@ The goal: one event stream, runtime state off disk, and the housekeeping a daily
 
 ---
 
+## Deferred to the final phase (the user, 2026-10-03: `configs/PhotoProduction/` untouched until then)
+
+Changes that would make the user's current PhotoProduction configs fail, and the migrations of their files,
+wait for the last steps of the last phase; meanwhile the code accepts what those configs use.
+
+| Item | What changes in `configs/PhotoProduction/` |
+|---|---|
+| C8 (V54) | `eic.toml` `[tools.jets].executable = "python3"` → `"path:python3"` (only its unused delphes chain needs it) |
+| C3 | `swept = false` → a `[run].sweep_runs = ["a", "b"]` list (the rename itself waits, so `zeus_validation.toml` keeps working) |
+| C6 / L14b | owned lines out of `photo_ep.cmnd` / `photo_zs.cmnd` (`Main:numberOfEvents`, `Random:*`, `Beams:*` if beam option A) |
+| F1, F2 (V56) | on the user's word: `zeus_validation.toml`'s seven configurations as `extends`, shared tables lifted into `common.toml` |
+| B5 | labels from TLatex to LaTeX (`migrate.py labels`) |
+| held C++ / Rivet (P0 S3) | K3, K4 (Lamriv), K7, K8, K10's define, yd2rt's dead parameter: rebuilt binaries change the user's points' identities |
+
 ## Progress
 
 | Phase | Steps | State |
 |---|---|---|
 | P0 | S1 S2 S3 | S1 (V52), S2 (V53), S3 (V54) done; held: the C++ and Rivet items of S3 (K3, K4, K7, K8, K10's define, yd2rt's dead parameter), which rebuild binaries in the user's points' identities |
-| P1 | S1 S2 S3 | S1 (V55: the schema, "default" = keep it as it is) done |
+| P1 | S1 S2 S3 | S1 (V55), S2 (V56: [run.defaults], extends, include, --show-config, swept events) done |
 | P2 | S1 S2 S3 | not started |
 | P3 | S1 S2 S3 | not started |
 | P4 | S1 S2 S3 | not started |
