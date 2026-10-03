@@ -106,13 +106,14 @@ def yoda_backend():
     ("MSTW 2008 LO", "MSTW 2008 LO"),
     ("5x41 GeV (#sqrt{s} = 28.6 GeV)", r"5x41 GeV $(\sqrt{s}$ = 28.6 GeV)"),
     ("p_{T0}^{ref} = 3.0 GeV", "$p_{T0}^{ref}$ = 3.0 GeV"),
-    ("#hat{p}_{T} > 2 GeV", r"$\hat{p}_{T}$ > 2 GeV"),
+    ("#hat{p}_{T} > 2 GeV", r"$\hat{p}_{T}$ $>$ 2 GeV"),
     ("R: 0.4", "R  0.4"),                                                 # ':' separates mkhtml's options
     ("PDF4LHC21_40_pdfas", "PDF4LHC21_40_pdfas"),                        # TLatex's rule: a bare _ is itself
     ("E_T jets", "E_T jets"),
     (r"PDF4LHC21\_40", "PDF4LHC21_40"),                                  # the escapes are the characters
     (r"\#1 \^2", "#1 ^2"),
     (r"x_1\_a_{2}", r"$x\_1\_a_{2}$"),                                   # literal underscores inside math
+    ("E_{T} > 5", "$E_{T}$ $>$ 5"),                                       # V51: > in LaTeX's text font is ¿
 ])
 def test_tlatex_becomes_latex_for_mkhtml(yoda_backend, root, latex):
     assert yoda_backend.latex(root) == latex

@@ -1,5 +1,15 @@
 # Current plan
 
+## NEXT (asked 2026-10-03, not started): titles, legend header, overlays, parent→child options
+
+- `[plot].title`, `.title_left`, `.title_right`, `.legend_header` for every page; `[plot.<hist>].<same>`
+  overrides one histogram. Today `[plot.object."<glob>"].title` is the legend header in ROOT but the
+  top title in yoda: separate the two.
+- The pattern everywhere: `<parent>.<key>` and `<parent>.<child>.<key>`, children inherit; a key
+  never means different things at the two levels.
+- `[plot.overlay.<name>] objects = [...], labels = [...]`: several objects of one point on one page
+  (e.g. d02, d11, d12: dσ/dη per jet algorithm); ratio over the first.
+
 ## `exclude` for quantities — **DONE 2026-10-01** (ordered by the user 2026-10-01)
 
 "quantities.<quantity>.exclude = [indices]; such values on indices are excluded when sweeping."

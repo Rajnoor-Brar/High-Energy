@@ -24,6 +24,7 @@ only about its look.
 from __future__ import annotations
 
 import math
+import shutil
 import os
 import re
 import subprocess
@@ -41,6 +42,7 @@ LEGEND = {"top-right": {"LegendAlign": "r"}, "top-left": {"LegendAlign": "l", "L
 _MATH = {"bf": "mathbf", "it": "mathit", "LT": "<", "GT": ">"}
 HONOURED = {("legend", "position"), ("ratio", "divisions"), ("ratio", "range"), ("ratio", "limits"), ("text", "legend"), ("text", "header")}             # style keys mkhtml can follow
 MARK = "# ratio ticks: ratio.divisions (utils/Env/yoda/backend.py)"
+TITLE_MARK = "# titles: title, title_left, title_right (utils/Env/yoda/backend.py)"
 
 
 def validate(settings: dict, beside_root: bool = False) -> None:
@@ -66,8 +68,8 @@ def latex(text: str) -> str:
     '$\\sqrt{s}$ = 28.6 GeV'. TLatex's rules hold (V41): only `_{…}`, `^{…}` and `#<name>` are math;
     a bare _ or ^, and the escapes \\_ \\^ \\#, are the characters ('PDF4LHC21_40' stays as written)."""
     def word(w: str) -> str:
-        if not re.search(r"(?<!\\)(?:[_^]\{|#[A-Za-z])", w):
-            return re.sub(r"\\([_^#\\])", r"\1", w)
+        if not re.search(r"(?<!\\)(?:[_^]\{|#[A-Za-z])", w):     # text; LaTeX's text font prints > as ¿
+            return re.sub(r"[<>]", lambda m: f"${m[0]}$", re.sub(r"\\([_^#\\])", r"\1", w))
         w = re.sub(r"(?<!\\)#([A-Za-z]+)", lambda m: _MATH.get(m.group(1), "\\" + m.group(1)), w)
         w = re.sub(r"\\_|(?<!\\)_(?!\{)", "\x00", w).replace("\x00", r"\_")     # literal underscores in math
         return f"${w}$"
@@ -164,11 +166,16 @@ def _plot_block(page, window: tuple[float, float] | None = None) -> str:
     if window and settings["ratio"]:
         top = window[1] - 1e-4 * (window[1] - window[0])     # as mkhtml's 1.4999: no tick label at the pad's top
         keys["RatioPlotYMin"], keys["RatioPlotYMax"] = f"{window[0]:.6g}", f"{top:.6g}"
-    for key, native in (("title", "Title"), ("x_label", "XLabel"), ("y_label", "YLabel")):
-        if key in page.overrides:
+    keys["Title"] = ""                                 # the titles are ours, drawn by titles() (V51)
+    overlay = getattr(page, "overlay", "")
+    for key, native in (("x_label", "XLabel"), ("y_label", "YLabel")):
+        if key in page.overrides or overlay:              # an overlay's path has no .plot of its own
             keys[native] = latex(settings[key])
-    from runner.plot import labels_of, lines_of, macros
-    for native, text in labels_of(page.object).items():  # mkhtml draws each line apart: close math per line (V47)
+    from runner.plot import labels_of, lines_of, macros, tlatex
+    own = labels_of(page.object)
+    if settings.get("legend_header", "") != tlatex(own.get("LegendTitle", "")):   # [plot], a child or an overlay's
+        keys["LegendTitle"] = latex(settings.get("legend_header", ""))
+    for native, text in own.items():  # mkhtml draws each line apart: close math per line (V47)
         if native in ("Title", "LegendTitle", "XLabel", "YLabel") and native not in keys:   # and our macros (V48)
             fixed = "\\newline".join(lines_of(macros(text)))
             if fixed != text:
@@ -224,68 +231,150 @@ def ratio_ticks(script: Path, divisions: int) -> bool:
     return True
 
 
+def titles(script: Path, page) -> bool:
+    """title above the frame, title_left and title_right over its corners (V51): mkhtml's own Title is
+    blanked in pages.plot and these are added to the page's script, with a tight bounding box so the
+    margin holds them. True when the script changed and must run again."""
+    settings, text = page.document["page"], page.style["text"]
+    left, right, main = (latex(settings.get(k, "")) for k in ("title_left", "title_right", "title"))
+    if not (left or right or main):
+        return False
+    code = script.read_text(encoding="utf-8")
+    if TITLE_MARK in code:
+        return False
+    corner, size = text["corner"], text["page_title"]
+    lines = [TITLE_MARK]
+    place = "xycoords='axes fraction', textcoords='offset points', va='bottom'"
+    if left:
+        lines.append(f"ax.annotate({left!r}, (0, 1), xytext=(0, 3), {place}, ha='left', fontsize={corner})")
+    if right:
+        lines.append(f"ax.annotate({right!r}, (1, 1), xytext=(0, 3), {place}, ha='right', fontsize={corner})")
+    if main:
+        lift = 3 + (1.5 * corner if left or right else 0)
+        lines.append(f"ax.annotate({main!r}, (0.5, 1), xytext=(0, {lift:g}), {place}, ha='center', fontsize={size})")
+    at = code.find("plt.savefig(")
+    if at < 0:
+        return False
+    code = code[:at] + "\n".join(lines) + "\n" + code[at:]
+    code = re.sub(r"(plt\.savefig\([^\n]*format='[A-Z]+')\)", r"\1, bbox_inches='tight')", code)
+    script.write_text(code, encoding="utf-8")
+    return True
+
+
+def _finish(page, outdir: Path, say) -> bool:
+    """The page's own fixes to mkhtml's script (ratio ticks, a best legend, titles); False when the
+    rewritten script fails."""
+    script = outdir / _base(page.object).split("/")[1] / f"{page.object.rsplit('/', 1)[-1]}.py"
+    if not script.is_file():
+        return True
+    ticks = page.document["page"]["ratio"] and ratio_ticks(script, int(page.style["ratio"]["divisions"]))
+    best = page.style["legend"]["position"] == "best" and best_legend(script)
+    named = titles(script, page)
+    if ticks or best or named:
+        again = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, cwd=script.parent)
+        if again.returncode != 0:
+            say(f"plot: {script.name} rewritten (ratio ticks, best legend, titles): {again.stderr.strip()[-200:]}")
+            return False
+    return True
+
+
+def _mkhtml(argv: list, work: Path, outdir: Path, pages: list, plot_text: str, plot_file: Path, say) -> list:
+    """Run mkhtml once for `pages`; returns those drawn (their PDF exists and their script's fixes ran)."""
+    plot_file.write_text(plot_text, encoding="utf-8")
+    env = dict(os.environ, RIVET_ANALYSIS_PATH=str(build_root() / "Rivet"),
+               RIVET_DATA_PATH=os.pathsep.join(filter(None, [str(build_root() / "Rivet"), os.environ.get("RIVET_DATA_PATH")])))
+    done = subprocess.run(argv, capture_output=True, text=True, env=env, cwd=work)
+    log = work / f"{plot_file.stem}.log"
+    log.write_text(" ".join(argv) + "\n" + done.stdout + done.stderr, encoding="utf-8")
+    drawn = [p for p in pages if (outdir / _base(p.object).split("/")[1] / f"{p.object.rsplit('/', 1)[-1]}.pdf").exists()]
+    drawn = [p for p in drawn if _finish(p, outdir, say)]
+    if done.returncode != 0 or len(drawn) != len(pages):
+        say(f"plot: rivet-mkhtml: {len(drawn)} of {len(pages)} drawn (exit {done.returncode}; see {log})")
+    return drawn
+
+
+def _overlay(yoda, page, work: Path, outdir: Path, settings: dict, say) -> bool:
+    """An overlay page (V51): each curve is another object, so each gets a file of its own holding it
+    under one path, /overlay/<name>, which mkhtml then draws as curves of one page."""
+    path, files, read = page.object, [], {}
+    for i, (source, variant) in enumerate(zip(page.sources, page.variants)):
+        if source not in read:
+            read[source] = yoda.read(str(source))
+        copy = read[source][variant].clone()
+        copy.setPath(path)
+        files.append(work / f"overlay_{page.overlay}_{i:02d}.yoda")
+        yoda.write([copy], str(files[-1]))
+    labels = [c["label"] for c in page.document["curve"]]
+    window = None
+    if page.document["page"]["ratio"]:
+        drawn = [_bins(yoda.read(str(f))[path]) for f in files]
+        window = ratio_window(drawn, drawn[0], page.ranges["x"], page.style["ratio"])
+    own = work / f"overlay_{page.overlay}_out"           # mkhtml rebuilds its -o folder: not the cell's
+    argv = ["rivet-mkhtml", "--no-rivet-refs", "-o", str(own), "-c", str(work / f"overlay_{page.overlay}.plot")]
+    formats = settings.get("formats", ["pdf"])
+    argv += [x for f in (["pdf"] if formats == "default" else formats) if FORMATS[f] for x in ("-f", FORMATS[f])]
+    argv += [] if page.document["page"]["ratio"] else ["--no-ratio"]
+    argv += [f"{f}:Title={latex(label)}" for f, label in zip(files, labels)]
+    if not _mkhtml(argv, work, own, [page], _plot_block(page, window), work / f"overlay_{page.overlay}.plot", say):
+        return False
+    (outdir / "overlay").mkdir(parents=True, exist_ok=True)
+    for made in (own / "overlay").glob(f"{page.overlay}.*"):
+        shutil.copy2(made, outdir / "overlay" / made.name)
+    return True
+
+
 def draw(cells: dict, settings: dict, say) -> int:
     import yoda
     failed = 0
-    for cell, pages in cells.items():
-        first = pages[0]
+    for cell, every in cells.items():
+        first = every[0]
         work = first.config.parent / "yoda"
         work.mkdir(parents=True, exist_ok=True)
         outdir = first.output.parent
-        # one file per point (its variants are curves mkhtml draws from it); labels by point
-        sources = list(dict.fromkeys(s for page in pages for s in page.sources))
-        label_of = {s: c["label"].split(" [")[0] for page in pages for s, c in zip(page.sources, page.document["curve"])}
-        labels = [label_of[s] for s in sources]
-        curves = [_voided(yoda, source, pages, work / f"{i:02d}_{source.parent.name}.yoda")
-                  for i, source in enumerate(sources)]
-        argv = ["rivet-mkhtml", "--no-rivet-refs", "-o", str(outdir), "-c", str(work / "pages.plot")]
-        formats = settings.get("formats", ["pdf"])
-        argv += [x for f in (["pdf"] if formats == "default" else formats) if FORMATS[f] for x in ("-f", FORMATS[f])]
-        argv += [] if any(p.document["page"]["ratio"] for p in pages) else ["--no-ratio"]
-        argv += [f"{path}:Title={latex(label)}" for path, label in zip(curves, labels)]
-
-        references = [_reference(yoda, page) for page in pages if page.data and page.ranges.get("data_bins", 0) > 0]
-        if references:
-            yoda.write(references, str(work / "reference.yoda"))
-            argv += [str(work / "reference.yoda"), "--reflabel", latex(settings.get("data", {}).get("legend", "Data"))]
-        voided, cache = dict(zip(sources, curves)), {}
-
-        def objects(path):
-            if path not in cache:
-                cache[path] = yoda.read(str(path))
-            return cache[path]
-
-        windows = {}
-        for page in [p for p in pages if p.document["page"]["ratio"]]:
-            drawn_curves = [_bins(objects(voided[s])[v]) for s, v in zip(page.sources, page.variants)]
-            if not drawn_curves:
-                continue
-            with_data = page.data and page.ranges.get("data_bins", 0) > 0
-            reference = _bins(_reference(yoda, page)) if with_data else drawn_curves[0]
-            windows[page.name] = ratio_window(drawn_curves + ([reference] if with_data else []), reference,
-                                              page.ranges["x"], page.style["ratio"])
-        (work / "pages.plot").write_text("\n".join(_plot_block(p, windows.get(p.name)) for p in pages), encoding="utf-8")
-
-        env = dict(os.environ, RIVET_ANALYSIS_PATH=str(build_root() / "Rivet"),
-                   RIVET_DATA_PATH=os.pathsep.join(filter(None, [str(build_root() / "Rivet"), os.environ.get("RIVET_DATA_PATH")])))
-        done = subprocess.run(argv, capture_output=True, text=True, env=env, cwd=work)
-        (work / "mkhtml.log").write_text(" ".join(argv) + "\n" + done.stdout + done.stderr, encoding="utf-8")
-        drawn = [p for p in pages if (outdir / _base(p.object).split("/")[1] / f"{p.object.rsplit('/', 1)[-1]}.pdf").exists()]
-        for page in list(drawn):
-            script = outdir / _base(page.object).split("/")[1] / f"{page.object.rsplit('/', 1)[-1]}.py"
-            if not script.is_file():
-                continue
-            ticks = page.document["page"]["ratio"] and ratio_ticks(script, int(page.style["ratio"]["divisions"]))
-            best = page.style["legend"]["position"] == "best" and best_legend(script)
-            if ticks or best:
-                again = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, cwd=script.parent)
-                if again.returncode != 0:
-                    drawn.remove(page)
-                    say(f"plot: {script.name} rewritten (ratio ticks, best legend): {again.stderr.strip()[-200:]}")
-        if done.returncode != 0 or len(drawn) != len(pages):
-            failed += len(pages) - len(drawn)
-            say(f"plot: rivet-mkhtml for {cell or 'the page'}: {len(drawn)} of {len(pages)} drawn "
-                f"(exit {done.returncode}; see {work / 'mkhtml.log'})")
+        pages = [p for p in every if not p.overlay]
+        if pages:
+            failed += _cell(yoda, pages, work, outdir, settings, say)
+        for page in [p for p in every if p.overlay]:   # after: mkhtml rebuilds its output folder each run
+            failed += not _overlay(yoda, page, work, outdir, settings, say)
     total = sum(len(p) for p in cells.values())
     say(f"plot (yoda): {total - failed} of {total} page(s) drawn in {len(cells)} page set(s)")
     return failed
+
+
+def _cell(yoda, pages: list, work: Path, outdir: Path, settings: dict, say) -> int:
+    """The pages of one cell in one mkhtml run; returns how many were not drawn."""
+    # one file per point (its variants are curves mkhtml draws from it); labels by point
+    sources = list(dict.fromkeys(s for page in pages for s in page.sources))
+    label_of = {s: c["label"].split(" [")[0] for page in pages for s, c in zip(page.sources, page.document["curve"])}
+    labels = [label_of[s] for s in sources]
+    curves = [_voided(yoda, source, pages, work / f"{i:02d}_{source.parent.name}.yoda")
+              for i, source in enumerate(sources)]
+    argv = ["rivet-mkhtml", "--no-rivet-refs", "-o", str(outdir), "-c", str(work / "pages.plot")]
+    formats = settings.get("formats", ["pdf"])
+    argv += [x for f in (["pdf"] if formats == "default" else formats) if FORMATS[f] for x in ("-f", FORMATS[f])]
+    argv += [] if any(p.document["page"]["ratio"] for p in pages) else ["--no-ratio"]
+    argv += [f"{path}:Title={latex(label)}" for path, label in zip(curves, labels)]
+
+    references = [_reference(yoda, page) for page in pages if page.data and page.ranges.get("data_bins", 0) > 0]
+    if references:
+        yoda.write(references, str(work / "reference.yoda"))
+        argv += [str(work / "reference.yoda"), "--reflabel", latex(settings.get("data", {}).get("legend", "Data"))]
+    voided, cache = dict(zip(sources, curves)), {}
+
+    def objects(path):
+        if path not in cache:
+            cache[path] = yoda.read(str(path))
+        return cache[path]
+
+    windows = {}
+    for page in [p for p in pages if p.document["page"]["ratio"]]:
+        drawn_curves = [_bins(objects(voided[s])[v]) for s, v in zip(page.sources, page.variants)]
+        if not drawn_curves:
+            continue
+        with_data = page.data and page.ranges.get("data_bins", 0) > 0
+        reference = _bins(_reference(yoda, page)) if with_data else drawn_curves[0]
+        windows[page.name] = ratio_window(drawn_curves + ([reference] if with_data else []), reference,
+                                          page.ranges["x"], page.style["ratio"])
+    plot_text = "\n".join(_plot_block(p, windows.get(p.name)) for p in pages)
+    drawn = _mkhtml(argv, work, outdir, pages, plot_text, work / "pages.plot", say)
+    return len(pages) - len(drawn)

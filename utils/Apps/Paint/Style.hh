@@ -24,7 +24,7 @@ namespace Paint {
         int dpi = 0;
         std::string font;
         double left = 0, right = 0, top = 0, bottom = 0;  // [page.margins], fractions of the page
-        double title = 0, labels = 0, legend = 0, header = 0;   // [text], points
+        double title = 0, labels = 0, legend = 0, header = 0, pageTitle = 0, cornerTitle = 0;   // [text], points
         std::vector<std::string> palette;                // [curves]
         double lineWidth = 0;
         std::string errors;
@@ -135,6 +135,7 @@ namespace Paint {
         s.top = number(t, "page.margins.top"), s.bottom = number(t, "page.margins.bottom");
         s.title = number(t, "text.title"), s.labels = number(t, "text.labels");
         s.legend = number(t, "text.legend"), s.header = number(t, "text.header");
+        s.pageTitle = number(t, "text.page_title"), s.cornerTitle = number(t, "text.corner");
         if (const auto* palette = at(t, "curves.palette").as_array())
             for (const auto& c : *palette) {
                 if (auto name = c.value<std::string>()) s.palette.push_back(*name);

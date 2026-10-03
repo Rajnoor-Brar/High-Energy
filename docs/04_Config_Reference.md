@@ -632,6 +632,10 @@ style.legend.position = "bottom-left"
 | `objects` | array of globs | every 1D object | matched against the option-free YODA path (`/photo_eic/d01-x01-y01`) or any variant's path. No object matching is an error. |
 | `ratio` | bool | false | a ratio pad: each curve over the data, or over the first curve when there are no data |
 | `use_data` | bool | true | `false`: the `[plot.data]` table stays in the file but is not drawn, and a `ratio` divides each curve by the page's first curve, the first value of its curve axis (V44) |
+| `title` | string | the `.plot`'s `Title` | the main title, centred above the frame (V51). Every page; `[plot.object."<glob>"]` and `[plot.overlay.<name>]` override it for theirs |
+| `title_left`, `title_right` | string | `""` | small text just above the frame's top-left and top-right corners (V51), inherited the same way |
+| `legend_header` | string | the `.plot`'s `LegendTitle` | the legend's first line (V51), inherited the same way. Children inherit every key their parent has and a key means the same at both levels |
+| `overlay` | tables | none | `[plot.overlay.<name>] objects = [globs], labels = [...]`: one page per cell, `<cell>/<name>`, whose curves are those objects of each point (label: the overlay's, plus the point's when a page has several points); takes the `[plot.object]` keys too, inheriting from `[plot]`; a ratio divides by the first curve (V51) |
 | `y_gutter` | number ≥ 0 or `"default"` | `0.5` | the top of the y axis at (1 + g) × the largest drawn value (on a log axis, g of the decades shown). `0` or `"default"`: no gutter, the tool's own range (V29) |
 | `x_gutter` | number ≥ 0 or `"default"` | `"default"` | widens x by g of its span, symmetrically (in decades on a log axis). `0` or `"default"`: the range the bins give |
 | `logx`, `logy` | bool | the `.plot` file's `LogX`/`LogY` | |
@@ -733,7 +737,9 @@ again. A page's config holds only what the layers changed; `build/Paint.exe PAGE
 | `text.title` | `10.0` | axis titles |
 | `text.labels` | `8.0` | tick labels |
 | `text.legend` | `9.0` | legend entries, in points; the yoda backend follows it (`LegendFontSize`) |
-| `text.header` | `9.0` | the legend's first line: the page title; the yoda backend follows it (`legend.title_fontsize`, V50) |
+| `text.header` | `9.0` | the legend's first line (`legend_header`); the yoda backend follows it (`legend.title_fontsize`, V50) |
+| `text.page_title` | `12.0` | `title`, above the frame |
+| `text.corner` | `9.0` | `title_left`, `title_right` |
 | `curves.palette` | `["#EE3311", "#3366FF", "#109618", "#FF9900", "#990099"]` | curve colours in order: `#rrggbb`, ROOT names with offsets (`kBlue+1`) or numbers |
 | `curves.width` | `1.0` | points: steps and error bars |
 | `curves.errors` | `"bars"` | `bars` (at the bin centres), `band`, `none` |

@@ -43,7 +43,8 @@ TOOL_COMMON = {"tool": str, "baseconfig": (str, list), "input": (str, list), "ou
                "consumes_events": bool, "shards": int}
 PLOT_KEYS = {"backend": (str, list), "formats": list, "objects": list, "ratio": bool, "y_gutter": (int, float, str),
              "x_gutter": (int, float, str), "logy": bool, "logx": bool, "auto_range": bool, "void_empty": bool, "use_data": bool,
-             "min_entries": int, "range_pad": int, "root_style": str, "data": dict, "style": dict, "object": dict}
+             "min_entries": int, "range_pad": int, "root_style": str, "data": dict, "style": dict, "object": dict,
+             "title": str, "title_left": str, "title_right": str, "legend_header": str, "overlay": dict}
 
 
 @dataclass
@@ -433,7 +434,7 @@ def parse(raw: dict, path: Path) -> RunConfig:
         raise HepError("[plot].legend is now part of the style", where=f"{where}: [plot].legend",
                        hint=f'[plot.style] legend.position = "{plot["legend"]}" (or in the root_style file)')
     # "default" is every drawing option's own value (V37): the tool decides; plot.py resolves it
-    _check({k: v for k, v in plot.items() if v != "default" or k in ("data", "style", "object")}, PLOT_KEYS,
+    _check({k: v for k, v in plot.items() if v != "default" or k in ("data", "style", "object", "overlay")}, PLOT_KEYS,
            f"{where}: [plot]")
 
     return RunConfig(path=path, project=project, name=run["name"], serial=run.get("serial"),

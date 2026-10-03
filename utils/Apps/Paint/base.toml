@@ -23,7 +23,9 @@ bottom = 0.11
 title  = 10.0                # axis titles
 labels = 8.0                 # tick labels
 legend = 9.0                 # legend entries (the yoda backend follows it)
-header = 9.0                 # the legend's first line: the page title
+header = 9.0                 # the legend's first line: legend_header
+page_title = 12.0            # title, centred above the frame
+corner = 9.0                 # title_left and title_right, just above the frame's corners
 
 [curves]                     # the MC
 palette = ["#EE3311", "#3366FF", "#109618", "#FF9900", "#990099"]   # #rrggbb, ROOT names (kBlue+1) or numbers
