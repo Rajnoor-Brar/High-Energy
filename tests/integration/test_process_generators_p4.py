@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from support import REPO, hep_ok
+from support import REPO, folder, hep_ok
 yoda = pytest.importorskip("yoda")
 
 pytestmark = pytest.mark.slow
@@ -27,10 +27,10 @@ def hep_run(scratch: Path, *args: str) -> str:
 @pytest.mark.skipif(not shutil.which("mg5_aMC"), reason="load_hep: mg5_aMC")
 def test_madgraph_to_pythia_to_rivet(scratch):
     out = hep_run(scratch, "PhotoProduction/madgraph", "--set", "run.event_count=300")
-    assert "count ok: 300 events" in (scratch / "output/PhotoProduction/07_madgraph/single/point/provenance.json").read_text(encoding="utf-8", errors="replace")
-    log = (scratch / "output/PhotoProduction/07_madgraph/single/point/logs/madgraph.log").read_text(encoding="utf-8", errors="replace")
+    assert "count ok: 300 events" in (scratch / "output" / folder("PhotoProduction/madgraph") / "point/provenance.json").read_text(encoding="utf-8", errors="replace")
+    log = (scratch / "output" / folder("PhotoProduction/madgraph") / "point/logs/madgraph.log").read_text(encoding="utf-8", errors="replace")
     stated = float(re.findall(r"Cross-section :\s+([\d.eE+-]+)", log)[-1])
-    rivet = yoda.read(str(scratch / "results/PhotoProduction/07_madgraph/single/point/photo.yoda"))["/RAW/_XSEC"].val()
+    rivet = yoda.read(str(scratch / "results" / folder("PhotoProduction/madgraph") / "point/photo.yoda"))["/RAW/_XSEC"].val()
     assert rivet == pytest.approx(stated, rel=1e-3)
     again = hep_run(scratch, "PhotoProduction/madgraph", "--set", "run.event_count=300", "--rerun")
     assert "madgraph:prepare: cached" in again and "madgraph:prepare" in out
@@ -39,9 +39,9 @@ def test_madgraph_to_pythia_to_rivet(scratch):
 @pytest.mark.skipif(not shutil.which("whizard"), reason="load_hep: whizard")
 def test_whizard_direct_photoproduction_runs(scratch):
     hep_run(scratch, "PhotoProduction/whizard", "--set", "run.event_count=500")
-    point = scratch / "output/PhotoProduction/06_whizard/single/point"
+    point = scratch / "output" / folder("PhotoProduction/whizard") / "point"
     assert "count ok: 500 events" in (point / "provenance.json").read_text(encoding="utf-8", errors="replace")
-    integration = (scratch / "output/PhotoProduction/06_whizard/single/point/logs/whizard.prepare.log").read_text(encoding="utf-8", errors="replace")
+    integration = (scratch / "output" / folder("PhotoProduction/whizard") / "point/logs/whizard.prepare.log").read_text(encoding="utf-8", errors="replace")
     blocks = integration.split("Starting integration for process")[1:]
     summary = r"^\s+\d+\s+\d+\s+([\d.]+E[+-]\d+)\s+[\d.]+E[+-]\d+\s+[\d.]+\s+[\d.]+\s+[\d.]+\s+[\d.]+\s+\d+\s*$"
     totals = [re.findall(summary, block, re.M)[-1] for block in blocks]  # each process's final summary row

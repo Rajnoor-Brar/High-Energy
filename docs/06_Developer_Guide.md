@@ -44,7 +44,7 @@ The target is written the way the source is, and the output lands where the conv
 | `utils/App_<X>.cc` | `utils/App_<X>.exe` | `build/App_<X>.exe` | `-I utils` |
 | `utils/Apps/<X>/main.cc` | `utils/Apps/<X>.exe` | `build/<X>.exe` | `-I utils -I utils/Apps/<X>/` |
 | `modules/<P>/<X>.cc` | `modules/<P>/<X>.exe` | `build/<P>/<X>.exe` | `-I utils -I modules/<P>` |
-| `modules/<P>/Rivet/<x>.cc`, `modules/<P>/Rivet_<x>.cc` | `….so`, or `rivet_<x>` | `build/Rivet/Rivet_<x>.so` + `<x>.info`, `.plot`, `.yoda` | `rivet-build … -I utils -I modules/<P> -DHEKIT_WITH_HEPMC=1` |
+| `modules/<P>/Rivet/<x>.cc`, `modules/<P>/Rivet_<x>.cc` | `….so`, or `rivet_<x>` | `build/Rivet/Rivet_<x>.so` + `<x>.info`, `.plot`, `.yoda` | `rivet-build … -I utils -I modules/<P>` |
 | `tests/cxx/<X>.cc` | `tests/cxx/<X>.exe` | `build/tests/<X>.exe` | `-I utils` |
 | any other `<dir>/<X>.cc`, named | `<dir>/<X>.exe` or `.so` | `build/<dir>/<X>.exe` or `build/<dir>/lib<X>.so` | `-I utils` |
 
@@ -54,7 +54,7 @@ The target is written the way the source is, and the output lands where the conv
   `Lambda.exe` and `Rivet_Lamriv.so`.
 - A Rivet plugin's `.info`, `.plot` and `.yoda` copies are real targets: editing one re-copies it
   (00/B44). A `.info` saying `Requires: ONNX` adds the ONNX flags (00/B37, L20).
-- `make all` builds every non-parked `modules/**` program and plugin, every app, and
+- `make all` builds every non-parked `modules/<P>/*.cc` program and `modules/<P>/Rivet/` plugin (a subfolder of a project holds headers), every app, and
   `build/Herwig/HerwigDefaults.rpo` (`Herwig init --repo=…`, when Herwig is on `PATH`; a failure
   warns and leaves no file, L15).
 - Other targets: `tests` (the C++ tests), `test` (build and run them, then pytest without the slow
@@ -348,13 +348,14 @@ Add the name to `plot.BACKENDS`. **A key the backend cannot honour is an error**
 
 ## 7. Writing C++
 
-- **Two headers only.** A helper a second program needs goes into `utils/` as one more header; until
-  then it lives in `modules/<P>/`. v1's libraries (`Phys`, `ML`, …) come back from git only when a
+- **A few headers only.** A helper a second program needs goes into `utils/` as one more header;
+  until then it lives in `modules/<P>/`. `Status.hh` and `Module.hh` were the first; `PythiaRun.hh`
+  (V63: σ combination, stamping, seed check, chunking) is App_Pythia's and the integrated programs'. v1's libraries (`Phys`, `ML`, …) come back from git only when a
   program needs them, as a deliberate copy (V7).
 - **A header holds one PascalCase namespace**, checked against the installed toolchain first: X11
   `#define`s `Status` (so `Status.hh` guards it), and Delphes declares a global `class Event`.
   Functions are `camelCase`; no `using namespace` of an external library at namespace scope.
-- **Every source has a `// requires:` line.**
+- **Every program and app has a `// requires:` line** (a Rivet plugin links through `rivet-build`, plus ONNX when its `.info` says `Requires: ONNX`).
 - **An app speaks the status protocol** (`Status.hh`) and uses the exit codes of 02 §11.
 - **Outputs are written atomically**: to a partial name, renamed on success. A stopped program
   writes what it has, marked partial, and exits 6.

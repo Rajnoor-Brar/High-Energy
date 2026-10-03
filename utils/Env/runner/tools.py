@@ -290,6 +290,7 @@ class Step:
     config_path: Path | None = None
     config_data: dict | None = None
     identity_parts: dict = field(default_factory=dict)
+    flags: list[str] = field(default_factory=list)       # a mapping's flag = "-N" values, for argv
     card_lines_for_key: list[str] = field(default_factory=list)
     cwd: Path | None = None            # where it runs (default: the point's output directory)
     prepare_dir: Path | None = None    # the prepare cache entry ([prepare]), keyed by the card
@@ -848,7 +849,7 @@ def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
                     path = Path(expand(pattern, {"repo": str(repo_root()), "exe": str(step.exe), name: value}, folder.name))
                     if path.is_file():
                         step.identity_parts.setdefault("files_sha256", {})[str(path)] = sha256_file(path)
-    step.identity_parts["_flags"] = flags
+    step.flags = flags                                  # argv after [command] argv (V63)
 
 
 def beam_class(pdg: int) -> str:
@@ -1051,7 +1052,7 @@ def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
             argv.extend(piece)
         elif piece != "":
             argv.append(piece)
-    argv.extend(step.identity_parts.pop("_flags", []))
+    argv.extend(step.flags)
     step.argv = argv
     step.env = {k: expand(v, context, f"{folder.name}/tool.toml [command].env")
                 for k, v in folder.get("command", "env", {}).items()}

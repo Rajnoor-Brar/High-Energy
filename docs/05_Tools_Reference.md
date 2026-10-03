@@ -409,6 +409,10 @@ A backend is a module with `validate(settings, beside_root=False)` and
 
 ## 15. App_Pythia — `utils/App_Pythia.cc`
 
+Its Pythia rules (the σ combination, the stamping, the seed check, the chunking: L1, L2, L4, L6,
+L28) are `utils/PythiaRun.hh`'s, which the integrated programs (InprocJets) run too (V63), so an
+integrated point's events and σ are the chain's by construction.
+
 ```
 App_Pythia.exe [--threads N] [--events N] [--seeds S1,S2,…] [--sidecar FILE] OUTPUT[,OUTPUT…] CARD [CARD…]
 ```

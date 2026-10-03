@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from support import REPO, hep_ok
+from support import REPO, folder, hep_ok
 yoda = pytest.importorskip("yoda")
 uproot = pytest.importorskip("uproot")
 
@@ -36,7 +36,7 @@ def xsec(path: Path) -> tuple[float, float]:
 @pytest.mark.skipif(not shutil.which("DelphesHepMC3"), reason="load_hep: DelphesHepMC3")
 def test_delphes_file_chain_counts_every_event(scratch):
     hep_run(scratch, "PhotoProduction/eic", "delphes", "--set", "run.event_count=1000", "--set", "run.threads=2")
-    point = "PhotoProduction/03_eic/12_delphes/point"
+    point = str(folder("PhotoProduction/eic", "delphes") / "point")
     written = json.loads((scratch / "output" / point / "showered.hepmc.json").read_text(encoding="utf-8", errors="replace"))["written"]
     assert uproot.open(scratch / "results" / point / "delphes.root")["Delphes"].num_entries == written
     assert json.loads((scratch / "results" / point / "jets_reco.json").read_text(encoding="utf-8", errors="replace"))["events"] == written
@@ -46,7 +46,7 @@ def test_delphes_file_chain_counts_every_event(scratch):
 def test_sherpa_sigma_matches_v1_and_the_integration_is_cached(scratch):
     first = hep_run(scratch, "PhotoProduction/sherpa")
     assert "sherpa:prepare: ok" in first
-    value, error = xsec(scratch / "results" / "PhotoProduction/04_sherpa/single/point/photo.yoda")
+    value, error = xsec(scratch / "results" / folder("PhotoProduction/sherpa") / "point/photo.yoda")
     assert abs(value - 9636) < 3 * (error ** 2 + 782 ** 2) ** 0.5        # L24: v1's measurement
     again = hep_run(scratch, "PhotoProduction/sherpa", "--rerun")
     assert "sherpa:prepare: cached" in again
@@ -56,15 +56,15 @@ def test_sherpa_sigma_matches_v1_and_the_integration_is_cached(scratch):
                     reason="load_hep and hep build: Herwig and its repository")
 def test_herwig_sigma_is_its_own_and_the_run_file_is_shared(scratch):
     hep_run(scratch, "PhotoProduction/herwig", "--set", "run.event_count=500")
-    point = scratch / "output" / "PhotoProduction/05_herwig/single/point"
+    point = scratch / "output" / folder("PhotoProduction/herwig") / "point"
     report = next(point.glob("point-S*.out")).read_text(encoding="utf-8", errors="replace")
     stated = re.search(r"Total \(from generated events\):\s+(\d+)\s+\d+\s+([\d.]+)\((\d+)\)e([+-]\d+)", report)
     assert int(stated[1]) == 500
     nb = float(stated[2]) * 10 ** int(stated[4])
-    value, _ = xsec(scratch / "results" / "PhotoProduction/05_herwig/single/point/photo.yoda")
+    value, _ = xsec(scratch / "results" / folder("PhotoProduction/herwig") / "point/photo.yoda")
     digits = len(stated[2].split(".")[1]) if "." in stated[2] else 0
     assert abs(value / 1000 - nb) <= 0.5 * 10 ** (int(stated[4]) - digits) * 1.0001   # to the digits Herwig prints
     out = hep_run(scratch, "PhotoProduction/herwig", "export")
     assert "herwig:prepare: cached" in out                               # the same card: one read
-    probe = (scratch / "output" / "PhotoProduction/05_herwig/export/point/logs/probe.log").read_text(encoding="utf-8", errors="replace")
+    probe = (scratch / "output" / folder("PhotoProduction/herwig", "export") / "point/logs/probe.log").read_text(encoding="utf-8", errors="replace")
     assert "point.run" in probe

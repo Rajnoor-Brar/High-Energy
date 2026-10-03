@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from support import REPO, hep_ok
+from support import REPO, folder, hep_ok
 BUILT = [REPO / "build" / p for p in ("App_Pythia.exe", "Lambda/Lambda.exe", "PhotoProduction/InprocJets.exe")]
 uproot = pytest.importorskip("uproot")
 yoda = pytest.importorskip("yoda")
@@ -52,26 +52,26 @@ def test_lambda_module_and_rivet_agree_on_the_same_events(scratch):
 def test_inproc_equals_the_chain_at_one_thread(scratch):
     for configuration in ("single", "inproc"):
         hep_run(scratch, "PhotoProduction/eic", configuration, "--set", "run.event_count=2000", "--set", "run.threads=1")
-    base = scratch / "results" / "PhotoProduction" / "03_eic"
-    chain, inproc = base / "single" / "point", base / "11_inproc" / "point"
-    technical = scratch / "output" / "PhotoProduction" / "03_eic"
-    seeds = [json.loads((technical / c / "point" / "provenance.json").read_text(encoding="utf-8"))["seed"]
-             for c in ("single", "11_inproc")]
+    chain, inproc = (scratch / "results" / folder("PhotoProduction/eic", c) / "point" for c in ("single", "inproc"))
+    seeds = [json.loads((scratch / "output" / folder("PhotoProduction/eic", c) / "point" / "provenance.json")
+                        .read_text(encoding="utf-8"))["seed"] for c in ("single", "inproc")]
     assert seeds[0] == seeds[1]
     a, b = yoda.read(str(chain / "photo.yoda")), yoda.read(str(inproc / "photo.yoda"))
     finals = [p for p in a if not p.startswith("/RAW") and "Estimate1D" in a[p].type()]
-    assert len(finals) == 17
-    for path in finals:
-        assert np.array_equal(np.nan_to_num(a[path].vals(), nan=-1), np.nan_to_num(b[path].vals(), nan=-1)), path
+    assert len(finals) == 19                       # d01…d19: d18, d19 since 40a9224
+    for path in finals:                            # the chain's is merged from its shards' YODAs (V31), each
+        mine, theirs = (np.nan_to_num(x[path].vals(), nan=-1) for x in (a, b))   # written to 7 digits
+        assert np.array_equal(mine == 0, theirs == 0), path
+        assert np.allclose(mine, theirs, rtol=1e-5, atol=0), path
 
 
 def test_inproc_sigma_equals_the_sidecar_at_four_threads(scratch):
     for configuration in ("single", "inproc"):
         output, results = hep_run(scratch, "PhotoProduction/eic", configuration, "--set", "run.event_count=4000",
                                   "--set", "run.threads=4")
-    point = output / "PhotoProduction" / "03_eic" / "single" / "point"
+    point = output / folder("PhotoProduction/eic", "single") / "point"
     sidecar = json.loads(min(point.glob("events*.hepmc.json")).read_text(encoding="utf-8", errors="replace"))  # sharded: .s1
-    report = json.loads((results / "PhotoProduction" / "03_eic" / "11_inproc" / "point" / "photo.yoda.json").read_text(encoding="utf-8", errors="replace"))
+    report = json.loads((results / folder("PhotoProduction/eic", "inproc") / "point" / "photo.yoda.json").read_text(encoding="utf-8", errors="replace"))
     assert report["events"] == sidecar["written"]
     assert report["sigma_pb"] == pytest.approx(sidecar["sigma_pb"], rel=1e-6)
 
@@ -105,5 +105,5 @@ def test_the_serial_engine_is_reproducible(scratch):
     for attempt in range(2):
         _, results = hep_run(scratch, "PhotoProduction/eic", "inproc", "--rerun", "--set", "run.event_count=1000",
                              "--set", "run.threads=1", "--set", "tools.jets.config.engine=serial")
-        runs.append((results / "PhotoProduction" / "03_eic" / "11_inproc" / "point" / "photo.yoda").read_bytes())
+        runs.append((results / folder("PhotoProduction/eic", "inproc") / "point" / "photo.yoda").read_bytes())
     assert runs[0] == runs[1]

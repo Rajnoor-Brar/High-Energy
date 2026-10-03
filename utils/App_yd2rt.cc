@@ -122,7 +122,7 @@ namespace {
     }
 
     template <class T>
-    TH2D* from2D(const T& y, const std::string& name, bool isEstimate) {
+    TH2D* from2D(const T& y, const std::string& name) {
         const auto xs = y.template edges<0>();
         const auto ys = y.template edges<1>();
         auto* h = new TH2D(name.c_str(), y.path().c_str(), static_cast<int>(xs.size()) - 1, xs.data(),
@@ -139,7 +139,6 @@ namespace {
                 }
             }
         }
-        (void)isEstimate;
         return h;
     }
 
@@ -186,8 +185,8 @@ namespace {
             TObject* made = nullptr;
             if (auto* e = dynamic_cast<YODA::Estimate1D*>(ao)) made = fromEstimate1D(*e, name);
             else if (auto* h = dynamic_cast<YODA::Histo1D*>(ao)) made = fromHisto1D(*h, name);
-            else if (auto* e2 = dynamic_cast<YODA::Estimate2D*>(ao)) made = from2D(*e2, name, true);
-            else if (auto* h2 = dynamic_cast<YODA::Histo2D*>(ao)) made = from2D(*h2, name, false);
+            else if (auto* e2 = dynamic_cast<YODA::Estimate2D*>(ao)) made = from2D(*e2, name);
+            else if (auto* h2 = dynamic_cast<YODA::Histo2D*>(ao)) made = from2D(*h2, name);
             else if (auto* sc = dynamic_cast<YODA::Scatter2D*>(ao)) made = fromScatter2D(*sc, name);
             else if (auto* c = dynamic_cast<YODA::Counter*>(ao)) made = oneBin(name, path, c->sumW(), std::sqrt(std::fabs(c->sumW2())), c->numEntries());
             else if (auto* e0 = dynamic_cast<YODA::Estimate0D*>(ao)) made = oneBin(name, path, e0->val(), estimateError(*e0), 1);

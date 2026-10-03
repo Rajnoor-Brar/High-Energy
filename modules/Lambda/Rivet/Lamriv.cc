@@ -16,6 +16,8 @@
 //   TRACKETAMAX track |eta| acceptance                   (default 8.0)
 //   BINS        bins per distribution                    (default 100)
 //   MASSAXIS    half-width of the mass axis about m(Λ)   (default 0.4)
+//   ENERGYAXIS, MOMENTUMAXIS, PTAXIS, ETAAXIS, COUNTAXIS   the other axes (200, 200, 20, 8, 50)
+//   SET         all | unvalidated | validated | selected (default all)
 //
 // Rivet's FinalState does the status-1 selection and the track cuts; its FourMomentum becomes a
 // HepMC3::FourVector at the boundary, which is what the shared reconstruction speaks.
@@ -34,9 +36,10 @@ namespace Rivet {
     RIVET_DEFAULT_ANALYSIS_CTOR(Lamriv);
 
     void init() {
-      _cuts.mass_tolerance     = getOption<double>("MASSTOL", 0.15);
-      _cuts.cos_theta_tolerance = getOption<double>("COSTHETATOL", 0.0);
-      _cuts.reserved_protons   = static_cast<std::size_t>(getOption<int>("RESERVED", 2));
+      const Lambda::Cuts defaults;                           // the cuts' defaults live in Reconstruction.hh
+      _cuts.mass_tolerance     = getOption<double>("MASSTOL", defaults.mass_tolerance);
+      _cuts.cos_theta_tolerance = getOption<double>("COSTHETATOL", defaults.cos_theta_tolerance);
+      _cuts.reserved_protons   = static_cast<std::size_t>(getOption<int>("RESERVED", static_cast<int>(defaults.reserved_protons)));
       _ptmin                   = getOption<double>("TRACKPTMIN", 0.0);
       _etamax                  = getOption<double>("TRACKETAMAX", 8.0);
       const int bins           = getOption<int>("BINS", 100);
@@ -63,6 +66,9 @@ namespace Rivet {
       // the analysis never sees a particle it would have thrown away.
       declare(FinalState(Cuts::abseta < _etamax && Cuts::pT > _ptmin*GeV), "FS");
 
+      const double energyAxis = getOption<double>("ENERGYAXIS", 200.0), momentumAxis = getOption<double>("MOMENTUMAXIS", 200.0);
+      const double ptAxis = getOption<double>("PTAXIS", 20.0), etaAxis = getOption<double>("ETAAXIS", 8.0);
+      const int countmax = getOption<int>("COUNTAXIS", 50);
       // One booking loop over the three sets, so a set cannot end up with a different axis from
       // its neighbours — which is the whole point of drawing them together.
       for (std::size_t set = 0; set < Lambda::kSetCount; ++set) {
@@ -70,14 +76,11 @@ namespace Rivet {
         const std::string tag = (_only >= 0) ? "" : std::string(Lambda::kSetNames[set]) + "_";
         book(_mass[set],       tag + "mass", bins, Lambda::kLambdaMass - masswin,
                                                    Lambda::kLambdaMass + masswin);
-        book(_energy[set],     tag + "energy", bins, 0.0, getOption<double>("ENERGYAXIS", 200.0));
-        book(_momentum[set],   tag + "momentum", bins, 0.0, getOption<double>("MOMENTUMAXIS", 200.0));
-        book(_pt[set],         tag + "pt", bins, 0.0, getOption<double>("PTAXIS", 20.0));
-        book(_pz[set],         tag + "pz", bins, -getOption<double>("MOMENTUMAXIS", 200.0),
-                                                  getOption<double>("MOMENTUMAXIS", 200.0));
-        book(_eta[set],        tag + "eta", bins, -getOption<double>("ETAAXIS", 8.0),
-                                                   getOption<double>("ETAAXIS", 8.0));
-        const int countmax = getOption<int>("COUNTAXIS", 50);
+        book(_energy[set],     tag + "energy", bins, 0.0, energyAxis);
+        book(_momentum[set],   tag + "momentum", bins, 0.0, momentumAxis);
+        book(_pt[set],         tag + "pt", bins, 0.0, ptAxis);
+        book(_pz[set],         tag + "pz", bins, -momentumAxis, momentumAxis);
+        book(_eta[set],        tag + "eta", bins, -etaAxis, etaAxis);
         book(_count[set],      tag + "count", countmax + 1, -0.5, countmax + 0.5);
       }
     }

@@ -32,6 +32,8 @@
 //   L6  run() is called in chunks that are a multiple of the thread count, so SIGINT takes effect
 //       within a chunk.
 //   L25 zstd for kept event files.
+// The σ combination (L1), the stamping (L2, L28), the seed check (L4) and the chunking (L6) are
+// utils/PythiaRun.hh's, shared with the integrated programs (V63).
 // The output is opened only after init() succeeds, so a card that fails leaves no half-open FIFO.
 // Callbacks run concurrently (processAsync = on): each instance converts with its own converter,
 // σ is combined under one small lock, and each output has its own writer and lock, so formatting
@@ -44,6 +46,7 @@
 #define HEPMC3_Z_SUPPORT 1
 #define HEPMC3_ZSTD_SUPPORT 1
 
+#include "PythiaRun.hh"
 #include "Status.hh"
 
 #include "HepMC3/WriterAscii.h"
@@ -142,25 +145,6 @@ namespace {
         return args;
     }
 
-    // ── σ over instances (L1) ──────────────────────────────────────────────────────────────────
-    struct Instance {
-        double weightSum = 0, sigmaMb = 0, errorMb = 0;
-    };
-    struct Xsec {
-        double pb = 0, errPb = 0;
-    };
-    Xsec combine(const std::map<const Pythia8::Pythia*, Instance>& instances) {
-        double weight = 0, value = 0, variance = 0;
-        for (const auto& [_, in] : instances) {
-            if (in.weightSum <= 0) continue;  // an instance that generated nothing says nothing
-            weight += in.weightSum;
-            value += in.weightSum * in.sigmaMb;
-            variance += std::pow(in.weightSum * in.errorMb, 2);
-        }
-        if (weight <= 0) return {};
-        return {value / weight * 1e9, std::sqrt(variance) / weight * 1e9};  // mb → pb
-    }
-
     // ── output ─────────────────────────────────────────────────────────────────────────────────
     bool endsWith(const std::string& text, const std::string& tail) {
         return text.size() >= tail.size() && text.compare(text.size() - tail.size(), tail.size(), tail) == 0;
@@ -191,11 +175,6 @@ namespace {
         std::mutex lock;
         std::atomic<long> written{0};
         std::shared_ptr<HepMC3::GenEvent> held;   // under lock: written when the next one comes (L2)
-    };
-    // The σ an event was stamped with, as the converter or the re-stamp left it.
-    struct Stamp {
-        std::vector<double> xs, err;
-        long accepted = -1, attempted = -1;
     };
     // What one event goes to: every group, and one member of each (a copy output is a group of one).
     struct Group {
@@ -256,20 +235,11 @@ int main(int argc, char** argv) {
     }
     pythia.readString("Parallelism:processAsync = on");     // callbacks in parallel: see the header
 
-    int threads = pythia.settings.mode("Parallelism:numThreads");
-    if (threads <= 0) threads = std::max(1u, std::thread::hardware_concurrency());
+    const int threads = PythiaRun::threads(pythia.settings);
     const std::vector<int> seeds = pythia.settings.mvec("Parallelism:seeds");
-    if (!seeds.empty()) {  // L4: Pythia does not check either of these
-        if (static_cast<int>(seeds.size()) != threads) {
-            status.log("error", "Parallelism:seeds has " + std::to_string(seeds.size()) + " seeds for " +
-                                    std::to_string(threads) + " threads; it needs one per thread");
-            return Card;
-        }
-        for (int seed : seeds)
-            if (seed < 1 || seed > 900000000) {
-                status.log("error", "seed " + std::to_string(seed) + " is outside Pythia's range 1…900000000");
-                return Card;
-            }
+    if (const std::string wrong = PythiaRun::checkSeeds(pythia.settings, threads); !wrong.empty()) {   // L4
+        status.log("error", wrong);
+        return Card;
     }
     const long requested = pythia.settings.mode("Main:numberOfEvents");
 
@@ -304,13 +274,11 @@ int main(int argc, char** argv) {
     // A converter per instance (each callback runs on its instance's thread); read-only map from here.
     std::map<const Pythia8::Pythia*, std::unique_ptr<Pythia8::Pythia8ToHepMC>> converters;
     pythia.foreach([&](Pythia8::Pythia* instance) { converters[instance] = std::make_unique<Pythia8::Pythia8ToHepMC>(); });
-    std::map<const Pythia8::Pythia*, Instance> latest;          // under xsLock
-    std::shared_ptr<HepMC3::GenRunInfo> runInfo;                // under xsLock: one for every event
-    Stamp last;                                                 // under xsLock: the latest event's σ
-    std::mutex xsLock, failLock;
+    PythiaRun::Stamper stamper;                                 // numbering, run info, σ (L1, L2, L28)
+    std::mutex failLock;
     std::exception_ptr failure;                                 // under failLock
     std::atomic<bool> failed{false};
-    std::atomic<long> written{0}, writeFailures{0}, numbered{0};
+    std::atomic<long> written{0}, writeFailures{0};
 
     // One event to one sink of a group: a copy output's only member, or the first free member of a
     // deal group (starting from a rotating index, so an even load deals round-robin).
@@ -342,19 +310,7 @@ int main(int argc, char** argv) {
                 return;
             }
             const std::shared_ptr<HepMC3::GenEvent> event = converter.getEventPtr();   // a new one each event
-            event->set_event_number(static_cast<int>(numbered++));  // one numbering across instances, from 0
-            {
-                std::lock_guard<std::mutex> guard(xsLock);
-                if (!runInfo) runInfo = event->run_info();
-                latest[instance] = {instance->info.weightSum(), instance->info.sigmaGen(), instance->info.sigmaErr()};
-                const auto cs = event->cross_section();
-                if (cs && latest.size() > 1) {                        // L2: re-stamp with the combination
-                    const Xsec xs = combine(latest);
-                    cs->set_cross_section(xs.pb, xs.errPb);
-                }
-                if (cs) last = {cs->xsecs(), cs->xsec_errs(), cs->get_accepted_events(), cs->get_attempted_events()};
-            }
-            event->set_run_info(runInfo);                              // one run info: no per-event warning
+            stamper.stamp(*instance, *event);
             for (auto& group : groups) deliver(*group, event);
             ++written;
         } catch (...) {
@@ -365,7 +321,7 @@ int main(int argc, char** argv) {
     };
 
     status.phase("generating", std::to_string(requested) + " events");
-    const long chunk = 100L * threads;  // a multiple of the thread count (L6)
+    const long chunk = PythiaRun::chunk(threads);  // L6
     long attempted = 0;
     const auto start = std::chrono::steady_clock::now();
     auto rate = [&] {
@@ -377,10 +333,11 @@ int main(int argc, char** argv) {
         const long n = std::min(chunk, requested - attempted);
         for (long count : pythia.run(n, onEvent)) attempted += count;       // every callback has returned
         status.progress(written, requested, rate());
-        const Xsec running = combine(latest);
+        const PythiaRun::Xsec running = stamper.running();
         status.xsec(running.pb, running.errPb, false);
     }
     // Every output's held event: stamped with the latest σ (unless it is that event), then written (L2).
+    const PythiaRun::Stamp last = stamper.last();
     for (auto& sink : sinks) {
         if (!sink->held) continue;
         const auto cs = sink->held->cross_section();
@@ -392,16 +349,15 @@ int main(int argc, char** argv) {
     for (auto& sink : sinks) sink->writer->close();
 
     // ── account ────────────────────────────────────────────────────────────────────────────────
-    std::map<const Pythia8::Pythia*, Instance> final;
+    std::vector<Pythia8::Pythia*> instances;
     long accepted = 0;
-    pythia.foreach([&](Pythia8::Pythia* instance) {
-        final[instance] = {instance->info.weightSum(), instance->info.sigmaGen(), instance->info.sigmaErr()};
-        accepted += instance->info.nAccepted();
-    });
-    const Xsec xs = final.size() == 1 ? Xsec{final.begin()->second.sigmaMb * 1e9, final.begin()->second.errorMb * 1e9}
-                                      : combine(final);
     double sumW = 0;
-    for (const auto& [_, in] : final) sumW += in.weightSum;
+    pythia.foreach([&](Pythia8::Pythia* instance) {
+        instances.push_back(instance);
+        accepted += instance->info.nAccepted();
+        sumW += instance->info.weightSum();
+    });
+    const PythiaRun::Xsec xs = PythiaRun::final(instances);
     pythia.stat();
 
     const bool stopped = stopRequested.load();

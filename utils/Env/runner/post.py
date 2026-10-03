@@ -33,68 +33,80 @@ COMBINED = "combined"            # the group's name when every swept quantity is
 MERGE_TAG = "combine"
 
 
+def _plan_stage(run, configuration, master: dict, point: Point, groups: list, products: dict, manifest,
+                upstream: list | None = None) -> tools.PointPlan:
+    """One stage, planned as a point is (V63): its tool groups, no quantities, `{points}` the manifest, an
+    `input` naming a product of the points reads `products`; its identity holds `upstream` (the
+    identities it follows), and its seed follows from its identity."""
+    stage = replace(configuration, tools=groups, static={}, prelim={}, pre=[], post=[], combine=[])
+    plan = tools.plan_point(run, stage, point, master, post={"manifest": manifest, "products": products})
+    if upstream is not None:
+        plan.upstream = upstream
+    plan.identity = record.identity(plan)
+    tools.finalise(plan, record.seed_of(plan.identity, plan.threads, plan.seed_range))
+    return plan
+
+
+def _run_stage(stage: tools.PointPlan, waits_on: list, run_config, configuration, *, sink, journal, stopper,
+               rerun: bool, say, missing: str):
+    """One stage, once every plan it waits on is complete (V63): its result, or None when it did not run
+    (incomplete upstream: `missing`, formatted with the count and the names, is said; or complete)."""
+    incomplete = [p.point.name for p in waits_on if not record.is_complete(p)]
+    if incomplete:
+        say(missing.format(count=len(incomplete), names=", ".join(incomplete[:4]) + (", …" if len(incomplete) > 4 else "")))
+        return None
+    if not rerun and record.is_complete(stage):
+        sink.skipped(stage)
+        return None
+    return execute.run_point(stage, run_config, configuration, sink=sink, journal=journal, stopper=stopper)
+
+
+def _reserved(run, configuration, names, name: str, stage: str) -> None:
+    if name in names:
+        raise HepError(f"a point is named '{name}', which is where the {stage} stage lives",
+                       where=f"{run.path}: [run.{configuration.key}]", hint="give that value another tag")
+
+
 def plan_pre(run, configuration, master: dict, points: list) -> tools.PointPlan | None:
     """The pre stage: once, before every point, in <cfg>/pre/. No quantities; `{points}` is the
     manifest. Its products are inputs every point may name, and its identity is in theirs."""
     if not configuration.pre:
         return None
-    if any(point.name == PRE for point in points):
-        raise HepError(f"a point is named '{PRE}', which is where the pre stage lives",
-                       where=f"{run.path}: [run.{configuration.key}]", hint="give that value another tag")
-    stage = replace(configuration, tools=configuration.pre, static={}, prelim={})
+    _reserved(run, configuration, {p.name for p in points}, PRE, "pre")
     manifest = tools.point_dirs(run, configuration, Point(index=-1, name=PRE))[0].parent / "points.json"
-    pre = tools.plan_point(run, stage, Point(index=-1, name=PRE), master, post={"manifest": manifest, "products": {}})
-    pre.identity = record.identity(pre)
-    tools.finalise(pre, record.seed_of(pre.identity, pre.threads, pre.seed_range))
-    return pre
+    return _plan_stage(run, configuration, master, Point(index=-1, name=PRE), configuration.pre, {}, manifest)
 
 
 def run_pre(pre: tools.PointPlan | None, run_config, configuration, *, sink, journal, stopper, rerun: bool) -> bool:
     """True unless the pre stage ran and failed (the points then do not run)."""
     if pre is None:
         return True
-    if not rerun and record.is_complete(pre):
-        sink.skipped(pre)
-        return True
-    return execute.run_point(pre, run_config, configuration, sink=sink, journal=journal, stopper=stopper).ok
+    result = _run_stage(pre, [], run_config, configuration, sink=sink, journal=journal, stopper=stopper,
+                        rerun=rerun, say=print, missing="")
+    return result is None or result.ok
 
 
 def plan(run, configuration, master: dict, plans: list) -> tools.PointPlan | None:
     if not configuration.post:
         return None
-    if any(p.point.name == NAME for p in plans):
-        raise HepError(f"a point is named '{NAME}', which is where the post stage lives",
-                       where=f"{run.path}: [run.{configuration.key}]", hint="give that value another tag")
+    _reserved(run, configuration, {p.point.name for p in plans}, NAME, "post")
     products: dict[str, list] = {}                  # name → [(point, path)], in point order
     for p in plans:
         for interface in p.interfaces.values():
             if interface.kind == "product" and not interface.shard:
                 products.setdefault(interface.name, []).append((p.point.name, interface.path))
-    stage = replace(configuration, tools=configuration.post, static={}, prelim={})
-    manifest = plans[0].out.parent / "points.json"
-    post = tools.plan_point(run, stage, Point(index=0, name=NAME), master,
-                            post={"manifest": manifest, "products": products})
-    post.upstream = [p.identity for p in plans]
-    post.identity = record.identity(post)
-    tools.finalise(post, record.seed_of(post.identity, post.threads, post.seed_range))
-    return post
+    return _plan_stage(run, configuration, master, Point(index=0, name=NAME), configuration.post, products,
+                       plans[0].out.parent / "points.json", upstream=[p.identity for p in plans])
 
 
 def run(post: tools.PointPlan | None, every: list, run_config, configuration, *, sink, journal, stopper,
         rerun: bool, say) -> bool:
-    """True unless the post stage ran and failed."""
+    """True unless the post stage ran and failed. It runs only when every point is complete."""
     if post is None:
         return True
-    missing = [p.point.name for p in every if not record.is_complete(p)]
-    if missing:
-        say(f"post: not run, {len(missing)} point(s) incomplete ({', '.join(missing[:4])}"
-            f"{', …' if len(missing) > 4 else ''})")
-        return True
-    if not rerun and record.is_complete(post):
-        sink.skipped(post)
-        return True
-    result = execute.run_point(post, run_config, configuration, sink=sink, journal=journal, stopper=stopper)
-    return result.ok
+    result = _run_stage(post, every, run_config, configuration, sink=sink, journal=journal, stopper=stopper,
+                        rerun=rerun, say=say, missing="post: not run, {count} point(s) incomplete ({names})")
+    return result is None or result.ok
 
 
 # ── combine: the points that differ only in the combined quantities, merged (V35) ──────────────
@@ -134,7 +146,6 @@ def plan_combined(run, configuration, master: dict, plans: list) -> list[tools.P
     for p in plans:
         groups.setdefault(tuple(p.point.choice[name] for name in kept), []).append(p)
     taken = {p.point.name for p in plans} | {NAME, PRE}
-    stage = replace(configuration, tools=[[MERGE_TAG]], static={}, prelim={}, pre=[], post=[], combine=[])
     manifest = plans[0].out.parent / "points.json"
     out = []
     for number, (key, members) in enumerate(groups.items(), start=1):
@@ -150,13 +161,10 @@ def plan_combined(run, configuration, master: dict, plans: list) -> list[tools.P
         source = f"{product} of the combined points"           # not the product's own name: the output is
         stage_run = replace(run, tools={**run.tools, MERGE_TAG: Tool(tag=MERGE_TAG, tool=_combiner()[0], input=[source],
                                                                       output_file=[product])})
-        plan = tools.plan_point(stage_run, stage, Point(index=number, name=name, stage=COMBINED), master,
-                                post={"manifest": manifest, "products": {source: [(m.point.name, f[1])
-                                                                                  for m, f in zip(members, found)]}})
+        plan = _plan_stage(stage_run, configuration, master, Point(index=number, name=name, stage=COMBINED), [[MERGE_TAG]],
+                           {source: [(m.point.name, f[1]) for m, f in zip(members, found)]}, manifest,
+                           upstream=[m.identity for m in members])
         plan.point = replace(plan.point, choice=choice)
-        plan.upstream = [m.identity for m in members]
-        plan.identity = record.identity(plan)
-        tools.finalise(plan, record.seed_of(plan.identity, plan.threads, plan.seed_range))
         out.append(plan)
     return out
 
@@ -167,14 +175,10 @@ def run_combined(groups: list, every: list, run_config, configuration, *, sink, 
     failed = 0
     for group in groups:
         members = [p for p in every if p.identity in set(group.upstream)]
-        missing = [p.point.name for p in members if not record.is_complete(p)]
-        if missing:
-            say(f"combine: {group.point.name} not merged, {len(missing)} of its points incomplete")
+        result = _run_stage(group, members, run_config, configuration, sink=sink, journal=journal, stopper=stopper,
+                            rerun=rerun, say=say, missing=f"combine: {group.point.name} not merged, {{count}} of its points incomplete")
+        if result is None:
             continue
-        if not rerun and record.is_complete(group):
-            sink.skipped(group)
-            continue
-        result = execute.run_point(group, run_config, configuration, sink=sink, journal=journal, stopper=stopper)
         if result.stopped or stopper.requested:
             return failed + 1
         failed += not result.ok

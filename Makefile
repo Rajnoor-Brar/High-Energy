@@ -115,7 +115,7 @@ define rivet_rule
 $(call out_of,$(1)): $(1)
 	@mkdir -p $$(@D) $(BUILD)/deps
 	+rivet-build $$(abspath $$@) $(abspath $(1)) -I$(abspath utils) $(if $(filter modules/%,$(1)),-I$(abspath modules/$(call proj_of,$(1)))) \
-	    -DHEKIT_WITH_HEPMC=1 -MMD -MP -MF$(abspath $(call depfile,$(1))) \
+	    -MMD -MP -MF$(abspath $(call depfile,$(1))) \
 	    $(if $(shell grep -ls 'Requires:.*ONNX' $(call side_of,$(1),info) /dev/null),$$(FLAGS_onnx))
 	@sed -i '1s|^[^:]*:[[:space:]]*[^[:space:]]*\.cc|$$@:|' $(call depfile,$(1))
 $(foreach e,info plot yoda,$(if $(call side_of,$(1),$(e)),$(eval $(call side_rule,$(1),$(e)))))

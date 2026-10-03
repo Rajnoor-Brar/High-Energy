@@ -328,9 +328,9 @@ wait for the last steps of the last phase; meanwhile the code accepts what those
 
 | Phase | Steps | State |
 |---|---|---|
-| P0 | S1 S2 S3 | S1 (V52), S2 (V53), S3 (V54) done; held: the C++ and Rivet items of S3 (K3, K4, K7, K8, K10's define, yd2rt's dead parameter), which rebuild binaries in the user's points' identities |
+| P0 | S1 S2 S3 | done: S1 (V52), S2 (V53), S3 (V54; its held C++ and Rivet items landed with V63, the reruns accepted) |
 | P1 | S1 S2 S3 | done: S1 (V55 schema, "default"), S2 (V56 layers, include, --show-config), S3 (V57 --why, hep check) |
 | P2 | S1 S2 S3 | done: S1 (V58), S2 (V59), S3 (V62: option A, the run's beam order into each card's slots) |
-| P3 | S1 S2 S3 | S1 (V60), S2 (V61: tables as data, one plugin loader, twins merged, filters key) done |
+| P3 | S1 S2 S3 | done: S1 (V60), S2 (V61: tables as data, one plugin loader, twins merged, filters key), S3 (V63: PythiaRun.hh, one stage runner, Step.flags) |
 | P4 | S1 S2 S3 | not started |
 | P5 | S1 S2 S3 | not started |

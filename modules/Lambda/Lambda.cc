@@ -53,10 +53,10 @@ int main(int argc, char** argv) {
     Module::Job job(argc, argv);
     const Module::Values& c = job.config();
 
-    Lambda::Cuts cuts;
-    cuts.mass_tolerance = c.get("mass_tolerance", 0.15);
-    cuts.cos_theta_tolerance = c.get("cos_theta_tolerance", 0.0);
-    cuts.reserved_protons = static_cast<std::size_t>(c.get("reserved_protons", 2));
+    Lambda::Cuts cuts;                                       // its defaults are the one place they are written
+    cuts.mass_tolerance = c.get("mass_tolerance", cuts.mass_tolerance);
+    cuts.cos_theta_tolerance = c.get("cos_theta_tolerance", cuts.cos_theta_tolerance);
+    cuts.reserved_protons = static_cast<std::size_t>(c.get("reserved_protons", static_cast<int>(cuts.reserved_protons)));
     const Tracks tracks{c.get("track_pt_min", 0.0), c.get("track_eta_max", 8.0)};
     const int bins = c.get("bins", 100);
     if (bins < 1) job.fail(Module::Config, "bins must be at least 1");

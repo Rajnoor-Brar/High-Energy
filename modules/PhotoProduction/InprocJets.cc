@@ -1,5 +1,5 @@
 // modules/PhotoProduction/InprocJets.cc — Pythia and Rivet in one process: an integrated run.
-// requires: pythia8 rivet   (Module.hh adds hepmc3 toml)
+// requires: pythia8 rivet fastjet   (Module.hh adds hepmc3 toml; Inproc/Analysis.hh uses FastJet and SISCone)
 //
 //     InprocJets.exe CONFIG.toml --output=photo.yoda
 //
@@ -48,10 +48,10 @@ int main(int argc, char** argv) {
         rivet.halt();                                               // no thread may outlive the exit
         job.fail(Module::Internal, run.error);
     }
-    if (const std::string error = rivet.finish(stamper.last(), job.output()); !error.empty())
-        job.fail(Module::Internal, error);
+    if (const std::string error = rivet.finish(Inproc::lastSigma(stamper), job.output()); !error.empty())
+        job.fail(Module::Output, error);                            // the YODA could not be written (02 §11)
 
-    job.setCrossSection(run.sigma.pb, run.sigma.errPb);             // the report's σ: the run's, as a sidecar's
+    job.setCrossSection(run.sigma.pb, run.sigma.errPb, "generator");   // the report's σ: the run's own
     job.status().xsec(run.sigma.pb, run.sigma.errPb, true);
     return job.finish();
 }
