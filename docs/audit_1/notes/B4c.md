@@ -114,3 +114,16 @@ only the drawing.
 2. If A or B: the backend's name (`"mpl"`, or reuse `"yoda"` for the new one).
 3. If A: whether `config`'s `backend = "yoda"` lines migrate automatically in the final phase (along with
    the other config migrations), or are refused until edited.
+
+---
+
+## 6. Decision (the user, 2026-10-03)
+
+**Option B, named `"mpl"`.** The matplotlib renderer is built beside the yoda backend, which is frozen: it
+gets no new features, and new keys are refused there. **Until the user has verified it, `mpl`'s pages
+must match mkhtml's output**, not Paint's where the two differ. So §3 changes in one respect: where
+mkhtml and Paint draw differently (the ratio of a data bin spanning several MC bins, the legend's
+symbols, mkhtml's fonts and tick lengths), `mpl` follows mkhtml. It still takes the ranges and voided bins
+from Paint's ranges file, since the yoda backend already hands mkhtml those. §4's first check therefore
+compares `mpl` with mkhtml's own generated data (`<object>__data.py`) rather than with Paint, and the
+side-by-side is `mpl` against mkhtml. Built as P4 S4.
