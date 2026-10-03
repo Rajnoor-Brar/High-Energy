@@ -181,10 +181,30 @@ namespace Paint {
         if (!xText) ax->SetLabelSize(0), ax->SetTitleSize(0);
     }
 
+    // How one curve is drawn: its colour, ROOT line style and width in pixels.
+    struct Pen {
+        int colour, line, width;
+    };
+
+    // Each curve's pen (V67): its own colour, line and width where its source gives them; the others
+    // take the palette in turn, as mkhtml's curves without a LineColor take its colour cycle.
+    inline std::vector<Pen> pens(const std::vector<Source>& sources, const Look& look) {
+        static const std::map<std::string, int> lines{{"", 1}, {"solid", 1}, {"dashed", 2}, {"dotted", 3}, {"dashdot", 4}};
+        std::vector<Pen> out;
+        size_t next = 0;
+        for (const Source& s : sources) {
+            const int c = colour(s.colour.empty() ? look.s.palette[next++ % look.s.palette.size()] : s.colour);
+            const int w = s.width > 0 ? std::max(1, static_cast<int>(std::lround(s.width * look.px))) : look.width;
+            out.push_back({c, lines.at(s.line), w});
+        }
+        return out;
+    }
+
     // Steps per run of finite bins, with their errors as bars at the centres, a band, or nothing.
-    inline void curve(const Series& s, int colourIndex, const Look& look, Keep& keep, const std::string& id) {
+    inline void curve(const Series& s, const Pen& pen, const Look& look, Keep& keep, const std::string& id) {
+        const int colourIndex = pen.colour;
         for (TH1D* h : segments(s, keep, id)) {
-            h->SetLineColor(colourIndex), h->SetLineWidth(look.width);
+            h->SetLineColor(colourIndex), h->SetLineWidth(pen.width), h->SetLineStyle(pen.line);
             h->Draw("HIST ][ SAME");                    // ][: a run does not drop to the axis at its ends
             if (look.s.errors == "band") {
                 auto* band = static_cast<TH1D*>(keep.hold(h->Clone()));
@@ -194,7 +214,7 @@ namespace Paint {
         }
         if (look.s.errors != "bars") return;
         auto* bars = points(s, keep, false);
-        bars->SetLineColor(colourIndex), bars->SetLineWidth(look.width), bars->SetMarkerSize(0);
+        bars->SetLineColor(colourIndex), bars->SetLineWidth(pen.width), bars->SetMarkerSize(0);
         bars->Draw("PZ");
     }
 
@@ -210,6 +230,7 @@ namespace Paint {
         std::string label;
         int colour;
         bool data, drawn;
+        int line = 1, width = 0;                      // the curve's pen (0: the style's width)
     };
 
     // mkhtml's legend: no frame, the title as its header, and a "+" beside each entry — on the right
@@ -271,16 +292,17 @@ namespace Paint {
             auto* l = keep.hold(new TLatex(x, at, t.c_str()));
             l->SetNDC(), l->SetTextFont(look.font), l->SetTextSize(size), l->SetTextAlign(align), l->Draw();
         };
-        auto line = [&](double x1, double y1, double x2, double y2, int colourIndex) {
+        auto line = [&](double x1, double y1, double x2, double y2, int colourIndex, int style = 1, int width = 0) {
             auto* l = keep.hold(new TLine(x1, y1, x2, y2));
-            l->SetNDC(), l->SetLineColor(colourIndex), l->SetLineWidth(look.width), l->Draw();
+            l->SetNDC(), l->SetLineColor(colourIndex), l->SetLineWidth(width ? width : look.width), l->SetLineStyle(style);
+            l->Draw();
         };
         if (!title.empty()) text(x0, yTop - 0.5 * first, title, right ? 32 : 12, look.header);
         double y = yTop - first - 0.5 * dy;
         for (const auto& e : entries) {
             const double s1 = right ? x0 - sw : x0, s2 = right ? x0 : x0 + sw, xc = 0.5 * (s1 + s2);
             if (e.drawn) {
-                line(s1, y, s2, y, e.colour);
+                line(s1, y, s2, y, e.colour, e.line, e.width);   // the curve's line; the bar stays solid
                 line(xc, y - 0.4 * dy, xc, y + 0.4 * dy, e.colour);
                 if (e.data) {
                     auto* m = keep.hold(new TMarker(xc, y, s.marker));
@@ -355,11 +377,12 @@ namespace Paint {
             dataPoints(*data, look, keep);
             entries.push_back({data->label, colour(st.dataColour), true, true});
         }
+        const std::vector<Pen> pen = pens(page.curves, look);
         for (size_t c = 0; c < curves.size(); ++c) {
-            const int colourIndex = colour(st.palette[c % st.palette.size()]);
-            curve(curves[c], colourIndex, look, keep, "c" + std::to_string(c));
+            curve(curves[c], pen[c], look, keep, "c" + std::to_string(c));
             const bool drawn = std::any_of(curves[c].y.begin(), curves[c].y.end(), [](double v) { return std::isfinite(v); });
-            entries.push_back({drawn ? curves[c].label : curves[c].label + " (no entries)", colourIndex, false, drawn});
+            entries.push_back({drawn ? curves[c].label : curves[c].label + " (no entries)", pen[c].colour, false, drawn,
+                               pen[c].line, pen[c].width});
         }
         std::vector<const Series*> drawn;
         if (data) drawn.push_back(&*data);
@@ -389,7 +412,7 @@ namespace Paint {
             rframe->GetYaxis()->SetNdivisions(st.divisions), rframe->GetYaxis()->SetDecimals(st.decimals);
             if (data) dataPoints(reference, look, keep, &reference);          // the data at 1, with their errors
             for (auto& [c, ratio] : ratios)
-                curve(ratio, colour(st.palette[c % st.palette.size()]), look, keep, "r" + std::to_string(c));
+                curve(ratio, pen[c], look, keep, "r" + std::to_string(c));
             bottom->RedrawAxis();
         }
 

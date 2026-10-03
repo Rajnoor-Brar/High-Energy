@@ -383,6 +383,13 @@
       "description": "one per value: legend text",
       "type": "array"
      },
+     "styles": {
+      "description": "one per value: its curves' look, { colour, line, width } (V67)",
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
      "key": {
       "description": "the native key, or { <tool or tag> = key }",
       "type": [

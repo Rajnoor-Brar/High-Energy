@@ -20,6 +20,8 @@ namespace Paint {
 
     struct Source {
         std::string file, object, raw, label;
+        std::string colour, line;            // a curve's own (V67: a quantity value's style); "": the style's
+        double width = 0;                    // points; 0: the style's
     };
 
     struct Page {
@@ -86,8 +88,18 @@ namespace Paint {
         if (auto* curves = doc["curve"].as_array()) {
             for (auto& node : *curves) {
                 const auto& c = *node.as_table();
-                page.curves.push_back({c["file"].value_or(std::string("")), c["object"].value_or(std::string("")),
-                                       c["raw"].value_or(std::string("")), c["label"].value_or(std::string(""))});
+                Source source{c["file"].value_or(std::string("")), c["object"].value_or(std::string("")),
+                              c["raw"].value_or(std::string("")), c["label"].value_or(std::string(""))};
+                if (const auto* look = c["style"].as_table()) {
+                    source.colour = (*look)["colour"].value_or(std::string(""));
+                    if (const auto number = (*look)["colour"].value<int64_t>()) source.colour = std::to_string(*number);
+                    source.line = (*look)["line"].value_or(std::string(""));
+                    source.width = (*look)["width"].value_or(0.0);
+                    if (!source.line.empty() && source.line != "solid" && source.line != "dashed" &&
+                        source.line != "dotted" && source.line != "dashdot")
+                        throw std::runtime_error(path + ": a curve's style.line must be solid, dashed, dotted or dashdot");
+                }
+                page.curves.push_back(source);
             }
         }
         if (page.curves.empty()) throw std::runtime_error(path + ": a page needs at least one [[curve]]");

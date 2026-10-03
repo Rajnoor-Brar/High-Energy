@@ -112,7 +112,8 @@ def validate(run) -> None:
     for name, table in settings.get("overlay", {}).items():
         check_style(table.get("style", {}), f"{where}.overlay.{name}.style")
     for name in names[1:] if names[0] == "root" else names:
-        backend(name).validate(settings, beside_root=names[0] == "root")
+        backend(name).validate(settings, beside_root=names[0] == "root",
+                               curve_styles=[s for q in run.quantities.values() for s in q.styles])
     data = settings.get("data", {})
     if data and not data.get("map"):
         raise HepError("[plot.data] names a file but no map", where=f"{where}.data",
@@ -382,7 +383,8 @@ def pages(run, configuration, plans) -> list[Page]:
                 {"file": str(merged), "object": f"{plan.point.name}/{root_name(full)}",
                  **({"raw": f"{plan.point.name}/RAW/{root_name(full)}"} if "/RAW" + full in raws[plan.point.name] else {}),
                  "label": _curve_label(run, plan, curve_groups, curve_fill(plan))
-                          + (f" [{full.strip('/').split('/')[0].partition(':')[2]}]" if plan.point.name in several else "")}
+                          + (f" [{full.strip('/').split('/')[0].partition(':')[2]}]" if plan.point.name in several else ""),
+                 **({"style": look} if (look := _curve_look(run, plan, curve_groups)) else {})}
                 for plan, full in curves]}
             if reference:
                 document["data"] = {"file": str(data_file), "object": root_name(reference),
@@ -518,6 +520,17 @@ def page_settings(settings: dict, path: str, rel: str, output: Path, with_data: 
 
 def _gutter(value):
     return value if value == "default" else float(value)
+
+
+def _curve_look(run, plan, curve_groups) -> dict:
+    """A curve's own look (V67): the styles of its curve axes' values at its point, a later axis's key
+    over an earlier's. Empty: the page style's palette, in turn."""
+    look: dict = {}
+    for group in curve_groups:
+        for name in group:
+            if run.quantities[name].styles:
+                look.update(run.quantities[name].styles[plan.point.choice[name]])
+    return look
 
 
 def _curve_label(run, plan, curve_groups, fill=lambda text: text) -> str:

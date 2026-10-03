@@ -296,3 +296,16 @@ def test_many_pages_in_one_paint_each_with_its_outcome_and_ranges(inputs):
     for config in (good, other):
         written = json.loads(Path(str(config) + ".ranges.json").read_text())
         assert written == dump(config)
+
+
+def test_a_curve_may_have_its_own_look(inputs):
+    """V67: a curve's style (colour, line, width) is drawn; an unknown line is the page's error."""
+    config = page(inputs, "d01-x01-y01")
+    document = tomllib.loads(config.read_text(encoding="utf-8"))
+    document["curve"][0]["style"] = {"colour": "#109618", "line": "dashed", "width": 2.0}
+    config.write_text(tomli_w.dumps(document), encoding="utf-8")
+    assert subprocess.run([str(PAINT), str(config)], capture_output=True).returncode == 0
+    document["curve"][1]["style"] = {"line": "wavy"}
+    config.write_text(tomli_w.dumps(document), encoding="utf-8")
+    done = subprocess.run([str(PAINT), str(config)], capture_output=True, text=True, encoding="utf-8")
+    assert done.returncode == 1 and "style.line" in done.stdout + done.stderr

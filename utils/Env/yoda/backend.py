@@ -45,8 +45,13 @@ MARK = "# ratio ticks: ratio.divisions (utils/Env/yoda/backend.py)"
 TITLE_MARK = "# titles: title, title_left, title_right (utils/Env/yoda/backend.py)"
 
 
-def validate(settings: dict, beside_root: bool = False) -> None:
+def validate(settings: dict, beside_root: bool = False, curve_styles: list[dict] = ()) -> None:
     hint = 'rivet-mkhtml has its own look; drop the key, or use backend = "root"'
+    for look in curve_styles:                         # V67: matplotlib takes #rrggbb, not ROOT's names
+        colour = look.get("colour")
+        if colour is not None and not re.fullmatch(r"#[0-9A-Fa-f]{6}", str(colour)):
+            raise HepError(f"the yoda backend cannot draw the curve colour {colour!r}", where="[quantities].styles",
+                           hint='write it as "#rrggbb", which both backends draw')
     if "root_style" in settings and not beside_root:
         raise HepError('[plot].root_style cannot be honoured by backend = "yoda"', where="[plot].root_style", hint=hint)
     layers = [("[plot.style]", settings.get("style", {}))] + [
@@ -322,11 +327,18 @@ def draw(cells: dict, settings: dict, say) -> int:
     return failed
 
 
+def _pen(look: dict) -> str:
+    """A curve's own look (V67) as mkhtml's per-file keys; a curve without a colour takes its cycle."""
+    keys = {"colour": "LineColor", "line": "LineStyle", "width": "LineWidth"}
+    return "".join(f":{keys[k]}={v}" for k, v in look.items())
+
+
 def _cell(yoda, pages: list, work: Path, outdir: Path, settings: dict, say) -> int:
     """The pages of one cell in one mkhtml run; returns how many were not drawn."""
     # one file per point (its variants are curves mkhtml draws from it); labels by point
     sources = list(dict.fromkeys(s for page in pages for s in page.sources))
     label_of = {s: c["label"].split(" [")[0] for page in pages for s, c in zip(page.sources, page.document["curve"])}
+    look_of = {s: c.get("style", {}) for page in pages for s, c in zip(page.sources, page.document["curve"])}
     labels = [label_of[s] for s in sources]
     curves = [_voided(yoda, source, pages, work / f"{i:02d}_{source.parent.name}.yoda")
               for i, source in enumerate(sources)]
@@ -334,12 +346,14 @@ def _cell(yoda, pages: list, work: Path, outdir: Path, settings: dict, say) -> i
     formats = settings.get("formats", ["pdf"])
     argv += [x for f in (["pdf"] if formats == "default" else formats) if FORMATS[f] for x in ("-f", FORMATS[f])]
     argv += [] if any(p.document["page"]["ratio"] for p in pages) else ["--no-ratio"]
-    argv += [f"{path}:Title={mathtext(label)}" for path, label in zip(curves, labels)]
+    argv += [f"{path}:Title={mathtext(label)}" + _pen(look_of[source])
+             for path, label, source in zip(curves, labels, sources)]
 
     references = [_reference(yoda, page) for page in pages if page.data and page.ranges.get("data_bins", 0) > 0]
     if references:
         yoda.write(references, str(work / "reference.yoda"))
-        argv += [str(work / "reference.yoda"), "--reflabel", mathtext(canonical(settings.get("data", {}).get("legend", "Data")))]
+        legend = next(p.document["data"]["label"] for p in pages if "data" in p.document)   # filled, LaTeX (V66)
+        argv += [str(work / "reference.yoda"), "--reflabel", mathtext(legend)]
     voided, cache = dict(zip(sources, curves)), {}
 
     def objects(path):

@@ -226,6 +226,11 @@ doc   = "one per value: folder and point names"
 type  = "list"
 doc   = "one per value: legend text"
 
+[quantity.styles]
+type  = "list"
+items = "table"
+doc   = "one per value: its curves' look, { colour, line, width } (V67)"
+
 [quantity.key]
 type = "str|table"
 doc  = "the native key, or { <tool or tag> = key }"

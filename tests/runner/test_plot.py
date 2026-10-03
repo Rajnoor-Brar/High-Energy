@@ -347,3 +347,30 @@ def test_a_page_text_that_differs_between_its_curves_is_refused():
         plot.filler([{"q:pdf": "MSTW"}, {"q:pdf": "NNPDF"}], "here")("{q:pdf}")
     with pytest.raises(HepError, match="nothing the points have"):
         plot.filler([{"opt:ETMIN": "17"}], "here")("{opt:ETMN}")
+
+
+def test_a_quantity_value_has_its_own_curve_look(scratch):
+    """V67: styles = [...], one per value, reach the value's curves; a later curve axis's key wins."""
+    from helpers import plan
+    styles = [{"colour": "#EE3311", "line": "dashed"}, {"width": 2.0, "colour": "default"}]
+    data = raw(run__one__sweeps=["pdf"], quantities__pdf__styles=styles)
+    run, _, first = plan(data, scratch)
+    _, _, second = plan(data, scratch, point=1)
+    assert plot._curve_look(run, first, [["pdf"]]) == {"colour": "#EE3311", "line": "dashed"}
+    assert plot._curve_look(run, second, [["pdf"]]) == {"width": 2.0}          # "default": the palette's colour
+    assert plot._curve_look(run, first, []) == {}
+
+
+@pytest.mark.parametrize("styles, message", [
+    ([{"line": "wavy"}, {}], "is not one"), ([{"colour": "#EE3311"}], "one entry per value"),
+    ([{"color": "#EE3311"}, {}], "did you mean 'colour'"), ([{"width": 0}, {}], "is not one")])
+def test_a_curve_look_is_checked(scratch, styles, message):
+    with pytest.raises(HepError, match=message):
+        parse(raw(quantities__pdf__styles=styles), scratch)
+
+
+def test_the_yoda_backend_draws_hex_colours_only(scratch):
+    run = parse(raw(plot={"backend": "both"}, quantities__pdf__styles=[{"colour": "kRed"}, {}]), scratch)
+    with pytest.raises(HepError, match="cannot draw the curve colour"):
+        plot.validate(run)
+    plot.validate(parse(raw(plot={"backend": "both"}, quantities__pdf__styles=[{"colour": "#EE3311"}, {}]), scratch))
