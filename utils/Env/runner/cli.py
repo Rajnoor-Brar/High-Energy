@@ -98,6 +98,7 @@ def build_plans(args, key: str | None) -> Planned:
     record.assign_seeds(plans, frozenset(p.point.name for p in plans if again and p.point.index in chosen))
     for plan in plans:
         tools.finalise(plan, plan.seed)
+        tools.check_cards(plan)                  # the tools read their cards (V59), cached by text
     return Planned(run, configuration, plans, [p for p in plans if p.point.index in chosen],
                    post.plan(run, configuration, master, plans), pre_plan,
                    post.plan_combined(run, configuration, master, plans))
@@ -144,6 +145,8 @@ def print_plan(run, configuration, plans, post_plan=None, pre_plan=None, combine
           f"{configuration.event_count} events, {configuration.threads} threads" + parallel_note(configuration, plans))
     if crowded(configuration, plans):
         print(f"note: {crowded(configuration, plans)}")
+    for note in notes_of(plans):
+        print(f"note: {note}")
     if configuration.seed_type != "identity":
         print(f"seeds: {configuration.seed_type}")
     if configuration.manual_seed is not None and configuration.seed_type != "manual":
@@ -175,6 +178,11 @@ def print_why(run, configuration, plans, post_plan=None, pre_plan=None, combined
         print(f"{plan.point.name}   identity {plan.identity[:12]}")
         for line in record.why(plan):
             print(f"  {line}")
+
+
+def notes_of(plans) -> list[str]:
+    """What the plans say once (V59): a base card's line the runner overrides, …; each note once."""
+    return list(dict.fromkeys(note for plan in plans for note in plan.notes))
 
 
 def catch_signals(stopper: execute.Stopper) -> None:
@@ -324,6 +332,8 @@ def run_one(args, key: str, stopper: execute.Stopper, *, number: int = 0, follow
     shown.begin(len(plans), title, header=title_line)
     if crowded(configuration, plans):
         shown.say(f"   note: {crowded(configuration, plans)}")
+    for note in notes_of(plans):
+        shown.say(f"   note: {note}")
     if journal:
         journal.write("", "", {"k": "run", "state": "started", "points": len(plans), "title": title,
                                **({"header": title_line} if title_line else {})})

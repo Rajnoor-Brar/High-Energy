@@ -304,6 +304,10 @@ doc  = "it can read a FIFO"
 type = "bool"
 doc  = "its event count is checked against the producer's"
 
+[tool.settings]
+type = "table"
+doc  = "native card settings, as written: \"HeavyIon:mode\" = 1 (over the base card, under quantities)"
+
 [tool.shards]
 type    = "int"
 min     = 1

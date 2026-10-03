@@ -499,6 +499,7 @@ analyses    = ["photo_eic"]        # a key of the rivet folder's [options]
 | `streamable` | bool | the folder's | may it read a FIFO? |
 | `consumes_events` | bool | the folder's | is its event count checked against the producer's sidecar? |
 | `shards` | integer ≥ 1 | 1 | K > 1: K processes of this tool, each on a share of the events, merged into its `output_file` by the folder's merge tool (V31; rivet, [05 §3.1](05_Tools_Reference.md#31-sharded-rivet-shards--k)). The chain is unchanged. |
+| `settings` | table | `{}` | native card settings as written, `"HeavyIon:mode" = 1`, with no base card needed: over the base card, refused when a quantity sets the same key (one source per key, C8); a tool with no card refuses them (V59) |
 | `executable` | string | the folder's | custom and module: bare → `build/<project>/<name>` (must be built); `path:<command>` → `PATH` |
 | `arguments` | array | `[]` | custom and module: argv after the config; placeholders (§10) |
 | `consumes` | array of names | `[]` | custom and module: quantities written into the config |

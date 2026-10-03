@@ -42,6 +42,7 @@ class Tool:
     streamable: bool | None = None
     consumes_events: bool | None = None
     shards: int = 1                                  # K > 1: K processes on a share of the events each (V31)
+    settings: dict = field(default_factory=dict)     # native card settings, as written (V59)
     extra: dict = field(default_factory=dict)       # tool-specific keys and export requests
 
 
@@ -403,6 +404,7 @@ def parse(raw: dict, path: Path) -> RunConfig:
                           arguments=list(table.get("arguments", [])), consumes=list(table.get("consumes", [])),
                           config=table.get("config"), streamable=table.get("streamable"),
                           consumes_events=table.get("consumes_events"), shards=int(table.get("shards", 1)),
+                          settings=dict(table.get("settings", {})),
                           extra=extras)
 
     static = raw.get("static", {})

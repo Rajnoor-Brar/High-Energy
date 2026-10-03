@@ -189,18 +189,43 @@ def test_path_prefix_takes_the_command_from_path(scratch):
         plan(data, scratch)
 
 
-def test_the_combined_card_carries_the_base_settings_without_comments(scratch):
-    """V54: the card that runs is the base's settings, under one `! from <base>` line, then the point card."""
+def test_the_combined_card_holds_each_key_once(scratch):
+    """V54, V59: the card on disk is the base's settings without comments, each key once (a base line
+    the point card sets is left out: the point card's value is the one used), then the point card."""
+    import json
+    from runner import tools
     _, _, p = plan(raw(), scratch)
     step = p.rendered["pythia"]
     combined = p.writes[step.card_combined].splitlines()
-    base = step.card_base[0]
-    assert combined[0] == f"! from {base}"
-    settings = [line for line in combined[1:] if not line.startswith("!")]
-    assert settings and all(line.strip() and line.strip()[0].isalnum() for line in settings)
-    assert not any(" ! " in line for line in settings)                         # trailing comments gone
-    kept = [l.split("!")[0].rstrip() for l in base.read_text().splitlines() if l.strip()[:1].isalnum()]
-    assert settings[:len(kept)] == kept                                        # every setting, in order
+    assert combined[0] == f"! from {step.card_base[0]}"
+    parse = tools.card_parser(step.folder)
+    keys = [parsed[0] for parsed in map(parse, combined) if parsed]
+    assert len(keys) == len(set(keys))                                         # every key once
+    assert "main:numberofevents" in keys and not any(" ! " in l for l in combined if not l.startswith("!"))
+    settings = json.loads(p.writes[step.card_combined.with_suffix(".json")])
+    assert settings["Main:numberOfEvents"] == {"value": "10", "from": "built-in events"}
+    assert settings["PhaseSpace:pTHatMin"]["from"].startswith("photo_ep.cmnd:")
+    assert any("which the runner sets" in note for note in p.notes) is ("Random:seed" in step.card_base[0].read_text())
+
+
+def test_repeatable_commands_are_kept_every_time(scratch):
+    from runner import tools
+    base = scratch / "b.cmnd"
+    base.write_text("23:onMode = off\n23:onIfMatch = 11 -11\n23:onIfMatch = 13 -13\nPDF:pSet = 13\n", encoding="utf-8")
+    data = raw(tools__pythia__baseconfig=str(base), tools__pythia__settings={"23:onIfMatch": "15 -15", "PDF:pSet": 8})
+    _, _, p = plan(data, scratch)
+    card = p.writes[p.rendered["pythia"].card_combined]
+    assert card.count("23:onIfMatch") == 3 and card.count("PDF:pSet") == 1 and "PDF:pSet = 8" in card
+
+
+def test_settings_reach_the_card_and_a_second_source_is_refused(scratch):
+    _, _, p = plan(raw(tools__pythia__settings={"HeavyIon:mode": 1}), scratch)
+    assert "HeavyIon:mode = 1" in p.writes[p.rendered["pythia"].card_point]
+    data = raw(tools__pythia__settings={"PDF:pSet": 8}, run__one__sweeps=["pdf"])
+    with pytest.raises(HepError, match="set by both"):
+        plan(data, scratch)
+    with pytest.raises(HepError, match="no card for settings"):
+        plan(raw(tools__rivet__settings={"x": 1}), scratch)
 
 
 def test_a_tcl_comment_line_inside_braces_is_kept(scratch):
@@ -210,3 +235,18 @@ def test_a_tcl_comment_line_inside_braces_is_kept(scratch):
     folder = tools.folders()["delphes"]
     assert tools.clean_base(card, folder) == [f"# from {card}", "set ExecutionPath {", "  A", "#  B", "}",
                                               "set X 1  # not a comment in Tcl"]
+
+
+@pytest.mark.skipif(not (Path(__file__).resolve().parents[2] / "build" / "App_PythiaCheck.exe").exists(),
+                    reason="make utils/App_PythiaCheck.exe")
+def test_pythia_reads_the_card_and_a_rejected_line_names_its_source(scratch, monkeypatch):
+    """V59: [checks] card. Pythia's own reader, so a nucleus or an id:new particle needs no list of ours."""
+    from runner import tools
+    monkeypatch.setenv("HEKIT_OUTPUT", str(scratch / "output"))
+    _, _, good = plan(raw(tools__pythia__settings={"9999999:new": "x void 1 0 0 1.0", "9999999:m0": 2.0,
+                                                    "HeavyIon:mode": 1}), scratch)
+    tools.check_cards(good)                                                 # no error: every line read
+    _, _, bad = plan(raw(tools__pythia__settings={"PDF:pSett": 13}), scratch)
+    with pytest.raises(HepError, match=r"rejects 1 line.*'PDF:pSett = 13' \(\[tools.pythia\].settings\)"):
+        tools.check_cards(bad)
+    assert list((scratch / "output").glob("*/.cache/checks/pythia/*.json"))   # cached by the card's text

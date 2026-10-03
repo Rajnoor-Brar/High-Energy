@@ -55,8 +55,23 @@ output_file = "events.hepmc"         # a [prelim] FIFO or file; an array fans ou
 - **Runs** `build/App_Pythia.exe <outputs> <base cards…> <point card>` (§15): the base cards in
   order, then the point card, so its settings win.
 - **Card** (`cards/pythia.point.cmnd`, and `cards/pythia.cmnd` = base + point): a header comment,
-  one `Key = value` line per consumed value (`on`/`off` for bools), the footer, then the seeds:
-  `Random:setSeed = on`, `Random:seed = <seed>`, and at threads > 1 `Parallelism:seeds = {…}`.
+  one `Key = value` line per consumed value and per `settings` entry (`on`/`off` for bools), the
+  footer, then the seeds: `Random:setSeed = on`, `Random:seed = <seed>`, and at threads > 1
+  `Parallelism:seeds = {…}`. **`cards/pythia.cmnd` holds each key once** (V59, `[card] merge`): the
+  base cards' settings without comments, less each key the point card sets, then the point card; the
+  particle-data commands that add up (`id:onIfMatch` and the rest of `[card] repeatable`) are kept
+  every time. `cards/pythia.json` gives each key's value and where it came from (`photo_ep.cmnd:34`,
+  `[quantities.pdf] = NNPDF23lo`, `built-in events`, `[tools.pythia].settings`). App_Pythia still
+  reads the base cards and the point card (the argv, and so the identity, are unchanged), which
+  gives the same settings.
+- **Keys the runner sets** (`[card] owned`: `Main:numberOfEvents`, `Parallelism:numThreads`, the
+  `Random:` seeds, `Parallelism:seeds`, `Beams:LHEF`): a base card's line for one of them is never
+  used, and `--plan` and the run say so (V59).
+- **Checked** (`[checks] card`, V59): `build/App_PythiaCheck.exe` gives every line of the card (base
+  settings and point card, before seeds) to Pythia's own reader, at plan time; a line Pythia rejects
+  (a key it does not know, a value of the wrong kind, a particle its table lacks) refuses the plan,
+  with the line's source. No list of keys is kept: a nucleus or an `id:new` particle earlier in the
+  card is read as Pythia reads it. Answers are cached by the card's text in `output/<P>/.cache/checks/`.
 - **Footer** `Beams:LHEF = <input>`, only when the tool has an input: a shower of an LHE file from
   an earlier group (MadGraph); the base card sets `Beams:frameType = 4`.
 - **Consumes** through the master: `energies`, `sqrts`, `beam_a`, `beam_b`, `beams`, `pdf`
