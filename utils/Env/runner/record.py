@@ -162,8 +162,7 @@ def seed_basis(plan: PointPlan, replica: bool = True) -> str:
     for _, step in sorted(plan.rendered.items()):
         if not step.folder.get("tool", "produces_events"):      # the generators, not Delphes
             continue
-        parts = {k: v for k, v in step.identity_parts.items()
-                 if k != "argv" and not k.startswith("_") and (replica or k != "replica")}
+        parts = {k: v for k, v in step.identity_parts.items() if k != "argv" and (replica or k != "replica")}
         comment = step.folder.get("card", "comment", "")
         if comment and "card" in parts:                  # the header comment names the point
             parts["card"] = [line for line in parts["card"] if not line.startswith(comment)]

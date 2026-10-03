@@ -11,6 +11,15 @@ ext     = "cmnd"
 comment = "!"
 drop    = '^\s*[^A-Za-z0-9\s]'   # Pythia reads a line only when it starts with a letter or digit
 trailing = '\s+!.*$'
+# The combined card holds each key once (V59): a base setting the point card sets is left out of it.
+# These particle-data commands add up instead of replacing (three 23:onIfMatch lines all apply), so
+# every one is kept, in order.
+merge      = true
+repeatable = ["onIfAny", "onIfAll", "onIfMatch", "offIfAny", "offIfAll", "offIfMatch", "addChannel",
+              "oneChannel", "all", "new", "rescaleBR"]
+# What the runner sets: a base card's value of these is never used (--plan says so, V59)
+owned      = ["Main:numberOfEvents", "Parallelism:numThreads", "Random:setSeed", "Random:seed",
+              "Parallelism:seeds", "Beams:LHEF"]
 bools   = ["on", "off"]
 # Seeds from the point's identity (02 §8). Random:seed is always written, so a serial Pythia in an
 # integrated program is seeded too; PythiaParallel reads Parallelism:seeds (L4).
@@ -30,6 +39,9 @@ deal    = true                      # it can deal events among a sharded tool's 
 
 [exports.cmnd]
 alias = "card"                      # pythia_cmnd = pythia_card
+
+[checks]
+card = ["{repo}/build/App_PythiaCheck.exe", "{card}"]   # Pythia reads the card and names what it rejects (V59)
 
 [identity]
 files   = ["{exe}"]

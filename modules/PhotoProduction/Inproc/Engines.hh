@@ -10,6 +10,7 @@
 //   L3  Nothing may leave a callback: the first exception is kept and returned.
 //   L5  Main:numberOfEvents counts attempts, and failed events never reach Rivet.
 //   L6  run() goes in chunks of 100 × threads, as App_Pythia, so the instances see the same work.
+// The threads, the seed check and the chunk are utils/PythiaRun.hh's, App_Pythia's own (V63).
 
 #include "Module.hh"
 #include "Inproc/Analysis.hh"
@@ -96,7 +97,7 @@ namespace Inproc {
         } catch (...) {
             run.error = detail::describe(std::current_exception());
         }
-        run.sigma = Stamper::final({&pythia});
+        run.sigma = PythiaRun::final({&pythia});
         pythia.stat();
         return run;
     }
@@ -107,7 +108,9 @@ namespace Inproc {
         pythia.readString("Parallelism:processAsync = on");                  // as App_Pythia
         Run run;
         run.requested = pythia.settings.mode("Main:numberOfEvents");
-        run.threads = std::max(1, pythia.settings.mode("Parallelism:numThreads"));
+        run.threads = PythiaRun::threads(pythia.settings);                   // ≤ 0: every core, as App_Pythia
+        if (const std::string wrong = PythiaRun::checkSeeds(pythia.settings, run.threads); !wrong.empty())
+            job.fail(Module::Config, wrong);                                 // L4
         job.status().phase("init", std::to_string(run.threads) + " threads, " + std::to_string(rivet.threads()) + " Rivet");
         if (!pythia.init()) job.fail(Module::Init, "Pythia initialisation failed");
 
@@ -134,7 +137,7 @@ namespace Inproc {
 
         rivet.start();
         job.status().phase("generating", std::to_string(run.requested) + " events");
-        const long chunk = 100L * run.threads;                               // L6
+        const long chunk = PythiaRun::chunk(run.threads);                    // L6
         detail::Report report;
         while (run.attempted < run.requested && !job.stopping() && !failed && !rivet.failed()) {
             for (long count : pythia.run(std::min(chunk, run.requested - run.attempted), onEvent))
@@ -145,7 +148,7 @@ namespace Inproc {
 
         std::vector<Pythia8::Pythia*> instances;
         pythia.foreach([&](Pythia8::Pythia* instance) { instances.push_back(instance); });
-        run.sigma = Stamper::final(instances);
+        run.sigma = PythiaRun::final(instances);
         pythia.stat();
         return run;
     }

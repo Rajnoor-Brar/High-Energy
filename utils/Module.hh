@@ -228,7 +228,11 @@ namespace Module {
             const double s = std::chrono::duration<double>(std::chrono::steady_clock::now() - started_).count();
             status().progress(done, total, s > 0 ? done / s : 0.0, done == 0 || done == total);
         }
-        void setCrossSection(double pb, double errPb) { lastPb_ = pb, lastErrPb_ = errPb; }
+        // `from` is what the report's sigma_from says: "events" (the last event's, L2) or, for an
+        // integrated program, "generator" (the run's own combination).
+        void setCrossSection(double pb, double errPb, const char* from = "events") {
+            lastPb_ = pb, lastErrPb_ = errPb, sigmaFrom_ = from;
+        }
         void countEvent(double weight) { ++count_, sumW_ += weight; }
 
         [[noreturn]] void fail(int code, const std::string& message = "") {
@@ -247,7 +251,7 @@ namespace Module {
                 report.precision(12);
                 report << "{\n  \"events\": " << count_ << ",\n  \"sum_w\": " << sumW_ << ",\n  \"sigma_pb\": "
                        << crossSectionPb() << ",\n  \"sigma_err_pb\": " << crossSectionErrPb()
-                       << ",\n  \"sigma_from\": \"" << (haveSidecar_ ? "sidecar" : "events") << "\",\n  \"input\": "
+                       << ",\n  \"sigma_from\": \"" << (haveSidecar_ ? "sidecar" : sigmaFrom_) << "\",\n  \"input\": "
                        << Status::quote(input_) << ",\n  \"stopped\": " << (stopping() ? "true" : "false") << "\n}\n";
                 ok = ok && report.good();
             }
@@ -306,6 +310,7 @@ namespace Module {
         long expected_ = 0, count_ = 0;
         double sumW_ = 0, lastPb_ = 0, lastErrPb_ = 0, sidecarPb_ = 0, sidecarErrPb_ = 0;
         bool haveSidecar_ = false;
+        std::string sigmaFrom_ = "events";
         std::shared_ptr<HepMC3::Reader> reader_;
         HepMC3::GenEvent event_;
         Event current_;

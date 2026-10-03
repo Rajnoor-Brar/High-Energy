@@ -19,7 +19,7 @@ checked **at plan time**, before any process starts: `hep run … --plan` runs e
 |---|---|---|
 | native base cards: `configs/<P>/*.cmnd`, `.in`, `.yaml`, `.sin`, `.mg5`, `.tcl` | the physics | you; never modified by the runner |
 | the run TOML: `configs/<P>/<run>.toml` | configurations, quantities, tools, wiring, plots | you |
-| `utils/Env/master.toml`, optionally overlaid by a project's master | how each standard tool consumes named quantities (§3) | the framework; a project may add to it |
+| `utils/Env/quantities.toml` (what each quantity name means) and each tool folder's `quantities.toml` (how that tool consumes it), optionally overlaid by a project's master | how each standard tool consumes named quantities (§3) | the framework; a project may add to it |
 | `utils/Apps/Paint/base.toml`, optionally a style file | the look of the ROOT pages (§12) | the framework; you, to change every page |
 
 **Physics stays in the native card.** A quantity renders an *override* into a point card; the base
@@ -29,7 +29,7 @@ YAML merge for Sherpa, …; see [05](05_Tools_Reference.md)).
 **Precedence of a value, lowest to highest:**
 
 ```
-utils/Env/master.toml  <  [master].master_toml  <  [quantities.<q>].key / target  <  --set
+utils/Env/<tool>/quantities.toml  <  [master].master_toml  <  [quantities.<q>].key / target  <  --set
 [static]  <  [run.<cfg>].static  <  --set static.<q>=…  <  the value a sweep gives the point
 [run].event_count, threads  <  [run.<cfg>].event_count, threads  <  --set
 base.toml  <  [plot].root_style file  <  [plot.style]  <  [plot.object."<glob>"].style
@@ -57,7 +57,7 @@ Every key that takes a path has **one** convention root. There is no search path
 | `[master].master_toml` | `configs/<project>/` | `master.toml` |
 | `[tools.*].baseconfig` | `configs/<project>/` | `photo_ep.cmnd` |
 | `[tools.*].executable` | `build/<project>/`, which must exist; `path:<command>` asks for a command on `PATH` by name (V54) | `Lambda.exe` → `build/Lambda/Lambda.exe`; `path:python3` |
-| `[tools.*].status = "filters:<file>"` | `configs/<project>/` | `filters:fit_filters.toml` |
+| `[tools.*].filters` | `configs/<project>/` | `fit_filters.toml` |
 | `[prelim].fifo`, `[prelim].files` | the point's **output** directory | `events.hepmc` |
 | `[tools.*].input` | a `[prelim]` name or another tool's `output_file` by name; otherwise a path under the point's output directory | `events.hepmc` |
 | `[tools.*].output_file` | a `[prelim]` name → the point's output directory; **any other name → the point's results directory** (a product) | `photo.yoda` → `results/…/<point>/photo.yoda` |
@@ -92,16 +92,23 @@ include     = ["common.toml"]    # optional: run TOMLs whose tables this one sta
 
 | Key | Type | Default | Notes |
 |---|---|---|---|
-| `master_toml` | string (path) | none | overlays `utils/Env/master.toml` key by key: an entry for a (tool, quantity) pair replaces the framework's. The file must exist. |
+| `master_toml` | string (path) | none | overlays the tool folders' mappings key by key (`[quantities.<tool>.compatible_quantities]`): an entry for a (tool, quantity) pair replaces the framework's. The file must exist. |
 | `include` | string or array (paths) | none | files under `configs/<project>/` (`.toml` optional) whose tables the run starts from, in order; **this file wins** (V56). A quantity, tool table or configuration of the file replaces the included one whole; `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively. An included file has no `[master]` of its own. `--show-config` lists what came from where. |
 
-A master TOML maps a **quantity name** to what it means for one **tool type**:
+**The vocabulary** (`utils/Env/quantities.toml`, V58) says what each quantity name means for every
+tool: its **shape** (`energies`: two numbers, `[beam A, beam B]`; `beams`: two PDG ids; `pdf`: a string or
+a set number) and **unit**. A run TOML's quantity of that name is checked against the shape when the
+file is read (`[[275, 18]]`, not `[275, 18]`). A name the vocabulary does not have is the user's own,
+reaching a tool through its `key` or `target` (§8.1). **Each tool folder** says how that tool consumes
+the vocabulary, in `utils/Env/<tool>/quantities.toml`; a project master overlays those mappings in the
+same form:
+
 
 ```toml
 [quantities.pythia.compatible_quantities]           # [quantities.<tool>.compatible_quantities]
 sqrts    = { key = "Beams:eCM" }                      # the card line  Beams:eCM = value
 energies = { keys = ["Beams:eA", "Beams:eB"] }        # an array value spread over several keys, in order
-pdf      = { key = "PDF:pSet", check = "pythia_pdf" }  # the value as written; a provider check (C10)
+pdf      = { key = "PDF:pSet", check = "lhapdf:pythia" }  # the value as written; a provider check (C10)
 
 [quantities.herwig.compatible_quantities]
 seed_offset = { flag = "-x" }                         # a command-line argument instead of a card line
@@ -109,25 +116,32 @@ seed_offset = { flag = "-x" }                         # a command-line argument 
 
 Each entry takes **exactly one** of `key`, `keys`, `flag` (`format` and `check` are additions).
 `check` is a provider check (C10), with the `lhapdf install <set>` line to type when a set is not
-under `LHAPDF_DATA_PATH`. `"lhapdf"` takes a bare set name, `<set>[/member]`, as Sherpa does.
-`"pythia_pdf"` takes the value exactly as Pythia's `PDF:pSet` reads it (V40: no prefix is added):
+under `LHAPDF_DATA_PATH`. `"lhapdf:bare"` takes a bare set name, `<set>[/member]`, as Sherpa does.
+`"lhapdf:pythia"` takes the value exactly as Pythia's `PDF:pSet` reads it (V40: no prefix is added; a number must be one of Pythia's own sets, V60):
 `"LHAPDF6:<set>[/member]"`, whose set must be installed; one of Pythia's own set numbers (`13`); or
 a grid file. A bare name that is an installed LHAPDF set is refused with the `LHAPDF6:` spelling,
-since Pythia would read it as a file. The `render` form mentioned in `master.toml`'s header is not
-implemented (F11): a tool with a `render.py` takes plain `key` mappings and interprets the keys
-itself (a YAML path for Sherpa, a SINDARIN variable for Whizard).
+since Pythia would read it as a file. A tool with a `render.py` takes plain `key` mappings and
+interprets the keys itself (a YAML path for Sherpa, a SINDARIN variable for Whizard).
 
-**What the framework's master maps** (`utils/Env/master.toml`):
+**What the tool folders map** (`utils/Env/<tool>/quantities.toml`):
 
 | Quantity | pythia | sherpa | herwig | whizard | madgraph |
 |---|---|---|---|---|---|
-| `energies` `[E_A, E_B]` | `Beams:eA`, `Beams:eB` | `BEAM_ENERGIES` | `Luminosity:BeamEMaxB`, `…MaxA` (×GeV) | `beams_momentum` | `ebeam1`, `ebeam2` |
+| `energies` `[E_A, E_B]` | `Beams:eA`, `Beams:eB` | `BEAM_ENERGIES` | `Luminosity:BeamEMaxA`, `…MaxB` (×GeV), in Herwig's slots (lepton on A) | `beams_momentum` | `ebeam1`, `ebeam2` |
 | `sqrts` | `Beams:eCM` | `BEAM_ENERGIES = [√s/2, √s/2]` | `Luminosity:Energy` | — | — |
 | `beam_a`, `beam_b` | `Beams:idA`, `Beams:idB` | — | — | — | — |
 | `beams` `[id_A, id_B]` | `Beams:idA`, `Beams:idB` | `BEAMS` | — | `beams` (model names) | `lpp1`, `lpp2` |
 | `pdf` (checked, C10) | `PDF:pSet = <value>`: write `"LHAPDF6:<set>"`, or a Pythia set number | `PDF_SET[0]` (and `MPI_PDF_SET`): the bare `<set>` | — | — | — |
 | `events` (built-in) | `Main:numberOfEvents` | `EVENTS` | (the `-N` flag) | `n_events` | `nevents` |
 | `threads` (built-in) | `Parallelism:numThreads` | — | — | — | — |
+
+**Beam order** (V62). `energies` and `beams` are lists in **the run's** beam order, `[beam A, beam B]`.
+A point that gives `beams` (or `beam_a` and `beam_b`) names that order; one that gives none follows
+the convention `[hadron, lepton]` (`unnamed` in the vocabulary), which every card so far assumes. A
+tool whose card needs its beams in fixed slots says so (`[beams] slots` in its `tool.toml`: Herwig's
+`EPCollider.in`, lepton on A), and the runner reorders every per-beam value for it, the ids and the
+energies together. The other tools take the order as given (they write the ids from the plan, or
+their card's own beam ids are the run's).
 
 `rivet` maps nothing: it reads beams and energies from the events, and its analysis options are
 always targeted explicitly (§8.1).
@@ -489,14 +503,17 @@ analyses    = ["photo_eic"]        # a key of the rivet folder's [options]
 | `output_file` | string or array | `[]` | what it writes. An array is fan-out: App_Pythia writes the same events to each (V16). Exactly one writer per output (C6). |
 | `timeout` | number (s) | 0 (none) | the tool fails when it runs longer |
 | `stall_after` | number (s) | 300 | the tool fails when silent this long: no log line, status message or heartbeat (a prepare step waits at least 3600) |
-| `status` | string | the folder's | `"standard"` (`$HEP_STATUS_FD`), `"filters"` (the folder's `filters.toml`), `"filters:<file>"` (your rules, root `configs/<P>/`), `"none"` |
+| `status` | string | the folder's | `"standard"` (`$HEP_STATUS_FD`), `"filters"` (the folder's `filters.toml`), `"none"` |
+| `filters` | string (path) | none | your own rules in place of the folder's, root `configs/<P>/`; implies `status = "filters"` (V61) |
 | `streamable` | bool | the folder's | may it read a FIFO? |
 | `consumes_events` | bool | the folder's | is its event count checked against the producer's sidecar? |
 | `shards` | integer ≥ 1 | 1 | K > 1: K processes of this tool, each on a share of the events, merged into its `output_file` by the folder's merge tool (V31; rivet, [05 §3.1](05_Tools_Reference.md#31-sharded-rivet-shards--k)). The chain is unchanged. |
+| `settings` | table | `{}` | native card settings as written, `"HeavyIon:mode" = 1`, with no base card needed: over the base card, refused when a quantity sets the same key (one source per key, C8); a tool with no card refuses them (V59) |
 | `executable` | string | the folder's | custom and module: bare → `build/<project>/<name>` (must be built); `path:<command>` → `PATH` |
 | `arguments` | array | `[]` | custom and module: argv after the config; placeholders (§10) |
 | `consumes` | array of names | `[]` | custom and module: quantities written into the config |
 | `config` | table | none | custom and module: `[tools.<tag>.config]`, extracted to a file (§9.2) |
+| `cores` | integer ≥ 1 | estimated | how many cores it keeps busy, for `--plan`'s note and the crowded warning (V60); an integrated program is estimated as the generator's threads and one more |
 
 Every other key is **tool-specific**, checked against the tool folder's `[options]` schema (type
 and `required`), or, for custom and module tools, a standard-configuration request (§9.4). An
@@ -507,12 +524,12 @@ unknown key is an error with the keys the tool takes (C1).
 ```toml
 [tools.fit]
 tool        = "custom"
-executable  = "fit_peaks.py"                # build/<P>/fit_peaks.py, else a command on PATH; ./… from the repo
+executable  = "fit_peaks.py"                # build/<P>/fit_peaks.py (path:<command> for PATH); ./… from the repo
 arguments   = ["{in:lambda.yoda}", "{res}/fit.json"]
 input       = "lambda.yoda"
 output_file = "fit.json"
 consumes    = ["energy"]                    # written under [quantities] in its config
-status      = "filters:fit_filters.toml"
+filters     = "fit_filters.toml"
 
 [tools.fit.config]                          # written verbatim to output/…/<point>/config/fit.toml
 model  = "gauss+poly2"

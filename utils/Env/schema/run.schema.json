@@ -7,7 +7,7 @@
    "type": "object",
    "properties": {
     "master_toml": {
-     "description": "a project master overlaid on utils/Env/master.toml (configs/<Project>/…)",
+     "description": "a project master overlaid on the tool folders' quantities.toml (configs/<Project>/…)",
      "type": "string"
     },
     "include": {
@@ -305,7 +305,16 @@
       "minimum": 0
      },
      "status": {
-      "description": "standard | filters | none, or filters:<file>",
+      "description": "how its progress is read: the status protocol, its log's filter rules, or not at all",
+      "type": "string",
+      "enum": [
+       "standard",
+       "filters",
+       "none"
+      ]
+     },
+     "filters": {
+      "description": "a filters.toml of your own (configs/<Project>/…), in place of its folder's",
       "type": "string"
      },
      "executable": {
@@ -334,6 +343,15 @@
      "consumes_events": {
       "description": "its event count is checked against the producer's",
       "type": "boolean"
+     },
+     "settings": {
+      "description": "native card settings, as written: \"HeavyIon:mode\" = 1 (over the base card, under quantities)",
+      "type": "object"
+     },
+     "cores": {
+      "description": "cores it keeps busy, for --plan's note (default: estimated)",
+      "type": "integer",
+      "minimum": 1
      },
      "shards": {
       "description": "K processes on a share of the events each",

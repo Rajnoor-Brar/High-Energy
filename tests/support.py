@@ -35,3 +35,12 @@ def hep_ok(where: Path, *args: str, timeout: float = 1800) -> str:
     done = hep(where, *args, timeout=timeout)
     assert done.returncode == 0, done.stdout[-2000:] + done.stderr[-2000:]
     return done.stdout
+
+
+def folder(config: str, configuration: str | None = None) -> Path:
+    """<project>/<run name>/<NN_label> of a configuration, as the runner names it (tools.run_dir, V45):
+    tests never spell the layout out."""
+    from runner import config as configmod, tools
+    run = configmod.load(config)
+    return tools.run_dir(run, run.configuration(configuration))
+

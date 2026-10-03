@@ -9,6 +9,7 @@ Both tables are runner/__init__.py's.
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 
 from runner import PLUGINS_MAY_IMPORT as PLUGIN_MAY_IMPORT, RANKS
@@ -88,3 +89,29 @@ def test_there_are_no_import_cycles():
 
     for module in graph:
         visit(module, [])
+
+
+#: The plot stage reads YODA and Rivet's .plot files by definition, and hepfiles reads those formats for
+#: everyone; every other module is the core.
+PLOT_DOMAIN = {"plot", "labels", "hepfiles"}
+#: Words of the folder contract that are also a folder's name: "merge" is a key of [card] and [shard]
+#: (and ".merge" the suffix of a sharded table's merge step), not the merge tool.
+CONTRACT_WORDS = {"merge", ".merge"}
+
+
+def test_the_core_names_no_tool():
+    """BOT.md, V60: everything the runner knows about a tool is in its folder. No core module names a
+    tool folder, or a provider, in a string (a dict key, a comparison, an argv): the rule is a gate."""
+    names = {p.parent.name for p in ENV.glob("*/tool.toml")} | {p.parent.name for p in ENV.glob("*/provider.py")}
+    found = []
+    for path in sorted(RUNNER.glob("*.py")):
+        if path.stem in PLOT_DOMAIN:
+            continue
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                words = set(re.findall(r"[a-z0-9]+", node.value))
+                hit = {n for n in names if node.value == n or node.value.startswith(n + "_") or f"{n}_" in node.value
+                       or (n in words and len(node.value) < 40 and not node.value.startswith(("\"", " ")))}
+                if hit and node.value not in CONTRACT_WORDS and "\n" not in node.value:
+                    found.append(f"{path.stem}:{node.lineno}: {node.value!r}")
+    assert not found, "tool names in the core:\n  " + "\n  ".join(found)

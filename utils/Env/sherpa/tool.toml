@@ -17,6 +17,8 @@ ext     = "yaml"
 comment = "#"
 footer  = ["EVENT_OUTPUT: HepMC3_GenEvent[{output_name}]"]
 seed    = ["RANDOM_SEED: {seed}"]
+# What the plan owns: a base card setting one is refused (render.py), so a point never inherits it
+owned   = ["BEAMS", "BEAM_ENERGIES", "RANDOM_SEED", "EVENTS", "EVENT_OUTPUT", "RESULT_DIRECTORY"]
 
 [command]
 argv = ["{exe}", "-f", "{card}", "RESULT_DIRECTORY: {prepared}/Results"]

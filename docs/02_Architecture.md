@@ -11,7 +11,7 @@ How the framework works, and why its boundaries are where they are. The principl
 ```
 hep run PhotoProduction/eic energy_pdf                      utils/Env/hep → utils/Env/run → runner.cli
   │
-  ├─ load     configs/PhotoProduction/eic.toml  (+ utils/Env/master.toml: quantity → tool maps)
+  ├─ load     configs/PhotoProduction/eic.toml  (+ utils/Env/quantities.toml, <tool>/quantities.toml: quantity → tool maps)
   ├─ resolve  [run.energy_pdf]: sweeps, plot_points, tools, static, prelim
   ├─ expand   sweeps = ["energies", "pdf"]  →  16 points   (a grid of axes; entangled groups zip)
   ├─ plan     per point: cards, config files, argv, connections, identity, seeds; every check (C1–C14)
@@ -64,9 +64,10 @@ utils/
 │   ├── run                   the runner's entry script
 │   ├── hep_env.sh            the shell environment (load_hep, quit, hep_cd, hep_status, …)
 │   ├── flags.sh              probes each library's *-config once → build/flags.mk
-│   ├── master.toml           how each standard tool consumes named quantities
+│   ├── quantities.toml       the vocabulary: what each quantity name means (shape, unit)
+│   ├── schema/run.toml       every key a run TOML may hold (V55)
 │   ├── runner/               the runner: one flat Python package (§3.1)
-│   └── <tool>/               one folder per standard tool: tool.toml (+ render.py, filters.toml)
+│   └── <tool>/               one folder per standard tool: tool.toml (+ quantities.toml, render.py, filters.toml)
 ├── Status.hh                 ─── C++ ─── the status protocol (JSON lines on $HEP_STATUS_FD)
 ├── Module.hh                 the kit for module programs
 ├── App_Pythia.cc             the standard Pythia tool
@@ -88,6 +89,8 @@ half whose layering was not had nine cycles.)
 | 0 | `errors.py` | `HepError(message, where, hint)`, `did_you_mean` |
 | 0 | `paths.py` | the repository root (by markers, or `$HEKIT_ROOT`), the `configs/`, `output/` and `results/` roots, the path rules (04 §2) |
 | 0 | `schema.py` | the run TOML's schema, `utils/Env/schema/run.toml`: every key's type, choices, bounds, default and inheritance; checking a table against it; the editor schema (V55) |
+| 0 | `hepfiles.py` | reading YODA text (objects, `/RAW` twins, counters; `.gz` too) and Rivet's data directories, once (V60) |
+| 0 | `plugins.py` | loading a folder's Python by path, once: `render.py`, `backend.py`, `provider.py` (V61) |
 | 1 | `config.py` | load the TOML, `--set`, the strict schema check; the typed model (`RunConfig`, `Configuration`, `Tool`, `Quantity`) |
 | 1 | `quantities.py` | the master TOML, static values and selectors, who consumes what (C7), provider checks (C10) |
 | 1 | `sweep.py` | points from `sweeps` (grid and zip), point names, pages, `--points` |
@@ -102,7 +105,7 @@ half whose layering was not had nine cycles.)
 | 5 | `cli.py` | `argparse`: `run`, `plot`, `watch`; the order of events |
 
 A **tool plugin** (`utils/Env/<tool>/render.py`, a plot backend's `backend.py`) may import only
-`PLUGINS_MAY_IMPORT` (`errors`, `paths`, `quantities` and `labels`), and never another plugin. The runner is standard library only,
+`PLUGINS_MAY_IMPORT` (`errors`, `paths`, `quantities`, `labels` and `hepfiles`), and never another plugin. The runner is standard library only,
 plus `tomli_w` for writing TOML and, lazily, `yaml` (Sherpa's plugin) and `uproot` (the Delphes
 count); `rich` for the live view is optional.
 

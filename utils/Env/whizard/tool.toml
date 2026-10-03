@@ -13,6 +13,8 @@ produces_events = true
 style   = "render"
 ext     = "sin"
 comment = "#"
+# What the plan owns: SINDARIN runs the base after the point card, so a base setting one is refused
+owned   = ["seed", "n_events", "sqrts", "beams", "beams_momentum", "$sample", "sample_format"]
 
 [command]
 argv = ["{exe}", "{card}"]

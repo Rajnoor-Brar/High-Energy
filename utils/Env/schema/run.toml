@@ -25,7 +25,7 @@ order = ["master", "run", "prelim", "static", "tools", "quantities", "plot"]
 
 [master.master_toml]
 type = "str"
-doc  = "a project master overlaid on utils/Env/master.toml (configs/<Project>/…)"
+doc  = "a project master overlaid on the tool folders' quantities.toml (configs/<Project>/…)"
 
 [master.include]
 type  = "str|list"
@@ -276,8 +276,13 @@ min  = 0
 doc  = "seconds of silence before it counts as stalled (default 300)"
 
 [tool.status]
+type    = "str"
+choices = ["standard", "filters", "none"]
+doc     = "how its progress is read: the status protocol, its log's filter rules, or not at all"
+
+[tool.filters]
 type = "str"
-doc  = "standard | filters | none, or filters:<file>"
+doc  = "a filters.toml of your own (configs/<Project>/…), in place of its folder's"
 
 [tool.executable]
 type = "str"
@@ -303,6 +308,15 @@ doc  = "it can read a FIFO"
 [tool.consumes_events]
 type = "bool"
 doc  = "its event count is checked against the producer's"
+
+[tool.settings]
+type = "table"
+doc  = "native card settings, as written: \"HeavyIon:mode\" = 1 (over the base card, under quantities)"
+
+[tool.cores]
+type = "int"
+min  = 1
+doc  = "cores it keeps busy, for --plan's note (default: estimated)"
 
 [tool.shards]
 type    = "int"

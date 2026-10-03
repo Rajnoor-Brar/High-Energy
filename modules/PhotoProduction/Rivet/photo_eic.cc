@@ -4,7 +4,7 @@
 // Replaces photo_5x41 / photo_10x100 / photo_18x275, which differed only by
 // their hard-coded W window (the HERA inelasticity range 0.1992 < y < 0.8483
 // expressed in GeV for each sqrt(s)). Here the cuts are analysis options, set
-// from the run TOML ([static.rivet].options or [sweep.rivet.*] quantities):
+// from the run TOML ([tools.<tag>].options, inline NAME:OPT=V, or quantities with target = "<tag>/photo_eic"):
 //
 //   YMIN, YMAX   inelasticity window (default 0.1992, 0.8483), used unless
 //   WMIN, WMAX   a photon-proton W window in GeV is given (reproduces the old plugins)
@@ -29,6 +29,9 @@
 #include "fastjet/SISConePlugin.hh"
 #include "Rivet/Projections/FinalState.hh"
 #include "Rivet/Projections/ChargedFinalState.hh"
+
+#include <algorithm>
+#include <cmath>
 
 
 namespace Rivet {
@@ -107,16 +110,19 @@ namespace Rivet {
       book(_h_9,  "d13-x01-y01", etEdges);          // kT, 2 < eta < 2.5
       book(_h_10, "d14-x01-y01", etEdges);          // kT, 2.5 < eta < 3
 
-      book(_h_1a, "d02-x01-y01", 28, -3.5, 3.5);    // kT eta, ET > ETMIN
-      book(_h_2a, "d03-x01-y01", 28, -3.5, 3.5);    // kT eta, ET > ETMIN2
-      book(_h_3a, "d11-x01-y01", 28, -3.5, 3.5);    // anti-kT eta
-      book(_h_4a, "d12-x01-y01", 28, -3.5, 3.5);    // SISCone eta
+      // eta axes follow the acceptances, in bins of 0.25: 28 over |eta| < 3.5, as the old plugins
+      const int etaBins = std::max(1, static_cast<int>(std::lround(2 * _etamax / 0.25)));
+      const int chEtaBins = std::max(1, static_cast<int>(std::lround(2 * chEtaMax / 0.25)));
+      book(_h_1a, "d02-x01-y01", etaBins, -_etamax, _etamax);    // kT eta, ET > ETMIN
+      book(_h_2a, "d03-x01-y01", etaBins, -_etamax, _etamax);    // kT eta, ET > ETMIN2
+      book(_h_3a, "d11-x01-y01", etaBins, -_etamax, _etamax);    // anti-kT eta
+      book(_h_4a, "d12-x01-y01", etaBins, -_etamax, _etamax);    // SISCone eta
 
       book(_h_11, "d15-x01-y01", ptEdges);          // charged-particle pT
       book(_h_12, "d16-x01-y01", nchEdges);         // charged multiplicity
-      book(_h_13, "d17-x01-y01", 28, -3.5, 3.5);    // charged-particle eta
+      book(_h_13, "d17-x01-y01", chEtaBins, -chEtaMax, chEtaMax);    // charged-particle eta
 
-      book(_h_1b, "d18-x01-y01", 14, 0.0, 3.5);      // kT |eta|, ET > ETMIN
+      book(_h_1b, "d18-x01-y01", std::max(1, etaBins / 2), 0.0, _etamax);   // kT |eta|, ET > ETMIN
       book(_h_14, "d19-x01-y01", etEdges);          // kT jet pT, all eta (dN/dpT, per jet)
     }
 

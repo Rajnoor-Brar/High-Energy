@@ -9,15 +9,20 @@ from __future__ import annotations
 
 import functools
 import re
-import subprocess
-from pathlib import Path
+import tomllib
 
-from .paths import build_root
+from . import hepfiles
+from .paths import repo_root
 
 # ── LaTeX ($…$ in Rivet .plot files) → ROOT TLatex (V11) ──────────────────────────────────────
 
-_COMMANDS = {"text": "", "mathrm": "", "rm": "", "mathit": "", "textrm": "", "mathbf": "#bf",
-             "left": "", "right": "", "le": "#leq", "ge": "#geq", "to": "#rightarrow", "ell": "l"}
+@functools.cache
+def latex() -> dict:
+    """utils/Env/latex.toml: the LaTeX → TLatex commands, YODA's macros, TLatex → mathtext (V61)."""
+    return tomllib.loads((repo_root() / "utils" / "Env" / "latex.toml").read_text(encoding="utf-8"))
+
+
+_COMMANDS = latex()["tlatex"]
 
 
 def _italic(math: str) -> str:
@@ -34,13 +39,7 @@ def root_text(text: str) -> str:
     return re.sub(r"\\([_^#\\])", r"\1", text)
 
 
-#: YODA's own text macros (yoda/plotting/mlp_preprocessor.py), so a .plot file reads the same in both backends
-_MACROS = {"GeV": r"\mathrm{GeV}", "TeV": r"\mathrm{TeV}", "MeV": r"\mathrm{MeV}", "pt": r"{p_\mathrm{T}}",
-           "pT": r"{p_\mathrm{T}}", "dfrac": r"\frac", "tfrac": r"\frac"}
-
-
-_PLAIN = {"GeV": "GeV", "TeV": "TeV", "MeV": "MeV", "pt": "$p_\\mathrm{T}$", "pT": "$p_\\mathrm{T}$",
-          "dfrac": "\\frac", "tfrac": "\\frac"}
+_MACROS, _PLAIN = latex()["macros"]["math"], latex()["macros"]["text"]       # YODA's macros, in and out of math
 
 
 def macros(text: str) -> str:
@@ -89,13 +88,7 @@ def _tlatex_line(text: str) -> str:
 @functools.cache
 def _plot_blocks(analysis: str) -> tuple:
     """The `# BEGIN PLOT` blocks of an analysis's .plot file: build/Rivet first, then Rivet's own."""
-    places = [build_root() / "Rivet"]
-    try:
-        found = subprocess.run(["rivet-config", "--datadir"], capture_output=True, text=True, timeout=30)
-        places += [Path(p) for p in found.stdout.strip().split(":") if p]
-    except (OSError, subprocess.SubprocessError):
-        pass
-    for place in places:
+    for place in hepfiles.rivet_dirs():
         path = place / f"{analysis}.plot"
         if not path.is_file():
             continue

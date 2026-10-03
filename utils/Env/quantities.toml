@@ -1,0 +1,55 @@
+# utils/Env/quantities.toml — the vocabulary: what a quantity name means, for every tool (V58).
+#
+# A quantity named here ([quantities.<name>] in a run TOML) has this meaning wherever it goes, and its
+# values are checked against the shape when the run TOML is read. How each tool consumes it is the
+# tool's own: utils/Env/<tool>/quantities.toml (docs/04_Config_Reference.md §3). A quantity not named
+# here is the user's own, reaching a tool through its `key` or `target`.
+#
+#   shape    "float" | "int" | "pdg" (a PDG id) | "str" | "bool", several joined by "|", or a list of
+#            shapes: a list value with one entry each, in order
+#   unit     the unit of a number
+#   builtin  true: the runner provides it from the configuration (events, threads); declared as a
+#            quantity it may be swept, and each point then has that value (V56)
+#   per_beam true: a list in the run's beam order, [beam A, beam B] (V62). A tool whose card needs its
+#            beams in fixed slots ([beams] slots in its tool.toml, Herwig's lepton first) gets every
+#            per-beam value reordered together, by the point's beam ids (`beams`, or beam_a and beam_b);
+#            with none named, the order is `unnamed` below: what every card so far assumes
+
+[energies]
+shape    = ["float", "float"]
+unit     = "GeV"
+per_beam = true
+unnamed  = ["hadron", "lepton"]       # the order of a point that names no beams (V62)
+doc      = "the beam energies, [beam A, beam B]: the run's order, which each tool's card is given"
+
+[sqrts]
+shape = "float"
+unit  = "GeV"
+doc   = "the centre-of-mass energy, for symmetric beams"
+
+[beam_a]
+shape = "pdg"
+doc   = "beam A's PDG id"
+
+[beam_b]
+shape = "pdg"
+doc   = "beam B's PDG id"
+
+[beams]
+shape    = ["pdg", "pdg"]
+per_beam = true
+doc      = "the beams' PDG ids, [beam A, beam B]: they name the run's beam order"
+
+[pdf]
+shape = "str|int"
+doc   = "the proton PDF: an LHAPDF set (as each tool writes it), or a generator's own set number"
+
+[events]
+shape   = "int"
+builtin = true
+doc     = "events per point (the configuration's event_count)"
+
+[threads]
+shape   = "int"
+builtin = true
+doc     = "threads per generator (the configuration's threads)"

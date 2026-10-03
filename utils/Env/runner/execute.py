@@ -27,7 +27,6 @@ from __future__ import annotations
 import fcntl
 import json
 import os
-import re
 import signal
 import stat
 import subprocess
@@ -38,6 +37,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+from . import hepfiles
 from .errors import HepError
 from .paths import repo_root
 from .record import complete_marker, is_complete, now, provenance, write_atomic, write_identity
@@ -138,17 +138,22 @@ def run_points(plans: list[PointPlan], run, configuration, *, sink, journal: Jou
 
 def cores(plan: PointPlan) -> int:
     """About how many cores a point keeps busy, for the plan's note: its busiest group, where a
-    generator counts its threads, an integrated program its threads and rivet_threads, anything
-    else one."""
+    generator counts its threads, a table's own `cores` what it says, an integrated program (one that
+    asks for a generator's standard configuration) the generator's threads and one more, anything
+    else one (V60: no tool named here)."""
+    from .tools import folders
     busiest = 0
     for group in plan.groups:
         count = 0
         for step in group:
-            data = step.config_data or {}
+            standard = (step.config_data or {}).get("standard", {})
             if step.folder.get("tool", "produces_events"):
                 count += plan.threads
-            elif "pythia_cmnd" in data.get("standard", {}):
-                count += plan.threads + int(data.get("rivet_threads", 1))
+            elif step.tool.cores:
+                count += step.tool.cores
+            elif any(folders().get(s.get("tool"), None) and folders()[s["tool"]].get("tool", "produces_events")
+                     for s in standard.values()):
+                count += plan.threads + 1
             else:
                 count += 1
         busiest = max(busiest, count)
@@ -194,11 +199,9 @@ def read_count(path: Path, reader: str) -> float | None:
             return float(json.loads(report_of(path).read_text(encoding="utf-8"))[obj])
         except (OSError, ValueError, KeyError, TypeError):
             return None
-    if kind != "yoda" or not path.exists():
+    if kind != "yoda":
         return None
-    text = path.read_text(encoding="utf-8", errors="replace")
-    match = re.search(re.escape(obj) + r"\n.*?# sumW[^\n]*\n\S+\s+\S+\s+(\S+)", text, re.S)
-    return float(match.group(1)) if match else None
+    return hepfiles.entries(path, obj)
 
 
 def report_of(product: Path) -> Path:

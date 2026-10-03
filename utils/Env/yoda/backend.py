@@ -29,18 +29,17 @@ import os
 import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 from runner.errors import HepError
+from runner.hepfiles import base_path
 from runner.paths import build_root
 
-FORMATS = {"pdf": None, "png": None, "svg": "SVG", "eps": "EPS"}       # None: mkhtml writes it anyway
-LEGEND = {"top-right": {"LegendAlign": "r"}, "top-left": {"LegendAlign": "l", "LegendXPos": "0.05"},
-          "bottom-right": {"LegendAlign": "r", "LegendYPos": "0.4"},
-          "bottom-left": {"LegendAlign": "l", "LegendXPos": "0.05", "LegendYPos": "0.4"},
-          "best": {"LegendAlign": "r"}}                # then matplotlib's loc='best' (best_legend)
-_MATH = {"bf": "mathbf", "it": "mathit", "LT": "<", "GT": ">"}
-HONOURED = {("legend", "position"), ("ratio", "divisions"), ("ratio", "range"), ("ratio", "limits"), ("text", "legend"), ("text", "header")}             # style keys mkhtml can follow
+_SPEC = tomllib.loads((Path(__file__).with_name("backend.toml")).read_text(encoding="utf-8"))   # V61
+FORMATS = {k: v or None for k, v in _SPEC["formats"].items()}                     # None: mkhtml writes it anyway
+LEGEND = _SPEC["legend"]
+HONOURED = {tuple(key.split(".")) for key in _SPEC["style"]["honoured"]}         # style keys mkhtml can follow
 MARK = "# ratio ticks: ratio.divisions (utils/Env/yoda/backend.py)"
 TITLE_MARK = "# titles: title, title_left, title_right (utils/Env/yoda/backend.py)"
 
@@ -63,6 +62,11 @@ def validate(settings: dict, beside_root: bool = False) -> None:
                                    hint=hint + " (only legend.position, text.legend, text.header and ratio.divisions, range and limits carry over)")
 
 
+def _math() -> dict:
+    from runner.labels import latex as table
+    return table()["mathtext"]
+
+
 def latex(text: str) -> str:
     """TLatex → matplotlib mathtext for the common subset, word by word: '#sqrt{s} = 28.6 GeV' →
     '$\\sqrt{s}$ = 28.6 GeV'. TLatex's rules hold (V41): only `_{…}`, `^{…}` and `#<name>` are math;
@@ -70,16 +74,10 @@ def latex(text: str) -> str:
     def word(w: str) -> str:
         if not re.search(r"(?<!\\)(?:[_^]\{|#[A-Za-z])", w):     # text; LaTeX's text font prints > as ¿
             return re.sub(r"[<>]", lambda m: f"${m[0]}$", re.sub(r"\\([_^#\\])", r"\1", w))
-        w = re.sub(r"(?<!\\)#([A-Za-z]+)", lambda m: _MATH.get(m.group(1), "\\" + m.group(1)), w)
+        w = re.sub(r"(?<!\\)#([A-Za-z]+)", lambda m: _math().get(m.group(1), "\\" + m.group(1)), w)
         w = re.sub(r"\\_|(?<!\\)_(?!\{)", "\x00", w).replace("\x00", r"\_")     # literal underscores in math
         return f"${w}$"
     return " ".join(word(w) for w in text.split(" ")).replace(":", " ")    # ':' separates mkhtml options
-
-
-def _base(path: str) -> str:
-    """/photo_eic:R=0.4/d01-x01-y01 → /photo_eic/d01-x01-y01 (plot keys and references ignore options)."""
-    analysis, _, rest = path.strip("/").partition("/")
-    return f"/{analysis.split(':')[0]}/{rest}"
 
 
 def _voided(yoda, source: Path, pages: list, target: Path) -> Path:
@@ -112,7 +110,7 @@ def _reference(yoda, page):
     keep = [i for i in range(1, source.numBins() + 1)
             if source.bin(i).xMin() >= lo - 1e-9 * abs(lo) and source.bin(i).xMax() <= hi + 1e-9 * abs(hi)]
     edges = [source.bin(i).xMin() for i in keep] + [source.bin(keep[-1]).xMax()]
-    out = yoda.BinnedEstimate1D(edges, "/REF" + _base(page.object))
+    out = yoda.BinnedEstimate1D(edges, "/REF" + base_path(page.object))
     for k, i in enumerate(keep, start=1):
         out.bin(k).setVal(source.bin(i).val())
         for name in source.bin(i).sources():
@@ -186,7 +184,7 @@ def _plot_block(page, window: tuple[float, float] | None = None) -> str:
         if page.ranges.get(f"{axis}_tool"):
             keys.pop(f"{axis.upper()}Min", None), keys.pop(f"{axis.upper()}Max", None)
     body = "".join(f"{k}={v}\n" for k, v in keys.items() if not (isinstance(v, str) and v in ("nan", "inf")))
-    return f"# BEGIN PLOT {_base(page.object)}\n{body}# END PLOT\n"
+    return f"# BEGIN PLOT {base_path(page.object)}\n{body}# END PLOT\n"
 
 
 def _step(width: float) -> float:
@@ -264,7 +262,7 @@ def titles(script: Path, page) -> bool:
 def _finish(page, outdir: Path, say) -> bool:
     """The page's own fixes to mkhtml's script (ratio ticks, a best legend, titles); False when the
     rewritten script fails."""
-    script = outdir / _base(page.object).split("/")[1] / f"{page.object.rsplit('/', 1)[-1]}.py"
+    script = outdir / base_path(page.object).split("/")[1] / f"{page.object.rsplit('/', 1)[-1]}.py"
     if not script.is_file():
         return True
     ticks = page.document["page"]["ratio"] and ratio_ticks(script, int(page.style["ratio"]["divisions"]))
@@ -286,7 +284,7 @@ def _mkhtml(argv: list, work: Path, outdir: Path, pages: list, plot_text: str, p
     done = subprocess.run(argv, capture_output=True, text=True, env=env, cwd=work)
     log = work / f"{plot_file.stem}.log"
     log.write_text(" ".join(argv) + "\n" + done.stdout + done.stderr, encoding="utf-8")
-    drawn = [p for p in pages if (outdir / _base(p.object).split("/")[1] / f"{p.object.rsplit('/', 1)[-1]}.pdf").exists()]
+    drawn = [p for p in pages if (outdir / base_path(p.object).split("/")[1] / f"{p.object.rsplit('/', 1)[-1]}.pdf").exists()]
     drawn = [p for p in drawn if _finish(p, outdir, say)]
     if done.returncode != 0 or len(drawn) != len(pages):
         say(f"plot: rivet-mkhtml: {len(drawn)} of {len(pages)} drawn (exit {done.returncode}; see {log})")

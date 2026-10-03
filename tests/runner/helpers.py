@@ -70,3 +70,10 @@ def plans(name: str, configuration: str | None = None, sets=()):
         tools.finalise(p, p.seed)
     return out
 
+
+def render_context(folder: str, **context) -> dict:
+    """The context the runner passes a folder's render.py (L26: the real type): its [card] owned and
+    [render] data (V61), and the keys given."""
+    spec = tools.folders()[folder].spec
+    return {"owned": list(spec.get("card", {}).get("owned", [])), "render": spec.get("render", {}), **context}
+

@@ -36,7 +36,7 @@ namespace Lambda {
     struct Cuts {
         double mass_tolerance = 0.15;       ///< |m(pπ) − m(Λ)| accepted, GeV
         double cos_theta_tolerance = 0.0;   ///< 0 = off; else |cosθ* + 1| must be within this
-        std::size_t reserved_protons = 20;  ///< beam protons per event that cannot come from a Λ
+        std::size_t reserved_protons = 2;   ///< beam protons per event that cannot come from a Λ (pp's 2 × Z)
     };
 
     /// One reconstructed pair, kept with the indices so the greedy matching can refuse a reuse.

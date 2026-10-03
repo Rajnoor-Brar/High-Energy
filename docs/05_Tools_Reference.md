@@ -34,8 +34,8 @@ Two more folders are not tools in a chain:
 - **Paint** (`utils/Apps/Paint/`) is driven by the plot stage, never named in `tools` (§17).
 
 **Not tools at all.** *Providers* (LHAPDF, FeynRules, SARAH) are plan-time checks: a mapping with
-`check = "lhapdf"` (a bare set name) or `"pythia_pdf"` (`LHAPDF6:<set>`) refuses an uninstalled PDF
-set (C10). *Analysis algorithms* (FastJet, ROOT
+`check = "lhapdf:bare"` (a bare set name) or `"lhapdf:pythia"` (`LHAPDF6:<set>`, or one of Pythia's own
+sets, checked against its PDFSelection.xml) refuses an uninstalled PDF set (C10, `utils/Env/lhapdf/provider.py`, V60). *Analysis algorithms* (FastJet, ROOT
 libraries) are `// requires:` names in a source ([06 §2](06_Developer_Guide.md#2-the-build)). A
 *detector simulation* with no command line of its own (Geant4) is a module program with
 `// requires: geant4`. *Statistics* (RooFit, pyhf, uproot, scikit-learn) are custom tools, usually
@@ -55,8 +55,23 @@ output_file = "events.hepmc"         # a [prelim] FIFO or file; an array fans ou
 - **Runs** `build/App_Pythia.exe <outputs> <base cards…> <point card>` (§15): the base cards in
   order, then the point card, so its settings win.
 - **Card** (`cards/pythia.point.cmnd`, and `cards/pythia.cmnd` = base + point): a header comment,
-  one `Key = value` line per consumed value (`on`/`off` for bools), the footer, then the seeds:
-  `Random:setSeed = on`, `Random:seed = <seed>`, and at threads > 1 `Parallelism:seeds = {…}`.
+  one `Key = value` line per consumed value and per `settings` entry (`on`/`off` for bools), the
+  footer, then the seeds: `Random:setSeed = on`, `Random:seed = <seed>`, and at threads > 1
+  `Parallelism:seeds = {…}`. **`cards/pythia.cmnd` holds each key once** (V59, `[card] merge`): the
+  base cards' settings without comments, less each key the point card sets, then the point card; the
+  particle-data commands that add up (`id:onIfMatch` and the rest of `[card] repeatable`) are kept
+  every time. `cards/pythia.json` gives each key's value and where it came from (`photo_ep.cmnd:34`,
+  `[quantities.pdf] = NNPDF23lo`, `built-in events`, `[tools.pythia].settings`). App_Pythia still
+  reads the base cards and the point card (the argv, and so the identity, are unchanged), which
+  gives the same settings.
+- **Keys the runner sets** (`[card] owned`: `Main:numberOfEvents`, `Parallelism:numThreads`, the
+  `Random:` seeds, `Parallelism:seeds`, `Beams:LHEF`): a base card's line for one of them is never
+  used, and `--plan` and the run say so (V59).
+- **Checked** (`[checks] card`, V59): `build/App_PythiaCheck.exe` gives every line of the card (base
+  settings and point card, before seeds) to Pythia's own reader, at plan time; a line Pythia rejects
+  (a key it does not know, a value of the wrong kind, a particle its table lacks) refuses the plan,
+  with the line's source. No list of keys is kept: a nucleus or an `id:new` particle earlier in the
+  card is read as Pythia reads it. Answers are cached by the card's text in `output/<P>/.cache/checks/`.
 - **Footer** `Beams:LHEF = <input>`, only when the tool has an input: a shower of an LHE file from
   an earlier group (MadGraph); the base card sets `Beams:frameType = 4`.
 - **Consumes** through the master: `energies`, `sqrts`, `beam_a`, `beam_b`, `beams`, `pdf`
@@ -96,6 +111,7 @@ output_file = "photo.yoda"
   from `rivet --version`.
 - **Exports** `rivet_analyses`: `analyses` (with this point's options applied, e.g.
   `photo_eic:R=0.4`) and `plugin_path` (`build/Rivet`).
+- **Its own code** is `utils/Env/rivet/render.py`'s `options` hook (V60): the analyses with their options, the `.info` check, `{analyses}` for the argv; the runner core names no tool.
 - Status by filters: `Event N (` → progress, `ERROR`/`Exception` → error, `WARN` → warning (the
   "unvalidated" warning ignored). Ledger: L7, L9, L10, L19.
 
@@ -393,6 +409,10 @@ A backend is a module with `validate(settings, beside_root=False)` and
 
 ## 15. App_Pythia — `utils/App_Pythia.cc`
 
+Its Pythia rules (the σ combination, the stamping, the seed check, the chunking: L1, L2, L4, L6,
+L28) are `utils/PythiaRun.hh`'s, which the integrated programs (InprocJets) run too (V63), so an
+integrated point's events and σ are the chain's by construction.
+
 ```
 App_Pythia.exe [--threads N] [--events N] [--seeds S1,S2,…] [--sidecar FILE] OUTPUT[,OUTPUT…] CARD [CARD…]
 ```
@@ -665,7 +685,7 @@ For a tool that only prints: its log is tailed, each new line matched against th
 **the first match wins**.
 
 ```toml
-# utils/Env/<tool>/filters.toml, or your own via status = "filters:<file>"
+# utils/Env/<tool>/filters.toml, or your own via filters = "<file>" (V61)
 [[rule]]
 match = '^Event (?P<done>\d+) \('     # a Python regex
 emit  = "progress"                    # progress | phase | warn | error | ignore

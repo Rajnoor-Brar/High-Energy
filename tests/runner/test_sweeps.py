@@ -118,9 +118,9 @@ def test_a_bare_lhapdf_set_name_for_pythia_is_refused(scratch):
 
 def test_sherpa_takes_the_bare_set_name():
     from runner.quantities import check_provider
-    check_provider("lhapdf", "MSTW2008lo68cl", "x")
+    check_provider("lhapdf:bare", "MSTW2008lo68cl", "x")
     with pytest.raises(HepError, match="takes the bare LHAPDF set name"):
-        check_provider("lhapdf", "LHAPDF6:MSTW2008lo68cl", "x")
+        check_provider("lhapdf:bare", "LHAPDF6:MSTW2008lo68cl", "x")
 
 
 def test_an_override_equal_to_the_base_card_does_not_change_the_identity(scratch):

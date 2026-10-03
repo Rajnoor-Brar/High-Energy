@@ -8,6 +8,7 @@ consumes_events = true
 
 [card]
 style = "none"                      # everything is a flag
+bools = ["1", "0"]                  # how an analysis option writes true and false
 
 [command]
 argv = ["{exe}", "-o", "{partial:output}", "{analyses}", "{input}"]
@@ -21,8 +22,8 @@ options  = { kind = "table" }       # analysis options applied to every analysis
 products    = ["yoda"]
 event_count = "yoda:/RAW/_EVTCOUNT"  # the count check against the producer's sidecar (L7)
 
-[exports.analyses]
-gives = ["analyses", "plugin_path"]
+[exports.analyses]                  # rivet_analyses: what an integrated program needs to run them itself
+values = { analyses = "identity:analyses", plugin_path = "{repo}/build/Rivet" }
 
 [identity]
 files   = ["{repo}/build/Rivet/Rivet_{analysis}.so"]

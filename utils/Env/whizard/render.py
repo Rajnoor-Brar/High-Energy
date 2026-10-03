@@ -21,7 +21,6 @@ from pathlib import Path
 
 from runner.errors import HepError
 
-OWNED = ("seed", "n_events", "sqrts", "beams", "beams_momentum", "$sample", "sample_format")
 GENERATION = ("n_events", "$sample", "sample_format")
 ASSIGNMENT = re.compile(r"^\s*([?$]?[A-Za-z_][A-Za-z0-9_]*)\s*=")
 STRUCTURE = re.compile(r"^\s*#\s*hep:\s*beam_structure\s*=\s*(.+?)\s*$", re.M)
@@ -59,7 +58,7 @@ def card(bases: list[str], overrides: list, context: dict) -> str:
         raise HepError("a Whizard tool takes one base card", where=f"[tools.{context.get('tag')}].baseconfig")
     base = bases[0]
     owned = sorted({m.group(1).lower() for line in base.splitlines() if not line.lstrip().startswith("#")
-                    and (m := ASSIGNMENT.match(line)) and m.group(1).lower() in OWNED})
+                    and (m := ASSIGNMENT.match(line)) and m.group(1).lower() in context["owned"]})
     if owned:
         raise HepError(f"the base card sets {', '.join(owned)}, which the plan owns",
                        where=f"[tools.{context.get('tag')}].baseconfig",

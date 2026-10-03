@@ -13,6 +13,7 @@ else (02 §8).
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import shutil
 import subprocess
@@ -23,6 +24,7 @@ from typing import Any
 
 import tomli_w
 
+from . import plugins
 from . import quantities as qmod
 from .config import Tool
 from .errors import HepError, did_you_mean
@@ -32,17 +34,20 @@ from .sweep import label_of, tag_of
 ENV = Path(__file__).resolve().parents[1]                 # utils/Env
 
 FOLDER_SECTIONS = {
-    "tool": {"category", "executable", "streamable", "status", "consumes_events", "produces_events"},
+    "tool": {"category", "executable", "streamable", "status", "consumes_events", "produces_events", "config_file",
+             "config_always"},
     "card": {"style", "ext", "comment", "bools", "seed", "seed_parallel", "seed_range", "line", "footer",
-             "drop", "trailing", "drop_inside_braces"},
+             "drop", "trailing", "drop_inside_braces", "merge", "repeatable", "owned"},
     "command": {"argv", "env", "cwd"},
     "options": None,                                      # free: the schema of tool-specific keys
-    "outputs": {"products", "event_count", "sidecar", "written", "deal"},
+    "outputs": {"products", "event_count", "sidecar", "written", "deal", "combines"},
     "exports": None,
     "identity": {"files", "version"},
     "prepare": {"argv", "marker", "ignore", "key"},
-    "checks": {"info_dirs", "info_dirs_command", "files"},
+    "checks": {"info_dirs", "info_dirs_command", "files", "card"},
     "shard": {"merge"},
+    "render": None,                                       # free: data for the folder's render.py (V61)
+    "beams": {"slots"},                                   # the card's fixed beam slots (V62)
 }
 CARD_STYLES = ("append", "none", "render")
 EXPORT = re.compile(r"^(?P<tool>[a-z0-9]+)_(?P<export>[a-z0-9_]+)$")
@@ -72,11 +77,13 @@ class Folder:
         path = self.dir / "render.py"
         if not path.is_file():
             raise HepError(f'{self.name} has [card] style = "render" but no render.py', where=str(self.dir))
-        import importlib.util
-        spec = importlib.util.spec_from_file_location(f"hep_render_{self.name}", path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
+        return plugins.load(path, "render")
+
+    def hook(self, name: str):
+        """A function of the folder's render.py, or None (V60): the folder's own code, called by name."""
+        if not (self.dir / "render.py").is_file():
+            return None
+        return getattr(self.plugin, name, None)
 
     @property
     def filters(self) -> list[dict]:
@@ -283,6 +290,7 @@ class Step:
     config_path: Path | None = None
     config_data: dict | None = None
     identity_parts: dict = field(default_factory=dict)
+    flags: list[str] = field(default_factory=list)       # a mapping's flag = "-N" values, for argv
     card_lines_for_key: list[str] = field(default_factory=list)
     cwd: Path | None = None            # where it runs (default: the point's output directory)
     prepare_dir: Path | None = None    # the prepare cache entry ([prepare]), keyed by the card
@@ -290,6 +298,8 @@ class Step:
     prepare_card: Path | None = None   # render.py's prepare_card(): the card the prepare step reads
     prepare_needed: bool = False       # in the chain, or asked for by an export with needs_prepare
     sidecar_written: int | None = None # [outputs] written = "requested": the runner writes the sidecar
+    card_origins: dict = field(default_factory=dict)   # card key → where the point card's value came from (V59)
+    placeholders: dict = field(default_factory=dict)   # argv placeholders a folder's hook gives (V60)
 
 
 @dataclass
@@ -315,6 +325,7 @@ class PointPlan:
     manual_seed: int | None = None
     seed_kept: bool = False                                 # random: a complete point's seed, from its provenance
     seed_range: tuple[int, int] = DEFAULT_SEED_RANGE        # what every seeded step accepts (V54)
+    notes: list[str] = field(default_factory=list)          # what --plan and the run should say (V59)
 
 
 def location(serial: int | None, name: str) -> str:
@@ -336,7 +347,7 @@ def point_dirs(run, configuration, point) -> tuple[Path, Path]:
 def _check_options(tool, folder: Folder, where: str) -> None:
     schema = folder.spec.get("options", {})
     for key, value in tool.extra.items():
-        if EXPORT.match(key) and tool.tool in ("custom", "module") and EXPORT.match(key).group("tool") in folders():
+        if EXPORT.match(key) and folder.get("tool", "config_file") and EXPORT.match(key).group("tool") in folders():
             continue
         if key not in schema:
             raise HepError(f"unknown key '{key}' for a {folder.name} tool", where=where,
@@ -352,8 +363,9 @@ def _check_options(tool, folder: Folder, where: str) -> None:
 
 
 def _export_requests(run, tool) -> dict[str, str]:
-    """custom/module: `<tool>_<export> = true | "<tag>"` → {request key: referenced tag} (C13)."""
-    if tool.tool not in ("custom", "module"):
+    """A folder with [tool] config_file (custom, module): `<tool>_<export> = true | "<tag>"` → {request key:
+    referenced tag} (C13)."""
+    if not folder_of(tool).get("tool", "config_file"):
         return {}
     out = {}
     for key, value in tool.extra.items():
@@ -540,8 +552,9 @@ def plan_point(run, configuration, point, master: dict, *, post: dict | None = N
     alternatives = [v for name in selectors if name in run.quantities for v in run.quantities[name].values
                     if isinstance(v, str) and v in run.tools]
     builtin = {name: _builtin_value(run, name, values[name]) for name in qmod.BUILTIN if name in values}   # V56
+    configured = {t for t in rendered_tags if folder_of(run.tools[t]).get("tool", "config_file")}
     consumers = qmod.consumer_table(run, master, [n for n in values if n not in selectors and n not in builtin],
-                                    rendered_tags, alternatives)
+                                    rendered_tags, alternatives, configured)
     consumers.update({name: [] for name in selectors if name in values})   # it chooses the tool itself
     consumers.update({name: [] for name in builtin})                        # it is the point's events or threads
 
@@ -584,8 +597,8 @@ def plan_point(run, configuration, point, master: dict, *, post: dict | None = N
         step = Step(tag=tag, tool=tool, folder=folder, group=group_of.get(tag, -1),
                     exe=executable_of(tool, folder, run.project))
         step.status = tool.status or folder.get("tool", "status", "none")
-        if step.status.startswith("filters:"):
-            rules = resolve(step.status.split(":", 1)[1], "filters", project=run.project, where=f"{where}.status")
+        if tool.filters:                                    # your rules, configs/<P>/… (V61)
+            rules = resolve(tool.filters, "filters", project=run.project, where=f"{where}.filters")
             step.filters = tomllib.loads(rules.read_text(encoding="utf-8")).get("rule", [])
             step.status = "filters"
         elif step.status == "filters":
@@ -727,6 +740,7 @@ def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
             raise HepError(f"'{key}' is set by both {owners[normal]} and {origin}", where=f"[tools.{step.tag}]",
                            hint="one source per native key (C8): pin it in one place")
         owners[normal] = origin
+        step.card_origins[normal] = origin
         overrides.append(qmod.Override(key, value, origin))
         line = line_format.replace("{key}", key).replace("{value}", native(value, bools, fmt))
         lines.append(line)
@@ -747,7 +761,7 @@ def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
         elif mapping.form == "flag":
             flags.extend([mapping.key, native(value, bools, mapping.format)])
         elif mapping.form == "option":
-            options.setdefault(mapping.analysis, {})[mapping.key] = native(value, ["1", "0"], mapping.format)
+            options.setdefault(mapping.analysis, {})[mapping.key] = native(value, bools, mapping.format)
         elif mapping.form == "config":
             config_values[mapping.key] = value
         elif mapping.form == "seed":
@@ -759,13 +773,23 @@ def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
         value = plan.events if name == "events" else plan.threads
         for mapping in qmod.builtin_mappings(master, run, [step.tag], name):
             apply(mapping, value, f"built-in {name}")
+    if tool.settings and style == "none":
+        raise HepError(f"a {folder.name} tool has no card for settings", where=f"[tools.{step.tag}].settings",
+                       hint="its values are flags or options: give them as its own keys")
+    for key, value in tool.settings.items():                                # native settings, as written (V59)
+        if value != "default":
+            claim(key, value, f"[tools.{step.tag}].settings")
+    order = beam_order(plan, run, folder)                  # V62: the card's slots, when it has fixed ones
     for name, found in plan.consumers.items():
         quantity = run.quantities[name]
         index = plan.values[name]
         origin = f"[quantities.{name}] = {tag_of(quantity, index)}"
+        value = quantity.values[index]
+        if order and qmod.vocabulary().get(name, {}).get("per_beam") and isinstance(value, list) and len(value) == 2:
+            value = [value[i] for i in order]
         for mapping in found:
             if mapping.tag == step.tag:
-                apply(mapping, quantity.values[index], origin)
+                apply(mapping, value, origin)
 
     step.identity_parts.update({"flags": flags, "options": options, "config_values": config_values})
     if style in ("append", "render"):
@@ -791,40 +815,72 @@ def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
             text = folder.plugin.card([b.read_text(encoding="utf-8") for b in step.card_base], overrides,
                                       {"point": plan.point.name, "tag": step.tag, "output_name": output_name,
                                        "output": str(step.outputs[0].path) if step.outputs else "",
-                                       "base_paths": [str(b) for b in step.card_base]})
+                                       "base_paths": [str(b) for b in step.card_base],
+                                       "owned": list(folder.get("card", "owned", [])),       # V61: the folder's data
+                                       "render": folder.spec.get("render", {})})
             step.card_lines = [header, *text.rstrip("\n").splitlines(), *footer]
         step.card_combined = plan.out / "cards" / f"{step.tag}.{ext}"
         step.identity_parts["base_sha256"] = [sha256_file(b) for b in step.card_base]
+        owned = {_normal(k) for k in folder.get("card", "owned", [])} if style == "append" else set()
+        parse_line = card_parser(folder)
+        for base in step.card_base if owned else ():
+            for line in clean_base(base, folder)[1:]:
+                key = parse_line(line)
+                if key and key[0] in owned:
+                    plan.notes.append(f"{base.name} sets {key[2]}, which the runner sets: the card's value is not used")
         step.identity_parts["card"] = [line for line in step.card_lines if line not in redundant]
         _prepare_key(plan, step, run)
     elif lines:
         raise HepError(f"{folder.name} has no card, but quantities set native keys on it: {', '.join(lines)}",
                        where=f"[tools.{step.tag}]", hint="target an option or a config key instead")
 
-    # analysis-style tools (rivet): analyses with their options
-    if "analyses" in tool.extra:
-        common = {k: native(v, ["1", "0"]) for k, v in tool.extra.get("options", {}).items()}
-        rendered = []
-        for analysis in tool.extra["analyses"]:
-            base, *inline = analysis.split(":")
-            merged = dict(common)                                  # the table's, for every analysis …
-            merged.update(item.partition("=")[::2] for item in inline)   # … the analysis's own, written inline …
-            merged.update(options.get(base, {}))                   # … and the point's quantities, most specific last
-            rendered.append(":".join([base, *(f"{k}={v}" for k, v in sorted(merged.items()))]))
-        unknown = set(options) - {a.split(":")[0] for a in tool.extra["analyses"]}
-        if unknown:
-            raise HepError(f"options target analyses not run by {step.tag}: {', '.join(sorted(unknown))}",
-                           where=f"[tools.{step.tag}]")
-        _check_declared_options(step, rendered)
-        step.identity_parts["analyses"] = rendered
-        step.config_data = {"analyses": rendered}
+    # a folder's own options hook (rivet: its analyses and their options, V60)
+    hook = folder.hook("options")
+    if hook is not None:
+        given = hook(dict(tool.extra), options, {"tag": step.tag, "bools": bools, "native": native,
+                                                 "info_dirs": _info_dirs(folder)})
+        step.identity_parts.update(given.get("identity", {}))
+        if "config_data" in given:
+            step.config_data = given["config_data"]
+        step.placeholders = dict(given.get("placeholders", {}))
         for pattern in folder.get("identity", "files", []):
-            for analysis in rendered:
-                path = Path(expand(pattern, {"repo": str(repo_root()), "exe": str(step.exe),
-                                             "analysis": analysis.split(":")[0]}, folder.name))
-                if path.is_file():
-                    step.identity_parts.setdefault("files_sha256", {})[str(path)] = sha256_file(path)
-    step.identity_parts["_flags"] = flags
+            for name, values in given.get("identity_values", {}).items():
+                for value in values:
+                    path = Path(expand(pattern, {"repo": str(repo_root()), "exe": str(step.exe), name: value}, folder.name))
+                    if path.is_file():
+                        step.identity_parts.setdefault("files_sha256", {})[str(path)] = sha256_file(path)
+    step.flags = flags                                  # argv after [command] argv (V63)
+
+
+def beam_class(pdg: int) -> str:
+    return "lepton" if abs(int(pdg)) in (11, 12, 13, 14, 15, 16) else "photon" if int(pdg) == 22 else "hadron"
+
+
+def beam_order(plan: PointPlan, run, folder: Folder) -> tuple[int, int] | None:
+    """V62: how the run's [beam A, beam B] maps onto a card's fixed slots ([beams] slots), or None when
+    the card takes them as given. The run's order is named by the point's beam ids (a per-beam quantity
+    of PDG ids: `beams`, or beam_a with beam_b), else it is the vocabulary's `unnamed` order."""
+    slots = folder.get("beams", "slots")
+    if not slots:
+        return None
+    vocabulary = qmod.vocabulary()
+    classes = None
+    for name, index in plan.values.items():
+        entry = vocabulary.get(name, {})
+        value = run.quantities[name].values[index]
+        if entry.get("per_beam") and entry.get("shape") == ["pdg", "pdg"]:
+            classes = [beam_class(v) for v in value]
+    if classes is None and "beam_a" in plan.values and "beam_b" in plan.values:
+        classes = [beam_class(run.quantities[n].values[plan.values[n]]) for n in ("beam_a", "beam_b")]
+    if classes is None:
+        classes = next((e["unnamed"] for e in vocabulary.values() if e.get("unnamed")), ["hadron", "lepton"])
+    if sorted(classes) != sorted(slots):
+        if classes[0] == classes[1]:
+            return None                                   # two of a kind (pp): any order is the card's
+        raise HepError(f"{folder.name}'s card takes beams as {slots}, and this point's are {classes}",
+                       where=f"tool '{folder.name}' [beams] slots")
+    first = classes.index(slots[0])
+    return (first, 1 - first)
 
 
 def _prepare_key(plan: PointPlan, step: Step, run) -> None:
@@ -905,36 +961,6 @@ def _info_dirs(folder: Folder) -> list[Path]:
     return dirs
 
 
-def _check_declared_options(step: Step, rendered: list[str]) -> None:
-    """C9 (L19): each analysis has a .info, and every option it is given is declared there."""
-    dirs = _info_dirs(step.folder)
-    if not dirs:
-        return
-    for analysis in rendered:
-        name, *options = analysis.split(":")
-        info = next((d / f"{name}.info" for d in dirs if (d / f"{name}.info").is_file()), None)
-        if info is None:
-            raise HepError(f"no analysis '{name}' (no {name}.info)", where=f"[tools.{step.tag}].analyses",
-                           hint=f"searched {', '.join(str(d) for d in dirs)}; a project plugin needs `hep build`")
-        declared, inside = set(), False
-        for raw in info.read_text(encoding="utf-8", errors="replace").splitlines():
-            if re.match(r"^Options:", raw):
-                inside = True
-                continue
-            if inside:
-                match = re.match(r"^\s*-\s*([A-Za-z0-9_]+)=", raw)
-                if match:
-                    declared.add(match.group(1))
-                elif raw.strip() and not raw.startswith((" ", "\t", "-")):
-                    break
-        for option in options:
-            key = option.split("=")[0]
-            if key not in declared:
-                raise HepError(f"'{name}' does not declare the option {key}", where=f"[tools.{step.tag}]",
-                               hint=(f"declared: {', '.join(sorted(declared)) or 'none'} (in {info}). Rivet ignores "
-                                     "an undeclared option silently, so the curves would be identical (L19)"))
-
-
 def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
     folder, tool = step.folder, step.tool
     context: dict[str, Any] = {
@@ -955,7 +981,7 @@ def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
         "q:": {name: str(run.quantities[name].values[i]) for name, i in plan.values.items()},
         "cards": [str(p) for p in step.card_base] + ([str(step.card_point)] if step.card_point else []),
         "card": str(step.card_combined or ""),
-        "analyses": [x for a in step.identity_parts.get("analyses", []) for x in ("-a", a)],
+        **step.placeholders,
         **plan.context,
     }
     # every option the tool folder declares is a placeholder too: its value, or empty when unset
@@ -987,19 +1013,16 @@ def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
                 values["path"] = expand(declared["path"], {"prepared": str(source.prepare_dir or ""),
                                                            "card": str(source.card_combined or "")},
                                         f"{source.folder.name}/tool.toml [exports.{export}]")
-            for give in declared.get("gives", []):
-                if give == "analyses":
-                    values["analyses"] = source.identity_parts.get("analyses", [])
-                elif give == "plugin_path":
-                    values["plugin_path"] = str(repo_root() / "build" / "Rivet")
+            for give, template in declared.get("values", {}).items():   # V60: data, not names in the core
+                if template.startswith("identity:"):
+                    values[give] = source.identity_parts.get(template[len("identity:"):], [])
                 else:
-                    raise HepError(f"{source.folder.name} export '{export}' gives unknown '{give}'",
-                                   where=f"{source.folder.name}/tool.toml")
+                    values[give] = expand(template, {"repo": str(repo_root())}, f"{source.folder.name}/tool.toml [exports.{export}]")
             standard[key] = values
         step.identity_parts.setdefault("exports", {})[key] = plan.rendered[tag].identity_parts
     context["std:"] = {k: v.get("path", "") for k, v in standard.items()}
 
-    if tool.tool in ("custom", "module"):
+    if folder.get("tool", "config_file"):
         data = dict(tool.config or {})
         consumed = {k: v for k, v in step.identity_parts.get("config_values", {}).items()}
         quantities_table = {k: v for k, v in consumed.items() if k in run.quantities}
@@ -1014,7 +1037,7 @@ def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
             data["quantities"] = quantities_table
         if standard:
             data["standard"] = standard
-        if data or tool.config is not None or tool.tool == "module":   # a kit program always takes one
+        if data or tool.config is not None or folder.get("tool", "config_always"):   # a kit program always takes one
             step.config_path = plan.out / "config" / f"{step.tag}.toml"
             step.config_data = data
             step.identity_parts["config"] = tomli_w.dumps(data)
@@ -1029,7 +1052,7 @@ def _argv(plan: PointPlan, step: Step, run, requests: dict[str, str]) -> None:
             argv.extend(piece)
         elif piece != "":
             argv.append(piece)
-    argv.extend(step.identity_parts.pop("_flags", []))
+    argv.extend(step.flags)
     step.argv = argv
     step.env = {k: expand(v, context, f"{folder.name}/tool.toml [command].env")
                 for k, v in folder.get("command", "env", {}).items()}
@@ -1105,12 +1128,83 @@ def finalise(plan: PointPlan, seed: int) -> None:
                     lines, [b.read_text(encoding="utf-8") for b in step.card_base],
                     {"prepared": prepared, "base_paths": [str(b) for b in step.card_base], "tag": step.tag})
             continue
-        combined = "\n".join(line for base in step.card_base for line in clean_base(base, step.folder)) + "\n" + point_text
+        if step.folder.get("card", "merge"):
+            combined, settings = merged_card(step, lines)
+            plan.writes[step.card_combined.with_suffix(".json")] = json.dumps(settings, indent=1) + "\n"
+            plan.writes[step.card_combined] = combined + "\n" + point_text
+        else:
+            combined = "\n".join(line for base in step.card_base for line in clean_base(base, step.folder))
+            plan.writes[step.card_combined] = combined + "\n" + point_text
         plan.writes[step.card_point] = point_text
-        plan.writes[step.card_combined] = combined
     for step in plan.rendered.values():
         if step.config_path is not None:
             plan.writes[step.config_path] = tomli_w.dumps(step.config_data or {})
+
+
+def _normal(key: str) -> str:
+    return "".join(key.split()).lower()
+
+
+def card_parser(folder: Folder):
+    """A function line → (normal key, value, key as written) or None, from the folder's [card].line
+    (V59): "{key} = {value}" reads `PDF:pSet = 13`, "set {key} {value}" reads `set X:Y 1`. The same
+    template that writes a line reads it, so the grammar is the folder's own."""
+    template = folder.get("card", "line", "{key} = {value}")
+    pattern = ""
+    for piece in re.split(r"(\{key\}|\{value\}|\s+)", template):
+        if piece == "{key}":
+            pattern += r"(?P<key>[^\s=]+)"
+        elif piece == "{value}":
+            pattern += r"(?P<value>.*?)"
+        elif piece and piece.isspace():
+            pattern += r"\s+"
+        elif piece:
+            pattern += r"\s*" + re.escape(piece.strip()) + r"\s*" if piece.strip() else ""
+    regex = re.compile(r"^\s*" + pattern + r"\s*$")
+
+    def parse(line: str):
+        match = regex.match(line)
+        return (_normal(match["key"]), match["value"], match["key"]) if match else None
+    return parse
+
+
+def merged_card(step: "Step", point_lines: list[str]) -> tuple[str, dict]:
+    """[card] merge = true (V59, Pythia): the base cards' settings with each key the point card sets
+    left out, so the card on disk holds every key once; the point card follows, as it does in the run.
+    A key in [card] repeatable (particle-data commands such as 23:onIfMatch, which add up) is kept
+    every time. Returns the text and each key's value and origin, for cards/<tag>.json."""
+    folder = step.folder
+    parse = card_parser(folder)
+    repeatable = {r.lower() for r in folder.get("card", "repeatable", [])}
+    point = {parsed[0]: parsed for parsed in map(parse, point_lines) if parsed}
+    lines, settings = [], {}
+    for base in step.card_base:
+        lines.append(f"{folder.get('card', 'comment', '#')} from {base}")
+        for number, line in _cleaned(base, folder):
+            parsed = parse(line)
+            if parsed and parsed[0] in point and parsed[0].rpartition(":")[2] not in repeatable:
+                continue                                    # the point card sets it: its value is the one used
+            lines.append(line)
+            if parsed:
+                settings[parsed[2]] = {"value": parsed[1].strip(), "from": f"{base.name}:{number}"}
+    for normal, (_, value, key) in point.items():
+        settings[key] = {"value": value.strip(), "from": step.card_origins.get(normal, "the runner")}
+    return "\n".join(lines), settings
+
+
+def _cleaned(base: Path, folder: Folder):
+    """(line number, line) of a base card's settings: no blank lines or comments (V54)."""
+    comment = folder.get("card", "comment", "#")
+    drop = re.compile(folder.get("card", "drop", r"^\s*" + re.escape(comment)))
+    trailing = folder.get("card", "trailing")
+    trailing = re.compile(trailing) if trailing else None
+    inside = folder.get("card", "drop_inside_braces", True)
+    depth = 0
+    for number, raw in enumerate(base.read_text(encoding="utf-8").splitlines(), start=1):
+        line = raw.rstrip()
+        if line.strip() and not ((inside or depth == 0) and drop.match(line)):
+            yield number, trailing.sub("", line) if trailing else line
+        depth = max(0, depth + line.count("{") - line.count("}"))
 
 
 def clean_base(base: Path, folder: Folder) -> list[str]:
@@ -1118,20 +1212,59 @@ def clean_base(base: Path, folder: Folder) -> list[str]:
     comments, under one `<comment> from <base>` line. [card] drop is a full-line comment (a regex),
     trailing a comment after a value; drop_inside_braces = false keeps comment-looking lines inside
     { … } (Tcl: there they can be list elements)."""
-    comment = folder.get("card", "comment", "#")
-    drop = re.compile(folder.get("card", "drop", r"^\s*" + re.escape(comment)))
-    trailing = folder.get("card", "trailing")
-    trailing = re.compile(trailing) if trailing else None
-    inside = folder.get("card", "drop_inside_braces", True)
-    out, depth = [f"{comment} from {base}"], 0
-    for raw in base.read_text(encoding="utf-8").splitlines():
-        line = raw.rstrip()
-        if not line.strip() or ((inside or depth == 0) and drop.match(line)):
-            pass
-        else:
-            out.append(trailing.sub("", line) if trailing else line)
-        depth = max(0, depth + line.count("{") - line.count("}"))
-    return out
+    return [f"{folder.get('card', 'comment', '#')} from {base}", *(line for _, line in _cleaned(base, folder))]
+
+
+_CHECKED: dict[str, list] = {}
+
+
+def check_cards(plan: PointPlan) -> None:
+    """[checks] card (V59): the tool reads each card it is given and says which lines it rejects (Pythia:
+    build/App_PythiaCheck.exe), so a key it does not know or a value of the wrong kind is refused before
+    anything runs, with no list of keys of ours. The card checked is the base cards' settings and the
+    point card before seeds; the answer is cached by its text, in output/<P>/.cache/checks/."""
+    for step in plan.rendered.values():
+        command = step.folder.get("checks", "card")
+        if not command or step.card_combined is None:
+            continue
+        lines: list[tuple[str, str]] = []                 # (line, where it came from)
+        parse = card_parser(step.folder)
+        for base in step.card_base:
+            lines += [(line, f"{base.name}:{n}") for n, line in _cleaned(base, step.folder)]
+        for line in step.card_lines:
+            parsed = parse(line)
+            lines.append((line, step.card_origins.get(parsed[0], "the point card") if parsed else "the point card"))
+        text = "\n".join(line for line, _ in lines) + "\n"
+        key = hashlib.sha256((step.folder.name + str(step.identity_parts.get("exe_sha256")) + text).encode()).hexdigest()[:16]
+        cache = output_root() / plan.out.relative_to(output_root()).parts[0] / ".cache" / "checks" / step.folder.name / f"{key}.json"
+        if key not in _CHECKED:
+            if cache.is_file():
+                _CHECKED[key] = json.loads(cache.read_text(encoding="utf-8"))
+            else:
+                card = cache.with_suffix(".card")
+                argv = [expand(a, {"repo": str(repo_root()), "card": str(card)}, f"{step.folder.name}/tool.toml [checks].card")
+                        for a in command]
+                checker = Path(argv[0])
+                if not checker.is_file():
+                    plan.notes.append(f"{step.tag}'s card is not checked: {checker.name} is not built (hep build)")
+                    continue
+                cache.parent.mkdir(parents=True, exist_ok=True)
+                card.write_text(text, encoding="utf-8")
+                done = subprocess.run(argv, capture_output=True, text=True,
+                                      encoding="utf-8", errors="replace", timeout=120)
+                if done.returncode not in (0, 1):
+                    plan.notes.append(f"{step.tag}'s card check failed to run: {done.stderr.strip()[-160:]}")
+                    continue
+                rejected = [json.loads(l) for l in done.stdout.splitlines() if l.startswith("{")]
+                _CHECKED[key] = rejected
+                cache.write_text(json.dumps(rejected) + "\n", encoding="utf-8")
+                card.unlink(missing_ok=True)
+        rejected = _CHECKED[key]
+        if rejected:
+            shown = [f"{lines[r['line'] - 1][0]!r} ({lines[r['line'] - 1][1]})" for r in rejected[:4]]
+            raise HepError(f"{step.folder.name} rejects {len(rejected)} line(s) of [tools.{step.tag}]'s card: "
+                           + "; ".join(shown) + (" …" if len(rejected) > 4 else ""),
+                           where=f"[tools.{step.tag}]", hint="a key it does not know, or a value of the wrong kind")
 
 
 def _unsharded(tag: str, plan: PointPlan) -> str:

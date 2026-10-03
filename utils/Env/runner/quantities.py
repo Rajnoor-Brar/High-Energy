@@ -14,16 +14,29 @@ finding (00/B14, 00/B40).
 
 from __future__ import annotations
 
+import copy
+import functools
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from . import plugins
 from .errors import HepError, did_you_mean
 from .paths import repo_root, resolve
 
+@functools.cache
+def vocabulary() -> dict:
+    """utils/Env/quantities.toml: what each quantity name means, for every tool (V58)."""
+    path = repo_root() / "utils" / "Env" / "quantities.toml"
+    try:
+        return tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as error:
+        raise HepError(f"cannot read the quantity vocabulary: {error}", where=str(path)) from None
+
+
 #: The built-in quantities: the runner provides them, and they need no consumer (04 §8.3).
-BUILTIN = ("events", "threads")
+BUILTIN = tuple(name for name, entry in vocabulary().items() if entry.get("builtin"))
 
 
 class Override(NamedTuple):
@@ -44,16 +57,34 @@ class Mapping:
     check: str = ""      # a provider check on the value (C10), e.g. "lhapdf"
 
 
-def load_master(project: str, master_toml: str | None) -> dict:
-    """utils/Env/master.toml, overlaid key by key by the project's master if [master] names one."""
-    def read(path: Path) -> dict:
-        try:
-            return tomllib.loads(path.read_text(encoding="utf-8"))
-        except tomllib.TOMLDecodeError as error:
-            raise HepError(f"not valid TOML: {error}", where=str(path))
+def _read(path: Path) -> dict:
+    try:
+        return tomllib.loads(path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as error:
+        raise HepError(f"not valid TOML: {error}", where=str(path)) from None
 
-    base = repo_root() / "utils" / "Env" / "master.toml"
-    master = read(base) if base.exists() else {}
+
+@functools.cache
+def _folders_master() -> dict:
+    """Every tool folder's quantities.toml, as one master: {quantities: {<tool>: {compatible_quantities}}}.
+    A folder maps only names the vocabulary has (V58)."""
+    master: dict = {"quantities": {}}
+    known = vocabulary()
+    for path in sorted((repo_root() / "utils" / "Env").glob("*/quantities.toml")):
+        table = _read(path)
+        unknown = [name for name in table if name not in known]
+        if unknown:
+            raise HepError(f"{path.parent.name} maps {', '.join(unknown)}, which the vocabulary does not have",
+                           where=str(path), hint="add it to utils/Env/quantities.toml, with its shape")
+        master["quantities"][path.parent.name] = {"compatible_quantities": table}
+    return master
+
+
+def load_master(project: str, master_toml: str | None) -> dict:
+    """The tool folders' mappings (utils/Env/<tool>/quantities.toml), overlaid key by key by the project's
+    master if [master].master_toml names one ([quantities.<tool>.compatible_quantities], as before)."""
+    master = copy.deepcopy(_folders_master())
+    read = _read
     if master_toml:
         overlay_path = resolve(master_toml, "master", project=project, where="[master].master_toml")
         if not overlay_path.exists():
@@ -96,8 +127,9 @@ def static_values(run, configuration) -> dict[str, int]:
     return out
 
 
-def mappings(run, master: dict, name: str, tags: list[str]) -> list[Mapping]:
-    """Every way quantity `name` reaches the tools `tags` of this configuration."""
+def mappings(run, master: dict, name: str, tags: list[str], configured: set = frozenset()) -> list[Mapping]:
+    """Every way quantity `name` reaches the tools `tags` of this configuration. `configured`: the tags whose
+    folder writes a config file ([tool] config_file: custom, module), where a target lands as a config key."""
     quantity = run.quantities[name]
     out: list[Mapping] = []
     if quantity.target:
@@ -117,7 +149,7 @@ def mappings(run, master: dict, name: str, tags: list[str]) -> list[Mapping]:
                     raise HepError(f"target '{target}' is an analysis option: give its name in key",
                                    where=f"{run.path}: [quantities.{name}]")
                 out.append(Mapping(tag, "option", key, quantity.format, analysis=rest))
-            elif tool.tool in ("custom", "module"):
+            elif tag in configured:
                 out.append(Mapping(tag, "config", key or name, quantity.format))
             elif key:
                 out.append(Mapping(tag, "key", key, quantity.format))
@@ -155,7 +187,7 @@ def builtin_mappings(master: dict, run, tags: list[str], name: str) -> list[Mapp
 
 
 def consumer_table(run, master: dict, active: list[str], tags: list[str],
-                   alternatives: list[str] = ()) -> dict[str, list[Mapping]]:
+                   alternatives: list[str] = (), configured: set = frozenset()) -> dict[str, list[Mapping]]:
     """quantity → mappings, and rule C7: an active quantity must reach at least one tool.
 
     In a chain that chooses a tool by a quantity (`"@generator"`, V19), a value that only another
@@ -163,8 +195,8 @@ def consumer_table(run, master: dict, active: list[str], tags: list[str],
     it reaches a tool in this configuration, just not in this point's chain."""
     table = {}
     for name in active:
-        found = mappings(run, master, name, tags)
-        if not found and alternatives and mappings(run, master, name, list(alternatives)):
+        found = mappings(run, master, name, tags, configured)
+        if not found and alternatives and mappings(run, master, name, list(alternatives), configured):
             table[name] = []
             continue
         if not found:
@@ -176,47 +208,58 @@ def consumer_table(run, master: dict, active: list[str], tags: list[str],
     return table
 
 
+# ── shapes: a vocabulary quantity's values (V58) ─────────────────────────────────────────────
+
+def _fits(value, shape) -> bool:
+    if isinstance(shape, list):
+        return isinstance(value, list) and len(value) == len(shape) and all(_fits(v, s) for v, s in zip(value, shape))
+    for kind in shape.split("|"):
+        if isinstance(value, bool):
+            if kind == "bool":
+                return True
+            continue
+        if kind == "float" and isinstance(value, (int, float)):
+            return True
+        if kind == "int" and isinstance(value, int):
+            return True
+        if kind == "pdg" and isinstance(value, int) and value != 0:
+            return True
+        if kind == "str" and isinstance(value, str):
+            return True
+    return False
+
+
+def _shape_text(shape) -> str:
+    names = {"float": "a number", "int": "an integer", "pdg": "a PDG id", "str": "a string", "bool": "true or false"}
+    if isinstance(shape, list):
+        return f"a list of {len(shape)}: [{', '.join(_shape_text(s) for s in shape)}]"
+    return " or ".join(names[k] for k in shape.split("|"))
+
+
+def check_shapes(quantity, where: str) -> None:
+    """A quantity the vocabulary names takes values of its shape (V58): `energies = [[275, 18]]`, not
+    `[275, 18]` or `[[275]]`. A quantity it does not name is the user's own, unchecked."""
+    entry = vocabulary().get(quantity.name)
+    if entry is None:
+        return
+    for place, value in enumerate(quantity.values, start=1):
+        if not _fits(value, entry["shape"]):
+            unit = f" in {entry['unit']}" if entry.get("unit") else ""
+            raise HepError(f"[quantities.{quantity.name}] value {place} is {value!r}, not {_shape_text(entry['shape'])}{unit}",
+                           where=where, hint=entry.get("doc", ""))
+
+
 # ── providers: things a value needs installed (02 §4, category 1) ─────────────────────────────
 
-LHAPDF_PREFIXES = ("LHAPDF6:", "LHAPDF5:")
-
-
-def _lhapdf_dirs() -> list[str]:
-    import os
-    return [d for d in os.environ.get("LHAPDF_DATA_PATH", "").split(":") if d]
-
-
-def _lhapdf_installed(name: str) -> bool:
-    return any((Path(d) / name / f"{name}.info").is_file() for d in _lhapdf_dirs())
+def _provider(name: str):
+    """utils/Env/<name>/provider.py (V60): a provider's checks, loaded by name."""
+    return plugins.load(repo_root() / "utils" / "Env" / name / "provider.py", "provider")
 
 
 def check_provider(kind: str, value, where: str) -> None:
-    """Refuse at plan time a value whose provider is missing (C10).
-
-    * "lhapdf": the value is a bare LHAPDF set name ("<set>[/member]", Sherpa's PDF_SET).
-    * "pythia_pdf": Pythia's PDF:pSet, written as the user gives it (no prefix is added): an
-      internal set number, "LHAPDF6:<set>[/member]" (the set must be installed), or a grid file.
-      A bare name that is an installed LHAPDF set is refused: Pythia would read it as a file."""
-    text = str(value)
-    if kind == "lhapdf":
-        if text.startswith(LHAPDF_PREFIXES):
-            raise HepError(f"'{text}': this tool takes the bare LHAPDF set name", where=where,
-                           hint=f"write '{text.split(':', 1)[1]}'")
-        _require_set(text.split("/")[0], where)
-    elif kind == "pythia_pdf":
-        if isinstance(value, int) and not isinstance(value, bool) or text.isdigit():
-            return                                              # one of Pythia's internal sets
-        if text.startswith(LHAPDF_PREFIXES):
-            _require_set(text.split(":", 1)[1].split("/")[0], where)
-        elif _lhapdf_installed(text.split("/")[0]):
-            raise HepError(f"PDF:pSet = '{text}' is an LHAPDF set, which Pythia reads only as LHAPDF6:{text}",
-                           where=where, hint=f"write the value as \"LHAPDF6:{text}\"")
-    else:
-        raise HepError(f"unknown provider check '{kind}'", where=where)
-
-
-def _require_set(name: str, where: str) -> None:
-    if not _lhapdf_installed(name):
-        raise HepError(f"the PDF set '{name}' is not installed", where=where,
-                       hint=f"lhapdf install {name}   (searched LHAPDF_DATA_PATH: {', '.join(_lhapdf_dirs()) or 'unset'})")
-
+    """Refuse at plan time a value whose provider is missing (C10): `check = "<provider>:<form>"` in a tool
+    folder's quantities.toml, e.g. "lhapdf:pythia" (utils/Env/lhapdf/provider.py)."""
+    provider, _, form = kind.partition(":")
+    if not form:
+        raise HepError(f"a provider check is '<provider>:<form>', not '{kind}'", where=where)
+    _provider(provider).check(form, value, where)

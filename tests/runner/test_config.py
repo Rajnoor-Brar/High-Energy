@@ -92,3 +92,27 @@ def test_set_overrides_one_value(scratch):
     apply_sets(data, ["run.one.threads=4", "static.pdf=MSTW08lo"])
     run = parse(data, scratch)
     assert run.configuration("one").threads == 4 and run.static == {"pdf": "MSTW08lo"}
+
+
+# ── V58: the vocabulary's shapes ──────────────────────────────────────────────────────────────
+
+def test_a_vocabulary_quantity_takes_values_of_its_shape(scratch):
+    good = raw(quantities__energies={"values": [[275, 18], [920, 27.5]], "tags": ["a", "b"]})
+    parse(good, scratch)
+    error = fails(raw(quantities__energies={"values": [275, 18]}), scratch, r"value 1 is 275, not a list of 2")
+    assert "beam A, beam B" in error.hint
+    fails(raw(quantities__beams={"values": [[2212, "e-"]]}), scratch, "not a list of 2")
+    fails(raw(quantities__pdf={"values": [True]}), scratch, "not a string or an integer")
+
+
+def test_a_quantity_the_vocabulary_lacks_is_the_users_own(scratch):
+    parse(raw(quantities__pt0ref={"values": ["anything", 3.2], "key": {"pythia": "MultipartonInteractions:pT0Ref"}}), scratch)
+
+
+def test_every_folder_maps_only_vocabulary_names():
+    from runner import quantities
+    master = quantities.load_master("PhotoProduction", None)
+    names = set(quantities.vocabulary())
+    for tool, table in master["quantities"].items():
+        assert set(table["compatible_quantities"]) <= names, tool
+    assert quantities.BUILTIN == ("events", "threads")

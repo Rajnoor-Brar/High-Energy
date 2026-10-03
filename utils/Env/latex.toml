@@ -1,0 +1,46 @@
+# utils/Env/latex.toml — what the plot stage knows of LaTeX text (V61): read by runner/labels.py
+# (.plot labels to ROOT's TLatex, V11, V47, V48) and the yoda backend (TLatex to matplotlib mathtext).
+# Literal strings ('…') keep the backslashes as written.
+
+# LaTeX command → TLatex, in math: what is not here becomes #<command> (\sigma → #sigma); "" drops it
+[tlatex]
+text   = ''
+mathrm = ''
+rm     = ''
+mathit = ''
+textrm = ''
+mathbf = '#bf'
+left   = ''
+right  = ''
+le     = '#leq'
+ge     = '#geq'
+to     = '#rightarrow'
+ell    = 'l'
+
+# YODA's own text macros (yoda/plotting/mlp_preprocessor.py), so a .plot file reads the same in both
+# backends: their value inside $…$ …
+[macros.math]
+GeV   = '\mathrm{GeV}'
+TeV   = '\mathrm{TeV}'
+MeV   = '\mathrm{MeV}'
+pt    = '{p_\mathrm{T}}'
+pT    = '{p_\mathrm{T}}'
+dfrac = '\frac'
+tfrac = '\frac'
+
+# … and outside it
+[macros.text]
+GeV   = 'GeV'
+TeV   = 'TeV'
+MeV   = 'MeV'
+pt    = '$p_\mathrm{T}$'
+pT    = '$p_\mathrm{T}$'
+dfrac = '\frac'
+tfrac = '\frac'
+
+# TLatex #<name> → matplotlib mathtext, where they differ (what is not here becomes \<name>)
+[mathtext]
+bf = 'mathbf'
+it = 'mathit'
+LT = '<'
+GT = '>'

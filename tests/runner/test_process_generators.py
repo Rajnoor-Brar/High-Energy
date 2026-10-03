@@ -11,7 +11,7 @@ from runner import plot, quantities, sweep, tools
 from runner.errors import HepError
 from runner.quantities import Override
 
-from helpers import parse, plans, raw
+from helpers import parse, plans, raw, render_context
 
 
 # ── Whizard (L13) ─────────────────────────────────────────────────────────────────────────────
@@ -24,7 +24,7 @@ def test_whizard_card_sets_everything_before_it_includes_the_base():
     plugin = tools.folders()["whizard"].plugin
     text = plugin.card([WHIZARD_BASE], [Override("beams", [2212, -11], "q"), Override("beams_momentum", [275, 18], "q"),
                                         Override("n_events", 100, "built-in")],
-                       {"tag": "whizard", "output": "/p/events.hepmc", "base_paths": ["/c/photo_ep.sin"]})
+                       render_context("whizard", tag="whizard", output="/p/events.hepmc", base_paths=["/c/photo_ep.sin"]))
     lines = text.splitlines()
     assert "beams = p, E1 => pdf_builtin, epa    # q" in lines
     assert "beams_momentum = 275.0 GeV, 18.0 GeV    # q" in lines
@@ -37,7 +37,7 @@ def test_whizard_card_sets_everything_before_it_includes_the_base():
 def test_whizard_refuses_a_base_that_sets_what_the_plan_owns():
     plugin = tools.folders()["whizard"].plugin
     with pytest.raises(HepError, match="n_events"):
-        plugin.card([WHIZARD_BASE + "n_events = 5\n"], [], {"tag": "whizard", "base_paths": ["/b"]})
+        plugin.card([WHIZARD_BASE + "n_events = 5\n"], [], render_context("whizard", tag="whizard", base_paths=["/b"]))
 
 
 # ── MadGraph (L14) ────────────────────────────────────────────────────────────────────────────
@@ -48,13 +48,13 @@ PROC = "import model sm\ngenerate p e- > e- j\n"
 def test_madgraph_launch_script_and_proc_card():
     plugin = tools.folders()["madgraph"].plugin
     launch = plugin.card([PROC], [Override("beams", [2212, 11], "q"), Override("ebeam1", 275, "q"),
-                                  Override("nevents", 1000, "built-in")], {"tag": "madgraph"}).splitlines()
+                                  Override("nevents", 1000, "built-in")], render_context("madgraph", tag="madgraph")).splitlines()
     assert launch[:2] == ["set automatic_html_opening False", "launch {prepared}/process -n r{seed}"]   # 00/B39
     assert {"set lpp1 1", "set lpp2 0", "set ebeam1 275", "set nevents 1000", "set iseed {seed}"} <= set(launch)
     proc = plugin.prepare_card(launch, [PROC], {"prepared": "/cache/k"}).splitlines()
     assert proc[0] == "set automatic_html_opening False" and proc[-1] == "output /cache/k/process -f"
     with pytest.raises(HepError, match="own `output` line"):
-        plugin.card([PROC + "output here\n"], [], {"tag": "madgraph"})
+        plugin.card([PROC + "output here\n"], [], render_context("madgraph", tag="madgraph"))
 
 
 @pytest.mark.skipif(not shutil.which("mg5_aMC"), reason="load_hep: mg5_aMC")

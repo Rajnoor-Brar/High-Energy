@@ -1,0 +1,32 @@
+# utils/Env/yoda/backend.toml — what the yoda backend tells rivet-mkhtml (V61), read by backend.py.
+
+# legend.position → the .plot keys that place mkhtml's legend ("best": then matplotlib's loc='best')
+[legend.top-right]
+LegendAlign = "r"
+
+[legend.top-left]
+LegendAlign = "l"
+LegendXPos  = "0.05"
+
+[legend.bottom-right]
+LegendAlign = "r"
+LegendYPos  = "0.4"
+
+[legend.bottom-left]
+LegendAlign = "l"
+LegendXPos  = "0.05"
+LegendYPos  = "0.4"
+
+[legend.best]
+LegendAlign = "r"
+
+# [plot].formats → mkhtml's -f flag; "" for a format it writes anyway
+[formats]
+pdf = ""
+png = ""
+svg = "SVG"
+eps = "EPS"
+
+# The style keys (utils/Apps/Paint/base.toml) mkhtml can follow; any other is refused for backend = "yoda"
+[style]
+honoured = ["legend.position", "ratio.divisions", "ratio.range", "ratio.limits", "text.legend", "text.header"]

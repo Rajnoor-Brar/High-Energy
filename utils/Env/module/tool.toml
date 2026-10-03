@@ -2,6 +2,9 @@
 # The table names it: executable = "Lambda.exe" → build/<project>/Lambda.exe. It always gets its
 # extracted config as the first argument; an empty --input means an integrated program.
 [tool]
+config_file     = true
+config_always   = true             # a Module.hh program takes its config even when it is empty             # its table's config, consumed quantities and standard configurations are
+                                   # written to config/<tag>.toml, its first argument; it may ask for exports (V60)
 category        = "analysis-application"
 streamable      = true
 status          = "standard"
