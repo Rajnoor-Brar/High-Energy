@@ -23,7 +23,8 @@ namespace Paint {
     };
 
     struct Page {
-        std::string name, output, title, xLabel, yLabel, ratioLabel = "Ratio";
+        std::string name, output, xLabel, yLabel, ratioLabel = "Ratio";
+        std::string title, titleLeft, titleRight, legendHeader;   // above the frame: centred, its corners; the legend's first line
         std::vector<std::string> formats{"pdf"};
         bool logx = false, logy = false, ratio = false, voidEmpty = false, autoRange = true;
         std::optional<double> yGutter = 0.5, xGutter;          // none: ROOT's own range (0 or "default")
@@ -63,6 +64,9 @@ namespace Paint {
             for (auto& f : *formats) page.formats.push_back(f.value_or(std::string("pdf")));
         }
         page.title = p["title"].value_or(std::string(""));
+        page.titleLeft = p["title_left"].value_or(std::string(""));
+        page.titleRight = p["title_right"].value_or(std::string(""));
+        page.legendHeader = p["legend_header"].value_or(std::string(""));
         page.xLabel = p["x_label"].value_or(std::string(""));
         page.yLabel = p["y_label"].value_or(std::string(""));
         page.ratioLabel = p["ratio_label"].value_or(page.ratioLabel);

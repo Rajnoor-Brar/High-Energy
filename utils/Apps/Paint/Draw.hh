@@ -319,15 +319,21 @@ namespace Paint {
         TCanvas canvas("paint", page.name.c_str(), W, H);
         canvas.SetCanvasSize(W, H);
 
+        // titles above the frame (V51): the corner line, then the main title over it; the top margin
+        // grows by what they need, so a page without them is unchanged
+        const bool corners = !page.titleLeft.empty() || !page.titleRight.empty(), main = !page.title.empty();
+        const double cornerH = 1.5 * st.cornerTitle * look.px, mainH = 1.6 * st.pageTitle * look.px;
+        const double topMargin = st.top + ((corners ? cornerH : 0.0) + (main ? mainH : 0.0)) / H;
+
         // with a ratio, the axes between the margins split by ratio.heights, with no gap
-        Frame ft{double(W), double(H), st.left, st.right, st.bottom, st.top}, fb{};
+        Frame ft{double(W), double(H), st.left, st.right, st.bottom, topMargin}, fb{};
         TPad* top = &canvas;
         TPad* bottom = nullptr;
         if (page.ratio) {
-            const double split = st.bottom + (1 - st.top - st.bottom) * st.ratioHeight / (st.mainHeight + st.ratioHeight);
+            const double split = st.bottom + (1 - topMargin - st.bottom) * st.ratioHeight / (st.mainHeight + st.ratioHeight);
             top = new TPad("top", "", 0, split, 1, 1);                         // the canvas owns its pads
             bottom = new TPad("bottom", "", 0, 0, 1, split);
-            ft = {double(W), H * (1 - split), st.left, st.right, 0.0, st.top / (1 - split)};
+            ft = {double(W), H * (1 - split), st.left, st.right, 0.0, topMargin / (1 - split)};
             fb = {double(W), H * split, st.left, st.right, st.bottom / split, 0.0};
             bottom->SetMargin(fb.l, fb.r, fb.b, fb.t);
             for (TPad* p : {top, bottom}) p->SetFillStyle(0), p->SetBorderMode(0), p->Draw();
@@ -358,7 +364,7 @@ namespace Paint {
         std::vector<const Series*> drawn;
         if (data) drawn.push_back(&*data);
         for (const Series& c : curves) drawn.push_back(&c);
-        legend(page.title, entries, look, ft, keep, placed(drawn, x, Range{y.lo, y.hi}, page.logx, page.logy, ft));
+        legend(page.legendHeader, entries, look, ft, keep, placed(drawn, x, Range{y.lo, y.hi}, page.logx, page.logy, ft));
         top->RedrawAxis();
 
         if (bottom) {
@@ -385,6 +391,19 @@ namespace Paint {
             for (auto& [c, ratio] : ratios)
                 curve(ratio, colour(st.palette[c % st.palette.size()]), look, keep, "r" + std::to_string(c));
             bottom->RedrawAxis();
+        }
+
+        if (corners || main) {                       // in the canvas's NDC, over the frame's top edge
+            canvas.cd();
+            const double edge = 1 - topMargin, gap = 0.25 * st.cornerTitle * look.px / H;
+            auto put = [&](double x, double y, const std::string& t, int align, double size) {
+                auto* l = keep.hold(new TLatex(x, y, t.c_str()));
+                l->SetNDC(), l->SetTextFont(look.font), l->SetTextSize(size), l->SetTextAlign(align), l->Draw();
+            };
+            if (!page.titleLeft.empty()) put(st.left, edge + gap, page.titleLeft, 11, st.cornerTitle * look.px);
+            if (!page.titleRight.empty()) put(1 - st.right, edge + gap, page.titleRight, 31, st.cornerTitle * look.px);
+            if (main) put(st.left + 0.5 * (1 - st.left - st.right), edge + (corners ? cornerH / H : 0.0) + gap,
+                          page.title, 21, st.pageTitle * look.px);
         }
 
         const std::string dir = gSystem->GetDirName(page.output.c_str()).Data();

@@ -42,8 +42,13 @@ BACKENDS = ("root", "yoda")
 FORMATS = ("pdf", "png", "svg", "eps")
 LEGENDS = ("top-right", "top-left", "bottom-right", "bottom-left", "best")
 DATA_KEYS = ("file", "legend", "map")
-OBJECT_KEYS = ("title", "x_label", "y_label", "logx", "logy", "y_gutter", "x_gutter", "ratio", "style")
-OBJECT_TYPES = {"title": str, "x_label": str, "y_label": str, "logx": bool, "logy": bool, "ratio": bool}
+#: Above the frame: the main title and the corners; the legend's first line (V51). [plot] sets them for
+#: every page, [plot.object."<glob>"] and [plot.overlay.<name>] for theirs: a child inherits its parent's
+#: value and may override it, and a key means the same at both levels.
+TITLE_KEYS = ("title", "title_left", "title_right", "legend_header")
+OBJECT_KEYS = (*TITLE_KEYS, "x_label", "y_label", "logx", "logy", "y_gutter", "x_gutter", "ratio", "style")
+OBJECT_TYPES = {**{k: str for k in TITLE_KEYS}, "x_label": str, "y_label": str, "logx": bool, "logy": bool, "ratio": bool}
+OVERLAY_KEYS = ("objects", "labels", *OBJECT_KEYS)
 DEFAULT = "default"      # any drawing option's value: set nothing, the drawing tool decides (V37)
 
 
@@ -71,6 +76,7 @@ class Page:
     ranges: dict = field(default_factory=dict)      # Paint --dump-ranges, for other backends
     style: dict = field(default_factory=dict)       # base.toml with the page's [style] over it
     plots: Path | None = None                        # results/…/plots: a backend draws into plots/<its name>/
+    overlay: str = ""                                # [plot.overlay.<name>]: curves are several objects (V51)
 
 
 def backend(name: str):
@@ -128,16 +134,25 @@ def validate(run) -> None:
         one_of(fmt, FORMATS, "formats")
     only(settings.get("data", {}), DATA_KEYS, "data")
     run_style(run)
-    for glob, table in settings.get("object", {}).items():
-        only(table, OBJECT_KEYS, f'object."{glob}"')
+    children = [(f'object."{glob}"', table, OBJECT_KEYS) for glob, table in settings.get("object", {}).items()]
+    children += [(f"overlay.{name}", table, OVERLAY_KEYS) for name, table in settings.get("overlay", {}).items()]
+    for name, table, _ in children:
+        only(table, OBJECT_KEYS if name.startswith("object") else OVERLAY_KEYS, name)
         for key, kind in OBJECT_TYPES.items():
             value = table.get(key, DEFAULT)
             if value != DEFAULT and (not isinstance(value, kind) or (kind is not bool and isinstance(value, bool))):
                 raise HepError(f"'{key}' must be {'true or false' if kind is bool else 'a string'} or \"default\"",
-                               where=f'{where}.object."{glob}".{key}', hint=f"got {value!r}")
+                               where=f'{where}.{name}.{key}', hint=f"got {value!r}")
         for key in ("y_gutter", "x_gutter"):
-            check_gutter(table.get(key, 0), f'{where}.object."{glob}".{key}')
-        check_style(table.get("style", {}), f'{where}.object."{glob}".style')
+            check_gutter(table.get(key, 0), f'{where}.{name}.{key}')
+        check_style(table.get("style", {}), f'{where}.{name}.style')
+        if name.startswith("overlay"):                                          # V51
+            objects, labels = table.get("objects"), table.get("labels")
+            if not isinstance(objects, list) or not objects or not all(isinstance(o, str) for o in objects):
+                raise HepError("an overlay needs objects = [\"d02-x01-y01\", …]: the histograms drawn together",
+                               where=f"{where}.{name}.objects")
+            if labels is not None and (not isinstance(labels, list) or len(labels) != len(objects)):
+                raise HepError(f"labels must give one label per object ({len(objects)})", where=f"{where}.{name}.labels")
     for name in names[1:] if names[0] == "root" else names:
         backend(name).validate(settings, beside_root=names[0] == "root")
     data = settings.get("data", {})
@@ -255,7 +270,7 @@ def root_text(text: str) -> str:
 def for_root(document: dict) -> dict:
     """The page document Paint reads: every label through root_text (the in-memory document keeps the
     labels as written, which the yoda backend converts its own way)."""
-    out = {**document, "page": {k: root_text(v) if k in ("title", "x_label", "y_label") and isinstance(v, str) else v
+    out = {**document, "page": {k: root_text(v) if k in (*TITLE_KEYS, "x_label", "y_label") and isinstance(v, str) else v
                                 for k, v in document["page"].items()},
            "curve": [{**c, "label": root_text(c["label"])} for c in document["curve"]]}
     if "data" in document:
@@ -473,6 +488,7 @@ def pages(run, configuration, plans) -> list[Page]:
         for full in objects_of(yoda_of(plan)):
             variants.setdefault(plan.point.name, {}).setdefault(base_of(full), []).append(full)
     objects = list(dict.fromkeys(b for plan in complete for b in variants.get(plan.point.name, {})))
+    every = list(objects)                                  # an overlay may name any object, drawn alone or not
     wanted = settings.get("objects", [])
     wanted = [] if wanted == DEFAULT else wanted
     if wanted:
@@ -529,18 +545,50 @@ def pages(run, configuration, plans) -> list[Page]:
                              data=(source, reference) if reference else None,
                              overrides={k for k, v in override.items() if v != DEFAULT},
                              style=merge_style(base, layer), plots=res_dir.parent))
+
+    for name, table in settings.get("overlay", {}).items():     # V51: several objects of a point on one page
+        paths = []
+        for glob in table["objects"]:
+            found = [o for o in every if fnmatch.fnmatch(o.rsplit("/", 1)[-1], glob) or fnmatch.fnmatch(o, glob)]
+            if not found:
+                raise HepError(f"overlay '{name}': '{glob}' matches no object of the points' YODAs",
+                               where=f"{run.path}: [plot.overlay.{name}].objects")
+            paths.append(found[0])
+        labels = table.get("labels") or [p.rsplit("/", 1)[-1] for p in paths]
+        for key, members in by_page.items():
+            rel = f"{key}/{name}" if key else name
+            page, override = page_settings(settings, paths[0], rel, res_dir / rel, False, child=table)
+            curves = [(plan, variants[plan.point.name][path][0], label) for plan in members
+                      for path, label in zip(paths, labels) if path in variants.get(plan.point.name, {})]
+            layer = merge_style(style, override.get("style", {}))
+            document = {"page": page, "style": layer, "curve": [
+                {"file": str(merged), "object": f"{plan.point.name}/{root_name(full)}",
+                 **({"raw": f"{plan.point.name}/RAW/{root_name(full)}"} if "/RAW" + full in raws[plan.point.name] else {}),
+                 "label": label + (f", {_curve_label(run, plan, curve_groups)}" if len(members) > 1 else "")}
+                for plan, full, label in curves]}
+            config = out_dir / f"{rel}.toml"
+            config.parent.mkdir(parents=True, exist_ok=True)
+            config.write_text(tomli_w.dumps(for_root(document)), encoding="utf-8")
+            made.append(Page(rel, config, res_dir / rel, cell=key, object=f"/overlay/{name}", document=document,
+                             sources=[yoda_of(plan) for plan, _, _ in curves], variants=[full for _, full, _ in curves],
+                             overrides={k for k, v in override.items() if v != DEFAULT},
+                             style=merge_style(base, layer), plots=res_dir.parent, overlay=name))
     return made
 
 
-def page_settings(settings: dict, path: str, rel: str, output: Path, with_data: bool) -> tuple[dict, dict]:
-    """A page's [page] table: labels from the analysis's .plot (TLatex), [plot.object] overrides,
-    and the [plot] values. Returns it and the overrides that applied."""
+def page_settings(settings: dict, path: str, rel: str, output: Path, with_data: bool,
+                  child: dict | None = None) -> tuple[dict, dict]:
+    """A page's [page] table: labels from the analysis's .plot (TLatex), [plot.object] overrides (or
+    an overlay's own table, `child`), and the [plot] values. Returns it and the overrides that applied."""
     short = path.rsplit("/", 1)[-1]
     labels = labels_of(path)
     override: dict = {}
-    for glob, table in settings.get("object", {}).items():
-        if fnmatch.fnmatch(short, glob) or fnmatch.fnmatch(path, glob):
-            override.update(table)
+    if child is not None:
+        override = {k: v for k, v in child.items() if k not in ("objects", "labels")}
+    else:
+        for glob, table in settings.get("object", {}).items():
+            if fnmatch.fnmatch(short, glob) or fnmatch.fnmatch(path, glob):
+                override.update(table)
 
     def pick(name, ours, native, tables=(override, settings)):
         """The object's value, else [plot]'s, else ours (the runner's default); "default" at either
@@ -551,13 +599,16 @@ def page_settings(settings: dict, path: str, rel: str, output: Path, with_data: 
     def plot_only(name, ours, native):
         return pick(name, ours, native, tables=(settings,))
 
-    title = tlatex(labels.get("Title") or labels.get("LegendTitle", ""))
+    title, header = tlatex(labels.get("Title", "")), tlatex(labels.get("LegendTitle", ""))     # as mkhtml (V51)
     x_label, y_label = tlatex(labels.get("XLabel", "")), tlatex(labels.get("YLabel", ""))
     log_x, log_y = labels.get("LogX") == "1", labels.get("LogY") == "1"
     ratio = labels["RatioPlot"] == "1" if labels.get("RatioPlot") in ("0", "1") else with_data   # mkhtml's rule
     page = {
         "name": rel, "output": str(output), "formats": formats_of(settings),
-        "title": pick("title", title, title, tables=(override,)),
+        "title": pick("title", title, title),
+        "title_left": pick("title_left", "", ""),
+        "title_right": pick("title_right", "", ""),
+        "legend_header": pick("legend_header", header, header),
         "x_label": pick("x_label", x_label, x_label, tables=(override,)),
         "y_label": pick("y_label", y_label, y_label, tables=(override,)),
         "logx": bool(pick("logx", log_x, log_x)),

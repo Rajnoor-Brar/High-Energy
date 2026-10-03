@@ -80,7 +80,7 @@ def test_object_overrides_and_rivet_labels(stage):
     assert pages["em/d04-x01-y01"]["title"] == "override"
     assert pages["em/d02-x01-y01"]["y_gutter"] == 0.5 and pages["em/d02-x01-y01"]["x_gutter"] == "default"
     if (REPO / "build" / "Rivet" / "photo_eic.plot").exists():
-        assert pages["em/d01-x01-y01"]["x_label"] == "#it{E}_{#it{T}} [GeV]"
+        assert pages["em/d01-x01-y01"]["x_label"] == "#it{E}_{#it{T}}^{#it{jet}} [GeV]"
         assert pages["em/d02-x01-y01"]["logy"] is False
 
 
@@ -218,3 +218,28 @@ def test_a_best_legend_is_drawn(stage):
     run, configuration, plans = stage
     run.plot["style"] = {**run.plot.get("style", {}), "legend": {"position": "best"}}
     assert plot.draw(run, configuration, plans, lambda line: None) == 0
+
+
+@pytest.mark.parametrize("stage", ["root", "yoda"], indirect=True)
+def test_titles_and_overlays(stage):
+    """V51: [plot] titles for every page, a child's override; an overlay is several objects of each
+    point on one page, labelled by the overlay (and the point, when a page has several)."""
+    run, configuration, plans = stage
+    run.plot.update({"title": "All pages", "title_right": "Pythia 8", "legend_header": "header for all",
+                     "overlay": {"cuts": {"objects": ["d02-x01-y01", "d03-x01-y01"], "labels": ["E_{T} > 5", "E_{T} > 10"],
+                                          "title": "#eta by cut", "title_left": "k_{T}"}}})
+    run.plot["object"]["d04-*"]["legend_header"] = "d04's own"
+    by = {p.name: p for p in plot.pages(run, configuration, plans)}
+    d01, d04, cuts = (tomllib.loads(by[n].config.read_text())["page"] for n in ("em/d01-x01-y01", "em/d04-x01-y01", "em/cuts"))
+    assert (d01["title"], d01["title_right"], d01["legend_header"]) == ("All pages", "Pythia 8", "header for all")
+    assert d04["legend_header"] == "d04's own" and d04["title"] == "override"        # the child's own title
+    assert (cuts["title"], cuts["title_left"], cuts["title_right"]) == ("#eta by cut", "k_{T}", "Pythia 8")
+    labels = [c["label"] for c in tomllib.loads(by["em/cuts"].config.read_text())["curve"]]
+    assert labels == ["E_{T} > 5, MSTW 2008 LO", "E_{T} > 10, MSTW 2008 LO", "E_{T} > 5, NNPDF 2.3 LO", "E_{T} > 10, NNPDF 2.3 LO"]
+    assert plot.draw(run, configuration, plans, lambda line: None) == 0
+
+    if run.plot["backend"] == "yoda":
+        plots = plans[0].res.parent / "plots" / "yoda"
+        assert (plots / "em" / "overlay" / "cuts.png").exists()
+        script = (plots / "em" / "photo_eic" / "d01-x01-y01.py").read_text()
+        assert "'All pages'" in script and "'Pythia 8'" in script and "bbox_inches='tight'" in script
