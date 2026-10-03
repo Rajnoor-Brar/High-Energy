@@ -7,8 +7,9 @@ docs/04_Config_Reference.md §11, docs/05_Tools_Reference.md §17. After the poi
 * the sweep is merged into one ROOT file, results/…/plots/root/<configuration>.root: a directory
   per point, raw entries included (so Paint can void by min_entries) and points.json inside. It is
   rebuilt only when a point's YODA changes, and it is what the pages read;
-* titles and axis labels come from the analysis's Rivet .plot file (one label source, v1's D9), its
-  LaTeX translated to TLatex (V11), under [plot.object."<glob>"] overrides;
+* titles and axis labels come from the analysis's Rivet .plot file (one label source, v1's D9), under
+  [plot.object."<glob>"] overrides; every text is LaTeX (V65), and may cite the points (V66):
+  {cell}, {q:<quantity>} (a value's label), and what the tools' folders give ({opt:ETMIN}: Rivet's);
 * reference data are drawn only through the explicit [plot.data].map (L18);
 * one Paint config per page, output/…/plots/[<page>/]<object>.toml, drawn to
   results/…/plots/root/[<page>/]<object>.<fmt>; the yoda backend writes results/…/plots/yoda/, and
@@ -23,6 +24,7 @@ from __future__ import annotations
 import fnmatch
 import hashlib
 import json
+import re
 import subprocess
 import tomllib
 from dataclasses import dataclass, field, replace
@@ -46,6 +48,7 @@ LEGENDS = ("top-right", "top-left", "bottom-right", "bottom-left", "best")
 #: value and may override it, and a key means the same at both levels.
 TITLE_KEYS = ("title", "title_left", "title_right", "legend_header")
 DEFAULT = schema.DEFAULT  # "keep it as it is" (V55): a child's is its parent's; [plot]'s sets nothing
+PLACEHOLDER = re.compile(r"\{(cell|[a-z]+:[A-Za-z0-9_.:+-]+)\}")    # V66; a LaTeX group never has the colon
 
 
 def formats_of(settings: dict) -> list[str]:
@@ -354,25 +357,36 @@ def pages(run, configuration, plans) -> list[Page]:
         by_page.setdefault(key, []).append(plan)
 
     style, base = run_style(run), base_style()
+    known = {plan.point.name: texts_of(run, plan, ", ".join(label_of(run.quantities[g[0]], plan.point.choice[g[0]])
+                                                           for g in page_groups)) for plan in complete}
+    where = f"{run.path}: [plot]"
+
+    def page_fill(plans):
+        return filler(list({p.point.name: known[p.point.name] for p in plans}.values()), where)
+
+    def curve_fill(plan):
+        return filler([known[plan.point.name]], where)
+
     made = []
     for key, members in by_page.items():
         for path in objects:
             short = path.rsplit("/", 1)[-1]
             rel = f"{key}/{short}" if key else short
             reference = data.get("map", {}).get(short) if data else None
-            page, override = page_settings(settings, path, rel, res_dir / rel, reference is not None)
             curves = [(plan, full) for plan in members for full in variants.get(plan.point.name, {}).get(path, [])]
+            fill = page_fill([plan for plan, _ in curves] or members)
+            page, override = page_settings(settings, path, rel, res_dir / rel, reference is not None, fill=fill)
             several = {plan.point.name for plan, _ in curves if len(variants[plan.point.name][path]) > 1}
             layer = merge_style(style, override.get("style", {}))
             document = {"page": page, "style": layer, "curve": [
                 {"file": str(merged), "object": f"{plan.point.name}/{root_name(full)}",
                  **({"raw": f"{plan.point.name}/RAW/{root_name(full)}"} if "/RAW" + full in raws[plan.point.name] else {}),
-                 "label": _curve_label(run, plan, curve_groups)
+                 "label": _curve_label(run, plan, curve_groups, curve_fill(plan))
                           + (f" [{full.strip('/').split('/')[0].partition(':')[2]}]" if plan.point.name in several else "")}
                 for plan, full in curves]}
             if reference:
                 document["data"] = {"file": str(data_file), "object": root_name(reference),
-                                    "label": canonical(data.get("legend", "Data"))}
+                                    "label": canonical(fill(data.get("legend", "Data")))}
             config = out_dir / f"{rel}.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(tomli_w.dumps(for_root(document)), encoding="utf-8")
@@ -390,17 +404,18 @@ def pages(run, configuration, plans) -> list[Page]:
                 raise HepError(f"overlay '{name}': '{glob}' matches no object of the points' YODAs",
                                where=f"{run.path}: [plot.overlay.{name}].objects")
             paths.append(found[0])
-        labels = [canonical(l) for l in table.get("labels") or [p.rsplit("/", 1)[-1] for p in paths]]
+        labels = table.get("labels") or [p.rsplit("/", 1)[-1] for p in paths]
         for key, members in by_page.items():
             rel = f"{key}/{name}" if key else name
-            page, override = page_settings(settings, paths[0], rel, res_dir / rel, False, child=table)
-            curves = [(plan, variants[plan.point.name][path][0], label) for plan in members
+            curves = [(plan, variants[plan.point.name][path][0], canonical(curve_fill(plan)(label))) for plan in members
                       for path, label in zip(paths, labels) if path in variants.get(plan.point.name, {})]
+            page, override = page_settings(settings, paths[0], rel, res_dir / rel, False, child=table,
+                                           fill=page_fill([plan for plan, _, _ in curves] or members))
             layer = merge_style(style, override.get("style", {}))
             document = {"page": page, "style": layer, "curve": [
                 {"file": str(merged), "object": f"{plan.point.name}/{root_name(full)}",
                  **({"raw": f"{plan.point.name}/RAW/{root_name(full)}"} if "/RAW" + full in raws[plan.point.name] else {}),
-                 "label": label + (f", {_curve_label(run, plan, curve_groups)}" if len(members) > 1 else "")}
+                 "label": label + (f", {_curve_label(run, plan, curve_groups, curve_fill(plan))}" if len(members) > 1 else "")}
                 for plan, full, label in curves]}
             config = out_dir / f"{rel}.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
@@ -412,10 +427,43 @@ def pages(run, configuration, plans) -> list[Page]:
     return made
 
 
+def texts_of(run, plan, cell: str) -> dict[str, str]:
+    """What a page text may cite at a point (V66): {cell}, {q:<quantity>} (the label of its value at the
+    point, swept or static) and the texts the tools' folders give (rivet: {opt:NAME})."""
+    out = {"cell": cell}
+    for name, index in plan.values.items():
+        if name in run.quantities:
+            out[f"q:{name}"] = label_of(run.quantities[name], index)
+    for step in plan.rendered.values():
+        out.update(step.texts)
+    return out
+
+
+def filler(known: list[dict[str, str]], where: str):
+    """A function filling a text's placeholders from the points it speaks for: a page's (all its curves'
+    points: a value must be the same at every one) or a curve's (its own point)."""
+    def fill(text: str) -> str:
+        def one(match):
+            key = match.group(1)
+            values = {k.get(key) for k in known}
+            if None in values:
+                cited = sorted({k for d in known for k in d})
+                raise HepError(f"a page text cites {{{key}}}, which is nothing the points have", where=where,
+                               hint=did_you_mean(key, cited) or f"they have: {', '.join('{' + k + '}' for k in cited)}")
+            if len(values) > 1:
+                raise HepError(f"a page text cites {{{key}}}, which differs between the curves of the page: "
+                               f"{', '.join(sorted(values))}", where=where,
+                               hint="cite it in the curves' labels (a quantity's labels), or make it a plot_points axis")
+            return values.pop()
+        return PLACEHOLDER.sub(one, text) if isinstance(text, str) else text
+    return fill
+
+
 def page_settings(settings: dict, path: str, rel: str, output: Path, with_data: bool,
-                  child: dict | None = None) -> tuple[dict, dict]:
+                  child: dict | None = None, fill=lambda text: text) -> tuple[dict, dict]:
     """A page's [page] table: labels from the analysis's .plot (TLatex), [plot.object] overrides (or
-    an overlay's own table, `child`), and the [plot] values. Returns it and the overrides that applied."""
+    an overlay's own table, `child`), and the [plot] values, their placeholders filled (`fill`, V66).
+    Returns it and the overrides that applied."""
     short = path.rsplit("/", 1)[-1]
     labels = labels_of(path)
     override: dict = {}
@@ -448,12 +496,12 @@ def page_settings(settings: dict, path: str, rel: str, output: Path, with_data: 
     ratio = labels["RatioPlot"] == "1" if labels.get("RatioPlot") in ("0", "1") else with_data   # mkhtml's rule
     page = {
         "name": rel, "output": str(output), "formats": formats_of(settings),
-        "title": canonical(pick("title", title, title)),
-        "title_left": canonical(pick("title_left", "", "")),
-        "title_right": canonical(pick("title_right", "", "")),
-        "legend_header": canonical(pick("legend_header", header, header)),
-        "x_label": canonical(pick("x_label", x_label, x_label, tables=(override,))),
-        "y_label": canonical(pick("y_label", y_label, y_label, tables=(override,))),
+        "title": canonical(fill(pick("title", title, title))),
+        "title_left": canonical(fill(pick("title_left", "", ""))),
+        "title_right": canonical(fill(pick("title_right", "", ""))),
+        "legend_header": canonical(fill(pick("legend_header", header, header))),
+        "x_label": canonical(fill(pick("x_label", x_label, x_label, tables=(override,)))),
+        "y_label": canonical(fill(pick("y_label", y_label, y_label, tables=(override,)))),
         "logx": bool(pick("logx", log_x, log_x)),
         "logy": bool(pick("logy", log_y, log_y)),
         "y_gutter": _gutter(pick("y_gutter", ours("y_gutter"), DEFAULT)),
@@ -472,10 +520,10 @@ def _gutter(value):
     return value if value == "default" else float(value)
 
 
-def _curve_label(run, plan, curve_groups) -> str:
+def _curve_label(run, plan, curve_groups, fill=lambda text: text) -> str:
     if not curve_groups:
         return run.name
-    return ", ".join(canonical(label_of(run.quantities[g[0]], plan.point.choice[g[0]])) for g in curve_groups)
+    return ", ".join(canonical(fill(label_of(run.quantities[g[0]], plan.point.choice[g[0]]))) for g in curve_groups)
 
 
 def _paint(paint: Path, configs: list[Path], mode: list[str] = ()) -> dict[str, tuple[bool, str]]:

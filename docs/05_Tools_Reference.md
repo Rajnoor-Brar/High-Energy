@@ -111,7 +111,7 @@ output_file = "photo.yoda"
   from `rivet --version`.
 - **Exports** `rivet_analyses`: `analyses` (with this point's options applied, e.g.
   `photo_eic:R=0.4`) and `plugin_path` (`build/Rivet`).
-- **Its own code** is `utils/Env/rivet/render.py`'s `options` hook (V60): the analyses with their options, the `.info` check, `{analyses}` for the argv; the runner core names no tool.
+- **Its own code** is `utils/Env/rivet/render.py`'s `options` hook (V60): the analyses with their options, the `.info` check, `{analyses}` for the argv, and the page texts `{opt:NAME}` (V66: each option at the point, the `.info`'s `(default X)` when unset); the runner core names no tool.
 - Status by filters: `Event N (` → progress, `ERROR`/`Exception` → error, `WARN` → warning (the
   "unvalidated" warning ignored). Ledger: L7, L9, L10, L19.
 

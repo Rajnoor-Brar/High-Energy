@@ -205,7 +205,7 @@ def test_the_combined_card_holds_each_key_once(scratch):
     settings = json.loads(p.writes[step.card_combined.with_suffix(".json")])
     assert settings["Main:numberOfEvents"] == {"value": "10", "from": "built-in events"}
     assert settings["PhaseSpace:pTHatMin"]["from"].startswith("photo_ep.cmnd:")
-    assert any("which the runner sets" in note for note in p.notes) is ("Random:seed" in step.card_base[0].read_text())
+    assert any("which the runner sets" in note for note in p.notes) is ("Random:seed" in step.card_base[0].read_text(encoding="utf-8"))
 
 
 def test_repeatable_commands_are_kept_every_time(scratch):
@@ -260,3 +260,12 @@ def test_a_tables_own_filters_file_replaces_the_folders(scratch, monkeypatch):
     assert p.rendered["rivet"].status == "filters" and p.rendered["rivet"].filters == [{"match": "^Done", "emit": "phase"}]
     with pytest.raises(HepError, match="status must be one of"):
         plan(raw(tools__rivet__status="filters:mine.toml"), scratch)
+
+
+def test_rivet_gives_the_pages_its_options_with_the_info_defaults(scratch):
+    """V66: {opt:NAME} is the option at the point, given or the .info's "(default X)"."""
+    data = raw(tools__rivet__options={"ETMIN": 17})
+    _, _, p = plan(data, scratch)
+    texts = p.rendered["rivet"].texts
+    assert texts["opt:ETMIN"] == texts["opt:photo_eic:ETMIN"] == "17"
+    assert texts["opt:ETMIN2"] == "10.0" and texts["opt:Q2MAX"] == "1.0"     # photo_eic.info's defaults

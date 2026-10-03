@@ -149,13 +149,13 @@ def _plot_block(page, window: tuple[float, float] | None = None) -> str:
         keys["RatioPlotYMin"], keys["RatioPlotYMax"] = f"{window[0]:.6g}", f"{top:.6g}"
     keys["Title"] = ""                                 # the titles are ours, drawn by titles() (V51)
     overlay = getattr(page, "overlay", "")
-    for key, native in (("x_label", "XLabel"), ("y_label", "YLabel")):
-        if key in page.overrides or overlay:              # an overlay's path has no .plot of its own
-            keys[native] = mathtext(settings[key])
     from runner.labels import labels_of, lines_of, macros
     own = labels_of(page.object)
-    if settings.get("legend_header", "") != own.get("LegendTitle", ""):   # [plot], a child or an overlay's (both LaTeX, V65)
-        keys["LegendTitle"] = mathtext(settings.get("legend_header", ""))
+    # a text that is not the .plot's as written: an override, an overlay's (its path has no .plot of its
+    # own), or the .plot's own with its placeholders filled (V66)
+    for key, native in (("x_label", "XLabel"), ("y_label", "YLabel"), ("legend_header", "LegendTitle")):
+        if overlay or settings.get(key, "") != canonical(own.get(native, "")):
+            keys[native] = mathtext(settings.get(key, ""))
     for native, text in own.items():  # mkhtml draws each line apart: close math per line (V47)
         if native in ("Title", "LegendTitle", "XLabel", "YLabel") and native not in keys:   # and our macros (V48)
             fixed = "\\newline".join(lines_of(macros(text)))

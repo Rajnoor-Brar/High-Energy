@@ -331,3 +331,19 @@ def test_yoda_sizes_the_legend_title_by_text_header(yoda_backend):
                            style={"legend": {"position": "top-right"}, "text": {"legend": 7.0, "header": 8.5}})
     block = yoda_backend._plot_block(page)
     assert "LegendFontSize=7; plt.rcParams['legend.title_fontsize'] = 8.5" in block
+
+
+def test_a_page_text_cites_the_points():
+    """V66: {cell}, {q:…} and a folder's texts are filled before the text is read as LaTeX."""
+    fill = plot.filler([{"cell": "18x275", "opt:ETMIN": "17"}] * 2, "here")
+    shown = plot.page_settings({"legend_header": "$E_T > {opt:ETMIN}$ GeV", "title": "{cell}"},
+                               "/photo_eic/d01-x01-y01", "d01", Path("/tmp/x"), True, fill=fill)[0]
+    assert shown["legend_header"] == "$E_T > 17$ GeV" and shown["title"] == "18x275"
+    assert fill(r"$\mathrm{d}\sigma/\mathrm{d}E_T$") == r"$\mathrm{d}\sigma/\mathrm{d}E_T$"   # LaTeX groups untouched
+
+
+def test_a_page_text_that_differs_between_its_curves_is_refused():
+    with pytest.raises(HepError, match="differs between the curves"):
+        plot.filler([{"q:pdf": "MSTW"}, {"q:pdf": "NNPDF"}], "here")("{q:pdf}")
+    with pytest.raises(HepError, match="nothing the points have"):
+        plot.filler([{"opt:ETMIN": "17"}], "here")("{opt:ETMN}")
