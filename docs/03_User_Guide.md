@@ -124,7 +124,7 @@ ratio   = true
 
 - **The physics is in the base card.** A quantity renders an override into the point card
   (`cards/pythia.point.cmnd`), read after the base, so it wins.
-- **Quantities reach tools** through `utils/Env/master.toml` (`energies`, `pdf`, `sqrts`, `beams`,
+- **Quantities reach tools** through the tool folders' `quantities.toml` (`energies`, `pdf`, `sqrts`, `beams`,
   `beam_a`, `beam_b` for Pythia), through `key = { pythia = "…" }`, or through a `target` (04 §8.1).
   A quantity that is set but reaches no tool is refused (C7): a value that changes a directory name
   and nothing else is the failure this framework is built to refuse.

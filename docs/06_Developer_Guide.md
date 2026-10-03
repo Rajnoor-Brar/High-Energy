@@ -16,7 +16,7 @@ C++, the tests, and the conventions. The design it serves is [02_Architecture.md
 | `utils/Env/patches/` | patches this repository needs in the `~/HEP` stack, applied by hand (each file says to which source; `fastjet-3.5.0-siscone-thread-local-ranlux.patch`: `cd ~/HEP/src/fastjet-3.5.0 && patch -p0 < …`, rebuild, `make install`) | yes |
 | `utils/App_Pythia.cc`, `utils/App_yd2rt.cc` | single-file apps | yes |
 | `utils/Apps/Paint/` | the multi-file Paint app, and `base.toml` (the style) | yes |
-| `utils/Env/` | `hep`, `run`, `hep_env.sh`, `flags.sh`, `master.toml`, `runner/`, the tool folders | yes |
+| `utils/Env/` | `hep`, `run`, `hep_env.sh`, `flags.sh`, `quantities.toml` (the vocabulary), `schema/`, `runner/`, the tool folders | yes |
 | `tests/` | `runner/` (unit), `integration/` (real processes), `cxx/`, `reference/` (data the gates compare against) | yes |
 | `docs/` | this manual | yes |
 | `bots/` | agent rules (`BOT.md`), the working plan, `intent.md` (ideas) | yes |
@@ -293,8 +293,9 @@ A worked outline, for a generator `gen` that reads a card and writes HepMC to a 
    ```
 
 3. **`filters.toml`**: a progress rule from a real log, an error rule; nothing that fails a run.
-4. **The master**: `[quantities.gen.compatible_quantities]` for the quantities it takes by name
-   (`energies`, `pdf`, `events`), in `utils/Env/master.toml`.
+4. **Its quantities**: `utils/Env/<gen>/quantities.toml`, how it consumes the vocabulary's names
+   (`energies = { keys = [...] }`, `pdf`, `events`); a name the vocabulary lacks goes into
+   `utils/Env/quantities.toml` first, with its shape (V58).
 5. **A plan-time test** in `tests/runner/` (the card, the argv, a refusal), using `helpers.raw()`,
    `parse()` and `plan()`, and a **slow gate** in `tests/integration/` that runs a point and checks
    a number (σ against the tool's own, the count check).

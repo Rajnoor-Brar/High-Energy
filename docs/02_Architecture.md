@@ -11,7 +11,7 @@ How the framework works, and why its boundaries are where they are. The principl
 ```
 hep run PhotoProduction/eic energy_pdf                      utils/Env/hep → utils/Env/run → runner.cli
   │
-  ├─ load     configs/PhotoProduction/eic.toml  (+ utils/Env/master.toml: quantity → tool maps)
+  ├─ load     configs/PhotoProduction/eic.toml  (+ utils/Env/quantities.toml, <tool>/quantities.toml: quantity → tool maps)
   ├─ resolve  [run.energy_pdf]: sweeps, plot_points, tools, static, prelim
   ├─ expand   sweeps = ["energies", "pdf"]  →  16 points   (a grid of axes; entangled groups zip)
   ├─ plan     per point: cards, config files, argv, connections, identity, seeds; every check (C1–C14)
@@ -64,9 +64,10 @@ utils/
 │   ├── run                   the runner's entry script
 │   ├── hep_env.sh            the shell environment (load_hep, quit, hep_cd, hep_status, …)
 │   ├── flags.sh              probes each library's *-config once → build/flags.mk
-│   ├── master.toml           how each standard tool consumes named quantities
+│   ├── quantities.toml       the vocabulary: what each quantity name means (shape, unit)
+│   ├── schema/run.toml       every key a run TOML may hold (V55)
 │   ├── runner/               the runner: one flat Python package (§3.1)
-│   └── <tool>/               one folder per standard tool: tool.toml (+ render.py, filters.toml)
+│   └── <tool>/               one folder per standard tool: tool.toml (+ quantities.toml, render.py, filters.toml)
 ├── Status.hh                 ─── C++ ─── the status protocol (JSON lines on $HEP_STATUS_FD)
 ├── Module.hh                 the kit for module programs
 ├── App_Pythia.cc             the standard Pythia tool

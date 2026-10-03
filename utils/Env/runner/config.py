@@ -18,6 +18,7 @@ from typing import Any
 from . import schema
 from .errors import HepError, did_you_mean
 from .paths import config_file, configs_root, resolve
+from .quantities import check_shapes
 
 #: How a point's seeds are chosen (V39, 02 §8); the schema's [run.seed_type].choices.
 SEED_TYPES = tuple(schema.keys("run")["seed_type"]["choices"])
@@ -380,10 +381,12 @@ def parse(raw: dict, path: Path) -> RunConfig:
                                hint=f"1-based: 1 to {len(values)}, as static \"#2\" and --points 2 count")
         if len(set(exclude)) == len(values):
             raise HepError("exclude leaves no value to sweep", where=f"{at}.exclude")
-        quantities[name] = Quantity(name=name, values=values, tags=[str(t) for t in table.get("tags", [])],
+        quantity = Quantity(name=name, values=values, tags=[str(t) for t in table.get("tags", [])],
                                     labels=[str(l) for l in table.get("labels", [])], key=table.get("key"),
                                     target=_as_list(table.get("target")), format=table.get("format", ""),
                                     description=table.get("description", ""), exclude=sorted(set(exclude)))
+        check_shapes(quantity, at)                                          # V58: the vocabulary's shape
+        quantities[name] = quantity
 
     tools: dict[str, Tool] = {}
     for tag, table in raw.get("tools", {}).items():

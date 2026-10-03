@@ -1,0 +1,48 @@
+# utils/Env/quantities.toml — the vocabulary: what a quantity name means, for every tool (V58).
+#
+# A quantity named here ([quantities.<name>] in a run TOML) has this meaning wherever it goes, and its
+# values are checked against the shape when the run TOML is read. How each tool consumes it is the
+# tool's own: utils/Env/<tool>/quantities.toml (docs/04_Config_Reference.md §3). A quantity not named
+# here is the user's own, reaching a tool through its `key` or `target`.
+#
+#   shape    "float" | "int" | "pdg" (a PDG id) | "str" | "bool", several joined by "|", or a list of
+#            shapes: a list value with one entry each, in order
+#   unit     the unit of a number
+#   builtin  true: the runner provides it from the configuration (events, threads); declared as a
+#            quantity it may be swept, and each point then has that value (V56)
+
+[energies]
+shape = ["float", "float"]
+unit  = "GeV"
+doc   = "the beam energies, [beam A, beam B] (04 §3: which beam is A is each card's)"
+
+[sqrts]
+shape = "float"
+unit  = "GeV"
+doc   = "the centre-of-mass energy, for symmetric beams"
+
+[beam_a]
+shape = "pdg"
+doc   = "beam A's PDG id"
+
+[beam_b]
+shape = "pdg"
+doc   = "beam B's PDG id"
+
+[beams]
+shape = ["pdg", "pdg"]
+doc   = "the beams' PDG ids, [beam A, beam B]"
+
+[pdf]
+shape = "str|int"
+doc   = "the proton PDF: an LHAPDF set (as each tool writes it), or a generator's own set number"
+
+[events]
+shape   = "int"
+builtin = true
+doc     = "events per point (the configuration's event_count)"
+
+[threads]
+shape   = "int"
+builtin = true
+doc     = "threads per generator (the configuration's threads)"

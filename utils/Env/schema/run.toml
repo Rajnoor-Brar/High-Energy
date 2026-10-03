@@ -25,7 +25,7 @@ order = ["master", "run", "prelim", "static", "tools", "quantities", "plot"]
 
 [master.master_toml]
 type = "str"
-doc  = "a project master overlaid on utils/Env/master.toml (configs/<Project>/…)"
+doc  = "a project master overlaid on the tool folders' quantities.toml (configs/<Project>/…)"
 
 [master.include]
 type  = "str|list"

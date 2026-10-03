@@ -19,7 +19,7 @@ checked **at plan time**, before any process starts: `hep run … --plan` runs e
 |---|---|---|
 | native base cards: `configs/<P>/*.cmnd`, `.in`, `.yaml`, `.sin`, `.mg5`, `.tcl` | the physics | you; never modified by the runner |
 | the run TOML: `configs/<P>/<run>.toml` | configurations, quantities, tools, wiring, plots | you |
-| `utils/Env/master.toml`, optionally overlaid by a project's master | how each standard tool consumes named quantities (§3) | the framework; a project may add to it |
+| `utils/Env/quantities.toml` (what each quantity name means) and each tool folder's `quantities.toml` (how that tool consumes it), optionally overlaid by a project's master | how each standard tool consumes named quantities (§3) | the framework; a project may add to it |
 | `utils/Apps/Paint/base.toml`, optionally a style file | the look of the ROOT pages (§12) | the framework; you, to change every page |
 
 **Physics stays in the native card.** A quantity renders an *override* into a point card; the base
@@ -29,7 +29,7 @@ YAML merge for Sherpa, …; see [05](05_Tools_Reference.md)).
 **Precedence of a value, lowest to highest:**
 
 ```
-utils/Env/master.toml  <  [master].master_toml  <  [quantities.<q>].key / target  <  --set
+utils/Env/<tool>/quantities.toml  <  [master].master_toml  <  [quantities.<q>].key / target  <  --set
 [static]  <  [run.<cfg>].static  <  --set static.<q>=…  <  the value a sweep gives the point
 [run].event_count, threads  <  [run.<cfg>].event_count, threads  <  --set
 base.toml  <  [plot].root_style file  <  [plot.style]  <  [plot.object."<glob>"].style
@@ -92,10 +92,17 @@ include     = ["common.toml"]    # optional: run TOMLs whose tables this one sta
 
 | Key | Type | Default | Notes |
 |---|---|---|---|
-| `master_toml` | string (path) | none | overlays `utils/Env/master.toml` key by key: an entry for a (tool, quantity) pair replaces the framework's. The file must exist. |
+| `master_toml` | string (path) | none | overlays the tool folders' mappings key by key (`[quantities.<tool>.compatible_quantities]`): an entry for a (tool, quantity) pair replaces the framework's. The file must exist. |
 | `include` | string or array (paths) | none | files under `configs/<project>/` (`.toml` optional) whose tables the run starts from, in order; **this file wins** (V56). A quantity, tool table or configuration of the file replaces the included one whole; `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively. An included file has no `[master]` of its own. `--show-config` lists what came from where. |
 
-A master TOML maps a **quantity name** to what it means for one **tool type**:
+**The vocabulary** (`utils/Env/quantities.toml`, V58) says what each quantity name means for every
+tool: its **shape** (`energies`: two numbers, `[beam A, beam B]`; `beams`: two PDG ids; `pdf`: a string or
+a set number) and **unit**. A run TOML's quantity of that name is checked against the shape when the
+file is read (`[[275, 18]]`, not `[275, 18]`). A name the vocabulary does not have is the user's own,
+reaching a tool through its `key` or `target` (§8.1). **Each tool folder** says how that tool consumes
+the vocabulary, in `utils/Env/<tool>/quantities.toml`; a project master overlays those mappings in the
+same form:
+
 
 ```toml
 [quantities.pythia.compatible_quantities]           # [quantities.<tool>.compatible_quantities]
@@ -113,11 +120,10 @@ under `LHAPDF_DATA_PATH`. `"lhapdf"` takes a bare set name, `<set>[/member]`, as
 `"pythia_pdf"` takes the value exactly as Pythia's `PDF:pSet` reads it (V40: no prefix is added):
 `"LHAPDF6:<set>[/member]"`, whose set must be installed; one of Pythia's own set numbers (`13`); or
 a grid file. A bare name that is an installed LHAPDF set is refused with the `LHAPDF6:` spelling,
-since Pythia would read it as a file. The `render` form mentioned in `master.toml`'s header is not
-implemented (F11): a tool with a `render.py` takes plain `key` mappings and interprets the keys
-itself (a YAML path for Sherpa, a SINDARIN variable for Whizard).
+since Pythia would read it as a file. A tool with a `render.py` takes plain `key` mappings and
+interprets the keys itself (a YAML path for Sherpa, a SINDARIN variable for Whizard).
 
-**What the framework's master maps** (`utils/Env/master.toml`):
+**What the tool folders map** (`utils/Env/<tool>/quantities.toml`):
 
 | Quantity | pythia | sherpa | herwig | whizard | madgraph |
 |---|---|---|---|---|---|

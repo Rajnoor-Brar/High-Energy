@@ -1,0 +1,5 @@
+# utils/Env/whizard/quantities.toml — how Whizard consumes the vocabulary (V58): SINDARIN
+# assignments (render.py).
+energies = { key = "beams_momentum" }               # [E_A, E_B]: the card names the proton first
+beams    = { key = "beams" }                        # PDG codes, written as the model's names
+events   = { key = "n_events" }                     # built-in

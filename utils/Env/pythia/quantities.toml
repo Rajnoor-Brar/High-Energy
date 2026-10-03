@@ -1,0 +1,14 @@
+# utils/Env/pythia/quantities.toml — how Pythia consumes the vocabulary (utils/Env/quantities.toml, V58).
+#   name = { key = "K" }                     the card line K = value
+#          { keys = ["K1", "K2"] }           a list value spread over several keys, in order
+#          { key = "K", format = "X{}" }     with the value written through a format
+#          { flag = "-N" }                   a command-line argument instead of a card line
+#          { …, check = "<provider>" }       a provider check on the value (C10)
+energies = { keys = ["Beams:eA", "Beams:eB"] }      # [E_A, E_B], beam A first
+sqrts    = { key = "Beams:eCM" }
+beam_a   = { key = "Beams:idA" }
+beam_b   = { key = "Beams:idB" }
+beams    = { keys = ["Beams:idA", "Beams:idB"] }  # [id_A, id_B]
+pdf      = { key = "PDF:pSet", check = "pythia_pdf" }   # as written: "LHAPDF6:<set>[/member]", checked installed (C10)
+events   = { key = "Main:numberOfEvents" }          # built-in
+threads  = { key = "Parallelism:numThreads" }       # built-in

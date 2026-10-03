@@ -14,6 +14,8 @@ finding (00/B14, 00/B40).
 
 from __future__ import annotations
 
+import copy
+import functools
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,8 +24,18 @@ from typing import Any, NamedTuple
 from .errors import HepError, did_you_mean
 from .paths import repo_root, resolve
 
+@functools.cache
+def vocabulary() -> dict:
+    """utils/Env/quantities.toml: what each quantity name means, for every tool (V58)."""
+    path = repo_root() / "utils" / "Env" / "quantities.toml"
+    try:
+        return tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as error:
+        raise HepError(f"cannot read the quantity vocabulary: {error}", where=str(path)) from None
+
+
 #: The built-in quantities: the runner provides them, and they need no consumer (04 §8.3).
-BUILTIN = ("events", "threads")
+BUILTIN = tuple(name for name, entry in vocabulary().items() if entry.get("builtin"))
 
 
 class Override(NamedTuple):
@@ -44,16 +56,34 @@ class Mapping:
     check: str = ""      # a provider check on the value (C10), e.g. "lhapdf"
 
 
-def load_master(project: str, master_toml: str | None) -> dict:
-    """utils/Env/master.toml, overlaid key by key by the project's master if [master] names one."""
-    def read(path: Path) -> dict:
-        try:
-            return tomllib.loads(path.read_text(encoding="utf-8"))
-        except tomllib.TOMLDecodeError as error:
-            raise HepError(f"not valid TOML: {error}", where=str(path))
+def _read(path: Path) -> dict:
+    try:
+        return tomllib.loads(path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as error:
+        raise HepError(f"not valid TOML: {error}", where=str(path)) from None
 
-    base = repo_root() / "utils" / "Env" / "master.toml"
-    master = read(base) if base.exists() else {}
+
+@functools.cache
+def _folders_master() -> dict:
+    """Every tool folder's quantities.toml, as one master: {quantities: {<tool>: {compatible_quantities}}}.
+    A folder maps only names the vocabulary has (V58)."""
+    master: dict = {"quantities": {}}
+    known = vocabulary()
+    for path in sorted((repo_root() / "utils" / "Env").glob("*/quantities.toml")):
+        table = _read(path)
+        unknown = [name for name in table if name not in known]
+        if unknown:
+            raise HepError(f"{path.parent.name} maps {', '.join(unknown)}, which the vocabulary does not have",
+                           where=str(path), hint="add it to utils/Env/quantities.toml, with its shape")
+        master["quantities"][path.parent.name] = {"compatible_quantities": table}
+    return master
+
+
+def load_master(project: str, master_toml: str | None) -> dict:
+    """The tool folders' mappings (utils/Env/<tool>/quantities.toml), overlaid key by key by the project's
+    master if [master].master_toml names one ([quantities.<tool>.compatible_quantities], as before)."""
+    master = copy.deepcopy(_folders_master())
+    read = _read
     if master_toml:
         overlay_path = resolve(master_toml, "master", project=project, where="[master].master_toml")
         if not overlay_path.exists():
@@ -174,6 +204,47 @@ def consumer_table(run, master: dict, active: list[str], tags: list[str],
                                 "a master mapping, or drop it: a value that changes nothing is refused (C7)")
         table[name] = found
     return table
+
+
+# ── shapes: a vocabulary quantity's values (V58) ─────────────────────────────────────────────
+
+def _fits(value, shape) -> bool:
+    if isinstance(shape, list):
+        return isinstance(value, list) and len(value) == len(shape) and all(_fits(v, s) for v, s in zip(value, shape))
+    for kind in shape.split("|"):
+        if isinstance(value, bool):
+            if kind == "bool":
+                return True
+            continue
+        if kind == "float" and isinstance(value, (int, float)):
+            return True
+        if kind == "int" and isinstance(value, int):
+            return True
+        if kind == "pdg" and isinstance(value, int) and value != 0:
+            return True
+        if kind == "str" and isinstance(value, str):
+            return True
+    return False
+
+
+def _shape_text(shape) -> str:
+    names = {"float": "a number", "int": "an integer", "pdg": "a PDG id", "str": "a string", "bool": "true or false"}
+    if isinstance(shape, list):
+        return f"a list of {len(shape)}: [{', '.join(_shape_text(s) for s in shape)}]"
+    return " or ".join(names[k] for k in shape.split("|"))
+
+
+def check_shapes(quantity, where: str) -> None:
+    """A quantity the vocabulary names takes values of its shape (V58): `energies = [[275, 18]]`, not
+    `[275, 18]` or `[[275]]`. A quantity it does not name is the user's own, unchecked."""
+    entry = vocabulary().get(quantity.name)
+    if entry is None:
+        return
+    for place, value in enumerate(quantity.values, start=1):
+        if not _fits(value, entry["shape"]):
+            unit = f" in {entry['unit']}" if entry.get("unit") else ""
+            raise HepError(f"[quantities.{quantity.name}] value {place} is {value!r}, not {_shape_text(entry['shape'])}{unit}",
+                           where=where, hint=entry.get("doc", ""))
 
 
 # ── providers: things a value needs installed (02 §4, category 1) ─────────────────────────────

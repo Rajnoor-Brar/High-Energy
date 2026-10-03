@@ -7,7 +7,7 @@
    "type": "object",
    "properties": {
     "master_toml": {
-     "description": "a project master overlaid on utils/Env/master.toml (configs/<Project>/…)",
+     "description": "a project master overlaid on the tool folders' quantities.toml (configs/<Project>/…)",
      "type": "string"
     },
     "include": {

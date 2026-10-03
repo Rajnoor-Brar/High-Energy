@@ -1,0 +1,7 @@
+# utils/Env/sherpa/quantities.toml — how Sherpa consumes the vocabulary (V58): keys are paths into
+# the YAML card (render.py).
+energies = { key = "BEAM_ENERGIES" }                # [E_A, E_B]: the card puts the proton first
+beams    = { key = "BEAMS" }                        # [id_A, id_B]: the plan owns BEAMS, so it is set whole
+sqrts    = { key = "sqrts" }                        # render.py: BEAM_ENERGIES = [√s/2, √s/2]
+pdf      = { key = "PDF_SET[0]", check = "lhapdf" }  # the proton's; MPI_PDF_SET follows it
+events   = { key = "EVENTS" }                       # built-in

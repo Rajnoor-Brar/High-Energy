@@ -1,0 +1,5 @@
+# utils/Env/madgraph/quantities.toml — how MadGraph consumes the vocabulary (V58): run-card values
+# in the launch script (render.py).
+energies = { keys = ["ebeam1", "ebeam2"] }          # beam 1 is the proc card's first incoming particle
+beams    = { key = "beams" }                        # PDG codes, written as lpp1/lpp2
+events   = { key = "nevents" }                      # built-in
