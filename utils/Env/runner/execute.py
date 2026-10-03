@@ -40,7 +40,7 @@ from pathlib import Path
 
 from .errors import HepError
 from .paths import repo_root
-from .record import complete_marker, is_complete, now, provenance, write_atomic
+from .record import complete_marker, is_complete, now, provenance, write_atomic, write_identity
 from .status import Journal, Reader, ToolState
 from .tools import PointPlan, Step, expand
 
@@ -423,6 +423,7 @@ def run_point(plan: PointPlan, run, configuration, *, sink=None, journal: Journa
     record = provenance(plan, run, configuration, started, now(),
                         {tag: {"exit": r.exit, "seconds": round(r.seconds, 3), "note": r.message} for tag, r in results.items()})
     write_atomic(plan.out / "provenance.json", json.dumps(record, indent=1, default=str) + "\n")
+    write_identity(plan)                          # what it ran with, for --why (V57)
     write_atomic(complete_marker(plan), plan.identity + "\n")
     result = PointResult(True, tools=results)
     _finished(plan, result, sink, journal)

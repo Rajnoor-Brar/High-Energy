@@ -14,6 +14,7 @@ import argparse
 import json
 import os
 import signal
+import tomllib
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,6 +36,8 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("config", help="configs/<Project>/<name>[.toml], or ./path from the repo root")
     run.add_argument("configuration", nargs="?", help="overrides [run].configuration; under [run].sweep_runs, runs only it")
     run.add_argument("--plan", action="store_true", help="print the plan; run nothing")
+    run.add_argument("--why", action="store_true",
+                     help="for each point that would run, what changed since it last completed; run nothing")
     run.add_argument("--show-config", action="store_true",
                      help="print each configuration's resolved values and where each came from; run nothing")
     run.add_argument("--points", metavar="SEL", help="run a subset: tags, indices or quantity=tag")
@@ -54,6 +57,10 @@ def parser() -> argparse.ArgumentParser:
     draw.add_argument("--formats", default="pdf,png", help="files: pdf, png, svg, eps (default pdf,png)")
     draw.add_argument("--ratio", action="store_true", help="files: a ratio panel against the first curve")
     draw.add_argument("--style", metavar="FILE", help="files: a style file over utils/Apps/Paint/base.toml")
+
+    check = commands.add_parser("check", help="check run TOMLs: every configuration loaded, validated and planned")
+    check.add_argument("configs", nargs="*", metavar="CONFIG",
+                       help="configs to check (default: every configs/<Project>/*.toml with a [run])")
 
     watch = commands.add_parser("watch", help="attach the live view to a running job")
     watch.add_argument("config", nargs="?", help="the run config whose job to watch (default: the latest job)")
@@ -157,6 +164,17 @@ def print_plan(run, configuration, plans, post_plan=None, pre_plan=None, combine
         count = len(sweep.pages(configuration, [p.point for p in plans]))
         print(f"plot ({', '.join(plot.backends(run.plot))}): {count} page(s) per object, "
               f"{', '.join(plot.formats_of(run.plot))} → {plans[0].res.parent / 'plots'}")
+
+
+def print_why(run, configuration, plans, post_plan=None, pre_plan=None, combined=()) -> None:
+    """--why (V57): each point and stage that would run, and what changed since it last completed."""
+    stages = [*([pre_plan] if pre_plan else []), *plans, *combined, *([post_plan] if post_plan else [])]
+    todo = [p for p in stages if not record.is_complete(p)]
+    print(f"run {run.name} · configuration {configuration.key}: {len(todo)} of {len(stages)} to run")
+    for plan in todo:
+        print(f"{plan.point.name}   identity {plan.identity[:12]}")
+        for line in record.why(plan):
+            print(f"  {line}")
 
 
 def catch_signals(stopper: execute.Stopper) -> None:
@@ -275,6 +293,11 @@ def run_one(args, key: str, stopper: execute.Stopper, *, number: int = 0, follow
     run, configuration, every, plans = planned.run, planned.configuration, planned.every, planned.plans
     post_plan, pre_plan, combined = planned.post, planned.pre, planned.combined
     title_line = header(number, configuration) if number else ""
+    if getattr(args, "why", False):
+        if title_line:
+            print(("\n" if number > 1 else "") + title_line)
+        print_why(run, configuration, plans, post_plan, pre_plan, combined)
+        return 0
     if args.plan or args.only == "plot":
         if title_line:
             print(("\n" if number > 1 else "") + title_line)
@@ -384,6 +407,37 @@ def cmd_plot(args) -> int:
     return 1 if failed else 0
 
 
+def cmd_check(args) -> int:
+    """`hep check [CONFIG…]` (V57): each config loaded, its [plot] validated and every configuration's
+    points planned (the C-rules, paths, consumers, connections, cards), nothing run or written. 0 when
+    all are well, 2 when any is not: for a pre-commit hook, or before a long sweep."""
+    from .paths import configs_root
+    names = list(args.configs)
+    if not names:
+        root = configs_root()
+        for path in sorted(root.glob("*/*.toml")):
+            try:
+                has_run = "run" in tomllib.loads(path.read_text(encoding="utf-8"))
+            except (OSError, tomllib.TOMLDecodeError):
+                has_run = True                                   # a broken file is checked, and fails
+            if has_run:
+                names.append(str(path.relative_to(root).with_suffix("")))
+    failed = 0
+    for name in names:
+        try:
+            run = configmod.load(name)
+            points = 0
+            for key in run.configurations:
+                planned = build_plans(argparse.Namespace(config=name, set=[], points=None, rerun=False, only=None), key)
+                points += len(planned.every)
+            print(f"ok    {name}: {len(run.configurations)} configuration(s), {points} point(s)")
+        except HepError as error:
+            failed += 1
+            print(f"FAIL  {name}")
+            print("      " + error.render().replace("\n", "\n      "))
+    return 2 if failed else 0
+
+
 def cmd_watch(args) -> int:
     """Follow a job from another terminal: its status.jsonl, or the most recent one under output/."""
     if args.config:                          # under [run].sweep_runs: the swept run written to last (V38)
@@ -421,6 +475,8 @@ def main(argv: list[str]) -> int:
             return cmd_run(args)
         if args.command == "plot":
             return cmd_plot(args)
+        if args.command == "check":
+            return cmd_check(args)
         return cmd_watch(args)
     except HepError as error:
         print(error.render(), file=sys.stderr)

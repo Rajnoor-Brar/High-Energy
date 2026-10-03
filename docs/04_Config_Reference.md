@@ -847,6 +847,7 @@ Options and positionals may come in any order (`hep run eic --plain pdf`, V54).
 |---|---|
 | `CONFIG` | `configs/<CONFIG>[.toml]`, or `./path` from the repository root |
 | `CONFIGURATION` | overrides `[run].configuration`; under `[run].sweep_runs`, runs only this one (§4.1) |
+| `--why` | for each point and stage that would run, what changed since it last completed (from its `identity.json`): `events: 10 → 20`, `tools.pythia.card: + PDF:pSet = …`; run nothing (V57) |
 | `--show-config` | print each configuration's resolved values and the layer each came from (its own, `extends`, `[run.defaults]`, `[run]`, default), and what `[master].include` gave; run nothing (V56) |
 | `--plan` | print everything and run nothing: per point, the values and their consumers, the groups and each tool's argv, what each reads and writes, the prepare steps and whether they are cached, the output and results directories and whether the point is complete; the pre and post stages; the page count |
 | `--points SEL` | run a subset: comma-separated point names, single tags, 1-based indices, or `quantity=tag`. The others keep their state (and `points.json` lists all). Refused under a sweep of several runs: name the configuration. |
@@ -876,6 +877,17 @@ configuration's, each under its `run NN - <title> -` line. With files (every tar
 of a merged sweep file (labelled from the `points.json` inside it). `-o` defaults to
 `results/plots/<first file's stem>/`; `--labels` gives one label per file; `--style` is a style
 file over base.toml.
+
+### `hep check`
+
+```
+hep check [CONFIG…]
+```
+
+Loads each config (with none given, every `configs/<Project>/*.toml` that has a `[run]`), validates
+its `[plot]` and plans every configuration's points: every C-rule, path, consumer, connection and
+card, with nothing run or written (V57). It prints one line per config, the error of each that fails,
+and exits 0, or 2 when any failed: for a pre-commit hook, or before a long sweep.
 
 ### `hep watch`
 
@@ -928,6 +940,7 @@ Herwig's repository), on every core by default. `--tests` adds the C++ tests, `-
 | `config/<tag>.toml` | a custom or module tool's extracted config |
 | `logs/<tag>.log`, `logs/<tag>.prepare.log`, `logs/prelim.log` | stdout and stderr |
 | `provenance.json` | `point`, `run`, `project`, `configuration`, `config_file`; `values` (each active quantity's index, tag and value); `identity`, `seed`, `threads`, `events`; per tool `tag`, `tool`, `exe`, `exe_sha256`, `version`, `argv`, `ran`, `card`, `card_sha256`, `config`, `result` (exit, seconds, note); `host`, `platform`, `user`, `git` (`revision`, `dirty`), `started`, `finished` |
+| `identity.json` | the parts the identity hashes (each tool's card lines, argv, binaries, options; threads, events, groups, prelim, the seed rule), written when the point completes, for `--why` (V57) |
 | `.complete` | the point's identity, written **last**; its absence means the point is not done |
 
 **Per configuration** (`output/…/<cfg>/`):
