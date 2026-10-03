@@ -916,7 +916,7 @@ label per file; `--style` is a style file over base.toml.
 ```
 hep ls [PROJECT]
 hep explain KEY                       # plot.y_gutter, run.event_count, quantities.<q>.styles, …
-hep status [CONFIG [CONFIGURATION]]
+hep status [CONFIG [CONFIGURATION]] | --stack
 hep clean [CONFIG] [--dry-run] [--yes]
 ```
 
@@ -925,7 +925,8 @@ Housekeeping (V74). `ls`: every config and its configurations, with descriptions
 from the schema (`utils/Env/schema/run.toml`). `status`: every configuration's points and stages,
 each **complete**, **stale** (complete for an earlier identity: it reruns), **incomplete** (begun, not
 done: failed, stopped or running) or **to run**, with when it finished, its results' size, and
-`[running]` for a configuration a job is running now. `clean`: removes what the runner made and no plan
+`[running]` for a configuration a job is running now; `status --stack`: each package of
+`utils/Env/stack.toml`, its version and where it is (V78). `clean`: removes what the runner made and no plan
 uses: within each configuration's folder, point folders no plan has (in `output/`) and `.partial`
 leftovers (in `output/` and `results/`); with no config named, every config is planned (all must plan)
 and run folders no configuration has and prepare cache entries no plan references go too. It never

@@ -40,7 +40,7 @@ ifneq ($(FLAGS_KEY),$(FLAGS_KEY_NOW))
   $(shell utils/Env/flags.sh $(FLAGS_MK))
   include $(FLAGS_MK)
 endif
-KNOWN := pythia8 hepmc3 yoda root fastjet lhapdf rivet geant4 toml zstd zlib onnx delphes
+# KNOWN (every library a source may require) is utils/Env/stack.toml's, written into $(FLAGS_MK) (V78)
 
 open     := (
 req_line  = $(shell sed -n 's#^[[:space:]]*//[[:space:]]*requires:[[:space:]]*##p' $(1) | head -n1 | sed 's#[[:space:]]*$(open).*##')

@@ -8,15 +8,17 @@
 # The Makefile compares FLAGS_KEY in the cache with `--key` on every invocation and rewrites the
 # cache only when they differ. A cache keyed on less than everything it reads is a correctness bug
 # waiting for an unusual environment (ledger L22, v1's 00/B38), so the key holds the resolved path
-# of every tool probed, plus the two directories the non-config libraries come from.
+# of every tool probed, plus the two directories the non-config libraries come from, and the stack
+# file itself. What is probed is utils/Env/stack.toml's (V78): TOOLS, NAMES and probes() come from it.
 set -u
 
-TOOLS=(pythia8-config HepMC3-config yoda-config root-config fastjet-config lhapdf-config rivet-config geant4-config pkg-config)
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+eval "$(python3 "$here/stack.py" --bash)" || { echo "flags.sh: cannot read utils/Env/stack.toml" >&2; exit 1; }
 
 key() {
     local t
     for t in "${TOOLS[@]}"; do printf '%s=%s;' "$t" "$(command -v "$t" || echo -)"; done
-    printf 'HEP_INSTALL=%s;ONNXRUNTIME_DIR=%s' "${HEP_INSTALL-}" "${ONNXRUNTIME_DIR-}"
+    printf 'HEP_INSTALL=%s;ONNXRUNTIME_DIR=%s;STACK=%s' "${HEP_INSTALL-}" "${ONNXRUNTIME_DIR-}" "$STACK"
 }
 
 if [ "${1-}" = "--key" ]; then key; exit 0; fi
@@ -52,19 +54,8 @@ dir_lib() {                                 # dir_lib NAME DIR LIB — a library
     echo "# build/flags.mk — written by utils/Env/flags.sh on $(date -u +%Y-%m-%dT%H:%M:%SZ). Do not edit:"
     echo "# delete it, or run \`hep build --configure\`, to probe again."
     echo "FLAGS_KEY := $(key)"
-    probe pythia8 pythia8-config --cxxflags --ldflags
-    probe hepmc3  HepMC3-config --cflags --libs
-    probe yoda    yoda-config --cppflags --libs
-    probe root    root-config --cflags --libs
-    probe fastjet fastjet-config --cxxflags --libs --plugins=yes
-    probe lhapdf  lhapdf-config --cppflags --ldflags
-    probe rivet   rivet-config --cppflags --ldflags --libs
-    probe geant4  geant4-config --cflags --libs
-    probe toml    pkg-config --cflags --libs tomlplusplus
-    probe zstd    pkg-config --cflags --libs libzstd
-    probe zlib    pkg-config --cflags --libs zlib
-    dir_lib onnx    "${ONNXRUNTIME_DIR:-${HEP_INSTALL-}/onnxruntime}" onnxruntime
-    dir_lib delphes "${HEP_INSTALL-}/delphes" Delphes
+    echo "KNOWN := ${NAMES[*]}"
+    probes
     echo "FOUND := ${found[*]}"
 } > "$OUT.tmp" && mv "$OUT.tmp" "$OUT"
 

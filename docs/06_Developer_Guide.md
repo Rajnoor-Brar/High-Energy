@@ -16,7 +16,7 @@ C++, the tests, and the conventions. The design it serves is [02_Architecture.md
 | `utils/Env/patches/` | patches this repository needs in the `~/HEP` stack, applied by hand (each file says to which source; `fastjet-3.5.0-siscone-thread-local-ranlux.patch`: `cd ~/HEP/src/fastjet-3.5.0 && patch -p0 < …`, rebuild, `make install`) | yes |
 | `utils/App_Pythia.cc`, `utils/App_yd2rt.cc` | single-file apps | yes |
 | `utils/Apps/Paint/` | the multi-file Paint app, and `base.toml` (the style) | yes |
-| `utils/Env/` | `hep`, `run`, `hep_env.sh`, `flags.sh`, `quantities.toml` (the vocabulary), `schema/`, `runner/`, the tool folders | yes |
+| `utils/Env/` | `hep`, `run`, `hep_env.sh`, `flags.sh`, `stack.toml` (the software stack), `quantities.toml` (the vocabulary), `schema/`, `runner/`, the tool folders | yes |
 | `tests/` | `runner/` (unit), `integration/` (real processes), `cxx/`, `reference/` (data the gates compare against) | yes |
 | `docs/` | this manual | yes |
 | `bots/` | agent rules (`BOT.md`), the working plan, `intent.md` (ideas) | yes |
@@ -88,11 +88,19 @@ name whose `*-config` was not found, is a make error saying which.
 
 ### 2.3 The flag cache
 
-`build/flags.mk` holds every library's flags and `FOUND`, written by `utils/Env/flags.sh`, which
-runs each `*-config` once. It records a key: the resolved path of every `*-config` it used and the
-two install directories. Make recomputes the key on every call and rewrites the cache when it
-differs (L22: a cache keyed on less than it reads is a correctness bug). `hep build --configure`
-forces it; `build/flags.log` records each probe.
+**The stack is one file**, `utils/Env/stack.toml` (V78): each library and program, the command that
+prints its flags (or, for a library with no `*-config`, its install directory and library) and the
+command that prints its version (or a `{ file = … }` to read it from). A new library is one entry there.
+`utils/Env/stack.py` reads it for `flags.sh` (its probes), for the tool folders (`[identity] version =
+"stack:<name>"`, the version in a point's provenance) and for `hep status --stack`. `hep_env.sh` keeps its
+own list: it runs at login and stays bash-only.
+
+`build/flags.mk` holds every library's flags, `FOUND` and `KNOWN` (the stack's libraries: what a
+`// requires:` line may name), written by `utils/Env/flags.sh`, which runs each `*-config` once. It
+records a key: the resolved path of every `*-config` it used, the two install directories and the stack
+file's checksum. Make recomputes the key on every call and rewrites the cache when it differs (L22: a
+cache keyed on less than it reads is a correctness bug). `hep build --configure` forces it;
+`build/flags.log` records each probe.
 
 ---
 

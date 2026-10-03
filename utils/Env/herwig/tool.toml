@@ -48,4 +48,4 @@ alias = "card"                      # herwig_in = herwig_card
 files = ["{repo}/build/Herwig/HerwigDefaults.rpo"]
 
 [identity]
-version = ["Herwig", "--version"]
+version = "stack:herwig"                # utils/Env/stack.toml's (V78)

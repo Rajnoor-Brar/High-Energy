@@ -43,3 +43,6 @@ alias = "card"                      # madgraph_proc: the launch script and proc 
 [exports.process]                   # madgraph_process = true: the process directory, built on demand
 path          = "{prepared}/process"
 needs_prepare = true
+
+[identity]
+version = "stack:madgraph"               # utils/Env/stack.toml's (V78): its VERSION file

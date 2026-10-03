@@ -79,6 +79,7 @@ def parser() -> argparse.ArgumentParser:
     state = commands.add_parser("status", help="each configuration's points: complete, stale, incomplete or to run")
     state.add_argument("config", nargs="?", help="one config (default: every config)")
     state.add_argument("configuration", nargs="?", help="one configuration of it")
+    state.add_argument("--stack", action="store_true", help="the software stack instead: each package's version (V78)")
 
     again = commands.add_parser("reproduce", help="run a finished point again, from its provenance, beside it")
     again.add_argument("provenance", help="output/…/<point>/provenance.json")
@@ -647,7 +648,14 @@ def _planned_all(names: list[str], configuration: str | None = None) -> tuple[li
 
 
 def cmd_status(args) -> int:
-    """`hep status [CONFIG [CONFIGURATION]]` (V74): each configuration's points and stages."""
+    """`hep status [CONFIG [CONFIGURATION]]` (V74): each configuration's points and stages. `--stack`
+    (V78): each package of utils/Env/stack.toml, its version and where it is."""
+    if getattr(args, "stack", False):
+        from .plugins import load
+        from .paths import repo_root
+        for line in load(repo_root() / "utils" / "Env" / "stack.py", "stack").versions():
+            print(line)
+        return 0
     names = [args.config] if args.config else house.config_names()
     planned, failed = _planned_all(names, args.configuration)
     for line in house.status(planned, house.running_configs()):
