@@ -280,3 +280,62 @@ def test_a_page_style_merges_over_the_base_and_is_checked(inputs):
         config.write_text(tomli_w.dumps(document))
         done = subprocess.run([str(PAINT), str(config)], capture_output=True, text=True, encoding="utf-8")
         assert done.returncode == 1 and message in done.stderr + done.stdout
+
+
+def test_many_pages_in_one_paint_each_with_its_outcome_and_ranges(inputs):
+    """V64: one ROOT for many pages; a bad page does not stop the rest; --ranges writes what --dump-ranges prints."""
+    good = page(inputs, "d01-x01-y01", **LEGACY_PAGE)
+    other = page(inputs, "d02-x01-y01", **LEGACY_PAGE)
+    bad = inputs["dir"] / "broken.toml"
+    bad.write_text('[page]\nname = "x"\noutput = "/nonexistent/dir/x"\n', encoding="utf-8")   # no [[curve]]
+    done = subprocess.run([str(PAINT), str(good), str(bad), str(other), "--ranges"], capture_output=True, text=True,
+                          encoding="utf-8")
+    lines = [json.loads(l) for l in done.stdout.splitlines() if l.startswith("{")]
+    assert done.returncode == 1 and [l["ok"] for l in lines] == [True, False, True]
+    assert "curve" in lines[1]["error"]
+    for config in (good, other):
+        written = json.loads(Path(str(config) + ".ranges.json").read_text())
+        assert written == dump(config)
+
+
+def test_a_curve_may_have_its_own_look(inputs):
+    """V67: a curve's style (colour, line, width) is drawn; an unknown line is the page's error."""
+    config = page(inputs, "d01-x01-y01")
+    document = tomllib.loads(config.read_text(encoding="utf-8"))
+    document["curve"][0]["style"] = {"colour": "#109618", "line": "dashed", "width": 2.0}
+    config.write_text(tomli_w.dumps(document), encoding="utf-8")
+    assert subprocess.run([str(PAINT), str(config)], capture_output=True).returncode == 0
+    document["curve"][1]["style"] = {"line": "wavy"}
+    config.write_text(tomli_w.dumps(document), encoding="utf-8")
+    done = subprocess.run([str(PAINT), str(config)], capture_output=True, text=True, encoding="utf-8")
+    assert done.returncode == 1 and "style.line" in done.stdout + done.stderr
+
+
+def test_normalise_scales_every_curve_to_unit_area(v1):
+    """V68: Σ y·Δx = 1 per curve over the drawn bins; a: 5/7 at most, b: 4/8."""
+    where, curves = v1
+    assert v1_page(where, curves)["largest"] == pytest.approx(5.0)
+    assert v1_page(where, curves, normalise="area")["largest"] == pytest.approx(5.0 / 7.0)
+    assert v1_page(where, curves, normalise=False)["largest"] == pytest.approx(5.0)
+
+
+def test_normalise_is_area_or_false(v1):
+    where, curves = v1
+    path = where / "bad_normalise.toml"
+    path.write_text(tomli_w.dumps({"page": {"name": "v1", "output": str(where / "v1"), "normalise": "peak"},
+                                   "curve": [{"file": str(curves[0]), "object": "photo_eic/d01-x01-y01", "label": "a"}]}))
+    done = subprocess.run([str(PAINT), str(path), "--dump-ranges"], capture_output=True, text=True, encoding="utf-8")
+    assert done.returncode == 1 and "normalise" in done.stdout + done.stderr
+
+
+def test_a_band_curve_spans_its_members(v1):
+    """V69: a curve's band members widen the range to their envelope; a member of other bins is no band."""
+    where, (a, b) = v1
+    alone = v1_page(where, [b])
+    path = where / "band.toml"
+    document = {"page": {"name": "v1", "output": str(where / "band"), "auto_range": True},
+                "curve": [{"file": str(b), "object": "photo_eic/d01-x01-y01", "label": "b",
+                           "band": [{"file": str(a), "object": "photo_eic/d01-x01-y01"}]}]}
+    path.write_text(tomli_w.dumps(document))
+    assert alone["largest"] == pytest.approx(4.0) and dump(path)["largest"] == pytest.approx(5.0)
+    assert subprocess.run([str(PAINT), str(path)], capture_output=True).returncode == 0

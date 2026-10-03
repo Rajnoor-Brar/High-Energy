@@ -1,5 +1,8 @@
 """utils/Env/yoda/backend.py — `[plot] backend = "yoda"`: the same pages drawn by rivet-mkhtml.
 
+Frozen (V71, B4c option B): no new features; the mpl backend draws these pages without mkhtml, and uses
+this module's transforms until it goes.
+
 docs/04_Config_Reference.md §11, V10/V11. The runner hands over the pages it wrote for Paint, with
 Paint's --dump-ranges of each: the x and y ranges (auto_range, gutters; none where no gutter leaves
 them to the tool) and the voided bins. Per
@@ -34,6 +37,7 @@ from pathlib import Path
 
 from runner.errors import HepError
 from runner.hepfiles import base_path
+from runner.labels import canonical, mathtext
 from runner.paths import build_root
 
 _SPEC = tomllib.loads((Path(__file__).with_name("backend.toml")).read_text(encoding="utf-8"))   # V61
@@ -44,8 +48,13 @@ MARK = "# ratio ticks: ratio.divisions (utils/Env/yoda/backend.py)"
 TITLE_MARK = "# titles: title, title_left, title_right (utils/Env/yoda/backend.py)"
 
 
-def validate(settings: dict, beside_root: bool = False) -> None:
+def validate(settings: dict, beside_root: bool = False, curve_styles: list[dict] = ()) -> None:
     hint = 'rivet-mkhtml has its own look; drop the key, or use backend = "root"'
+    for look in curve_styles:                         # V67: matplotlib takes #rrggbb, not ROOT's names
+        colour = look.get("colour")
+        if colour is not None and not re.fullmatch(r"#[0-9A-Fa-f]{6}", str(colour)):
+            raise HepError(f"the yoda backend cannot draw the curve colour {colour!r}", where="[quantities].styles",
+                           hint='write it as "#rrggbb", which both backends draw')
     if "root_style" in settings and not beside_root:
         raise HepError('[plot].root_style cannot be honoured by backend = "yoda"', where="[plot].root_style", hint=hint)
     layers = [("[plot.style]", settings.get("style", {}))] + [
@@ -62,31 +71,25 @@ def validate(settings: dict, beside_root: bool = False) -> None:
                                    hint=hint + " (only legend.position, text.legend, text.header and ratio.divisions, range and limits carry over)")
 
 
-def _math() -> dict:
-    from runner.labels import latex as table
-    return table()["mathtext"]
-
-
-def latex(text: str) -> str:
-    """TLatex → matplotlib mathtext for the common subset, word by word: '#sqrt{s} = 28.6 GeV' →
-    '$\\sqrt{s}$ = 28.6 GeV'. TLatex's rules hold (V41): only `_{…}`, `^{…}` and `#<name>` are math;
-    a bare _ or ^, and the escapes \\_ \\^ \\#, are the characters ('PDF4LHC21_40' stays as written)."""
-    def word(w: str) -> str:
-        if not re.search(r"(?<!\\)(?:[_^]\{|#[A-Za-z])", w):     # text; LaTeX's text font prints > as ¿
-            return re.sub(r"[<>]", lambda m: f"${m[0]}$", re.sub(r"\\([_^#\\])", r"\1", w))
-        w = re.sub(r"(?<!\\)#([A-Za-z]+)", lambda m: _math().get(m.group(1), "\\" + m.group(1)), w)
-        w = re.sub(r"\\_|(?<!\\)_(?!\{)", "\x00", w).replace("\x00", r"\_")     # literal underscores in math
-        return f"${w}$"
-    return " ".join(word(w) for w in text.split(" ")).replace(":", " ")    # ':' separates mkhtml options
-
-
 def _voided(yoda, source: Path, pages: list, target: Path) -> Path:
     objects = yoda.read(str(source))
     changed = False
     for page in pages:
-        voided = page.ranges.get("voided", [])
-        for path in {v for s, v in zip(page.sources, page.variants) if s == source} if voided else ():
-            changed |= _void(objects[path], voided, source)
+        voided, area = page.ranges.get("voided", []), page.document["page"].get("normalise") == "area"
+        mine = [(v, b) for s, v, b in zip(page.sources, page.variants, page.bands or [[]] * len(page.sources)) if s == source]
+        for path, members in mine if voided or area or any(b for _, b in mine) else ():
+            changed |= bool(voided) and _void(objects[path], voided, source)
+            changed |= area and _normalise(objects[path])        # after the void: the drawn bins' area, as Paint
+            if members:                                          # V69: the members, made the same way
+                drawn = []
+                for member, variant in members:
+                    copy = yoda.read(str(member))[variant]
+                    if voided:
+                        _void(copy, voided, member)
+                    if area:
+                        _normalise(copy)
+                    drawn.append(copy)
+                changed |= _envelope(objects[path], drawn)
     if not changed:
         return source
     yoda.write(list(objects.values()), str(target))
@@ -99,6 +102,32 @@ def _void(estimate, voided: list, source: Path) -> bool:
     for index in voided:
         estimate.bin(index).setVal(float("nan"))
         estimate.bin(index).rmErrs()
+    return True
+
+
+def _envelope(estimate, members: list) -> bool:
+    """V69: a band curve's errors become its members' min–max envelope around it, which mkhtml draws as
+    the curve's error band (ErrorBand=1), as Paint draws its envelope."""
+    for i in range(1, estimate.numBins() + 1):
+        b = estimate.bin(i)
+        values = [b.val()] + [m.bin(i).val() for m in members]
+        b.rmErrs()
+        if all(math.isfinite(v) for v in values):
+            b.setErr((min(values) - b.val(), max(values) - b.val()))
+    return True
+
+
+def _normalise(estimate) -> bool:
+    """V68: unit area, Σ value·width over the finite bins (Paint's normalise); every error scaled with it."""
+    bins = [estimate.bin(i) for i in range(1, estimate.numBins() + 1)]
+    area = sum(b.val() * (b.xMax() - b.xMin()) for b in bins if math.isfinite(b.val()))
+    if not (area > 0 and math.isfinite(area)):
+        return False
+    for b in bins:
+        errors = {name: b.errDownUp(name) for name in b.sources()}
+        b.setVal(b.val() / area)
+        for name, (down, up) in errors.items():
+            b.setErr((down / area, up / area), name)
     return True
 
 
@@ -115,6 +144,8 @@ def _reference(yoda, page):
         out.bin(k).setVal(source.bin(i).val())
         for name in source.bin(i).sources():
             out.bin(k).setErr(source.bin(i).errDownUp(name), name)
+    if page.document["page"].get("normalise") == "area":
+        _normalise(out)
     return out
 
 
@@ -166,13 +197,13 @@ def _plot_block(page, window: tuple[float, float] | None = None) -> str:
         keys["RatioPlotYMin"], keys["RatioPlotYMax"] = f"{window[0]:.6g}", f"{top:.6g}"
     keys["Title"] = ""                                 # the titles are ours, drawn by titles() (V51)
     overlay = getattr(page, "overlay", "")
-    for key, native in (("x_label", "XLabel"), ("y_label", "YLabel")):
-        if key in page.overrides or overlay:              # an overlay's path has no .plot of its own
-            keys[native] = latex(settings[key])
-    from runner.labels import labels_of, lines_of, macros, tlatex
+    from runner.labels import labels_of, lines_of, macros
     own = labels_of(page.object)
-    if settings.get("legend_header", "") != tlatex(own.get("LegendTitle", "")):   # [plot], a child or an overlay's
-        keys["LegendTitle"] = latex(settings.get("legend_header", ""))
+    # a text that is not the .plot's as written: an override, an overlay's (its path has no .plot of its
+    # own), or the .plot's own with its placeholders filled (V66)
+    for key, native in (("x_label", "XLabel"), ("y_label", "YLabel"), ("legend_header", "LegendTitle")):
+        if overlay or settings.get(key, "") != canonical(own.get(native, "")):
+            keys[native] = mathtext(settings.get(key, ""))
     for native, text in own.items():  # mkhtml draws each line apart: close math per line (V47)
         if native in ("Title", "LegendTitle", "XLabel", "YLabel") and native not in keys:   # and our macros (V48)
             fixed = "\\newline".join(lines_of(macros(text)))
@@ -234,7 +265,7 @@ def titles(script: Path, page) -> bool:
     blanked in pages.plot and these are added to the page's script, with a tight bounding box so the
     margin holds them. True when the script changed and must run again."""
     settings, text = page.document["page"], page.style["text"]
-    left, right, main = (latex(settings.get(k, "")) for k in ("title_left", "title_right", "title"))
+    left, right, main = (mathtext(settings.get(k, "")) for k in ("title_left", "title_right", "title"))
     if not (left or right or main):
         return False
     code = script.read_text(encoding="utf-8")
@@ -300,6 +331,8 @@ def _overlay(yoda, page, work: Path, outdir: Path, settings: dict, say) -> bool:
             read[source] = yoda.read(str(source))
         copy = read[source][variant].clone()
         copy.setPath(path)
+        if page.document["page"].get("normalise") == "area":
+            _normalise(copy)
         files.append(work / f"overlay_{page.overlay}_{i:02d}.yoda")
         yoda.write([copy], str(files[-1]))
     labels = [c["label"] for c in page.document["curve"]]
@@ -312,7 +345,7 @@ def _overlay(yoda, page, work: Path, outdir: Path, settings: dict, say) -> bool:
     formats = settings.get("formats", ["pdf"])
     argv += [x for f in (["pdf"] if formats == "default" else formats) if FORMATS[f] for x in ("-f", FORMATS[f])]
     argv += [] if page.document["page"]["ratio"] else ["--no-ratio"]
-    argv += [f"{f}:Title={latex(label)}" for f, label in zip(files, labels)]
+    argv += [f"{f}:Title={mathtext(label)}" for f, label in zip(files, labels)]
     if not _mkhtml(argv, work, own, [page], _plot_block(page, window), work / f"overlay_{page.overlay}.plot", say):
         return False
     (outdir / "overlay").mkdir(parents=True, exist_ok=True)
@@ -339,11 +372,19 @@ def draw(cells: dict, settings: dict, say) -> int:
     return failed
 
 
+def _pen(look: dict) -> str:
+    """A curve's own look (V67) as mkhtml's per-file keys; a curve without a colour takes its cycle."""
+    keys = {"colour": "LineColor", "line": "LineStyle", "width": "LineWidth"}
+    return "".join(f":{keys[k]}={v}" for k, v in look.items())
+
+
 def _cell(yoda, pages: list, work: Path, outdir: Path, settings: dict, say) -> int:
     """The pages of one cell in one mkhtml run; returns how many were not drawn."""
     # one file per point (its variants are curves mkhtml draws from it); labels by point
     sources = list(dict.fromkeys(s for page in pages for s in page.sources))
     label_of = {s: c["label"].split(" [")[0] for page in pages for s, c in zip(page.sources, page.document["curve"])}
+    look_of = {s: c.get("style", {}) for page in pages for s, c in zip(page.sources, page.document["curve"])}
+    banded = {s for page in pages for s, c in zip(page.sources, page.document["curve"]) if c.get("band")}
     labels = [label_of[s] for s in sources]
     curves = [_voided(yoda, source, pages, work / f"{i:02d}_{source.parent.name}.yoda")
               for i, source in enumerate(sources)]
@@ -351,12 +392,15 @@ def _cell(yoda, pages: list, work: Path, outdir: Path, settings: dict, say) -> i
     formats = settings.get("formats", ["pdf"])
     argv += [x for f in (["pdf"] if formats == "default" else formats) if FORMATS[f] for x in ("-f", FORMATS[f])]
     argv += [] if any(p.document["page"]["ratio"] for p in pages) else ["--no-ratio"]
-    argv += [f"{path}:Title={latex(label)}" for path, label in zip(curves, labels)]
+    argv += [f"{path}:Title={mathtext(label)}" + _pen(look_of[source])
+             + (":ErrorBand=1:ErrorBars=0" if source in banded else "")
+             for path, label, source in zip(curves, labels, sources)]
 
     references = [_reference(yoda, page) for page in pages if page.data and page.ranges.get("data_bins", 0) > 0]
     if references:
         yoda.write(references, str(work / "reference.yoda"))
-        argv += [str(work / "reference.yoda"), "--reflabel", latex(settings.get("data", {}).get("legend", "Data"))]
+        legend = next(p.document["data"]["label"] for p in pages if "data" in p.document)   # filled, LaTeX (V66)
+        argv += [str(work / "reference.yoda"), "--reflabel", mathtext(legend)]
     voided, cache = dict(zip(sources, curves)), {}
 
     def objects(path):

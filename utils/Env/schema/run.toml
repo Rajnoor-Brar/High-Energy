@@ -226,6 +226,11 @@ doc   = "one per value: folder and point names"
 type  = "list"
 doc   = "one per value: legend text"
 
+[quantity.styles]
+type  = "list"
+items = "table"
+doc   = "one per value: its curves' look, { colour, line, width } (V67)"
+
 [quantity.key]
 type = "str|table"
 doc  = "the native key, or { <tool or tag> = key }"
@@ -329,10 +334,10 @@ doc     = "K processes on a share of the events each"
 [plot.backend]
 type       = "str|list"
 items      = "str"
-choices    = ["root", "yoda", "both"]
+choices    = ["root", "yoda", "mpl", "both"]
 default    = "root"
 default_ok = true
-doc        = "root (Paint), yoda (rivet-mkhtml), or both"
+doc        = "root (Paint), yoda (rivet-mkhtml), mpl (matplotlib, V71), a list of them, or both (root and yoda)"
 
 [plot.formats]
 type       = "list"
@@ -341,6 +346,11 @@ choices    = ["pdf", "png", "svg", "eps"]
 default    = ["pdf"]
 default_ok = true
 doc        = "the pages' formats"
+
+[plot.band]
+type  = "list"
+items = "str"
+doc   = "curve-axis quantities drawn as one curve, their first value, with the min–max envelope of all their values (V69)"
 
 [plot.objects]
 type       = "list"
@@ -382,6 +392,13 @@ type       = "bool"
 default    = true
 default_ok = true
 doc        = "x clipped to the bins with content"
+
+[plot.normalise]
+type       = "str|bool"
+choices    = ["area", false]
+default    = false
+default_ok = true
+doc        = "\"area\": every curve and the data scaled to unit area over the bins drawn (V68)"
 
 [plot.void_empty]
 type       = "bool"
@@ -507,6 +524,12 @@ doc        = "as [plot].x_gutter, for these pages"
 type       = "bool"
 default_ok = true
 doc        = "as [plot].ratio, for these pages"
+
+[plot_child.normalise]
+type       = "str|bool"
+choices    = ["area", false]
+default_ok = true
+doc        = "as [plot].normalise, for these pages"
 
 [plot_child.style]
 type = "table"

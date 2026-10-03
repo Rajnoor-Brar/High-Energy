@@ -23,6 +23,30 @@ from .quantities import check_shapes
 #: How a point's seeds are chosen (V39, 02 §8); the schema's [run.seed_type].choices.
 SEED_TYPES = tuple(schema.keys("run")["seed_type"]["choices"])
 DEFAULT = schema.DEFAULT
+CURVE_LINES = ("solid", "dashed", "dotted", "dashdot")
+
+
+def check_curve_style(look, where: str) -> None:
+    """A quantity value's curve look (V67): colour ("#rrggbb", a ROOT name or number), line, width
+    (points); "default" for a key is the style's, as if left out."""
+    if not isinstance(look, dict):
+        raise HepError("a style is a table, { colour, line, width }", where=where)
+    for key, value in look.items():
+        if value == DEFAULT:
+            continue
+        if key == "colour":
+            ok = isinstance(value, str) and value or isinstance(value, int) and not isinstance(value, bool)
+        elif key == "line":
+            ok = value in CURVE_LINES
+        elif key == "width":
+            ok = isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0
+        else:
+            raise HepError(f"a style has no key '{key}'", where=where, hint=did_you_mean(key, ["colour", "line", "width"])
+                           or "its keys: colour, line, width")
+        if not ok:
+            raise HepError(f"style {key} = {value!r} is not one", where=where,
+                           hint={"colour": '"#rrggbb", a ROOT colour name ("kBlue+1") or number',
+                                 "line": " | ".join(CURVE_LINES), "width": "a number of points > 0"}[key])
 
 
 @dataclass
@@ -54,6 +78,7 @@ class Quantity:
     values: list
     tags: list[str] = field(default_factory=list)
     labels: list[str] = field(default_factory=list)
+    styles: list[dict] = field(default_factory=list)   # one per value: its curves' look (V67)
     key: str | dict | None = None
     target: list[str] = field(default_factory=list)
     format: str = ""
@@ -374,9 +399,11 @@ def parse(raw: dict, path: Path) -> RunConfig:
         if "values" not in table or not table["values"]:
             raise HepError("a quantity needs values", where=at)
         values = table["values"]
-        for listed in ("tags", "labels"):
+        for listed in ("tags", "labels", "styles"):
             if listed in table and len(table[listed]) != len(values):
                 raise HepError(f"'{listed}' must have one entry per value ({len(values)})", where=f"{at}.{listed}")
+        for i, look in enumerate(table.get("styles", []), start=1):
+            check_curve_style(look, f"{at}.styles[{i}]")
         exclude = table.get("exclude", [])
         for index in exclude:
             if isinstance(index, bool) or not isinstance(index, int) or not 1 <= index <= len(values):
@@ -386,6 +413,7 @@ def parse(raw: dict, path: Path) -> RunConfig:
             raise HepError("exclude leaves no value to sweep", where=f"{at}.exclude")
         quantity = Quantity(name=name, values=values, tags=[str(t) for t in table.get("tags", [])],
                                     labels=[str(l) for l in table.get("labels", [])], key=table.get("key"),
+                                    styles=[{k: v for k, v in s.items() if v != DEFAULT} for s in table.get("styles", [])],
                                     target=_as_list(table.get("target")), format=table.get("format", ""),
                                     description=table.get("description", ""), exclude=sorted(set(exclude)))
         check_shapes(quantity, at)                                          # V58: the vocabulary's shape

@@ -421,7 +421,8 @@ values = [0.05, 0.10, 0.15, 0.25]
 |---|---|---|---|
 | `values` | array | **required**, non-empty | scalars or arrays (an energy pair) |
 | `tags` | array of strings | derived | one per value. The default is the value with anything but `A–Za–z0–9.+-` replaced by `-`. Tags name point directories: keep them short and unique. |
-| `labels` | array of strings | the tags | legend text, in ROOT **TLatex** (`e^{-}`, `#sqrt{s}`; V11). Only `_{…}`, `^{…}` and `#<name>` are markup: a bare `_` or `^` is the character (`"PDF4LHC21_40"`), in ROOT and yoda alike (V41). `\_`, `\^` and `\#` also give the character, even before a brace; in TOML write them in single quotes, `'PDF4LHC21\_40'`, since in `"…"` a backslash starts a TOML escape |
+| `labels` | array of strings | the tags | legend text, in **LaTeX** (`$e^-$`, `$\sqrt{s}$`), the one label language of every text a run TOML gives a page (V65): math in `$…$`, the rest text, where a bare `_` or `^` is the character (`"PDF4LHC21_40"`). A label written in ROOT's TLatex (`#sqrt{s}`, `p_{T}`), as configs did before V65, is still read: it is converted faithfully (TLatex's upright letters become `\mathrm{…}`), until the configs are migrated. `\_`, `\^` and `\#` also give the character, even before a brace; in TOML write them in single quotes, `'PDF4LHC21\_40'`, since in `"…"` a backslash starts a TOML escape |
+| `styles` | array of tables | the palette | one per value (V67): its curves' look, `{ colour, line, width }`. `colour` is `"#rrggbb"`, a ROOT name (`"kBlue+1"`) or number (the yoda backend draws `#rrggbb` only); `line` is `solid`, `dashed`, `dotted` or `dashdot`; `width` is in points. A key left out, or `"default"`, is the style's; curves with no colour take the palette in turn, as mkhtml's take its cycle. A value keeps its look on every page, so a PDF is one colour throughout. With two curve axes, the later one's keys win |
 | `exclude` | array of integers | `[]` | values a sweep leaves out, by their **1-based** place (as `static = "#2"` and `--points 2` count): `exclude = [2]` sweeps the others. The remaining points keep their names and identities and are numbered 1… over what is swept. In an entangled group, a value any member excludes leaves the group. `static` may still pick an excluded value. Refused: a place outside 1…len(values), or none left (V42) |
 | `key` | string, or table `{<tag or tool type> = "<key>"}` | none | the native key. A string needs a `target`. A table entry for a tool tag wins over one for its type. |
 | `target` | string or array | none | restricts the consumers (§8.1) |
@@ -676,20 +677,23 @@ style.legend.position = "bottom-left"
 
 | Key | Type | Default | Notes |
 |---|---|---|---|
-| `backend` | string or array | `"root"` | `"root"` (Paint), `"yoda"` (rivet-mkhtml), `"both"` or an array (both, from the same pages: V28) |
-| `formats` | array | `["pdf"]` | `pdf`, `png`, `svg`, `eps`. mkhtml writes pdf and png always. |
+| `backend` | string or array | `"root"` | `"root"` (Paint), `"yoda"` (rivet-mkhtml, frozen since V71), `"mpl"` (matplotlib, mkhtml's pages drawn in-process: V71), `"both"` (root and yoda, V28) or an array of them, from the same pages |
+| `formats` | array | `["pdf"]` | `pdf`, `png`, `svg`, `eps`. mkhtml writes pdf and png always. The root backend writes `plots/root/index.html` (V70): a section per `plot_points` cell, each page by its PNG or SVG, else an embedded PDF, linked to every format; add `png` for thumbnails a browser shows at once |
 | `objects` | array of globs | every 1D object | matched against the option-free YODA path (`/photo_eic/d01-x01-y01`) or any variant's path. No object matching is an error. |
 | `ratio` | bool | false | a ratio pad: each curve over the data, or over the first curve when there are no data |
 | `use_data` | bool | true | `false`: the `[plot.data]` table stays in the file but is not drawn, and a `ratio` divides each curve by the page's first curve, the first value of its curve axis (V44) |
 | `title` | string | the `.plot`'s `Title` | the main title, centred above the frame (V51). Every page; `[plot.object."<glob>"]` and `[plot.overlay.<name>]` override it for theirs |
 | `title_left`, `title_right` | string | `""` | small text just above the frame's top-left and top-right corners (V51), inherited the same way |
 | `legend_header` | string | the `.plot`'s `LegendTitle` | the legend's first line (V51), inherited the same way. Children inherit every key their parent has and a key means the same at both levels |
+| *placeholders* | in any text | | every page text (the titles, `legend_header`, the labels, `[plot.data].legend`, an overlay's `labels`, the `.plot`'s own) may cite the points (V66): `{cell}` (the page's `plot_points` values), `{q:<quantity>}` (the label of its value, swept or static), and what a tool's folder gives: Rivet's `{opt:NAME}` / `{opt:<analysis>:NAME}`, the option at the point (the `.info`'s `(default X)` when not set). A page text's value must be the same at all the page's curves (a curve label's is its own point's); an unknown name is an error |
 | `overlay` | tables | none | `[plot.overlay.<name>] objects = [globs], labels = [...]`: one page per cell, `<cell>/<name>`, whose curves are those objects of each point (label: the overlay's, plus the point's when a page has several points); takes the `[plot.object]` keys too, inheriting from `[plot]`; a ratio divides by the first curve (V51) |
 | `y_gutter` | number ≥ 0 or `"default"` | `0.5` | the top of the y axis at (1 + g) × the largest drawn value (on a log axis, g of the decades shown); `0`: no headroom. `"default"`: no gutter, the tool's own range (V29, V55) |
 | `x_gutter` | number ≥ 0 or `"default"` | `"default"` | widens x by g of its span, symmetrically (in decades on a log axis). `"default"`: the range the bins give |
 | `logx`, `logy` | bool | the `.plot` file's `LogX`/`LogY` | |
 | `auto_range` | bool | true | trim x to the bins with content, in curves and data |
 | `range_pad` | integer | 0 | whole bins kept either side of the filled ones |
+| `band` | array of quantity names | none | curve axes drawn as an envelope (V69): per value of the other curve axes, one curve, the band quantity's first value, with the min–max of all its values shaded around it in the curve's colour (the usual PDF or scale band). Its legend entry ends `(<q> envelope)`; its own statistical errors are not drawn. A name that is not a curve axis of the configuration (swept, not `plot_points`, not combined) is refused at plan time. The yoda backend draws the same envelope as mkhtml's error band |
+| `normalise` | `"area"` or false | false | `"area"` (V68): every curve, and the data, scaled to unit area, Σ value × bin width over the bins drawn (after voiding and the data's alignment), so pages compare shapes. Both backends scale the same way. The y label stays the `.plot`'s: set `y_label` (e.g. `"$1/\sigma\,\mathrm{d}\sigma/\mathrm{d}E_T$"`) on the pages it applies to. `[plot.object."<glob>"]` and overlays may set it for theirs |
 | `void_empty` | bool | false | blank a bin that is zero in **every** curve |
 | `min_entries` | integer | 0 | blank a bin that fewer raw entries went into, in **any** curve (read from the `/RAW` twin; objects without one are not voided this way) |
 | `root_style` | string (path) | none | a style file over base.toml (§12). Refused by the yoda backend alone. |
@@ -707,6 +711,7 @@ a missing `auto_range` is true). In `[plot]`:
 |---|---|
 | `min_entries`, `range_pad` | 0: every bin drawn |
 | `void_empty` | false: neither Paint nor mkhtml voids a bin by itself |
+| `normalise` | false: neither tool scales a curve by itself |
 | `auto_range` | off: the tool's own x range |
 | `y_gutter`, `x_gutter` | no gutter: the tool's own range (as before) |
 | `logx`, `logy` | the analysis's `.plot` `LogX`/`LogY` |
@@ -757,7 +762,7 @@ every matching table applies, in file order.
 
 | Key | Overrides |
 |---|---|
-| `title`, `x_label`, `y_label` | the `.plot` labels (TLatex as written) |
+| `title`, `x_label`, `y_label` | the `.plot` labels (LaTeX, V65; a TLatex value is converted) |
 | `logx`, `logy`, `ratio` | the `[plot]` values |
 | `y_gutter`, `x_gutter` | the `[plot]` values (same rules) |
 | `style` | a style layer for these objects only (§12) |

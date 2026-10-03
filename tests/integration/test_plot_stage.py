@@ -245,3 +245,28 @@ def test_titles_and_overlays(stage):
         assert (plots / "em" / "overlay" / "cuts.png").exists()
         script = (plots / "em" / "photo_eic" / "d01-x01-y01.py").read_text()
         assert "'All pages'" in script and "'Pythia 8'" in script and "bbox_inches='tight'" in script
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not shutil.which("rivet-mkhtml"), reason="load_hep: rivet-mkhtml")
+@pytest.mark.parametrize("stage", ["yoda"], indirect=True)
+def test_the_mpl_backend_draws_mkhtml_s_pages_pixel_for_pixel(stage):
+    """V71 (B4c, option B): until the user has verified it, mpl's pages are mkhtml's: every page and
+    overlay, with titles and a best legend, is the same PNG."""
+    from matplotlib import image
+    np = pytest.importorskip("numpy")
+    run, configuration, plans = stage
+    run.plot.update({"backend": ["yoda", "mpl"], "title": "All pages", "title_right": "Pythia 8",
+                     "overlay": {"cuts": {"objects": ["d02-x01-y01", "d03-x01-y01"], "labels": ["$E_T > 5$", "$E_T > 10$"]}}})
+    run.plot["object"]["d05-*"] = {"style": {"legend": {"position": "best"}}}
+    said = []
+    assert plot.draw(run, configuration, plans, said.append) == 0, said
+    plots = plans[0].res.parent / "plots"
+    compared = 0
+    for mine in sorted((plots / "mpl").rglob("*.png")):
+        rel = mine.relative_to(plots / "mpl")
+        theirs = plots / "yoda" / rel.parent / ("overlay" if rel.stem == "cuts" else "photo_eic") / rel.name
+        a, b = image.imread(mine), image.imread(theirs)
+        assert a.shape == b.shape and not (np.abs(a[..., :3] - b[..., :3]) > 1e-3).any(), rel
+        compared += 1
+    assert compared == 36 and (plots / "mpl" / "index.html").is_file()            # 2 cells × (17 + 1)

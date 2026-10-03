@@ -24,6 +24,7 @@ namespace Paint {
     struct Series {
         std::string label;
         std::vector<double> lo, hi, y, err, raw;   // raw: per-bin entry counts when known
+        std::vector<double> bandLo, bandHi;        // V69: the envelope of a band curve's members; empty: none
         bool data = false;
         size_t size() const { return y.size(); }
     };
@@ -61,6 +62,33 @@ namespace Paint {
             if (c.size() == mask.size())
                 for (size_t i = 0; i < mask.size(); ++i)
                     if (mask[i]) c.y[i] = std::numeric_limits<double>::quiet_NaN(), c.err[i] = 0.0;
+    }
+
+    // V68: scale to unit area, Σ y·Δx over the finite bins (the bins drawn); nothing to scale is left as is.
+    inline void normalise(Series& s) {
+        double area = 0;
+        for (size_t i = 0; i < s.size(); ++i)
+            if (std::isfinite(s.y[i])) area += s.y[i] * (s.hi[i] - s.lo[i]);
+        if (!(area > 0) || !std::isfinite(area)) return;
+        for (size_t i = 0; i < s.size(); ++i) s.y[i] /= area, s.err[i] /= area;
+    }
+
+    // V69: the min–max envelope, per bin, of a curve and its band's members (a bin not finite in any is
+    // not finite in the band). false: a member's binning differs, and there is no band.
+    inline bool envelope(Series& central, const std::vector<Series>& members) {
+        for (const Series& m : members)
+            if (!sameBinning(central, m)) return false;
+        central.bandLo = central.y, central.bandHi = central.y;
+        for (const Series& m : members)
+            for (size_t i = 0; i < central.size(); ++i) {
+                if (!std::isfinite(m.y[i]) || !std::isfinite(central.bandLo[i])) {
+                    central.bandLo[i] = central.bandHi[i] = std::numeric_limits<double>::quiet_NaN();
+                    continue;
+                }
+                central.bandLo[i] = std::min(central.bandLo[i], m.y[i]);
+                central.bandHi[i] = std::max(central.bandHi[i], m.y[i]);
+            }
+        return true;
     }
 
     // Trim data to its longest run of consecutive bins whose edges are MC edges. false = drop it.

@@ -104,19 +104,35 @@ def yoda_backend():
 
 @pytest.mark.parametrize("root, latex", [
     ("MSTW 2008 LO", "MSTW 2008 LO"),
-    ("5x41 GeV (#sqrt{s} = 28.6 GeV)", r"5x41 GeV $(\sqrt{s}$ = 28.6 GeV)"),
-    ("p_{T0}^{ref} = 3.0 GeV", "$p_{T0}^{ref}$ = 3.0 GeV"),
-    ("#hat{p}_{T} > 2 GeV", r"$\hat{p}_{T}$ $>$ 2 GeV"),
+    ("5x41 GeV (#sqrt{s} = 28.6 GeV)", r"5x41 GeV $(\sqrt{\mathrm{s}}$ = 28.6 GeV)"),   # upright, as TLatex drew it
+    ("p_{T0}^{ref} = 3.0 GeV", r"$\mathrm{p}_{\mathrm{T0}}^{\mathrm{ref}}$ = 3.0 GeV"),
+    ("#hat{p}_{T} > 2 GeV", r"$\hat{\mathrm{p}}_{\mathrm{T}}$ $>$ 2 GeV"),
     ("R: 0.4", "R  0.4"),                                                 # ':' separates mkhtml's options
     ("PDF4LHC21_40_pdfas", "PDF4LHC21_40_pdfas"),                        # TLatex's rule: a bare _ is itself
     ("E_T jets", "E_T jets"),
     (r"PDF4LHC21\_40", "PDF4LHC21_40"),                                  # the escapes are the characters
     (r"\#1 \^2", "#1 ^2"),
-    (r"x_1\_a_{2}", r"$x\_1\_a_{2}$"),                                   # literal underscores inside math
-    ("E_{T} > 5", "$E_{T}$ $>$ 5"),                                       # V51: > in LaTeX's text font is ¿
+    (r"x_1\_a_{2}", r"$\mathrm{x}\_1\_\mathrm{a}_{2}$"),                 # literal underscores inside math
+    ("E_{T} > 5", r"$\mathrm{E}_{\mathrm{T}}$ $>$ 5"),                    # V51: > in LaTeX's text font is ¿
 ])
-def test_tlatex_becomes_latex_for_mkhtml(yoda_backend, root, latex):
-    assert yoda_backend.latex(root) == latex
+def test_a_tlatex_label_is_read_as_latex_and_mkhtml_gets_it(root, latex):
+    """V65: one label language. A TLatex label (a config not yet migrated) is converted on reading."""
+    from runner import labels
+    assert labels.mathtext(labels.canonical(root)) == latex
+
+
+@pytest.mark.parametrize("label", ["5x41 GeV (#sqrt{s} = 28.6 GeV)", "p_{T0}^{ref} = 3.0 GeV", "#hat{p}_{T} > 2 GeV",
+                                   "PDF4LHC21_40_pdfas", "e^{-}", "E_{T} > 5", "#bf{x}_{1}", "k_{T}, 18x275"])
+def test_a_tlatex_label_draws_the_same_in_root_after_the_round_trip(label):
+    from runner import labels
+    assert labels.tlatex(labels.canonical(label)) == label
+
+
+def test_tlatex_keeps_text_as_text():
+    """V65: the sub- and superscript rule is math's; a bare _ in text stays the character (V41)."""
+    from runner import labels
+    assert labels.tlatex("PDF4LHC21_40 x_1") == "PDF4LHC21_40 x_1"
+    assert labels.tlatex(r"$x\_1$") == "#it{x}_1"           # math italic; \_ the character
 
 
 @pytest.mark.parametrize("label, root", [
@@ -204,11 +220,14 @@ def test_references_are_cut_to_the_aligned_run_and_renamed(yoda_backend):
     except HepError:
         pytest.skip("no Rivet reference data")
     page = SimpleNamespace(object="/photo_eic:R=0.7/d01-x01-y01", ranges={"data_x": [17, 47]},
-                           data=(source, "/REF/ZEUS_2012_I1116258/d01-x01-y01"))
+                           data=(source, "/REF/ZEUS_2012_I1116258/d01-x01-y01"), document={"page": {}})
     ref = yoda_backend._reference(yoda, page)
     whole = yoda.read(str(page.data[0]))[page.data[1]]
     assert ref.path() == "/REF/photo_eic/d01-x01-y01"
     assert list(ref.xEdges()) == [17, 21, 25, 29, 35, 41, 47] and len(whole.xEdges()) > 7
+    page.document["page"]["normalise"] = "area"                         # V68: the data as the curves
+    area = yoda_backend._reference(yoda, page)
+    assert sum(b.val() * (b.xMax() - b.xMin()) for b in area.bins()) == pytest.approx(1.0)
     assert [ref.bin(i).val() for i in range(1, 7)] == [whole.bin(i).val() for i in range(1, 7)]
     assert ref.bin(1).errDownUp("stat") == whole.bin(1).errDownUp("stat")
 
@@ -315,3 +334,129 @@ def test_yoda_sizes_the_legend_title_by_text_header(yoda_backend):
                            style={"legend": {"position": "top-right"}, "text": {"legend": 7.0, "header": 8.5}})
     block = yoda_backend._plot_block(page)
     assert "LegendFontSize=7; plt.rcParams['legend.title_fontsize'] = 8.5" in block
+
+
+def test_a_page_text_cites_the_points():
+    """V66: {cell}, {q:…} and a folder's texts are filled before the text is read as LaTeX."""
+    fill = plot.filler([{"cell": "18x275", "opt:ETMIN": "17"}] * 2, "here")
+    shown = plot.page_settings({"legend_header": "$E_T > {opt:ETMIN}$ GeV", "title": "{cell}"},
+                               "/photo_eic/d01-x01-y01", "d01", Path("/tmp/x"), True, fill=fill)[0]
+    assert shown["legend_header"] == "$E_T > 17$ GeV" and shown["title"] == "18x275"
+    assert fill(r"$\mathrm{d}\sigma/\mathrm{d}E_T$") == r"$\mathrm{d}\sigma/\mathrm{d}E_T$"   # LaTeX groups untouched
+
+
+def test_a_page_text_that_differs_between_its_curves_is_refused():
+    with pytest.raises(HepError, match="differs between the curves"):
+        plot.filler([{"q:pdf": "MSTW"}, {"q:pdf": "NNPDF"}], "here")("{q:pdf}")
+    with pytest.raises(HepError, match="nothing the points have"):
+        plot.filler([{"opt:ETMIN": "17"}], "here")("{opt:ETMN}")
+
+
+def test_a_quantity_value_has_its_own_curve_look(scratch):
+    """V67: styles = [...], one per value, reach the value's curves; a later curve axis's key wins."""
+    from helpers import plan
+    styles = [{"colour": "#EE3311", "line": "dashed"}, {"width": 2.0, "colour": "default"}]
+    data = raw(run__one__sweeps=["pdf"], quantities__pdf__styles=styles)
+    run, _, first = plan(data, scratch)
+    _, _, second = plan(data, scratch, point=1)
+    assert plot._curve_look(run, first, [["pdf"]]) == {"colour": "#EE3311", "line": "dashed"}
+    assert plot._curve_look(run, second, [["pdf"]]) == {"width": 2.0}          # "default": the palette's colour
+    assert plot._curve_look(run, first, []) == {}
+
+
+@pytest.mark.parametrize("styles, message", [
+    ([{"line": "wavy"}, {}], "is not one"), ([{"colour": "#EE3311"}], "one entry per value"),
+    ([{"color": "#EE3311"}, {}], "did you mean 'colour'"), ([{"width": 0}, {}], "is not one")])
+def test_a_curve_look_is_checked(scratch, styles, message):
+    with pytest.raises(HepError, match=message):
+        parse(raw(quantities__pdf__styles=styles), scratch)
+
+
+def test_the_yoda_backend_draws_hex_colours_only(scratch):
+    run = parse(raw(plot={"backend": "both"}, quantities__pdf__styles=[{"colour": "kRed"}, {}]), scratch)
+    with pytest.raises(HepError, match="cannot draw the curve colour"):
+        plot.validate(run)
+    plot.validate(parse(raw(plot={"backend": "both"}, quantities__pdf__styles=[{"colour": "#EE3311"}, {}]), scratch))
+
+
+def test_normalise_is_a_page_key_a_child_may_set(scratch):
+    """V68: false unless asked; an object's table overrides [plot]'s; "area" or false only."""
+    assert page({})["normalise"] is False
+    assert page({"normalise": "area"})["normalise"] == "area"
+    assert page({"normalise": "area", "object": {"d01-*": {"normalise": False}}})["normalise"] is False
+    with pytest.raises(HepError, match="must be one of area, false"):
+        validated(scratch, normalise="peak")
+
+
+def test_the_yoda_backend_normalises_as_paint(yoda_backend):
+    import yoda
+    estimate = yoda.BinnedEstimate1D([0.0, 1.0, 3.0], "/x")
+    estimate.bin(1).setVal(2.0), estimate.bin(1).setErr(0.5), estimate.bin(2).setVal(1.0)
+    assert yoda_backend._normalise(estimate)
+    assert [estimate.bin(i).val() for i in (1, 2)] == [0.5, 0.25] and estimate.bin(1).errDownUp("")[1] == 0.125
+
+
+def test_a_cited_placeholder_is_checked_before_any_point_runs(scratch):
+    """V66: a typo is refused at plan time, with what the points have."""
+    from helpers import plan
+    run, _, p = plan(raw(static={"pdf": "MSTW08lo"}, plot={"title": "{opt:ETMIN} {q:pdf}", "overlay": {"o": {"objects": ["d01-*"], "labels": ["{cell}"]}}}), scratch)
+    plot.check_texts(run, [p])
+    run, _, p = plan(raw(plot={"legend_header": "{opt:ETMN}"}), scratch)
+    with pytest.raises(HepError, match=r"cites \{opt:ETMN\}") as error:
+        plot.check_texts(run, [p])
+    assert "opt:ETMIN" in error.value.hint
+
+
+def test_a_band_folds_its_axis_into_one_curve_per_other_value():
+    """V69: per value of the other curve axes (and variant), the band axis's first value with the rest as members."""
+    from types import SimpleNamespace as P
+    plans = [P(point=P(name=f"{e}_{p}", choice={"energy": e, "pdf": p})) for e in (0, 1) for p in (2, 0, 1)]
+    curves = [(plan, "/a/d01") for plan in plans]
+    folded = plot._banded(curves, [["energy"], ["pdf"]], ["pdf"], lambda plan, full: 0)
+    assert [(c.point.name, [m.point.name for m, _ in ms]) for c, _, ms in folded] == [
+        ("0_0", ["0_1", "0_2"]), ("1_0", ["1_1", "1_2"])]
+    assert [len(ms) for _, _, ms in plot._banded(curves, [["energy"], ["pdf"]], [], lambda *a: 0)] == [0] * 6
+
+
+def test_a_band_must_be_a_curve_axis(scratch):
+    from helpers import plan
+    run, conf, _ = plan(raw(run__one__sweeps=["pdf"], run__one__plot_points=["pdf"], plot={"band": ["pdf"]}), scratch)
+    with pytest.raises(HepError, match="not a curve axis"):
+        plot.check_band(run, conf)
+    run, conf, _ = plan(raw(run__one__sweeps=["pdf"], plot={"band": ["pdf"]}), scratch)
+    plot.check_band(run, conf)
+
+
+def test_the_yoda_backend_draws_the_envelope_as_the_errors(yoda_backend):
+    import yoda
+    central, low, high = (yoda.BinnedEstimate1D([0.0, 1.0, 2.0], "/x") for _ in range(3))
+    for estimate, values in ((central, (2.0, 1.0)), (low, (1.5, float("nan"))), (high, (3.0, 1.0))):
+        for i, v in enumerate(values, start=1):
+            estimate.bin(i).setVal(v), estimate.bin(i).setErr(0.1)
+    assert yoda_backend._envelope(central, [low, high])
+    assert central.bin(1).errDownUp("") == (-0.5, 1.0) and not central.bin(2).sources()   # a NaN member: no band
+
+
+def test_the_root_pages_get_an_index(scratch):
+    """V70: a section per cell, each page by its PNG (linked to its PDF), else an embedded PDF."""
+    for name in ("cell_a/d01.png", "cell_a/d01.pdf", "cell_b/d01.pdf"):
+        (scratch / name).parent.mkdir(parents=True, exist_ok=True)
+        (scratch / name).write_bytes(b"x")
+    index = plot.write_index(scratch, "run <1>", [("cell_a", "cell_a/d01", scratch / "cell_a" / "d01"),
+                                                  ("cell_b", "cell_b/d01", scratch / "cell_b" / "d01"),
+                                                  ("cell_b", "cell_b/gone", scratch / "cell_b" / "gone")])
+    text = index.read_text(encoding="utf-8")
+    assert "<title>run &lt;1&gt;</title>" in text and text.count("<h2>") == 2
+    assert '<a href="cell_a/d01.pdf"><img src="cell_a/d01.png"' in text
+    assert '<object data="cell_b/d01.pdf"' in text and "gone" not in text
+
+
+def test_mpl_is_a_backend_and_both_is_still_root_and_yoda(scratch):
+    """V71: "mpl" may be named; "both" keeps V28's meaning; mpl refuses what mkhtml cannot do, in its own name."""
+    assert plot.backends({"backend": "both"}) == ["root", "yoda"]
+    assert plot.backends({"backend": ["mpl", "root"]}) == ["root", "mpl"]
+    with pytest.raises(HepError, match='backend = "mpl"'):
+        validated(scratch, backend="mpl", style={"page": {"dpi": 100}})
+    mpl = plot.backend("mpl")
+    from yoda.plotting.mlp_preprocessor import preprocess
+    assert mpl._raw(preprocess(r"$a$\newline$b$")) == "$a$\n$b$" and mpl.INDEX

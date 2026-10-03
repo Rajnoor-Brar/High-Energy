@@ -20,6 +20,9 @@ namespace Paint {
 
     struct Source {
         std::string file, object, raw, label;
+        std::string colour, line;            // a curve's own (V67: a quantity value's style); "": the style's
+        double width = 0;                    // points; 0: the style's
+        std::vector<Source> band;            // V69: the members whose envelope is drawn around this curve
     };
 
     struct Page {
@@ -29,6 +32,7 @@ namespace Paint {
         // A key the page leaves out is what ROOT does by itself (V55): no gutter, no auto range, no voiding.
         // The runner writes every key it sets (its defaults are utils/Env/schema/run.toml's), so Paint keeps none.
         bool logx = false, logy = false, ratio = false, voidEmpty = false, autoRange = false;
+        bool normalise = false;                                 // "area": unit area over the bins drawn (V68)
         std::optional<double> yGutter, xGutter;                 // none: ROOT's own range ("default")
         int minEntries = 0, rangePad = 0;
         Style style;
@@ -78,6 +82,11 @@ namespace Paint {
         page.ratio = p["ratio"].value_or(false);
         page.voidEmpty = p["void_empty"].value_or(false);
         page.autoRange = p["auto_range"].value_or(false);
+        if (const auto node = p["normalise"]; node) {
+            if (node.value<std::string>() == std::optional<std::string>("area")) page.normalise = true;
+            else if (node.value<bool>() != std::optional<bool>(false))
+                throw std::runtime_error(path + ": [page].normalise must be \"area\" or false");
+        }
         page.yGutter = gutter(p["y_gutter"], "y_gutter", page.yGutter);
         page.xGutter = gutter(p["x_gutter"], "x_gutter", page.xGutter);
         page.minEntries = p["min_entries"].value_or(0);
@@ -86,8 +95,23 @@ namespace Paint {
         if (auto* curves = doc["curve"].as_array()) {
             for (auto& node : *curves) {
                 const auto& c = *node.as_table();
-                page.curves.push_back({c["file"].value_or(std::string("")), c["object"].value_or(std::string("")),
-                                       c["raw"].value_or(std::string("")), c["label"].value_or(std::string(""))});
+                Source source{c["file"].value_or(std::string("")), c["object"].value_or(std::string("")),
+                              c["raw"].value_or(std::string("")), c["label"].value_or(std::string(""))};
+                if (const auto* look = c["style"].as_table()) {
+                    source.colour = (*look)["colour"].value_or(std::string(""));
+                    if (const auto number = (*look)["colour"].value<int64_t>()) source.colour = std::to_string(*number);
+                    source.line = (*look)["line"].value_or(std::string(""));
+                    source.width = (*look)["width"].value_or(0.0);
+                    if (!source.line.empty() && source.line != "solid" && source.line != "dashed" &&
+                        source.line != "dotted" && source.line != "dashdot")
+                        throw std::runtime_error(path + ": a curve's style.line must be solid, dashed, dotted or dashdot");
+                }
+                if (const auto* members = c["band"].as_array())
+                    for (const auto& m : *members)
+                        if (const auto* t = m.as_table())
+                            source.band.push_back({(*t)["file"].value_or(std::string("")), (*t)["object"].value_or(std::string("")),
+                                                   (*t)["raw"].value_or(std::string("")), ""});
+                page.curves.push_back(source);
             }
         }
         if (page.curves.empty()) throw std::runtime_error(path + ": a page needs at least one [[curve]]");

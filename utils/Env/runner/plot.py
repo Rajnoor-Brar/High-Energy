@@ -7,8 +7,9 @@ docs/04_Config_Reference.md §11, docs/05_Tools_Reference.md §17. After the poi
 * the sweep is merged into one ROOT file, results/…/plots/root/<configuration>.root: a directory
   per point, raw entries included (so Paint can void by min_entries) and points.json inside. It is
   rebuilt only when a point's YODA changes, and it is what the pages read;
-* titles and axis labels come from the analysis's Rivet .plot file (one label source, v1's D9), its
-  LaTeX translated to TLatex (V11), under [plot.object."<glob>"] overrides;
+* titles and axis labels come from the analysis's Rivet .plot file (one label source, v1's D9), under
+  [plot.object."<glob>"] overrides; every text is LaTeX (V65), and may cite the points (V66):
+  {cell}, {q:<quantity>} (a value's label), and what the tools' folders give ({opt:ETMIN}: Rivet's);
 * reference data are drawn only through the explicit [plot.data].map (L18);
 * one Paint config per page, output/…/plots/[<page>/]<object>.toml, drawn to
   results/…/plots/root/[<page>/]<object>.<fmt>; the yoda backend writes results/…/plots/yoda/, and
@@ -22,7 +23,9 @@ from __future__ import annotations
 
 import fnmatch
 import hashlib
+import html
 import json
+import re
 import subprocess
 import tomllib
 from dataclasses import dataclass, field, replace
@@ -32,7 +35,7 @@ import tomli_w
 
 from . import hepfiles, plugins, schema
 from .errors import HepError, did_you_mean
-from .labels import labels_of, lines_of, macros, root_text, tlatex  # noqa: F401 (tlatex et al. re-exported)
+from .labels import canonical, labels_of, lines_of, macros, root_text, tlatex  # noqa: F401 (tlatex et al. re-exported)
 from .paths import build_root, output_root, repo_root, resolve, results_root
 from .record import is_complete
 from .tools import sha256_file
@@ -46,6 +49,7 @@ LEGENDS = ("top-right", "top-left", "bottom-right", "bottom-left", "best")
 #: value and may override it, and a key means the same at both levels.
 TITLE_KEYS = ("title", "title_left", "title_right", "legend_header")
 DEFAULT = schema.DEFAULT  # "keep it as it is" (V55): a child's is its parent's; [plot]'s sets nothing
+PLACEHOLDER = re.compile(r"\{(cell|[a-z]+:[A-Za-z0-9_.:+-]+)\}")    # V66; a LaTeX group never has the colon
 
 
 def formats_of(settings: dict) -> list[str]:
@@ -55,6 +59,8 @@ def formats_of(settings: dict) -> list[str]:
 STYLE_CHOICES = {"page.font": ("serif", "sans", "mono"), "curves.errors": ("bars", "band", "none"),
                  "legend.position": LEGENDS}
 COUNTERS = hepfiles.COUNTERS
+#: Pages per Paint process (V64): ROOT starts once per batch, and argv stays short.
+PAINT_BATCH = 200
 
 
 @dataclass
@@ -73,6 +79,7 @@ class Page:
     style: dict = field(default_factory=dict)       # base.toml with the page's [style] over it
     plots: Path | None = None                        # results/…/plots: a backend draws into plots/<its name>/
     overlay: str = ""                                # [plot.overlay.<name>]: curves are several objects (V51)
+    bands: list = field(default_factory=list)        # per curve: its band members' (YODA, object), V69
 
 
 def backend(name: str):
@@ -88,7 +95,7 @@ def backends(settings: dict) -> list[str]:
     """[plot].backend: a name, a list of names, or "both" (every backend). Paint's first when drawn."""
     value = settings.get("backend", "root")
     value = "root" if value == DEFAULT else value
-    names = list(BACKENDS) if value == "both" else [value] if isinstance(value, str) else list(value)
+    names = ["root", "yoda"] if value == "both" else [value] if isinstance(value, str) else list(value)   # "both": V28's pair
     return sorted(dict.fromkeys(names), key=lambda n: n != "root")
 
 
@@ -107,7 +114,8 @@ def validate(run) -> None:
     for name, table in settings.get("overlay", {}).items():
         check_style(table.get("style", {}), f"{where}.overlay.{name}.style")
     for name in names[1:] if names[0] == "root" else names:
-        backend(name).validate(settings, beside_root=names[0] == "root")
+        backend(name).validate(settings, beside_root=names[0] == "root",
+                               curve_styles=[s for q in run.quantities.values() for s in q.styles])
     data = settings.get("data", {})
     if data and not data.get("map"):
         raise HepError("[plot.data] names a file but no map", where=f"{where}.data",
@@ -205,11 +213,11 @@ def run_style(run) -> dict:
 def for_root(document: dict) -> dict:
     """The page document Paint reads: every label through root_text (the in-memory document keeps the
     labels as written, which the yoda backend converts its own way)."""
-    out = {**document, "page": {k: root_text(v) if k in (*TITLE_KEYS, "x_label", "y_label") and isinstance(v, str) else v
+    out = {**document, "page": {k: tlatex(v) if k in (*TITLE_KEYS, "x_label", "y_label") and isinstance(v, str) else v
                                 for k, v in document["page"].items()},
-           "curve": [{**c, "label": root_text(c["label"])} for c in document["curve"]]}
+           "curve": [{**c, "label": tlatex(c["label"])} for c in document["curve"]]}
     if "data" in document:
-        out["data"] = {**document["data"], "label": root_text(document["data"]["label"])}
+        out["data"] = {**document["data"], "label": tlatex(document["data"]["label"])}
     return out
 
 
@@ -312,9 +320,7 @@ def pages(run, configuration, plans) -> list[Page]:
     complete = [p for p in plans if is_complete(p) and yoda_of(p)]
     if not complete:
         return []
-    groups = [g for g in axes(configuration) if not set(g) & set(configuration.combine)]   # merged away (V35)
-    page_groups = [g for g in groups if set(g) & set(configuration.plot_points)]
-    curve_groups = [g for g in groups if g not in page_groups]
+    page_groups, curve_groups = axes_of(configuration)
 
     variants: dict[str, dict[str, list[str]]] = {}      # point → base path → its full paths
     raws = {plan.point.name: raws_of(yoda_of(plan)) for plan in complete}
@@ -346,36 +352,58 @@ def pages(run, configuration, plans) -> list[Page]:
         source = data_source(data["file"], run)
         data_file = convert(source, output_root() / run.project / ".cache" / "datasets" / f"{source.stem}.root")
 
+    band = settings.get("band", [])
+    check_band(run, configuration)
+    line_groups = [g for g in curve_groups if not set(g) & set(band)]     # what tells a band curve from another
+
     by_page: dict[str, list] = {}
     for plan in complete:
         key = "_".join(tag_of(run.quantities[g[0]], plan.point.choice[g[0]]) for g in page_groups)
         by_page.setdefault(key, []).append(plan)
 
     style, base = run_style(run), base_style()
+    known = {plan.point.name: texts_of(run, plan, ", ".join(label_of(run.quantities[g[0]], plan.point.choice[g[0]])
+                                                           for g in page_groups)) for plan in complete}
+    where = f"{run.path}: [plot]"
+
+    def page_fill(plans):
+        return filler(list({p.point.name: known[p.point.name] for p in plans}.values()), where)
+
+    def curve_fill(plan):
+        return filler([known[plan.point.name]], where)
+
     made = []
     for key, members in by_page.items():
         for path in objects:
             short = path.rsplit("/", 1)[-1]
             rel = f"{key}/{short}" if key else short
             reference = data.get("map", {}).get(short) if data else None
-            page, override = page_settings(settings, path, rel, res_dir / rel, reference is not None)
             curves = [(plan, full) for plan in members for full in variants.get(plan.point.name, {}).get(path, [])]
+            fill = page_fill([plan for plan, _ in curves] or members)
+            folded = _banded(curves, curve_groups, band, lambda p, f: variants[p.point.name][path].index(f))
+            envelope = f" ({', '.join(band)} envelope)" if band else ""
+            page, override = page_settings(settings, path, rel, res_dir / rel, reference is not None, fill=fill)
             several = {plan.point.name for plan, _ in curves if len(variants[plan.point.name][path]) > 1}
             layer = merge_style(style, override.get("style", {}))
             document = {"page": page, "style": layer, "curve": [
                 {"file": str(merged), "object": f"{plan.point.name}/{root_name(full)}",
                  **({"raw": f"{plan.point.name}/RAW/{root_name(full)}"} if "/RAW" + full in raws[plan.point.name] else {}),
-                 "label": _curve_label(run, plan, curve_groups)
-                          + (f" [{full.strip('/').split('/')[0].partition(':')[2]}]" if plan.point.name in several else "")}
-                for plan, full in curves]}
+                 "label": _curve_label(run, plan, line_groups, curve_fill(plan))
+                          + (f" [{full.strip('/').split('/')[0].partition(':')[2]}]" if plan.point.name in several else "")
+                          + (envelope if folded_members else ""),
+                 **({"style": look} if (look := _curve_look(run, plan, line_groups)) else {}),
+                 **({"band": [{"file": str(merged), "object": f"{m.point.name}/{root_name(f)}"} for m, f in folded_members]}
+                    if folded_members else {})}
+                for plan, full, folded_members in folded]}
             if reference:
                 document["data"] = {"file": str(data_file), "object": root_name(reference),
-                                    "label": data.get("legend", "Data")}
+                                    "label": canonical(fill(data.get("legend", "Data")))}
             config = out_dir / f"{rel}.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(tomli_w.dumps(for_root(document)), encoding="utf-8")
             made.append(Page(rel, config, res_dir / rel, cell=key, object=path, document=document,
-                             sources=[yoda_of(plan) for plan, _ in curves], variants=[full for _, full in curves],
+                             sources=[yoda_of(plan) for plan, _, _ in folded], variants=[full for _, full, _ in folded],
+                             bands=[[(yoda_of(m), f) for m, f in ms] for _, _, ms in folded],
                              data=(source, reference) if reference else None,
                              overrides={k for k, v in override.items() if v != DEFAULT},
                              style=merge_style(base, layer), plots=res_dir.parent))
@@ -391,14 +419,15 @@ def pages(run, configuration, plans) -> list[Page]:
         labels = table.get("labels") or [p.rsplit("/", 1)[-1] for p in paths]
         for key, members in by_page.items():
             rel = f"{key}/{name}" if key else name
-            page, override = page_settings(settings, paths[0], rel, res_dir / rel, False, child=table)
-            curves = [(plan, variants[plan.point.name][path][0], label) for plan in members
+            curves = [(plan, variants[plan.point.name][path][0], canonical(curve_fill(plan)(label))) for plan in members
                       for path, label in zip(paths, labels) if path in variants.get(plan.point.name, {})]
+            page, override = page_settings(settings, paths[0], rel, res_dir / rel, False, child=table,
+                                           fill=page_fill([plan for plan, _, _ in curves] or members))
             layer = merge_style(style, override.get("style", {}))
             document = {"page": page, "style": layer, "curve": [
                 {"file": str(merged), "object": f"{plan.point.name}/{root_name(full)}",
                  **({"raw": f"{plan.point.name}/RAW/{root_name(full)}"} if "/RAW" + full in raws[plan.point.name] else {}),
-                 "label": label + (f", {_curve_label(run, plan, curve_groups)}" if len(members) > 1 else "")}
+                 "label": label + (f", {_curve_label(run, plan, curve_groups, curve_fill(plan))}" if len(members) > 1 else "")}
                 for plan, full, label in curves]}
             config = out_dir / f"{rel}.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
@@ -410,10 +439,88 @@ def pages(run, configuration, plans) -> list[Page]:
     return made
 
 
+def texts_of(run, plan, cell: str) -> dict[str, str]:
+    """What a page text may cite at a point (V66): {cell}, {q:<quantity>} (the label of its value at the
+    point, swept or static) and the texts the tools' folders give (rivet: {opt:NAME})."""
+    out = {"cell": cell}
+    for name, index in plan.values.items():
+        if name in run.quantities:
+            out[f"q:{name}"] = label_of(run.quantities[name], index)
+    for step in plan.rendered.values():
+        out.update(step.texts)
+    return out
+
+
+def axes_of(configuration) -> tuple[list, list]:
+    """The sweep's axes that make pages (plot_points) and those that make curves; a combined axis is
+    merged away (V35) and is neither."""
+    groups = [g for g in axes(configuration) if not set(g) & set(configuration.combine)]
+    pages_ = [g for g in groups if set(g) & set(configuration.plot_points)]
+    return pages_, [g for g in groups if g not in pages_]
+
+
+def check_band(run, configuration) -> None:
+    """V69: [plot].band names curve axes of the configuration (checked at plan time too)."""
+    curve_groups = axes_of(configuration)[1]
+    for name in run.plot.get("band", []) if run.plot else ():
+        if not any(name in g for g in curve_groups):
+            raise HepError(f"[plot].band names {name}, which is not a curve axis of {configuration.key}",
+                           where=f"{run.path}: [plot].band",
+                           hint=f"curve axes: {', '.join(g[0] for g in curve_groups) or 'none'} (swept, not plot_points or combined)")
+
+
+def check_texts(run, plans) -> None:
+    """V66 at plan time: every placeholder the run TOML's texts cite ([plot] and its children, the
+    quantities' labels) is one the points have, so a typo costs no point run. Whether a page text has one
+    value on its page is known only with the pages, at the plot stage."""
+    if not run.plot:
+        return
+    cited: list[tuple[str, str]] = []
+
+    def walk(value, at):
+        if isinstance(value, str):
+            cited.extend((m.group(1), at) for m in PLACEHOLDER.finditer(value))
+        elif isinstance(value, dict):
+            for k, v in value.items():
+                walk(v, f"{at}.{k}")
+        elif isinstance(value, list):
+            for v in value:
+                walk(v, at)
+    walk(run.plot, "[plot]")
+    for name, quantity in run.quantities.items():
+        walk(quantity.labels, f"[quantities.{name}].labels")
+    known = {"cell"} | {k for plan in plans for k in texts_of(run, plan, "")}
+    for key, at in cited:
+        if key not in known:
+            raise HepError(f"a page text cites {{{key}}}, which is nothing the points have", where=f"{run.path}: {at}",
+                           hint=did_you_mean(key, sorted(known)) or f"they have: {', '.join('{' + k + '}' for k in sorted(known))}")
+
+
+def filler(known: list[dict[str, str]], where: str):
+    """A function filling a text's placeholders from the points it speaks for: a page's (all its curves'
+    points: a value must be the same at every one) or a curve's (its own point)."""
+    def fill(text: str) -> str:
+        def one(match):
+            key = match.group(1)
+            values = {k.get(key) for k in known}
+            if None in values:
+                cited = sorted({k for d in known for k in d})
+                raise HepError(f"a page text cites {{{key}}}, which is nothing the points have", where=where,
+                               hint=did_you_mean(key, cited) or f"they have: {', '.join('{' + k + '}' for k in cited)}")
+            if len(values) > 1:
+                raise HepError(f"a page text cites {{{key}}}, which differs between the curves of the page: "
+                               f"{', '.join(sorted(values))}", where=where,
+                               hint="cite it in the curves' labels (a quantity's labels), or make it a plot_points axis")
+            return values.pop()
+        return PLACEHOLDER.sub(one, text) if isinstance(text, str) else text
+    return fill
+
+
 def page_settings(settings: dict, path: str, rel: str, output: Path, with_data: bool,
-                  child: dict | None = None) -> tuple[dict, dict]:
+                  child: dict | None = None, fill=lambda text: text) -> tuple[dict, dict]:
     """A page's [page] table: labels from the analysis's .plot (TLatex), [plot.object] overrides (or
-    an overlay's own table, `child`), and the [plot] values. Returns it and the overrides that applied."""
+    an overlay's own table, `child`), and the [plot] values, their placeholders filled (`fill`, V66).
+    Returns it and the overrides that applied."""
     short = path.rsplit("/", 1)[-1]
     labels = labels_of(path)
     override: dict = {}
@@ -440,24 +547,25 @@ def page_settings(settings: dict, path: str, rel: str, output: Path, with_data: 
     def ours(name):
         return schema.default("plot", name)
 
-    title, header = tlatex(labels.get("Title", "")), tlatex(labels.get("LegendTitle", ""))     # as mkhtml (V51)
-    x_label, y_label = tlatex(labels.get("XLabel", "")), tlatex(labels.get("YLabel", ""))
+    title, header = labels.get("Title", ""), labels.get("LegendTitle", "")     # as mkhtml (V51); LaTeX, as all text (V65)
+    x_label, y_label = labels.get("XLabel", ""), labels.get("YLabel", "")
     log_x, log_y = labels.get("LogX") == "1", labels.get("LogY") == "1"
     ratio = labels["RatioPlot"] == "1" if labels.get("RatioPlot") in ("0", "1") else with_data   # mkhtml's rule
     page = {
         "name": rel, "output": str(output), "formats": formats_of(settings),
-        "title": pick("title", title, title),
-        "title_left": pick("title_left", "", ""),
-        "title_right": pick("title_right", "", ""),
-        "legend_header": pick("legend_header", header, header),
-        "x_label": pick("x_label", x_label, x_label, tables=(override,)),
-        "y_label": pick("y_label", y_label, y_label, tables=(override,)),
+        "title": canonical(fill(pick("title", title, title))),
+        "title_left": canonical(fill(pick("title_left", "", ""))),
+        "title_right": canonical(fill(pick("title_right", "", ""))),
+        "legend_header": canonical(fill(pick("legend_header", header, header))),
+        "x_label": canonical(fill(pick("x_label", x_label, x_label, tables=(override,)))),
+        "y_label": canonical(fill(pick("y_label", y_label, y_label, tables=(override,)))),
         "logx": bool(pick("logx", log_x, log_x)),
         "logy": bool(pick("logy", log_y, log_y)),
         "y_gutter": _gutter(pick("y_gutter", ours("y_gutter"), DEFAULT)),
         "x_gutter": _gutter(pick("x_gutter", DEFAULT, DEFAULT)),
         "ratio": bool(pick("ratio", ours("ratio"), ratio)),
         "ratio_label": "MC/Data" if with_data else "Ratio",
+        "normalise": pick("normalise", ours("normalise"), False),                 # V68: "area" or false
         "void_empty": bool(plot_only("void_empty", ours("void_empty"), False)),     # neither tool voids by itself
         "min_entries": int(plot_only("min_entries", ours("min_entries"), 0)),
         "auto_range": bool(plot_only("auto_range", ours("auto_range"), False)),    # the tool's own range
@@ -470,10 +578,58 @@ def _gutter(value):
     return value if value == "default" else float(value)
 
 
-def _curve_label(run, plan, curve_groups) -> str:
+def _banded(curves: list, curve_groups: list, band: list, of_plan) -> list:
+    """V69: the page's curves with the band quantities folded: one curve per value of the other curve
+    axes (and per variant of the object, `of_plan(plan, full)` its place), the band axes' first value,
+    with the others as its members. Without `band`: every curve, no members."""
+    if not band:
+        return [(plan, full, []) for plan, full in curves]
+    banded = [g for g in curve_groups if set(g) & set(band)]
+    rest = [g for g in curve_groups if g not in banded]
+    groups: dict = {}
+    for plan, full in curves:
+        key = (tuple(plan.point.choice[g[0]] for g in rest), of_plan(plan, full))
+        groups.setdefault(key, []).append((plan, full))
+    out = []
+    for members in groups.values():
+        members.sort(key=lambda pf: tuple(pf[0].point.choice[g[0]] for g in banded))
+        out.append((*members[0], members[1:]))
+    return out
+
+
+def _curve_look(run, plan, curve_groups) -> dict:
+    """A curve's own look (V67): the styles of its curve axes' values at its point, a later axis's key
+    over an earlier's. Empty: the page style's palette, in turn."""
+    look: dict = {}
+    for group in curve_groups:
+        for name in group:
+            if run.quantities[name].styles:
+                look.update(run.quantities[name].styles[plan.point.choice[name]])
+    return look
+
+
+def _curve_label(run, plan, curve_groups, fill=lambda text: text) -> str:
     if not curve_groups:
         return run.name
-    return ", ".join(label_of(run.quantities[g[0]], plan.point.choice[g[0]]) for g in curve_groups)
+    return ", ".join(canonical(fill(label_of(run.quantities[g[0]], plan.point.choice[g[0]]))) for g in curve_groups)
+
+
+def _paint(paint: Path, configs: list[Path], mode: list[str] = ()) -> dict[str, tuple[bool, str]]:
+    """Paint on many pages, PAINT_BATCH per process (V64): each config's (ok, why)."""
+    outcomes: dict[str, tuple[bool, str]] = {}
+    for start in range(0, len(configs), PAINT_BATCH):
+        batch = [str(c) for c in configs[start:start + PAINT_BATCH]]
+        done = subprocess.run([str(paint), *batch, *mode], capture_output=True, text=True)
+        if len(batch) == 1:
+            outcomes[batch[0]] = (done.returncode == 0, _why(done) if done.returncode else "")
+            continue
+        for line in done.stdout.splitlines():
+            if line.startswith("{"):
+                entry = json.loads(line)
+                outcomes[entry["page"]] = (entry["ok"], entry["error"])
+        for config in batch:                                  # a crash leaves the rest without a line
+            outcomes.setdefault(config, (False, _why(done)))
+    return outcomes
 
 
 def _why(done: subprocess.CompletedProcess) -> str:
@@ -483,6 +639,44 @@ def _why(done: subprocess.CompletedProcess) -> str:
         if line.strip() and not set(line.strip()) <= set("=-#"):
             return line.strip()[-200:]
     return f"exit {done.returncode}"
+
+
+def write_index(where: Path, title: str, pages: list[tuple[str, str, Path]]) -> Path:
+    """V70: <where>/index.html, the ROOT pages as mkhtml's index is the yoda backend's: a section per
+    plot_points cell, each page shown by its PNG or SVG (an embedded PDF otherwise) and linked to every
+    format drawn. `pages`: (cell, name, output without extension), in order."""
+    def rel(path: Path) -> str:
+        return html.escape(str(path.relative_to(where)) if path.is_relative_to(where) else str(path), quote=True)
+
+    body, cells = [], {}
+    for cell, name, output in pages:
+        cells.setdefault(cell, []).append((name, output))
+    for cell, members in cells.items():
+        if cell:
+            body.append(f"<h2>{html.escape(cell)}</h2>")
+        body.append('<div class="grid">')
+        for name, output in members:
+            made = [output.with_name(f"{output.name}.{f}") for f in FORMATS]
+            made = [m for m in made if m.is_file()]
+            shown = next((m for m in made if m.suffix in (".png", ".svg")), None)
+            pdf = next((m for m in made if m.suffix == ".pdf"), None)
+            if shown:
+                view = f'<a href="{rel(pdf or shown)}"><img src="{rel(shown)}" alt="{html.escape(name)}"></a>'
+            elif pdf:
+                view = f'<object data="{rel(pdf)}" type="application/pdf"><a href="{rel(pdf)}">{html.escape(name)}</a></object>'
+            else:
+                continue
+            links = " ".join(f'<a href="{rel(m)}">{m.suffix[1:]}</a>' for m in made)
+            body.append(f"<figure>{view}<figcaption>{html.escape(name.rsplit('/', 1)[-1])} · {links}</figcaption></figure>")
+        body.append("</div>")
+    index = where / "index.html"
+    index.write_text(
+        "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><title>" + html.escape(title) + "</title><style>"
+        "body{font-family:sans-serif;margin:1.5em}.grid{display:flex;flex-wrap:wrap;gap:1em}"
+        "figure{margin:0;width:22em}img,object{width:100%;height:auto;min-height:18em;border:1px solid #ddd}"
+        "figcaption{font-size:.85em;color:#444}</style></head><body><h1>" + html.escape(title) + "</h1>\n"
+        + "\n".join(body) + "\n</body></html>\n", encoding="utf-8")
+    return index
 
 
 def for_backend(page: Page, name: str) -> Page:
@@ -503,27 +697,39 @@ def draw(run, configuration, plans, say) -> int:
         say("plot: no complete point has a YODA product to draw")
         return 0
     names = backends(run.plot)
+    others = [n for n in names if n != "root"]
+    # One Paint for many pages (V64): it draws them (root) and writes each page's ranges beside its config
+    # for the other backends (--ranges), or only the ranges (--ranges-only, a yoda-only run).
+    mode = ["--ranges"] if others and "root" in names else ["--ranges-only"] if others else []
     failed = 0
+    outcomes = _paint(paint, [p.config for p in todo], mode)
+    for page in todo:
+        ok, why = outcomes[str(page.config)]
+        if not ok:
+            failed += 1
+            say(f"plot: {page.name} failed: {why}")
+        elif others:
+            page.ranges = json.loads(page.config.with_name(page.config.name + ".ranges.json").read_text())
     if "root" in names:
-        for page in todo:
-            done = subprocess.run([str(paint), str(page.config)], capture_output=True, text=True)
-            if done.returncode != 0:
-                failed += 1
-                say(f"plot: {page.name} failed: {_why(done)}")
         where = todo[0].config.parent if "/" not in todo[0].name else todo[0].config.parent.parent
         say(f"plot: {len(todo) - failed} of {len(todo)} page(s) drawn; configs in {where}")
-    others = [n for n in names if n != "root"]
-    if others:                           # the same pages; Paint computes the ranges and voids for them
-        for page in todo:
-            done = subprocess.run([str(paint), str(page.config), "--dump-ranges"], capture_output=True, text=True)
-            if done.returncode != 0:
-                raise HepError(f"plot: {page.name}: {_why(done)}", where=str(page.config))
-            page.ranges = json.loads(done.stdout)
+        drawn = [(p.cell, p.name, p.output) for p in todo if outcomes[str(p.config)][0]]
+        if drawn:                                            # V70: the ROOT pages' own index
+            write_index(todo[0].plots / "root", f"{run.name} · {configuration.label}", drawn)
+    if others and failed:
+        todo = [p for p in todo if p.ranges]                 # a page Paint could not read has no ranges
     for name in others:
         cells: dict[str, list[Page]] = {}
         for page in todo:
             cells.setdefault(page.cell, []).append(for_backend(page, name))
-        failed += backend(name).draw(cells, run.plot, say)
+        module = backend(name)
+        failed += module.draw(cells, run.plot, say)
+        if getattr(module, "INDEX", False):                  # a backend without its own index.html (V71)
+            drawn = [p for every in cells.values() for p in every
+                     if any(p.output.with_name(f"{p.output.name}.{f}").is_file() for f in FORMATS)]
+            if drawn:
+                write_index(todo[0].plots / name, f"{run.name} · {configuration.label}",
+                            [(p.cell, p.name, p.output) for p in drawn])
     return failed
 
 
@@ -610,7 +816,7 @@ def files(targets: list[str], outdir: Path | None, *, labels: list[str] | None =
         raise HepError("no 1D object to draw" + (f" matches {list(objects)}" if objects else ""))
     settings = {"formats": list(formats), "ratio": ratio, "auto_range": True}
     layer = style_file(style) if style else {}
-    failed = 0
+    failed, written = 0, {}
     for path in pages_of:
         rel = path.strip("/").replace(":", "__")
         page, _ = page_settings(settings, path, rel, outdir / rel, False)
@@ -620,9 +826,15 @@ def files(targets: list[str], outdir: Path | None, *, labels: list[str] | None =
         config = work / f"{rel}.toml"
         config.parent.mkdir(parents=True, exist_ok=True)
         config.write_text(tomli_w.dumps(for_root(document)), encoding="utf-8")
-        done = subprocess.run([str(paint), str(config)], capture_output=True, text=True)
-        if done.returncode != 0:
+        written[str(config)] = rel
+    drawn = []
+    for config, (ok, why) in _paint(paint, [Path(c) for c in written]).items():
+        if not ok:
             failed += 1
-            say(f"plot: {rel} failed: {_why(done)}")
+            say(f"plot: {written[config]} failed: {why}")
+        else:
+            drawn.append(("", written[config], outdir / written[config]))
+    if drawn:
+        write_index(outdir, "hep plot", drawn)                 # V70
     say(f"plot: {len(pages_of) - failed} of {len(pages_of)} page(s), {len(curves)} curve(s) → {outdir}")
     return failed

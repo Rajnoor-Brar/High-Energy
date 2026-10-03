@@ -300,6 +300,7 @@ class Step:
     sidecar_written: int | None = None # [outputs] written = "requested": the runner writes the sidecar
     card_origins: dict = field(default_factory=dict)   # card key → where the point card's value came from (V59)
     placeholders: dict = field(default_factory=dict)   # argv placeholders a folder's hook gives (V60)
+    texts: dict = field(default_factory=dict)          # page texts a folder's hook gives, {opt:ETMIN} (V66)
 
 
 @dataclass
@@ -843,6 +844,7 @@ def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
         if "config_data" in given:
             step.config_data = given["config_data"]
         step.placeholders = dict(given.get("placeholders", {}))
+        step.texts = dict(given.get("texts", {}))
         for pattern in folder.get("identity", "files", []):
             for name, values in given.get("identity_values", {}).items():
                 for value in values:

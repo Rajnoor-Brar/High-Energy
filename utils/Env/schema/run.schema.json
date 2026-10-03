@@ -383,6 +383,13 @@
       "description": "one per value: legend text",
       "type": "array"
      },
+     "styles": {
+      "description": "one per value: its curves' look, { colour, line, width } (V67)",
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     },
      "key": {
       "description": "the native key, or { <tool or tag> = key }",
       "type": [
@@ -420,7 +427,7 @@
    "type": "object",
    "properties": {
     "backend": {
-     "description": "root (Paint), yoda (rivet-mkhtml), or both",
+     "description": "root (Paint), yoda (rivet-mkhtml), mpl (matplotlib, V71), a list of them, or both (root and yoda)",
      "anyOf": [
       {
        "type": [
@@ -432,6 +439,7 @@
         "enum": [
          "root",
          "yoda",
+         "mpl",
          "both"
         ]
        }
@@ -464,6 +472,13 @@
      "default": [
       "pdf"
      ]
+    },
+    "band": {
+     "description": "curve-axis quantities drawn as one curve, their first value, with the min–max envelope of all their values (V69)",
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
     },
     "objects": {
      "description": "YODA path globs that get pages (default: every 1D object)",
@@ -549,6 +564,25 @@
       }
      ],
      "default": true
+    },
+    "normalise": {
+     "description": "\"area\": every curve and the data scaled to unit area over the bins drawn (V68)",
+     "anyOf": [
+      {
+       "type": [
+        "string",
+        "boolean"
+       ],
+       "enum": [
+        "area",
+        false
+       ]
+      },
+      {
+       "const": "default"
+      }
+     ],
+     "default": false
     },
     "void_empty": {
      "description": "blank the bins empty in every curve",
@@ -801,6 +835,24 @@
          }
         ]
        },
+       "normalise": {
+        "description": "as [plot].normalise, for these pages",
+        "anyOf": [
+         {
+          "type": [
+           "string",
+           "boolean"
+          ],
+          "enum": [
+           "area",
+           false
+          ]
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
        "style": {
         "description": "a style layer for these pages",
         "type": "object"
@@ -931,6 +983,24 @@
         "anyOf": [
          {
           "type": "boolean"
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "normalise": {
+        "description": "as [plot].normalise, for these pages",
+        "anyOf": [
+         {
+          "type": [
+           "string",
+           "boolean"
+          ],
+          "enum": [
+           "area",
+           false
+          ]
          },
          {
           "const": "default"
