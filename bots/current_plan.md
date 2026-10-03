@@ -1,6 +1,6 @@
 # Current plan
 
-## NEXT (asked 2026-10-03, not started): titles, legend header, overlays, parent→child options
+## Titles, legend header, overlays, parent→child options — **DONE 2026-10-03** as V51 (ordered 2026-10-03)
 
 - `[plot].title`, `.title_left`, `.title_right`, `.legend_header` for every page; `[plot.<hist>].<same>`
   overrides one histogram. Today `[plot.object."<glob>"].title` is the legend header in ROOT but the
