@@ -47,6 +47,7 @@ FOLDER_SECTIONS = {
     "checks": {"info_dirs", "info_dirs_command", "files", "card"},
     "shard": {"merge"},
     "render": None,                                       # free: data for the folder's render.py (V61)
+    "beams": {"slots"},                                   # the card's fixed beam slots (V62)
 }
 CARD_STYLES = ("append", "none", "render")
 EXPORT = re.compile(r"^(?P<tool>[a-z0-9]+)_(?P<export>[a-z0-9_]+)$")
@@ -777,13 +778,17 @@ def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
     for key, value in tool.settings.items():                                # native settings, as written (V59)
         if value != "default":
             claim(key, value, f"[tools.{step.tag}].settings")
+    order = beam_order(plan, run, folder)                  # V62: the card's slots, when it has fixed ones
     for name, found in plan.consumers.items():
         quantity = run.quantities[name]
         index = plan.values[name]
         origin = f"[quantities.{name}] = {tag_of(quantity, index)}"
+        value = quantity.values[index]
+        if order and qmod.vocabulary().get(name, {}).get("per_beam") and isinstance(value, list) and len(value) == 2:
+            value = [value[i] for i in order]
         for mapping in found:
             if mapping.tag == step.tag:
-                apply(mapping, quantity.values[index], origin)
+                apply(mapping, value, origin)
 
     step.identity_parts.update({"flags": flags, "options": options, "config_values": config_values})
     if style in ("append", "render"):
@@ -844,6 +849,37 @@ def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
                     if path.is_file():
                         step.identity_parts.setdefault("files_sha256", {})[str(path)] = sha256_file(path)
     step.identity_parts["_flags"] = flags
+
+
+def beam_class(pdg: int) -> str:
+    return "lepton" if abs(int(pdg)) in (11, 12, 13, 14, 15, 16) else "photon" if int(pdg) == 22 else "hadron"
+
+
+def beam_order(plan: PointPlan, run, folder: Folder) -> tuple[int, int] | None:
+    """V62: how the run's [beam A, beam B] maps onto a card's fixed slots ([beams] slots), or None when
+    the card takes them as given. The run's order is named by the point's beam ids (a per-beam quantity
+    of PDG ids: `beams`, or beam_a with beam_b), else it is the vocabulary's `unnamed` order."""
+    slots = folder.get("beams", "slots")
+    if not slots:
+        return None
+    vocabulary = qmod.vocabulary()
+    classes = None
+    for name, index in plan.values.items():
+        entry = vocabulary.get(name, {})
+        value = run.quantities[name].values[index]
+        if entry.get("per_beam") and entry.get("shape") == ["pdg", "pdg"]:
+            classes = [beam_class(v) for v in value]
+    if classes is None and "beam_a" in plan.values and "beam_b" in plan.values:
+        classes = [beam_class(run.quantities[n].values[plan.values[n]]) for n in ("beam_a", "beam_b")]
+    if classes is None:
+        classes = next((e["unnamed"] for e in vocabulary.values() if e.get("unnamed")), ["hadron", "lepton"])
+    if sorted(classes) != sorted(slots):
+        if classes[0] == classes[1]:
+            return None                                   # two of a kind (pp): any order is the card's
+        raise HepError(f"{folder.name}'s card takes beams as {slots}, and this point's are {classes}",
+                       where=f"tool '{folder.name}' [beams] slots")
+    first = classes.index(slots[0])
+    return (first, 1 - first)
 
 
 def _prepare_key(plan: PointPlan, step: Step, run) -> None:

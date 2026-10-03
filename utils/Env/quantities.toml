@@ -10,11 +10,17 @@
 #   unit     the unit of a number
 #   builtin  true: the runner provides it from the configuration (events, threads); declared as a
 #            quantity it may be swept, and each point then has that value (V56)
+#   per_beam true: a list in the run's beam order, [beam A, beam B] (V62). A tool whose card needs its
+#            beams in fixed slots ([beams] slots in its tool.toml, Herwig's lepton first) gets every
+#            per-beam value reordered together, by the point's beam ids (`beams`, or beam_a and beam_b);
+#            with none named, the order is `unnamed` below: what every card so far assumes
 
 [energies]
-shape = ["float", "float"]
-unit  = "GeV"
-doc   = "the beam energies, [beam A, beam B] (04 §3: which beam is A is each card's)"
+shape    = ["float", "float"]
+unit     = "GeV"
+per_beam = true
+unnamed  = ["hadron", "lepton"]       # the order of a point that names no beams (V62)
+doc      = "the beam energies, [beam A, beam B]: the run's order, which each tool's card is given"
 
 [sqrts]
 shape = "float"
@@ -30,8 +36,9 @@ shape = "pdg"
 doc   = "beam B's PDG id"
 
 [beams]
-shape = ["pdg", "pdg"]
-doc   = "the beams' PDG ids, [beam A, beam B]"
+shape    = ["pdg", "pdg"]
+per_beam = true
+doc      = "the beams' PDG ids, [beam A, beam B]: they name the run's beam order"
 
 [pdf]
 shape = "str|int"

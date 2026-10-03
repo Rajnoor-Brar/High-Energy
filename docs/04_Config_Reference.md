@@ -127,13 +127,21 @@ interprets the keys itself (a YAML path for Sherpa, a SINDARIN variable for Whiz
 
 | Quantity | pythia | sherpa | herwig | whizard | madgraph |
 |---|---|---|---|---|---|
-| `energies` `[E_A, E_B]` | `Beams:eA`, `Beams:eB` | `BEAM_ENERGIES` | `Luminosity:BeamEMaxB`, `…MaxA` (×GeV) | `beams_momentum` | `ebeam1`, `ebeam2` |
+| `energies` `[E_A, E_B]` | `Beams:eA`, `Beams:eB` | `BEAM_ENERGIES` | `Luminosity:BeamEMaxA`, `…MaxB` (×GeV), in Herwig's slots (lepton on A) | `beams_momentum` | `ebeam1`, `ebeam2` |
 | `sqrts` | `Beams:eCM` | `BEAM_ENERGIES = [√s/2, √s/2]` | `Luminosity:Energy` | — | — |
 | `beam_a`, `beam_b` | `Beams:idA`, `Beams:idB` | — | — | — | — |
 | `beams` `[id_A, id_B]` | `Beams:idA`, `Beams:idB` | `BEAMS` | — | `beams` (model names) | `lpp1`, `lpp2` |
 | `pdf` (checked, C10) | `PDF:pSet = <value>`: write `"LHAPDF6:<set>"`, or a Pythia set number | `PDF_SET[0]` (and `MPI_PDF_SET`): the bare `<set>` | — | — | — |
 | `events` (built-in) | `Main:numberOfEvents` | `EVENTS` | (the `-N` flag) | `n_events` | `nevents` |
 | `threads` (built-in) | `Parallelism:numThreads` | — | — | — | — |
+
+**Beam order** (V62). `energies` and `beams` are lists in **the run's** beam order, `[beam A, beam B]`.
+A point that gives `beams` (or `beam_a` and `beam_b`) names that order; one that gives none follows
+the convention `[hadron, lepton]` (`unnamed` in the vocabulary), which every card so far assumes. A
+tool whose card needs its beams in fixed slots says so (`[beams] slots` in its `tool.toml`: Herwig's
+`EPCollider.in`, lepton on A), and the runner reorders every per-beam value for it, the ids and the
+energies together. The other tools take the order as given (they write the ids from the plan, or
+their card's own beam ids are the run's).
 
 `rivet` maps nothing: it reads beams and energies from the events, and its analysis options are
 always targeted explicitly (§8.1).

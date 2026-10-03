@@ -1,5 +1,6 @@
 # utils/Env/herwig/quantities.toml — how Herwig consumes the vocabulary (V58): ThePEG `set` lines;
 # events and seed are flags.
-# snippets/EPCollider.in puts the lepton on beam A and the proton on B; energies are [E_p, E_e]
-energies = { keys = ["/Herwig/EventHandlers/Luminosity:BeamEMaxB", "/Herwig/EventHandlers/Luminosity:BeamEMaxA"], format = "{}*GeV" }
+# [beam A, beam B] in Herwig's slots: snippets/EPCollider.in puts the lepton on A, so tool.toml's [beams]
+# slots reorders the run's values to match (V62)
+energies = { keys = ["/Herwig/EventHandlers/Luminosity:BeamEMaxA", "/Herwig/EventHandlers/Luminosity:BeamEMaxB"], format = "{}*GeV" }
 sqrts    = { key = "/Herwig/EventHandlers/Luminosity:Energy" }                # snippets/PPCollider.in's FixedCMSLuminosity

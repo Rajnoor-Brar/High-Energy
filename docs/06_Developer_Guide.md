@@ -221,6 +221,7 @@ Every section and key is checked when the folders load: an unknown one is an err
 | `[identity]` | `files` | files whose sha256 enters the identity (`{repo}`, `{exe}`, `{analysis}`) |
 | | `version` | a command whose first line is the version, for provenance |
 | `[shard]` | `merge` | the tool folder that joins K shards' products into the table's `output_file`; without it, `shards` is refused (rivet: `merge`, i.e. `rivet-merge -e`) |
+| `[beams]` | `slots` | the card's fixed beam slots, `["lepton", "hadron"]` (Herwig): the run's per-beam values are reordered into them (V62); without it a tool takes `[beam A, beam B]` as given |
 | `[render]` | (free) | data for the folder's `render.py`, handed over as `context["render"]` (MadGraph's `[render.lpp]`, PDG → lpp) (V61) |
 | `[checks]` | `files` | files that must exist at plan time (C10) |
 | | `card` | argv that reads a card (`{card}`) and prints one JSON line `{"line": N, "text": …}` per line it rejects; run at plan time, cached by the card's text (V59) |

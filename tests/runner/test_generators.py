@@ -126,3 +126,32 @@ def test_a_runner_written_sidecar_says_what_was_asked_for(scratch):
     step.sidecar, step.sidecar_written = scratch / "events.hepmc.json", 500
     assert execute._settle([step], {}) is None
     assert json.loads(step.sidecar.read_text())["written"] == 500
+
+
+# ── V62: beam order, the run's [A, B] into a card's fixed slots ───────────────────────────────
+
+def test_the_runs_beam_order_is_reordered_into_herwigs_slots(scratch):
+    from runner import tools
+    folder = tools.folders()["herwig"]
+
+    class Plan:                                  # only what beam_order reads
+        def __init__(self, values):
+            self.values = values
+
+    from helpers import parse, raw
+    run = parse(raw(quantities__beams={"values": [[2212, 11], [11, 2212], [2212, 2212]]},
+                    quantities__energies={"values": [[275, 18]]}), scratch)
+    assert tools.beam_order(Plan({"beams": 0}), run, folder) == (1, 0)      # proton first → lepton to slot A
+    assert tools.beam_order(Plan({"beams": 1}), run, folder) == (0, 1)      # already lepton first
+    assert tools.beam_order(Plan({"beams": 2}), run, folder) is None        # pp: two of a kind
+    assert tools.beam_order(Plan({"energies": 0}), run, folder) == (1, 0)   # unnamed: [hadron, lepton]
+    assert tools.beam_order(Plan({"beams": 0}), run, tools.folders()["pythia"]) is None   # given as is
+
+
+def test_herwigs_card_puts_the_lepton_energy_on_beam_a():
+    if not NEEDS["herwig"]:
+        pytest.skip("load_hep: Herwig")
+    [p] = plans("PhotoProduction/herwig")
+    lines = [l for l in p.rendered["herwig"].card_lines if "BeamEMax" in l]
+    assert lines == ["set /Herwig/EventHandlers/Luminosity:BeamEMaxA 18*GeV",
+                     "set /Herwig/EventHandlers/Luminosity:BeamEMaxB 275*GeV"]

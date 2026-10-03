@@ -23,6 +23,9 @@ footer  = ["read snippets/HepMC.in",
            "cd /Herwig/Generators",
            "saverun point EventGenerator"]
 
+[beams]                             # snippets/EPCollider.in's slots: lepton on A, hadron on B (V62)
+slots = ["lepton", "hadron"]
+
 [command]
 argv = ["{exe}", "run", "{prepared}/point.run", "-N", "{events}", "-s", "{seed}", "-d", "0"]
 
