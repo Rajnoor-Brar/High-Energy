@@ -68,7 +68,9 @@ def test_plugins_import_only_the_allowed_modules():
             if isinstance(node, (ast.Import, ast.ImportFrom)):
                 names = [a.name for a in node.names] + [getattr(node, "module", "") or ""]
                 tools = {p.parent.name for p in ENV.glob("*/tool.toml")}
-                if any(n.split(".")[0] in tools for n in names):
+                # a folder's plugin module (rivet.render, …); the library of the same name (rivet's own
+                # Python package, which the mpl backend reads .plot files with, V71) is not a plugin
+                if any(n.split(".")[0] in tools and n.split(".")[1:2] in (["render"], ["backend"], ["provider"]) for n in names):
                     violations.append(f"{render.relative_to(REPO)} imports another tool plugin")
     assert not violations, "\n".join(violations)
 

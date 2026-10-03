@@ -95,7 +95,7 @@ def backends(settings: dict) -> list[str]:
     """[plot].backend: a name, a list of names, or "both" (every backend). Paint's first when drawn."""
     value = settings.get("backend", "root")
     value = "root" if value == DEFAULT else value
-    names = list(BACKENDS) if value == "both" else [value] if isinstance(value, str) else list(value)
+    names = ["root", "yoda"] if value == "both" else [value] if isinstance(value, str) else list(value)   # "both": V28's pair
     return sorted(dict.fromkeys(names), key=lambda n: n != "root")
 
 
@@ -722,7 +722,14 @@ def draw(run, configuration, plans, say) -> int:
         cells: dict[str, list[Page]] = {}
         for page in todo:
             cells.setdefault(page.cell, []).append(for_backend(page, name))
-        failed += backend(name).draw(cells, run.plot, say)
+        module = backend(name)
+        failed += module.draw(cells, run.plot, say)
+        if getattr(module, "INDEX", False):                  # a backend without its own index.html (V71)
+            drawn = [p for every in cells.values() for p in every
+                     if any(p.output.with_name(f"{p.output.name}.{f}").is_file() for f in FORMATS)]
+            if drawn:
+                write_index(todo[0].plots / name, f"{run.name} · {configuration.label}",
+                            [(p.cell, p.name, p.output) for p in drawn])
     return failed
 
 

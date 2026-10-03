@@ -334,10 +334,10 @@ doc     = "K processes on a share of the events each"
 [plot.backend]
 type       = "str|list"
 items      = "str"
-choices    = ["root", "yoda", "both"]
+choices    = ["root", "yoda", "mpl", "both"]
 default    = "root"
 default_ok = true
-doc        = "root (Paint), yoda (rivet-mkhtml), or both"
+doc        = "root (Paint), yoda (rivet-mkhtml), mpl (matplotlib, V71), a list of them, or both (root and yoda)"
 
 [plot.formats]
 type       = "list"

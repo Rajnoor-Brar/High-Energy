@@ -427,7 +427,7 @@
    "type": "object",
    "properties": {
     "backend": {
-     "description": "root (Paint), yoda (rivet-mkhtml), or both",
+     "description": "root (Paint), yoda (rivet-mkhtml), mpl (matplotlib, V71), a list of them, or both (root and yoda)",
      "anyOf": [
       {
        "type": [
@@ -439,6 +439,7 @@
         "enum": [
          "root",
          "yoda",
+         "mpl",
          "both"
         ]
        }

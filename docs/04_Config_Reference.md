@@ -677,7 +677,7 @@ style.legend.position = "bottom-left"
 
 | Key | Type | Default | Notes |
 |---|---|---|---|
-| `backend` | string or array | `"root"` | `"root"` (Paint), `"yoda"` (rivet-mkhtml), `"both"` or an array (both, from the same pages: V28) |
+| `backend` | string or array | `"root"` | `"root"` (Paint), `"yoda"` (rivet-mkhtml, frozen since V71), `"mpl"` (matplotlib, mkhtml's pages drawn in-process: V71), `"both"` (root and yoda, V28) or an array of them, from the same pages |
 | `formats` | array | `["pdf"]` | `pdf`, `png`, `svg`, `eps`. mkhtml writes pdf and png always. The root backend writes `plots/root/index.html` (V70): a section per `plot_points` cell, each page by its PNG or SVG, else an embedded PDF, linked to every format; add `png` for thumbnails a browser shows at once |
 | `objects` | array of globs | every 1D object | matched against the option-free YODA path (`/photo_eic/d01-x01-y01`) or any variant's path. No object matching is an error. |
 | `ratio` | bool | false | a ratio pad: each curve over the data, or over the first curve when there are no data |

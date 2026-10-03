@@ -449,3 +449,14 @@ def test_the_root_pages_get_an_index(scratch):
     assert "<title>run &lt;1&gt;</title>" in text and text.count("<h2>") == 2
     assert '<a href="cell_a/d01.pdf"><img src="cell_a/d01.png"' in text
     assert '<object data="cell_b/d01.pdf"' in text and "gone" not in text
+
+
+def test_mpl_is_a_backend_and_both_is_still_root_and_yoda(scratch):
+    """V71: "mpl" may be named; "both" keeps V28's meaning; mpl refuses what mkhtml cannot do, in its own name."""
+    assert plot.backends({"backend": "both"}) == ["root", "yoda"]
+    assert plot.backends({"backend": ["mpl", "root"]}) == ["root", "mpl"]
+    with pytest.raises(HepError, match='backend = "mpl"'):
+        validated(scratch, backend="mpl", style={"page": {"dpi": 100}})
+    mpl = plot.backend("mpl")
+    from yoda.plotting.mlp_preprocessor import preprocess
+    assert mpl._raw(preprocess(r"$a$\newline$b$")) == "$a$\n$b$" and mpl.INDEX

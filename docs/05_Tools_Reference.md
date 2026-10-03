@@ -387,6 +387,7 @@ output_file = "events.hepmc"
 |---|---|---|---|
 | `"root"` (default) | `build/Paint.exe`, one call per page | `results/…/plots/root/[<cell>/]<object>.<fmt>` | every `[plot]` key and the whole style |
 | `"yoda"` | `rivet-mkhtml`, one call per cell (`utils/Env/yoda/backend.py`) | `results/…/plots/yoda/[<cell>/]<analysis>/<object>.{pdf,png}` + `index.html` | the same pages, with Paint's ranges and voids, and a `legend.position` corner |
+| `"mpl"` | matplotlib, in this process, a pool of workers (`utils/Env/mpl/backend.py`, V71) | `results/…/plots/mpl/[<cell>/]<object>.<fmt>` + `index.html` | **mkhtml's pages, pixel for pixel** (until the user has verified it, B4c option B): the same keys as `"yoda"`, about 18× faster |
 | `"both"`, `["root", "yoda"]` | both, from the same page configs | both trees | as each |
 
 The **yoda backend** runs `Paint --dump-ranges` on every page first, then per cell:
@@ -401,6 +402,18 @@ The **yoda backend** runs `Paint --dump-ranges` on every page first, then per ce
 - the ratio pad's y ticks: YODA's generator puts them at a fifth of the pad's range with no key to
   change it (and a later `set_yscale` in its script resets them anyway), so the backend writes
   `ratio.divisions`' locators into each page's script just before it saves, and runs it again.
+
+The **yoda backend is frozen** (V71, the user's B4c decision): it gets no new features, and a new
+`[plot]` key it cannot follow is refused there.
+
+The **mpl backend** draws the pages mkhtml would, without mkhtml: rivet's `get_plot_configs` reads the
+`.plot` files and the yoda backend's block for the page; the yoda backend's transforms (void,
+normalise, envelope, the cut reference) run in memory; YODA's own helpers give every number
+(`reshape`/`rebinTo` for the ratio, `legendDefaults`, `LineProperties`, `preprocess`) with its
+`default.mplstyle`; and the calls of mkhtml's generated script are made directly, with the yoda
+backend's fixes (ratio ticks, a best legend, titles) applied before saving. Values are rounded to the
+7 digits mkhtml's data files keep. `tests/integration/test_plot_stage.py` checks every page and overlay
+PNG against mkhtml's, pixel for pixel. Until the yoda backend goes, mpl uses its module's transforms.
 
 A backend is a module with `validate(settings, beside_root=False)` and
 `draw(cells, settings, say) -> failed pages`; writing one is [06 §6](06_Developer_Guide.md#6-adding-a-plot-backend).

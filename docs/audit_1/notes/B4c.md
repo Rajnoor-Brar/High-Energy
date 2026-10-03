@@ -127,3 +127,19 @@ symbols, mkhtml's fonts and tick lengths), `mpl` follows mkhtml. It still takes 
 from Paint's ranges file, since the yoda backend already hands mkhtml those. §4's first check therefore
 compares `mpl` with mkhtml's own generated data (`<object>__data.py`) rather than with Paint, and the
 side-by-side is `mpl` against mkhtml. Built as P4 S4.
+
+---
+
+## 7. Built (V71)
+
+`utils/Env/mpl/backend.py` draws mkhtml's pages from the libraries mkhtml uses, without generating or
+running a script. The measurements of §4:
+1. **Numbers and look.** Not compared with Paint, as the decision asked, but with mkhtml itself: the PNGs are
+   **pixel-identical** on all 19 pages of the eic band sweep and on all 80 pages of `energy_pdf` (four
+   cells, titles, per-value styles, a normalised object, a best legend, an overlay). A slow test,
+   `test_the_mpl_backend_draws_mkhtml_s_pages_pixel_for_pixel`, keeps that true on the plot-stage pages.
+2. **Speed.** `energy_pdf`'s 80 pages (pdf + png): **5.6 s** against mkhtml's 100 s.
+
+**Next, after the user has verified the pages:** the mpl backend stops following mkhtml where Paint is
+the reference (the ratio rule, every style key), takes over the yoda backend's transforms, and the yoda
+backend goes (option A's remaining half).
