@@ -692,6 +692,7 @@ style.legend.position = "bottom-left"
 | `logx`, `logy` | bool | the `.plot` file's `LogX`/`LogY` | |
 | `auto_range` | bool | true | trim x to the bins with content, in curves and data |
 | `range_pad` | integer | 0 | whole bins kept either side of the filled ones |
+| `normalise` | `"area"` or false | false | `"area"` (V68): every curve, and the data, scaled to unit area, Σ value × bin width over the bins drawn (after voiding and the data's alignment), so pages compare shapes. Both backends scale the same way. The y label stays the `.plot`'s: set `y_label` (e.g. `"$1/\sigma\,\mathrm{d}\sigma/\mathrm{d}E_T$"`) on the pages it applies to. `[plot.object."<glob>"]` and overlays may set it for theirs |
 | `void_empty` | bool | false | blank a bin that is zero in **every** curve |
 | `min_entries` | integer | 0 | blank a bin that fewer raw entries went into, in **any** curve (read from the `/RAW` twin; objects without one are not voided this way) |
 | `root_style` | string (path) | none | a style file over base.toml (§12). Refused by the yoda backend alone. |
@@ -709,6 +710,7 @@ a missing `auto_range` is true). In `[plot]`:
 |---|---|
 | `min_entries`, `range_pad` | 0: every bin drawn |
 | `void_empty` | false: neither Paint nor mkhtml voids a bin by itself |
+| `normalise` | false: neither tool scales a curve by itself |
 | `auto_range` | off: the tool's own x range |
 | `y_gutter`, `x_gutter` | no gutter: the tool's own range (as before) |
 | `logx`, `logy` | the analysis's `.plot` `LogX`/`LogY` |

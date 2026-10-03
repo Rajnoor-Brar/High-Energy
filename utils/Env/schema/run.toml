@@ -388,6 +388,13 @@ default    = true
 default_ok = true
 doc        = "x clipped to the bins with content"
 
+[plot.normalise]
+type       = "str|bool"
+choices    = ["area", false]
+default    = false
+default_ok = true
+doc        = "\"area\": every curve and the data scaled to unit area over the bins drawn (V68)"
+
 [plot.void_empty]
 type       = "bool"
 default    = false
@@ -512,6 +519,12 @@ doc        = "as [plot].x_gutter, for these pages"
 type       = "bool"
 default_ok = true
 doc        = "as [plot].ratio, for these pages"
+
+[plot_child.normalise]
+type       = "str|bool"
+choices    = ["area", false]
+default_ok = true
+doc        = "as [plot].normalise, for these pages"
 
 [plot_child.style]
 type = "table"

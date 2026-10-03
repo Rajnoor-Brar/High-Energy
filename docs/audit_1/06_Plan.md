@@ -332,5 +332,5 @@ wait for the last steps of the last phase; meanwhile the code accepts what those
 | P1 | S1 S2 S3 | done: S1 (V55 schema, "default"), S2 (V56 layers, include, --show-config), S3 (V57 --why, hep check) |
 | P2 | S1 S2 S3 | done: S1 (V58), S2 (V59), S3 (V62: option A, the run's beam order into each card's slots) |
 | P3 | S1 S2 S3 | done: S1 (V60), S2 (V61: tables as data, one plugin loader, twins merged, filters key), S3 (V63: PythiaRun.hh, one stage runner, Step.flags) |
-| P4 | S1 S2 S3 | S1 (V64: batch mode; B4b dropped, see V64) done; S2: B5 (V65), F7 placeholders (V66), per-value styles (V67) done; normalise, bands, index page next |
+| P4 | S1 S2 S3 | S1 (V64: batch mode; B4b dropped, see V64) done; S2: B5 (V65), F7 placeholders (V66), per-value styles (V67), normalise (V68) done; bands, index page next |
 | P5 | S1 S2 S3 | not started |

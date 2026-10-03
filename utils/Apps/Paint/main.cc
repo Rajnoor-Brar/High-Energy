@@ -5,8 +5,8 @@
 //     Paint.exe PAGE.toml --dump-ranges
 //     Paint.exe [PAGE.toml] --dump-style
 //
-// Each page in the order v1 found load-bearing: load → void → align data → auto-range → gutters →
-// draw → save. Many pages are drawn in one process (V64: ROOT starts once, not once per page), and
+// Each page in the order v1 found load-bearing: load → void → align data → normalise (V68) →
+// auto-range → gutters → draw → save. Many pages are drawn in one process (V64: ROOT starts once, not once per page), and
 // with more than one page every page's outcome is a JSON line on stdout, {"page": …, "ok": …,
 // "error": …}, so one bad page does not stop the rest. `--ranges` also writes each page's final
 // ranges and voided bins beside its config, <PAGE>.ranges.json, for the other backends; `--ranges-only`
@@ -81,6 +81,12 @@ namespace {
         if (haveData && !Paint::alignTo(data, curves.front())) {
             status.log("warn", page.name + ": no reference bin lines up with the MC binning; data dropped");
             haveData = false;
+        }
+
+        // normalise (V68): after the void and the alignment, so the area is the drawn bins'
+        if (page.normalise) {
+            for (auto& c : curves) Paint::normalise(c);
+            if (haveData) Paint::normalise(data);
         }
 
         // ranges

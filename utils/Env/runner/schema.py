@@ -107,10 +107,11 @@ def check_value(key: str, value, entry: dict, where: str) -> None:
                 raise HepError(f"'{key}' entries must be {type_name(items)}", where=where, hint=f"got {item!r}")
     choices = entry.get("choices")
     if choices:
-        for item in members:
-            if isinstance(item, str) and item not in choices:
-                raise HepError(f"{key} must be one of {', '.join(choices)}, not '{item}'", where=where,
-                               hint=did_you_mean(item, choices))
+        for item in members:                     # a choice may be false (normalise = "area" | false, V68)
+            if isinstance(item, (str, bool)) and not any(type(item) is type(c) and item == c for c in choices):
+                shown = ", ".join(c if isinstance(c, str) else str(c).lower() for c in choices)
+                raise HepError(f"{key} must be one of {shown}, not {item!r}", where=where,
+                               hint=did_you_mean(item, [c for c in choices if isinstance(c, str)]) if isinstance(item, str) else None)
     if "min" in entry and _is(value, "float") and value < entry["min"]:
         raise HepError(f"'{key}' must be at least {entry['min']}", where=where, hint=f"got {value!r}")
 

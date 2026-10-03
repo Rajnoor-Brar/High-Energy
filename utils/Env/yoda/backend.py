@@ -72,9 +72,10 @@ def _voided(yoda, source: Path, pages: list, target: Path) -> Path:
     objects = yoda.read(str(source))
     changed = False
     for page in pages:
-        voided = page.ranges.get("voided", [])
-        for path in {v for s, v in zip(page.sources, page.variants) if s == source} if voided else ():
-            changed |= _void(objects[path], voided, source)
+        voided, area = page.ranges.get("voided", []), page.document["page"].get("normalise") == "area"
+        for path in {v for s, v in zip(page.sources, page.variants) if s == source} if voided or area else ():
+            changed |= bool(voided) and _void(objects[path], voided, source)
+            changed |= area and _normalise(objects[path])        # after the void: the drawn bins' area, as Paint
     if not changed:
         return source
     yoda.write(list(objects.values()), str(target))
@@ -87,6 +88,20 @@ def _void(estimate, voided: list, source: Path) -> bool:
     for index in voided:
         estimate.bin(index).setVal(float("nan"))
         estimate.bin(index).rmErrs()
+    return True
+
+
+def _normalise(estimate) -> bool:
+    """V68: unit area, Σ value·width over the finite bins (Paint's normalise); every error scaled with it."""
+    bins = [estimate.bin(i) for i in range(1, estimate.numBins() + 1)]
+    area = sum(b.val() * (b.xMax() - b.xMin()) for b in bins if math.isfinite(b.val()))
+    if not (area > 0 and math.isfinite(area)):
+        return False
+    for b in bins:
+        errors = {name: b.errDownUp(name) for name in b.sources()}
+        b.setVal(b.val() / area)
+        for name, (down, up) in errors.items():
+            b.setErr((down / area, up / area), name)
     return True
 
 
@@ -103,6 +118,8 @@ def _reference(yoda, page):
         out.bin(k).setVal(source.bin(i).val())
         for name in source.bin(i).sources():
             out.bin(k).setErr(source.bin(i).errDownUp(name), name)
+    if page.document["page"].get("normalise") == "area":
+        _normalise(out)
     return out
 
 
@@ -288,6 +305,8 @@ def _overlay(yoda, page, work: Path, outdir: Path, settings: dict, say) -> bool:
             read[source] = yoda.read(str(source))
         copy = read[source][variant].clone()
         copy.setPath(path)
+        if page.document["page"].get("normalise") == "area":
+            _normalise(copy)
         files.append(work / f"overlay_{page.overlay}_{i:02d}.yoda")
         yoda.write([copy], str(files[-1]))
     labels = [c["label"] for c in page.document["curve"]]

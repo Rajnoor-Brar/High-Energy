@@ -441,6 +441,33 @@ def texts_of(run, plan, cell: str) -> dict[str, str]:
     return out
 
 
+def check_texts(run, plans) -> None:
+    """V66 at plan time: every placeholder the run TOML's texts cite ([plot] and its children, the
+    quantities' labels) is one the points have, so a typo costs no point run. Whether a page text has one
+    value on its page is known only with the pages, at the plot stage."""
+    if not run.plot:
+        return
+    cited: list[tuple[str, str]] = []
+
+    def walk(value, at):
+        if isinstance(value, str):
+            cited.extend((m.group(1), at) for m in PLACEHOLDER.finditer(value))
+        elif isinstance(value, dict):
+            for k, v in value.items():
+                walk(v, f"{at}.{k}")
+        elif isinstance(value, list):
+            for v in value:
+                walk(v, at)
+    walk(run.plot, "[plot]")
+    for name, quantity in run.quantities.items():
+        walk(quantity.labels, f"[quantities.{name}].labels")
+    known = {"cell"} | {k for plan in plans for k in texts_of(run, plan, "")}
+    for key, at in cited:
+        if key not in known:
+            raise HepError(f"a page text cites {{{key}}}, which is nothing the points have", where=f"{run.path}: {at}",
+                           hint=did_you_mean(key, sorted(known)) or f"they have: {', '.join('{' + k + '}' for k in sorted(known))}")
+
+
 def filler(known: list[dict[str, str]], where: str):
     """A function filling a text's placeholders from the points it speaks for: a page's (all its curves'
     points: a value must be the same at every one) or a curve's (its own point)."""
@@ -510,6 +537,7 @@ def page_settings(settings: dict, path: str, rel: str, output: Path, with_data: 
         "x_gutter": _gutter(pick("x_gutter", DEFAULT, DEFAULT)),
         "ratio": bool(pick("ratio", ours("ratio"), ratio)),
         "ratio_label": "MC/Data" if with_data else "Ratio",
+        "normalise": pick("normalise", ours("normalise"), False),                 # V68: "area" or false
         "void_empty": bool(plot_only("void_empty", ours("void_empty"), False)),     # neither tool voids by itself
         "min_entries": int(plot_only("min_entries", ours("min_entries"), 0)),
         "auto_range": bool(plot_only("auto_range", ours("auto_range"), False)),    # the tool's own range

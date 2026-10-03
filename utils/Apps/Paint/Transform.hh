@@ -63,6 +63,15 @@ namespace Paint {
                     if (mask[i]) c.y[i] = std::numeric_limits<double>::quiet_NaN(), c.err[i] = 0.0;
     }
 
+    // V68: scale to unit area, Σ y·Δx over the finite bins (the bins drawn); nothing to scale is left as is.
+    inline void normalise(Series& s) {
+        double area = 0;
+        for (size_t i = 0; i < s.size(); ++i)
+            if (std::isfinite(s.y[i])) area += s.y[i] * (s.hi[i] - s.lo[i]);
+        if (!(area > 0) || !std::isfinite(area)) return;
+        for (size_t i = 0; i < s.size(); ++i) s.y[i] /= area, s.err[i] /= area;
+    }
+
     // Trim data to its longest run of consecutive bins whose edges are MC edges. false = drop it.
     inline bool alignTo(Series& data, const Series& mc) {
         std::vector<double> edges(mc.lo);

@@ -31,6 +31,7 @@ namespace Paint {
         // A key the page leaves out is what ROOT does by itself (V55): no gutter, no auto range, no voiding.
         // The runner writes every key it sets (its defaults are utils/Env/schema/run.toml's), so Paint keeps none.
         bool logx = false, logy = false, ratio = false, voidEmpty = false, autoRange = false;
+        bool normalise = false;                                 // "area": unit area over the bins drawn (V68)
         std::optional<double> yGutter, xGutter;                 // none: ROOT's own range ("default")
         int minEntries = 0, rangePad = 0;
         Style style;
@@ -80,6 +81,11 @@ namespace Paint {
         page.ratio = p["ratio"].value_or(false);
         page.voidEmpty = p["void_empty"].value_or(false);
         page.autoRange = p["auto_range"].value_or(false);
+        if (const auto node = p["normalise"]; node) {
+            if (node.value<std::string>() == std::optional<std::string>("area")) page.normalise = true;
+            else if (node.value<bool>() != std::optional<bool>(false))
+                throw std::runtime_error(path + ": [page].normalise must be \"area\" or false");
+        }
         page.yGutter = gutter(p["y_gutter"], "y_gutter", page.yGutter);
         page.xGutter = gutter(p["x_gutter"], "x_gutter", page.xGutter);
         page.minEntries = p["min_entries"].value_or(0);

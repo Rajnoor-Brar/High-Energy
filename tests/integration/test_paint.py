@@ -309,3 +309,20 @@ def test_a_curve_may_have_its_own_look(inputs):
     config.write_text(tomli_w.dumps(document), encoding="utf-8")
     done = subprocess.run([str(PAINT), str(config)], capture_output=True, text=True, encoding="utf-8")
     assert done.returncode == 1 and "style.line" in done.stdout + done.stderr
+
+
+def test_normalise_scales_every_curve_to_unit_area(v1):
+    """V68: Σ y·Δx = 1 per curve over the drawn bins; a: 5/7 at most, b: 4/8."""
+    where, curves = v1
+    assert v1_page(where, curves)["largest"] == pytest.approx(5.0)
+    assert v1_page(where, curves, normalise="area")["largest"] == pytest.approx(5.0 / 7.0)
+    assert v1_page(where, curves, normalise=False)["largest"] == pytest.approx(5.0)
+
+
+def test_normalise_is_area_or_false(v1):
+    where, curves = v1
+    path = where / "bad_normalise.toml"
+    path.write_text(tomli_w.dumps({"page": {"name": "v1", "output": str(where / "v1"), "normalise": "peak"},
+                                   "curve": [{"file": str(curves[0]), "object": "photo_eic/d01-x01-y01", "label": "a"}]}))
+    done = subprocess.run([str(PAINT), str(path), "--dump-ranges"], capture_output=True, text=True, encoding="utf-8")
+    assert done.returncode == 1 and "normalise" in done.stdout + done.stderr

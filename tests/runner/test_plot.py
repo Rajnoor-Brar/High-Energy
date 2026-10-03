@@ -220,11 +220,14 @@ def test_references_are_cut_to_the_aligned_run_and_renamed(yoda_backend):
     except HepError:
         pytest.skip("no Rivet reference data")
     page = SimpleNamespace(object="/photo_eic:R=0.7/d01-x01-y01", ranges={"data_x": [17, 47]},
-                           data=(source, "/REF/ZEUS_2012_I1116258/d01-x01-y01"))
+                           data=(source, "/REF/ZEUS_2012_I1116258/d01-x01-y01"), document={"page": {}})
     ref = yoda_backend._reference(yoda, page)
     whole = yoda.read(str(page.data[0]))[page.data[1]]
     assert ref.path() == "/REF/photo_eic/d01-x01-y01"
     assert list(ref.xEdges()) == [17, 21, 25, 29, 35, 41, 47] and len(whole.xEdges()) > 7
+    page.document["page"]["normalise"] = "area"                         # V68: the data as the curves
+    area = yoda_backend._reference(yoda, page)
+    assert sum(b.val() * (b.xMax() - b.xMin()) for b in area.bins()) == pytest.approx(1.0)
     assert [ref.bin(i).val() for i in range(1, 7)] == [whole.bin(i).val() for i in range(1, 7)]
     assert ref.bin(1).errDownUp("stat") == whole.bin(1).errDownUp("stat")
 
@@ -374,3 +377,31 @@ def test_the_yoda_backend_draws_hex_colours_only(scratch):
     with pytest.raises(HepError, match="cannot draw the curve colour"):
         plot.validate(run)
     plot.validate(parse(raw(plot={"backend": "both"}, quantities__pdf__styles=[{"colour": "#EE3311"}, {}]), scratch))
+
+
+def test_normalise_is_a_page_key_a_child_may_set(scratch):
+    """V68: false unless asked; an object's table overrides [plot]'s; "area" or false only."""
+    assert page({})["normalise"] is False
+    assert page({"normalise": "area"})["normalise"] == "area"
+    assert page({"normalise": "area", "object": {"d01-*": {"normalise": False}}})["normalise"] is False
+    with pytest.raises(HepError, match="must be one of area, false"):
+        validated(scratch, normalise="peak")
+
+
+def test_the_yoda_backend_normalises_as_paint(yoda_backend):
+    import yoda
+    estimate = yoda.BinnedEstimate1D([0.0, 1.0, 3.0], "/x")
+    estimate.bin(1).setVal(2.0), estimate.bin(1).setErr(0.5), estimate.bin(2).setVal(1.0)
+    assert yoda_backend._normalise(estimate)
+    assert [estimate.bin(i).val() for i in (1, 2)] == [0.5, 0.25] and estimate.bin(1).errDownUp("")[1] == 0.125
+
+
+def test_a_cited_placeholder_is_checked_before_any_point_runs(scratch):
+    """V66: a typo is refused at plan time, with what the points have."""
+    from helpers import plan
+    run, _, p = plan(raw(static={"pdf": "MSTW08lo"}, plot={"title": "{opt:ETMIN} {q:pdf}", "overlay": {"o": {"objects": ["d01-*"], "labels": ["{cell}"]}}}), scratch)
+    plot.check_texts(run, [p])
+    run, _, p = plan(raw(plot={"legend_header": "{opt:ETMN}"}), scratch)
+    with pytest.raises(HepError, match=r"cites \{opt:ETMN\}") as error:
+        plot.check_texts(run, [p])
+    assert "opt:ETMIN" in error.value.hint
