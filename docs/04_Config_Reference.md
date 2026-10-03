@@ -636,8 +636,8 @@ style.legend.position = "bottom-left"
 | `title_left`, `title_right` | string | `""` | small text just above the frame's top-left and top-right corners (V51), inherited the same way |
 | `legend_header` | string | the `.plot`'s `LegendTitle` | the legend's first line (V51), inherited the same way. Children inherit every key their parent has and a key means the same at both levels |
 | `overlay` | tables | none | `[plot.overlay.<name>] objects = [globs], labels = [...]`: one page per cell, `<cell>/<name>`, whose curves are those objects of each point (label: the overlay's, plus the point's when a page has several points); takes the `[plot.object]` keys too, inheriting from `[plot]`; a ratio divides by the first curve (V51) |
-| `y_gutter` | number ≥ 0 or `"default"` | `0.5` | the top of the y axis at (1 + g) × the largest drawn value (on a log axis, g of the decades shown). `0` or `"default"`: no gutter, the tool's own range (V29) |
-| `x_gutter` | number ≥ 0 or `"default"` | `"default"` | widens x by g of its span, symmetrically (in decades on a log axis). `0` or `"default"`: the range the bins give |
+| `y_gutter` | number ≥ 0 or `"default"` | `0.5` | the top of the y axis at (1 + g) × the largest drawn value (on a log axis, g of the decades shown); `0`: no headroom. `"default"`: no gutter, the tool's own range (V29, V55) |
+| `x_gutter` | number ≥ 0 or `"default"` | `"default"` | widens x by g of its span, symmetrically (in decades on a log axis). `"default"`: the range the bins give |
 | `logx`, `logy` | bool | the `.plot` file's `LogX`/`LogY` | |
 | `auto_range` | bool | true | trim x to the bins with content, in curves and data |
 | `range_pad` | integer | 0 | whole bins kept either side of the filled ones |
@@ -648,9 +648,11 @@ style.legend.position = "bottom-left"
 | `style` | table | `{}` | §12 |
 | `object` | table | `{}` | §11.2 |
 
-**`"default"` is a value of every drawing option** (V37): it sets nothing, and the drawing tool does
-what it does by itself. That is not always the runner's default when a key is left out (a missing
-`y_gutter` is 0.5, a missing `auto_range` is true):
+**`"default"` means "keep it as it is"** (V55, which replaces V37's meaning): in `[plot]` it sets
+nothing, and the drawing tool does what it does by itself; in a child (`[plot.object."<glob>"]`,
+`[plot.overlay.<name>]`) it is `[plot]`'s value, as if the key were left out. A key left out of
+`[plot]` takes the runner's default, from `utils/Env/schema/run.toml` (a missing `y_gutter` is 0.5,
+a missing `auto_range` is true). In `[plot]`:
 
 | Key | `"default"` gives |
 |---|---|
@@ -665,10 +667,11 @@ what it does by itself. That is not always the runner's default when a key is le
 | `backend` | `"root"` |
 | `root_style` | no style file: base.toml |
 
-In `[plot.object."<glob>"]` a `"default"` is the tool's for those objects whatever `[plot]` says
-(`logy = "default"` there takes the `.plot`'s even when `[plot].logy = false`), and `title`,
-`x_label`, `y_label` = `"default"` keep the `.plot`'s labels. In a style layer (§12) a `"default"`
-value sets nothing: the layer below decides, and at the bottom base.toml, Paint's own look.
+In `[plot.object."<glob>"]` a `"default"` keeps `[plot]`'s value (`logy = "default"` there is
+`[plot].logy`, and the `.plot`'s when `[plot]` sets none); `x_label` and `y_label`, which only a child
+sets, keep the `.plot`'s labels. In a style layer (§12) a `"default"` value sets nothing: the layer
+below decides, and at the bottom base.toml, Paint's own look. In `[run.<cfg>]` a `"default"` is
+`[run]`'s value (`threads = "default"`).
 `--set plot.min_entries=default` works for one run.
 
 `[plot].legend` is no longer a key: it moved to the style, `legend.position` (the error says so).

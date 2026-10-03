@@ -81,13 +81,19 @@ def test_every_toml_block_parses_and_complete_runs_load(page, scratch):
 
 
 def test_every_key_the_loader_accepts_is_documented():
+    """Every key of the schema (utils/Env/schema/run.toml, V55) is in the reference."""
+    from runner import schema
     ref = reference()
-    tables = {"[run]": config.RUN_KEYS, "[run.<cfg>]": config.CONFIGURATION_KEYS, "[prelim]": config.PRELIM_KEYS,
-              "[master]": config.MASTER_KEYS, "[quantities]": config.QUANTITY_KEYS, "[tools]": config.TOOL_COMMON,
-              "[plot]": config.PLOT_KEYS, "[plot.data]": dict.fromkeys(plot.DATA_KEYS),
-              "[plot.object]": dict.fromkeys(plot.OBJECT_KEYS)}
-    missing = [f"{where} {key}" for where, keys in tables.items() for key in keys if f"`{key}`" not in ref]
+    missing = [f"[{table}] {key}" for table in schema.TABLES for key in schema.keys(table) if f"`{key}`" not in ref]
     assert not missing, "not in 04/05: " + ", ".join(missing)
+
+
+def test_the_editor_schema_is_current():
+    """run.schema.json is generated from run.toml (`make schema`): it must say what run.toml says."""
+    import json
+    from runner import schema
+    written = json.loads(schema.path().with_name("run.schema.json").read_text(encoding="utf-8"))
+    assert written == json.loads(json.dumps(schema.json_schema())), "run `make schema`"
 
 
 def test_every_style_key_is_documented():

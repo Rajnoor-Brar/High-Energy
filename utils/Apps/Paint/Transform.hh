@@ -10,7 +10,7 @@
 //   * range  — x is clipped to the bins that carry content, in curves and data, widened by
 //              range_pad whole bins. Order: void, then align, then range (L18, v1 §5).
 //   * gutter — y_gutter = g puts the top of the y axis at (1 + g) × the largest drawn value; x_gutter = g
-//              widens x by g of its span. 0 (or "default") sets nothing: the range is ROOT's own choice.
+//              widens x by g of its span (0: no headroom, V55). "default" sets nothing: the range is ROOT's own choice.
 
 #include <algorithm>
 #include <cmath>
@@ -124,7 +124,7 @@ namespace Paint {
     }
 
     // x_gutter = g widens x symmetrically: the span becomes (1 + g) × itself, in decades on a log
-    // axis. None (0 or "default") keeps the range the bins give, as ROOT draws a histogram.
+    // axis. None ("default") keeps the range the bins give, as ROOT draws a histogram.
     inline Range xWithGutter(Range x, std::optional<double> gutter, bool logx) {
         if (!gutter) return x;
         if (logx && x.lo > 0) {

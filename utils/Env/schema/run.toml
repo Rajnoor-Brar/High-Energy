@@ -1,0 +1,513 @@
+# utils/Env/schema/run.toml — every key a run TOML may hold (docs/04_Config_Reference.md), in one place
+# (V55). The runner validates against it (runner/schema.py), the editor schema is generated from it
+# (`make schema` → run.schema.json), and test_docs.py holds docs/04 to it.
+#
+# [<table>.<key>] fields:
+#   type     "int" | "float" | "str" | "bool" | "list" | "table", or several joined by "|"
+#   items    for a list: the type of its entries
+#   choices  the values allowed
+#   min      the smallest number allowed
+#   required true: the table must set it
+#   default  the runner's value when the key is left out
+#   inherit  true: a configuration ([run.<cfg>]) inherits it from [run]
+#   default_ok  true: the value "default" is accepted. "default" means "keep it as it is" (V55): in a
+#            child it is the parent's value; at the top level nothing is set, and the tool decides.
+#   doc      one line, for `hep explain` and the editor
+#
+# Tables: master, run, configuration ([run.<cfg>]), prelim, quantity ([quantities.<q>]), tool
+# ([tools.<tag>]: the keys every tool table may carry; a folder's [options] add its own), plot,
+# plot_child ([plot.object."<glob>"] and [plot.overlay.<name>]), overlay (an overlay's own), data.
+
+[sections]
+order = ["master", "run", "prelim", "static", "tools", "quantities", "plot"]
+
+# ── [master] ─────────────────────────────────────────────────────────────────────────────────
+
+[master.master_toml]
+type = "str"
+doc  = "a project master overlaid on utils/Env/master.toml (configs/<Project>/…)"
+
+# ── [run] ────────────────────────────────────────────────────────────────────────────────────
+
+[run.name]
+type     = "str"
+required = true
+doc      = "the run's folder: <project>/<name>/"
+
+[run.project]
+type     = "str"
+required = true
+doc      = "the project; a config under configs/<X>/ belongs to X"
+
+[run.configuration]
+type = "str"
+doc  = "the configuration hep run runs (required unless sweep_runs)"
+
+[run.serial]
+type    = "int"
+inherit = true
+doc     = "the NN_ before each configuration's folder"
+
+[run.event_count]
+type    = "int"
+min     = 1
+inherit = true
+doc     = "events per point"
+
+[run.threads]
+type    = "int"
+min     = 0
+default = 1
+inherit = true
+doc     = "threads per generator; 0 = every core"
+
+[run.parallelism]
+type    = "int"
+min     = 1
+default = 1
+inherit = true
+doc     = "points run at once"
+
+[run.description]
+type = "str"
+doc  = "what the run is for"
+
+[run.sweep_runs]
+type    = "bool"
+default = false
+doc     = "hep run runs every configuration not swept = false, in turn"
+
+[run.seed_type]
+type    = "str"
+choices = ["identity", "manual", "random"]
+default = "identity"
+inherit = true
+doc     = "how seeds are chosen"
+
+[run.manual_seed]
+type    = "int"
+min     = 1
+inherit = true
+doc     = "seed_type = manual: every point's seed"
+
+# ── [run.<cfg>] ──────────────────────────────────────────────────────────────────────────────
+
+[configuration.serial]
+type       = "int"
+default_ok = true
+doc        = "this configuration's NN_ (else [run]'s)"
+
+[configuration.name]
+type = "str"
+doc  = "this configuration's run folder (else [run].name)"
+
+[configuration.label]
+type = "str"
+doc  = "this configuration's folder: NN_<label> (else its table key)"
+
+[configuration.title]
+type = "str"
+doc  = "the run NN - <title> - header of a sweep"
+
+[configuration.description]
+type = "str"
+doc  = "what the configuration is for"
+
+[configuration.event_count]
+type       = "int"
+min        = 1
+default_ok = true
+doc        = "events per point (else [run]'s)"
+
+[configuration.threads]
+type       = "int"
+min        = 0
+default_ok = true
+doc        = "threads per generator (else [run]'s); 0 = every core"
+
+[configuration.parallelism]
+type       = "int"
+min        = 1
+default_ok = true
+doc        = "points run at once (else [run]'s)"
+
+[configuration.swept]
+type    = "bool"
+default = true
+doc     = "false: [run].sweep_runs leaves this configuration out"
+
+[configuration.seed_type]
+type       = "str"
+choices    = ["identity", "manual", "random"]
+default_ok = true
+doc        = "how seeds are chosen (else [run]'s)"
+
+[configuration.manual_seed]
+type       = "int"
+min        = 1
+default_ok = true
+doc        = "seed_type = manual: every point's seed (else [run]'s)"
+
+[configuration.sweeps]
+type = "list"
+doc  = "swept quantities: a name is an axis, an inner list an entangled group"
+
+[configuration.plot_points]
+type  = "list"
+items = "str"
+doc   = "swept quantities whose grid makes the pages"
+
+[configuration.combine]
+type  = "list"
+items = "str"
+doc   = "swept quantities whose points are merged into one (seed replicas)"
+
+[configuration.tools]
+type     = "list"
+required = true
+doc      = "the chain: [A, [B, C], D]; an inner list runs together"
+
+[configuration.pre]
+type = "list"
+doc  = "tools run once, before every point"
+
+[configuration.post]
+type = "list"
+doc  = "tools run once, after every point"
+
+[configuration.static]
+type = "table"
+doc  = "quantity = value for this configuration, over [static]"
+
+[configuration.prelim]
+type = "table"
+doc  = "this configuration's [prelim]"
+
+# ── [prelim] ─────────────────────────────────────────────────────────────────────────────────
+
+[prelim.fifo]
+type  = "list"
+items = "str"
+doc   = "FIFOs made in the point's folder before the tools start"
+
+[prelim.files]
+type  = "list"
+items = "str"
+doc   = "files made (empty) before the tools start"
+
+[prelim.commands]
+type = "list"
+doc  = "commands run in the point's folder before the tools"
+
+# ── [quantities.<q>] ─────────────────────────────────────────────────────────────────────────
+
+[quantity.values]
+type     = "list"
+required = true
+doc      = "the values"
+
+[quantity.tags]
+type  = "list"
+doc   = "one per value: folder and point names"
+
+[quantity.labels]
+type  = "list"
+doc   = "one per value: legend text"
+
+[quantity.key]
+type = "str|table"
+doc  = "the native key, or { <tool or tag> = key }"
+
+[quantity.target]
+type = "str|list"
+doc  = "<tag>, <tag>/<analysis> or <tag>/seed"
+
+[quantity.format]
+type = "str"
+doc  = "how the value is written: a Python format, \"{}*GeV\""
+
+[quantity.description]
+type = "str"
+doc  = "what the quantity is"
+
+[quantity.exclude]
+type  = "list"
+doc   = "1-based value places a sweep leaves out"
+
+# ── [tools.<tag>] ────────────────────────────────────────────────────────────────────────────
+
+[tool.tool]
+type     = "str"
+required = true
+doc      = "a standard tool (a folder of utils/Env/) or custom"
+
+[tool.baseconfig]
+type = "str|list"
+doc  = "base card(s), configs/<Project>/…"
+
+[tool.input]
+type = "str|list"
+doc  = "what it reads: an interface or a file"
+
+[tool.output_file]
+type = "str|list"
+doc  = "what it writes: an interface or a product"
+
+[tool.timeout]
+type = "float"
+min  = 0
+doc  = "seconds before it is stopped (0: never)"
+
+[tool.stall_after]
+type = "float"
+min  = 0
+doc  = "seconds of silence before it counts as stalled (default 300)"
+
+[tool.status]
+type = "str"
+doc  = "standard | filters | none, or filters:<file>"
+
+[tool.executable]
+type = "str"
+doc  = "custom/module: build/<project>/<name>, or path:<command>"
+
+[tool.arguments]
+type = "list"
+doc  = "custom: its arguments"
+
+[tool.consumes]
+type  = "list"
+items = "str"
+doc   = "custom/module: quantities it reads from its config"
+
+[tool.config]
+type = "table"
+doc  = "custom/module: written to config/<tag>.toml"
+
+[tool.streamable]
+type = "bool"
+doc  = "it can read a FIFO"
+
+[tool.consumes_events]
+type = "bool"
+doc  = "its event count is checked against the producer's"
+
+[tool.shards]
+type    = "int"
+min     = 1
+default = 1
+doc     = "K processes on a share of the events each"
+
+# ── [plot] ───────────────────────────────────────────────────────────────────────────────────
+
+[plot.backend]
+type       = "str|list"
+items      = "str"
+choices    = ["root", "yoda", "both"]
+default    = "root"
+default_ok = true
+doc        = "root (Paint), yoda (rivet-mkhtml), or both"
+
+[plot.formats]
+type       = "list"
+items      = "str"
+choices    = ["pdf", "png", "svg", "eps"]
+default    = ["pdf"]
+default_ok = true
+doc        = "the pages' formats"
+
+[plot.objects]
+type       = "list"
+items      = "str"
+default_ok = true
+doc        = "YODA path globs that get pages (default: every 1D object)"
+
+[plot.ratio]
+type       = "bool"
+default    = false
+default_ok = true
+doc        = "a ratio pad"
+
+[plot.y_gutter]
+type       = "float"
+min        = 0
+default    = 0.5
+default_ok = true
+doc        = "the top of the y axis at (1 + g) × the largest value"
+
+[plot.x_gutter]
+type       = "float"
+min        = 0
+default_ok = true
+doc        = "x widened by g of its span"
+
+[plot.logy]
+type       = "bool"
+default_ok = true
+doc        = "log y (default: the .plot's)"
+
+[plot.logx]
+type       = "bool"
+default_ok = true
+doc        = "log x (default: the .plot's)"
+
+[plot.auto_range]
+type       = "bool"
+default    = true
+default_ok = true
+doc        = "x clipped to the bins with content"
+
+[plot.void_empty]
+type       = "bool"
+default    = false
+default_ok = true
+doc        = "blank the bins empty in every curve"
+
+[plot.use_data]
+type       = "bool"
+default    = true
+doc        = "false: [plot.data] stays but is not drawn"
+
+[plot.min_entries]
+type       = "int"
+min        = 0
+default    = 0
+default_ok = true
+doc        = "blank the bins with fewer raw entries"
+
+[plot.range_pad]
+type       = "int"
+min        = 0
+default    = 0
+default_ok = true
+doc        = "whole bins added around auto_range"
+
+[plot.root_style]
+type       = "str"
+default_ok = true
+doc        = "a style file over base.toml (configs/<Project>/…)"
+
+[plot.title]
+type       = "str"
+default_ok = true
+doc        = "centred above the frame (default: the .plot's Title)"
+
+[plot.title_left]
+type       = "str"
+default_ok = true
+doc        = "above the frame's top-left corner"
+
+[plot.title_right]
+type       = "str"
+default_ok = true
+doc        = "above the frame's top-right corner"
+
+[plot.legend_header]
+type       = "str"
+default_ok = true
+doc        = "the legend's first line (default: the .plot's LegendTitle)"
+
+[plot.data]
+type = "table"
+doc  = "reference data: file, legend, map"
+
+[plot.style]
+type = "table"
+doc  = "the style over base.toml"
+
+[plot.object]
+type = "table"
+doc  = "[plot.object.\"<glob>\"]: keys for the objects the glob matches"
+
+[plot.overlay]
+type = "table"
+doc  = "[plot.overlay.<name>]: several objects on one page"
+
+# ── [plot.object."<glob>"] and [plot.overlay.<name>]: a child of [plot] ──────────────────────
+
+[plot_child.title]
+type       = "str"
+default_ok = true
+doc        = "as [plot].title, for these pages"
+
+[plot_child.title_left]
+type       = "str"
+default_ok = true
+doc        = "as [plot].title_left, for these pages"
+
+[plot_child.title_right]
+type       = "str"
+default_ok = true
+doc        = "as [plot].title_right, for these pages"
+
+[plot_child.legend_header]
+type       = "str"
+default_ok = true
+doc        = "as [plot].legend_header, for these pages"
+
+[plot_child.x_label]
+type       = "str"
+default_ok = true
+doc        = "the x axis title (default: the .plot's)"
+
+[plot_child.y_label]
+type       = "str"
+default_ok = true
+doc        = "the y axis title (default: the .plot's)"
+
+[plot_child.logx]
+type       = "bool"
+default_ok = true
+doc        = "as [plot].logx, for these pages"
+
+[plot_child.logy]
+type       = "bool"
+default_ok = true
+doc        = "as [plot].logy, for these pages"
+
+[plot_child.y_gutter]
+type       = "float"
+min        = 0
+default_ok = true
+doc        = "as [plot].y_gutter, for these pages"
+
+[plot_child.x_gutter]
+type       = "float"
+min        = 0
+default_ok = true
+doc        = "as [plot].x_gutter, for these pages"
+
+[plot_child.ratio]
+type       = "bool"
+default_ok = true
+doc        = "as [plot].ratio, for these pages"
+
+[plot_child.style]
+type = "table"
+doc  = "a style layer for these pages"
+
+[overlay.objects]
+type     = "list"
+items    = "str"
+required = true
+doc      = "the objects drawn together (names or globs)"
+
+[overlay.labels]
+type  = "list"
+items = "str"
+doc   = "one legend label per object"
+
+# ── [plot.data] ──────────────────────────────────────────────────────────────────────────────
+
+[data.file]
+type = "str"
+doc  = "a YODA under datasets/, or rivet:<Analysis>"
+
+[data.legend]
+type    = "str"
+default = "Data"
+doc     = "the data's legend entry"
+
+[data.map]
+type = "table"
+doc  = "object = reference path, explicitly"

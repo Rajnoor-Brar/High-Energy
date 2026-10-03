@@ -15,36 +15,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from . import schema
 from .errors import HepError, did_you_mean
 from .paths import config_file, configs_root
 
-TOP_LEVEL = ("master", "run", "prelim", "static", "tools", "quantities", "plot")
-
-# key → accepted Python types. A tuple of types means any of them.
-RUN_KEYS = {"serial": int, "name": str, "project": str, "configuration": str, "event_count": int,
-            "threads": int, "parallelism": int, "description": str, "sweep_runs": bool, "seed_type": str,
-            "manual_seed": int}
-CONFIGURATION_KEYS = {"serial": int, "name": str, "label": str, "title": str, "description": str, "event_count": int,
-                      "threads": int, "parallelism": int, "swept": bool, "seed_type": str, "manual_seed": int,
-                      "sweeps": list, "plot_points": list, "combine": list, "tools": list, "pre": list, "post": list,
-                      "static": dict, "prelim": dict}
-#: How a point's seeds are chosen (V39, 02 §8): from the generator's identity (the default), given
-#: (`manual_seed`, or a quantity targeting <tool>/seed), or drawn afresh when the point runs.
-SEED_TYPES = ("identity", "manual", "random")
-PRELIM_KEYS = {"fifo": list, "files": list, "commands": list}
-MASTER_KEYS = {"master_toml": str}
-QUANTITY_KEYS = {"values": list, "tags": list, "labels": list, "key": (str, dict), "target": (str, list),
-                 "format": str, "description": str, "exclude": list}
-#: Keys any tool table may carry; the rest are tool-specific, checked in `tools` against the tool
-#: folder's [options], or are standard-configuration requests (<tool>_<export>, 04 §9.4).
-TOOL_COMMON = {"tool": str, "baseconfig": (str, list), "input": (str, list), "output_file": (str, list),
-               "timeout": (int, float), "stall_after": (int, float), "status": str, "executable": str,
-               "arguments": list, "consumes": list, "config": dict, "streamable": bool,
-               "consumes_events": bool, "shards": int}
-PLOT_KEYS = {"backend": (str, list), "formats": list, "objects": list, "ratio": bool, "y_gutter": (int, float, str),
-             "x_gutter": (int, float, str), "logy": bool, "logx": bool, "auto_range": bool, "void_empty": bool, "use_data": bool,
-             "min_entries": int, "range_pad": int, "root_style": str, "data": dict, "style": dict, "object": dict,
-             "title": str, "title_left": str, "title_right": str, "legend_header": str, "overlay": dict}
+#: How a point's seeds are chosen (V39, 02 §8); the schema's [run.seed_type].choices.
+SEED_TYPES = tuple(schema.keys("run")["seed_type"]["choices"])
+DEFAULT = schema.DEFAULT
 
 
 @dataclass
@@ -145,48 +122,6 @@ class RunConfig:
 
 # ── checking ───────────────────────────────────────────────────────────────────────────────────
 
-def _type_name(types) -> str:
-    types = types if isinstance(types, tuple) else (types,)
-    names = {int: "an integer", float: "a number", str: "a string", list: "a list", dict: "a table",
-             bool: "true/false"}
-    return " or ".join(names.get(t, t.__name__) for t in types)
-
-
-def _check(table: dict, spec: dict, where: str, *, allow_tables: bool = False, extra_ok: bool = False) -> dict:
-    """Unknown keys are errors (C1); known keys must have the right type. Returns the extras."""
-    extras = {}
-    for key, value in table.items():
-        types = spec.get(key)
-        if allow_tables and isinstance(value, dict) and dict not in (types if isinstance(types, tuple) else (types,)):
-            continue                             # a configuration, even one named like a key ([run.threads])
-        if key in spec:
-            if isinstance(value, bool) and bool not in (types if isinstance(types, tuple) else (types,)):
-                raise HepError(f"'{key}' must be {_type_name(types)}, not true/false", where=f"{where}.{key}")
-            if not isinstance(value, types):
-                raise HepError(f"'{key}' must be {_type_name(types)}", where=f"{where}.{key}",
-                               hint=f"got {value!r}")
-        elif extra_ok:
-            extras[key] = value
-        else:
-            raise HepError(f"unknown key '{key}'", where=where,
-                           hint=did_you_mean(key, spec) or f"known keys: {', '.join(spec)}")
-    return extras
-
-
-def _seed_type(value: str, where: str) -> str:
-    if value not in SEED_TYPES:
-        raise HepError(f"seed_type is '{value}'", where=where, hint=f"one of {', '.join(SEED_TYPES)}")
-    return value
-
-
-def _manual_seed(value: int | None, where: str) -> int | None:
-    """At least 1 here; the upper bound is the point's generators' `[card] seed_range` (V54), checked
-    when the point is planned."""
-    if value is not None and value < 1:
-        raise HepError(f"manual_seed {value} is out of range", where=where, hint="a seed is at least 1")
-    return value
-
-
 def _as_list(value) -> list:
     if value is None:
         return []
@@ -239,16 +174,8 @@ def _sweeps(entries: list, where: str, quantities: dict) -> list:
     return out
 
 
-def _parallelism(value: int, where: str) -> int:
-    if value < 1:
-        raise HepError("parallelism must be at least 1 (the points run at once)", where=where)
-    return value
-
-
-def _resolved_threads(value: int, where: str) -> int:
-    if value < 0:
-        raise HepError("threads must be ≥ 0 (0 = every core)", where=where)
-    return value or (os.cpu_count() or 1)             # resolved here, never passed on as 0
+def _resolved_threads(value: int) -> int:
+    return value or (os.cpu_count() or 1)             # 0 = every core: resolved here, never passed on as 0
 
 
 # ── --set ──────────────────────────────────────────────────────────────────────────────────────
@@ -292,18 +219,19 @@ def load(name: str, *, sets: list[str] = ()) -> RunConfig:
 
 def parse(raw: dict, path: Path) -> RunConfig:
     where = str(path)
+    sections = schema.sections()
     for key in raw:
-        if key not in TOP_LEVEL:
+        if key not in sections:
             raise HepError(f"unknown section [{key}]", where=where,
-                           hint=did_you_mean(key, TOP_LEVEL) or f"sections: {', '.join(TOP_LEVEL)}")
+                           hint=did_you_mean(key, sections) or f"sections: {', '.join(sections)}")
 
     master = raw.get("master", {})
-    _check(master, MASTER_KEYS, f"{where}: [master]")
+    schema.check(master, "master", f"{where}: [master]")
 
     run = raw.get("run")
     if not isinstance(run, dict):
         raise HepError("missing [run]", where=where, hint="every run TOML has [run] name, project, configuration")
-    _check(run, RUN_KEYS, f"{where}: [run]", allow_tables=True)
+    schema.check(run, "run", f"{where}: [run]", subtables=True)
     sweep_on = run.get("sweep_runs") is True
     for required in ("name", "project") + (() if sweep_on else ("configuration",)):
         if required not in run:
@@ -315,14 +243,14 @@ def parse(raw: dict, path: Path) -> RunConfig:
                        where=f"{where}: [run].project", hint="they must match")
 
     prelim = raw.get("prelim", {})
-    _check(prelim, PRELIM_KEYS, f"{where}: [prelim]")
+    schema.check(prelim, "prelim", f"{where}: [prelim]")
 
     quantities: dict[str, Quantity] = {}
     for name, table in raw.get("quantities", {}).items():
         at = f"{where}: [quantities.{name}]"
         if not isinstance(table, dict):
             raise HepError("a quantity is a table", where=at)
-        _check(table, QUANTITY_KEYS, at)
+        schema.check(table, "quantity", at)
         if "values" not in table or not table["values"]:
             raise HepError("a quantity needs values", where=at)
         values = table["values"]
@@ -346,11 +274,9 @@ def parse(raw: dict, path: Path) -> RunConfig:
         at = f"{where}: [tools.{tag}]"
         if not isinstance(table, dict):
             raise HepError("a tool is a table", where=at)
-        extras = _check(table, TOOL_COMMON, at, extra_ok=True)
+        extras = schema.check(table, "tool", at, extra=True)
         if "tool" not in table:
             raise HepError("a tool table needs tool = \"<standard tool>\" or \"custom\"", where=at)
-        if table.get("shards", 1) < 1:
-            raise HepError("shards must be at least 1", where=f"{at}.shards")
         tools[tag] = Tool(tag=tag, tool=table["tool"], baseconfig=_as_list(table.get("baseconfig")),
                           input=_as_list(table.get("input")), output_file=_as_list(table.get("output_file")),
                           timeout=float(table.get("timeout", 0)), stall_after=float(table.get("stall_after", 0)),
@@ -373,7 +299,16 @@ def parse(raw: dict, path: Path) -> RunConfig:
         if not isinstance(table, dict):
             continue
         at = f"{where}: [run.{key}]"
-        _check(table, CONFIGURATION_KEYS, at)
+        schema.check(table, "configuration", at)
+
+        def inherited(name: str):
+            """This configuration's value, else [run]'s (\"default\" in the child: [run]'s, V55), else the
+            schema's default."""
+            value = table.get(name, DEFAULT)
+            if value == DEFAULT:
+                value = run.get(name, DEFAULT)
+            return schema.default("run", name) if value == DEFAULT else value
+
         if "tools" not in table:
             raise HepError("a configuration needs tools = [...]", where=at)
         sweeps = _sweeps(table.get("sweeps", []), f"{at}.sweeps", quantities)
@@ -400,21 +335,17 @@ def parse(raw: dict, path: Path) -> RunConfig:
                                hint=did_you_mean(name, quantities))
         local_prelim = table.get("prelim")
         if local_prelim is not None:
-            _check(local_prelim, PRELIM_KEYS, f"{at}.prelim")
-        event_count = table.get("event_count", run.get("event_count"))
+            schema.check(local_prelim, "prelim", f"{at}.prelim")
+        event_count = inherited("event_count")
         if event_count is None:
             raise HepError("no event_count: set it here or in [run]", where=at)
         configurations[key] = Configuration(
-            key=key, name=table.get("label") or key, serial=table.get("serial", run.get("serial")),   # V45
+            key=key, name=table.get("label") or key, serial=inherited("serial"),                     # V45
             run_name=table.get("name", run["name"]),                                                 # V46
-            swept=table.get("swept", True), title=table.get("title", key),
-            seed_type=_seed_type(table.get("seed_type", run.get("seed_type", "identity")),
-                                 f"{at}.seed_type" if "seed_type" in table else f"{where}: [run].seed_type"),
-            manual_seed=_manual_seed(table.get("manual_seed", run.get("manual_seed")),
-                                     f"{at}.manual_seed" if "manual_seed" in table else f"{where}: [run].manual_seed"),
+            swept=table.get("swept", schema.default("configuration", "swept")), title=table.get("title", key),
+            seed_type=inherited("seed_type"), manual_seed=inherited("manual_seed"),
             description=table.get("description", ""), event_count=int(event_count),
-            threads=_resolved_threads(int(table.get("threads", run.get("threads", 1))), f"{at}.threads"),
-            parallelism=_parallelism(int(table.get("parallelism", run.get("parallelism", 1))), f"{at}.parallelism"),
+            threads=_resolved_threads(int(inherited("threads"))), parallelism=int(inherited("parallelism")),
             sweeps=sweeps, plot_points=list(plot_points), combine=list(combine),
             tools=_groups(table["tools"], f"{at}.tools", tools),
             post=_groups(table.get("post", []), f"{at}.post", tools),
@@ -435,11 +366,35 @@ def parse(raw: dict, path: Path) -> RunConfig:
     if "legend" in plot:
         raise HepError("[plot].legend is now part of the style", where=f"{where}: [plot].legend",
                        hint=f'[plot.style] legend.position = "{plot["legend"]}" (or in the root_style file)')
-    # "default" is every drawing option's own value (V37): the tool decides; plot.py resolves it
-    _check({k: v for k, v in plot.items() if v != "default" or k in ("data", "style", "object", "overlay")}, PLOT_KEYS,
-           f"{where}: [plot]")
+    check_plot(plot, f"{where}: [plot]")
 
     return RunConfig(path=path, project=project, name=run["name"], serial=run.get("serial"),
                      default_configuration=run.get("configuration"), configurations=configurations,
                      prelim=prelim, static=static, tools=tools, quantities=quantities, plot=plot,
                      master_toml=master.get("master_toml"), raw=raw, sweep_runs=sweep_on)
+
+
+def check_plot(plot: dict, where: str) -> None:
+    """[plot] and its children against the schema, when the file is read (C11, V55): every key, type and
+    bound of [plot], [plot.data], [plot.object."<glob>"] and [plot.overlay.<name>]. What needs the style
+    (base.toml) or a backend is plot.validate's."""
+    schema.check(plot, "plot", where)
+    schema.check(plot.get("data", {}), "data", f"{where}.data")
+    for glob, table in plot.get("object", {}).items():
+        if not isinstance(table, dict):
+            raise HepError("an object's table holds keys", where=f'{where}.object."{glob}"')
+        schema.check(table, "plot_child", f'{where}.object."{glob}"')
+    for name, table in plot.get("overlay", {}).items():
+        at = f"{where}.overlay.{name}"
+        if not isinstance(table, dict):
+            raise HepError("an overlay is a table", where=at)
+        own = {k: v for k, v in table.items() if k in schema.keys("overlay")}
+        schema.check({k: v for k, v in table.items() if k not in own}, "plot_child", at)
+        schema.check(own, "overlay", at)
+        objects, labels = table.get("objects"), table.get("labels")
+        if not objects:
+            raise HepError("an overlay needs objects = [\"d02-x01-y01\", …]: the histograms drawn together",
+                           where=f"{at}.objects")
+        if labels is not None and len(labels) != len(objects):
+            raise HepError(f"labels must give one label per object ({len(objects)})", where=f"{at}.labels")
+

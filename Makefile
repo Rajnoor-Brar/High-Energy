@@ -143,7 +143,7 @@ $(BUILD)/Herwig/HerwigDefaults.rpo: $(HERWIG)
 ALL += $(BUILD)/Herwig/HerwigDefaults.rpo
 endif
 
-.PHONY: all tests test test-slow clean configure list
+.PHONY: all tests test test-slow clean configure list schema
 all: $(ALL)
 tests: $(TESTS)
 test: all tests
@@ -155,6 +155,8 @@ configure:
 	utils/Env/flags.sh $(FLAGS_MK)
 list:
 	@printf '%s\n' $(ALL) $(TESTS)
+schema:                         # utils/Env/schema/run.schema.json from run.toml (V55)
+	cd utils/Env && python3 -m runner.schema
 clean:
 	rm -rf $(BUILD)
 

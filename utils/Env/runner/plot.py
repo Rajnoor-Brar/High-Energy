@@ -32,6 +32,7 @@ from pathlib import Path
 
 import tomli_w
 
+from . import schema
 from .errors import HepError, did_you_mean
 from .labels import labels_of, lines_of, macros, root_text, tlatex  # noqa: F401 (tlatex et al. re-exported)
 from .paths import build_root, output_root, repo_root, resolve, results_root
@@ -39,23 +40,19 @@ from .record import is_complete
 from .tools import sha256_file
 from .sweep import axes, label_of, tag_of
 
-BACKENDS = ("root", "yoda")
-FORMATS = ("pdf", "png", "svg", "eps")
+BACKENDS = tuple(b for b in schema.keys("plot")["backend"]["choices"] if b != "both")
+FORMATS = tuple(schema.keys("plot")["formats"]["choices"])
 LEGENDS = ("top-right", "top-left", "bottom-right", "bottom-left", "best")
-DATA_KEYS = ("file", "legend", "map")
 #: Above the frame: the main title and the corners; the legend's first line (V51). [plot] sets them for
 #: every page, [plot.object."<glob>"] and [plot.overlay.<name>] for theirs: a child inherits its parent's
 #: value and may override it, and a key means the same at both levels.
 TITLE_KEYS = ("title", "title_left", "title_right", "legend_header")
-OBJECT_KEYS = (*TITLE_KEYS, "x_label", "y_label", "logx", "logy", "y_gutter", "x_gutter", "ratio", "style")
-OBJECT_TYPES = {**{k: str for k in TITLE_KEYS}, "x_label": str, "y_label": str, "logx": bool, "logy": bool, "ratio": bool}
-OVERLAY_KEYS = ("objects", "labels", *OBJECT_KEYS)
-DEFAULT = "default"      # any drawing option's value: set nothing, the drawing tool decides (V37)
+DEFAULT = schema.DEFAULT  # "keep it as it is" (V55): a child's is its parent's; [plot]'s sets nothing
 
 
 def formats_of(settings: dict) -> list[str]:
     """[plot].formats; "default" is Paint's own, pdf (mkhtml writes pdf and png whatever it is given)."""
-    value = settings.get("formats", ["pdf"])
+    value = settings.get("formats", schema.default("plot", "formats"))
     return ["pdf"] if value == DEFAULT else list(value)
 STYLE_CHOICES = {"page.font": ("serif", "sans", "mono"), "curves.errors": ("bars", "band", "none"),
                  "legend.position": LEGENDS}
@@ -100,60 +97,20 @@ def backends(settings: dict) -> list[str]:
     return sorted(dict.fromkeys(names), key=lambda n: n != "root")
 
 
-def check_gutter(value, where: str) -> None:
-    """y_gutter / x_gutter: g ≥ 0 puts the axis end at (1 + g) × the largest value (x: widens by g of
-    the span); 0 or "default" sets nothing, and the drawing tool picks its own range."""
-    if value == "default" or (_number(value) and value >= 0):
-        return
-    raise HepError(f"a gutter must be a number >= 0 or \"default\", not {value!r}", where=where,
-                   hint='y_gutter = 0.5 puts the top of the axis at 1.5 × the largest value; "default" leaves it to the tool')
-
-
 def validate(run) -> None:
-    """Keys a backend cannot honour are errors at plan time, never dropped (v1's LegendXPos)."""
+    """What [plot] needs beyond the schema (config.check_plot has every key, type and bound): the style
+    layers against base.toml, the backends' own limits, and [plot.data]'s file and map together. Keys
+    a backend cannot honour are errors at plan time, never dropped (v1's LegendXPos)."""
     settings = run.plot
     where = f"{run.path}: [plot]"
-
-    def one_of(value, allowed, key):
-        if value not in allowed:
-            raise HepError(f"{key} must be one of {', '.join(allowed)}, not '{value}'", where=f"{where}.{key}")
-
-    def only(table, allowed, name):
-        for key in table:
-            if key not in allowed:
-                raise HepError(f"[plot.{name}] has no key '{key}'", where=f"{where}.{name}",
-                               hint=did_you_mean(key, allowed) or f"its keys: {', '.join(allowed)}")
-
-    for key in ("y_gutter", "x_gutter"):
-        check_gutter(settings.get(key, 0), f"{where}.{key}")
     names = backends(settings)
     if not names:
         raise HepError("[plot].backend names no backend", where=f"{where}.backend", hint='"root", "yoda" or "both"')
-    for name in names:
-        one_of(name, BACKENDS, "backend")
-    for fmt in formats_of(settings):
-        one_of(fmt, FORMATS, "formats")
-    only(settings.get("data", {}), DATA_KEYS, "data")
     run_style(run)
-    children = [(f'object."{glob}"', table, OBJECT_KEYS) for glob, table in settings.get("object", {}).items()]
-    children += [(f"overlay.{name}", table, OVERLAY_KEYS) for name, table in settings.get("overlay", {}).items()]
-    for name, table, _ in children:
-        only(table, OBJECT_KEYS if name.startswith("object") else OVERLAY_KEYS, name)
-        for key, kind in OBJECT_TYPES.items():
-            value = table.get(key, DEFAULT)
-            if value != DEFAULT and (not isinstance(value, kind) or (kind is not bool and isinstance(value, bool))):
-                raise HepError(f"'{key}' must be {'true or false' if kind is bool else 'a string'} or \"default\"",
-                               where=f'{where}.{name}.{key}', hint=f"got {value!r}")
-        for key in ("y_gutter", "x_gutter"):
-            check_gutter(table.get(key, 0), f'{where}.{name}.{key}')
-        check_style(table.get("style", {}), f'{where}.{name}.style')
-        if name.startswith("overlay"):                                          # V51
-            objects, labels = table.get("objects"), table.get("labels")
-            if not isinstance(objects, list) or not objects or not all(isinstance(o, str) for o in objects):
-                raise HepError("an overlay needs objects = [\"d02-x01-y01\", …]: the histograms drawn together",
-                               where=f"{where}.{name}.objects")
-            if labels is not None and (not isinstance(labels, list) or len(labels) != len(objects)):
-                raise HepError(f"labels must give one label per object ({len(objects)})", where=f"{where}.{name}.labels")
+    for glob, table in settings.get("object", {}).items():
+        check_style(table.get("style", {}), f'{where}.object."{glob}".style')
+    for name, table in settings.get("overlay", {}).items():
+        check_style(table.get("style", {}), f"{where}.overlay.{name}.style")
     for name in names[1:] if names[0] == "root" else names:
         backend(name).validate(settings, beside_root=names[0] == "root")
     data = settings.get("data", {})
@@ -488,13 +445,20 @@ def page_settings(settings: dict, path: str, rel: str, output: Path, with_data: 
                 override.update(table)
 
     def pick(name, ours, native, tables=(override, settings)):
-        """The object's value, else [plot]'s, else ours (the runner's default); "default" at either
-        level is `native`, what the drawing tool does by itself, whatever the other level says."""
-        value = next((table[name] for table in tables if name in table), ours)
-        return native if value == DEFAULT else value
+        """V55: the most specific table that sets a value wins. "default" keeps it as it is: in a child
+        (an object's or an overlay's table) it is the parent's value, as if the key were absent; in the
+        last table (the top level) it is `native`, set nothing: what the drawing tool does by itself.
+        Nothing set anywhere is `ours`, the runner's default (the schema's)."""
+        for table in tables:
+            if name in table and table[name] != DEFAULT:
+                return table[name]
+        return native if tables[-1].get(name) == DEFAULT else ours
 
     def plot_only(name, ours, native):
         return pick(name, ours, native, tables=(settings,))
+
+    def ours(name):
+        return schema.default("plot", name)
 
     title, header = tlatex(labels.get("Title", "")), tlatex(labels.get("LegendTitle", ""))     # as mkhtml (V51)
     x_label, y_label = tlatex(labels.get("XLabel", "")), tlatex(labels.get("YLabel", ""))
@@ -510,13 +474,14 @@ def page_settings(settings: dict, path: str, rel: str, output: Path, with_data: 
         "y_label": pick("y_label", y_label, y_label, tables=(override,)),
         "logx": bool(pick("logx", log_x, log_x)),
         "logy": bool(pick("logy", log_y, log_y)),
-        "y_gutter": _gutter(pick("y_gutter", 0.5, DEFAULT)), "x_gutter": _gutter(pick("x_gutter", DEFAULT, DEFAULT)),
-        "ratio": bool(pick("ratio", False, ratio)),
+        "y_gutter": _gutter(pick("y_gutter", ours("y_gutter"), DEFAULT)),
+        "x_gutter": _gutter(pick("x_gutter", DEFAULT, DEFAULT)),
+        "ratio": bool(pick("ratio", ours("ratio"), ratio)),
         "ratio_label": "MC/Data" if with_data else "Ratio",
-        "void_empty": bool(plot_only("void_empty", False, False)),      # neither tool voids by itself
-        "min_entries": int(plot_only("min_entries", 0, 0)),
-        "auto_range": bool(plot_only("auto_range", True, False)),       # the tool's own range
-        "range_pad": int(plot_only("range_pad", 0, 0)),
+        "void_empty": bool(plot_only("void_empty", ours("void_empty"), False)),     # neither tool voids by itself
+        "min_entries": int(plot_only("min_entries", ours("min_entries"), 0)),
+        "auto_range": bool(plot_only("auto_range", ours("auto_range"), False)),    # the tool's own range
+        "range_pad": int(plot_only("range_pad", ours("range_pad"), 0)),
     }
     return page, override
 

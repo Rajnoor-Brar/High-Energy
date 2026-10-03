@@ -1,0 +1,941 @@
+{
+ "$schema": "http://json-schema.org/draft-07/schema#",
+ "title": "hep run TOML (generated from utils/Env/schema/run.toml)",
+ "type": "object",
+ "properties": {
+  "master": {
+   "type": "object",
+   "properties": {
+    "master_toml": {
+     "description": "a project master overlaid on utils/Env/master.toml (configs/<Project>/…)",
+     "type": "string"
+    }
+   },
+   "additionalProperties": false
+  },
+  "run": {
+   "type": "object",
+   "properties": {
+    "name": {
+     "description": "the run's folder: <project>/<name>/",
+     "type": "string"
+    },
+    "project": {
+     "description": "the project; a config under configs/<X>/ belongs to X",
+     "type": "string"
+    },
+    "configuration": {
+     "description": "the configuration hep run runs (required unless sweep_runs)",
+     "type": "string"
+    },
+    "serial": {
+     "description": "the NN_ before each configuration's folder",
+     "type": "integer"
+    },
+    "event_count": {
+     "description": "events per point",
+     "type": "integer",
+     "minimum": 1
+    },
+    "threads": {
+     "description": "threads per generator; 0 = every core",
+     "type": "integer",
+     "minimum": 0,
+     "default": 1
+    },
+    "parallelism": {
+     "description": "points run at once",
+     "type": "integer",
+     "minimum": 1,
+     "default": 1
+    },
+    "description": {
+     "description": "what the run is for",
+     "type": "string"
+    },
+    "sweep_runs": {
+     "description": "hep run runs every configuration not swept = false, in turn",
+     "type": "boolean",
+     "default": false
+    },
+    "seed_type": {
+     "description": "how seeds are chosen",
+     "type": "string",
+     "enum": [
+      "identity",
+      "manual",
+      "random"
+     ],
+     "default": "identity"
+    },
+    "manual_seed": {
+     "description": "seed_type = manual: every point's seed",
+     "type": "integer",
+     "minimum": 1
+    }
+   },
+   "required": [
+    "name",
+    "project"
+   ],
+   "additionalProperties": {
+    "type": "object",
+    "properties": {
+     "serial": {
+      "description": "this configuration's NN_ (else [run]'s)",
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "const": "default"
+       }
+      ]
+     },
+     "name": {
+      "description": "this configuration's run folder (else [run].name)",
+      "type": "string"
+     },
+     "label": {
+      "description": "this configuration's folder: NN_<label> (else its table key)",
+      "type": "string"
+     },
+     "title": {
+      "description": "the run NN - <title> - header of a sweep",
+      "type": "string"
+     },
+     "description": {
+      "description": "what the configuration is for",
+      "type": "string"
+     },
+     "event_count": {
+      "description": "events per point (else [run]'s)",
+      "anyOf": [
+       {
+        "type": "integer",
+        "minimum": 1
+       },
+       {
+        "const": "default"
+       }
+      ]
+     },
+     "threads": {
+      "description": "threads per generator (else [run]'s); 0 = every core",
+      "anyOf": [
+       {
+        "type": "integer",
+        "minimum": 0
+       },
+       {
+        "const": "default"
+       }
+      ]
+     },
+     "parallelism": {
+      "description": "points run at once (else [run]'s)",
+      "anyOf": [
+       {
+        "type": "integer",
+        "minimum": 1
+       },
+       {
+        "const": "default"
+       }
+      ]
+     },
+     "swept": {
+      "description": "false: [run].sweep_runs leaves this configuration out",
+      "type": "boolean",
+      "default": true
+     },
+     "seed_type": {
+      "description": "how seeds are chosen (else [run]'s)",
+      "anyOf": [
+       {
+        "type": "string",
+        "enum": [
+         "identity",
+         "manual",
+         "random"
+        ]
+       },
+       {
+        "const": "default"
+       }
+      ]
+     },
+     "manual_seed": {
+      "description": "seed_type = manual: every point's seed (else [run]'s)",
+      "anyOf": [
+       {
+        "type": "integer",
+        "minimum": 1
+       },
+       {
+        "const": "default"
+       }
+      ]
+     },
+     "sweeps": {
+      "description": "swept quantities: a name is an axis, an inner list an entangled group",
+      "type": "array"
+     },
+     "plot_points": {
+      "description": "swept quantities whose grid makes the pages",
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "combine": {
+      "description": "swept quantities whose points are merged into one (seed replicas)",
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "tools": {
+      "description": "the chain: [A, [B, C], D]; an inner list runs together",
+      "type": "array"
+     },
+     "pre": {
+      "description": "tools run once, before every point",
+      "type": "array"
+     },
+     "post": {
+      "description": "tools run once, after every point",
+      "type": "array"
+     },
+     "static": {
+      "description": "quantity = value for this configuration, over [static]",
+      "type": "object"
+     },
+     "prelim": {
+      "description": "this configuration's [prelim]",
+      "type": "object"
+     }
+    },
+    "required": [
+     "tools"
+    ],
+    "additionalProperties": false
+   }
+  },
+  "prelim": {
+   "type": "object",
+   "properties": {
+    "fifo": {
+     "description": "FIFOs made in the point's folder before the tools start",
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "files": {
+     "description": "files made (empty) before the tools start",
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "commands": {
+     "description": "commands run in the point's folder before the tools",
+     "type": "array"
+    }
+   },
+   "additionalProperties": false
+  },
+  "static": {
+   "type": "object",
+   "description": "quantity = a tag, a value or \"#N\""
+  },
+  "tools": {
+   "type": "object",
+   "additionalProperties": {
+    "type": "object",
+    "properties": {
+     "tool": {
+      "description": "a standard tool (a folder of utils/Env/) or custom",
+      "type": "string"
+     },
+     "baseconfig": {
+      "description": "base card(s), configs/<Project>/…",
+      "type": [
+       "string",
+       "array"
+      ]
+     },
+     "input": {
+      "description": "what it reads: an interface or a file",
+      "type": [
+       "string",
+       "array"
+      ]
+     },
+     "output_file": {
+      "description": "what it writes: an interface or a product",
+      "type": [
+       "string",
+       "array"
+      ]
+     },
+     "timeout": {
+      "description": "seconds before it is stopped (0: never)",
+      "type": "number",
+      "minimum": 0
+     },
+     "stall_after": {
+      "description": "seconds of silence before it counts as stalled (default 300)",
+      "type": "number",
+      "minimum": 0
+     },
+     "status": {
+      "description": "standard | filters | none, or filters:<file>",
+      "type": "string"
+     },
+     "executable": {
+      "description": "custom/module: build/<project>/<name>, or path:<command>",
+      "type": "string"
+     },
+     "arguments": {
+      "description": "custom: its arguments",
+      "type": "array"
+     },
+     "consumes": {
+      "description": "custom/module: quantities it reads from its config",
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "config": {
+      "description": "custom/module: written to config/<tag>.toml",
+      "type": "object"
+     },
+     "streamable": {
+      "description": "it can read a FIFO",
+      "type": "boolean"
+     },
+     "consumes_events": {
+      "description": "its event count is checked against the producer's",
+      "type": "boolean"
+     },
+     "shards": {
+      "description": "K processes on a share of the events each",
+      "type": "integer",
+      "minimum": 1,
+      "default": 1
+     }
+    },
+    "required": [
+     "tool"
+    ],
+    "additionalProperties": true
+   }
+  },
+  "quantities": {
+   "type": "object",
+   "additionalProperties": {
+    "type": "object",
+    "properties": {
+     "values": {
+      "description": "the values",
+      "type": "array"
+     },
+     "tags": {
+      "description": "one per value: folder and point names",
+      "type": "array"
+     },
+     "labels": {
+      "description": "one per value: legend text",
+      "type": "array"
+     },
+     "key": {
+      "description": "the native key, or { <tool or tag> = key }",
+      "type": [
+       "string",
+       "object"
+      ]
+     },
+     "target": {
+      "description": "<tag>, <tag>/<analysis> or <tag>/seed",
+      "type": [
+       "string",
+       "array"
+      ]
+     },
+     "format": {
+      "description": "how the value is written: a Python format, \"{}*GeV\"",
+      "type": "string"
+     },
+     "description": {
+      "description": "what the quantity is",
+      "type": "string"
+     },
+     "exclude": {
+      "description": "1-based value places a sweep leaves out",
+      "type": "array"
+     }
+    },
+    "required": [
+     "values"
+    ],
+    "additionalProperties": false
+   }
+  },
+  "plot": {
+   "type": "object",
+   "properties": {
+    "backend": {
+     "description": "root (Paint), yoda (rivet-mkhtml), or both",
+     "anyOf": [
+      {
+       "type": [
+        "string",
+        "array"
+       ],
+       "items": {
+        "type": "string",
+        "enum": [
+         "root",
+         "yoda",
+         "both"
+        ]
+       }
+      },
+      {
+       "const": "default"
+      }
+     ],
+     "default": "root"
+    },
+    "formats": {
+     "description": "the pages' formats",
+     "anyOf": [
+      {
+       "type": "array",
+       "items": {
+        "type": "string",
+        "enum": [
+         "pdf",
+         "png",
+         "svg",
+         "eps"
+        ]
+       }
+      },
+      {
+       "const": "default"
+      }
+     ],
+     "default": [
+      "pdf"
+     ]
+    },
+    "objects": {
+     "description": "YODA path globs that get pages (default: every 1D object)",
+     "anyOf": [
+      {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      {
+       "const": "default"
+      }
+     ]
+    },
+    "ratio": {
+     "description": "a ratio pad",
+     "anyOf": [
+      {
+       "type": "boolean"
+      },
+      {
+       "const": "default"
+      }
+     ],
+     "default": false
+    },
+    "y_gutter": {
+     "description": "the top of the y axis at (1 + g) × the largest value",
+     "anyOf": [
+      {
+       "type": "number",
+       "minimum": 0
+      },
+      {
+       "const": "default"
+      }
+     ],
+     "default": 0.5
+    },
+    "x_gutter": {
+     "description": "x widened by g of its span",
+     "anyOf": [
+      {
+       "type": "number",
+       "minimum": 0
+      },
+      {
+       "const": "default"
+      }
+     ]
+    },
+    "logy": {
+     "description": "log y (default: the .plot's)",
+     "anyOf": [
+      {
+       "type": "boolean"
+      },
+      {
+       "const": "default"
+      }
+     ]
+    },
+    "logx": {
+     "description": "log x (default: the .plot's)",
+     "anyOf": [
+      {
+       "type": "boolean"
+      },
+      {
+       "const": "default"
+      }
+     ]
+    },
+    "auto_range": {
+     "description": "x clipped to the bins with content",
+     "anyOf": [
+      {
+       "type": "boolean"
+      },
+      {
+       "const": "default"
+      }
+     ],
+     "default": true
+    },
+    "void_empty": {
+     "description": "blank the bins empty in every curve",
+     "anyOf": [
+      {
+       "type": "boolean"
+      },
+      {
+       "const": "default"
+      }
+     ],
+     "default": false
+    },
+    "use_data": {
+     "description": "false: [plot.data] stays but is not drawn",
+     "type": "boolean",
+     "default": true
+    },
+    "min_entries": {
+     "description": "blank the bins with fewer raw entries",
+     "anyOf": [
+      {
+       "type": "integer",
+       "minimum": 0
+      },
+      {
+       "const": "default"
+      }
+     ],
+     "default": 0
+    },
+    "range_pad": {
+     "description": "whole bins added around auto_range",
+     "anyOf": [
+      {
+       "type": "integer",
+       "minimum": 0
+      },
+      {
+       "const": "default"
+      }
+     ],
+     "default": 0
+    },
+    "root_style": {
+     "description": "a style file over base.toml (configs/<Project>/…)",
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "const": "default"
+      }
+     ]
+    },
+    "title": {
+     "description": "centred above the frame (default: the .plot's Title)",
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "const": "default"
+      }
+     ]
+    },
+    "title_left": {
+     "description": "above the frame's top-left corner",
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "const": "default"
+      }
+     ]
+    },
+    "title_right": {
+     "description": "above the frame's top-right corner",
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "const": "default"
+      }
+     ]
+    },
+    "legend_header": {
+     "description": "the legend's first line (default: the .plot's LegendTitle)",
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "const": "default"
+      }
+     ]
+    },
+    "data": {
+     "type": "object",
+     "properties": {
+      "file": {
+       "description": "a YODA under datasets/, or rivet:<Analysis>",
+       "type": "string"
+      },
+      "legend": {
+       "description": "the data's legend entry",
+       "type": "string",
+       "default": "Data"
+      },
+      "map": {
+       "type": "object",
+       "additionalProperties": {
+        "type": "string"
+       }
+      }
+     },
+     "additionalProperties": false
+    },
+    "style": {
+     "description": "the style over base.toml",
+     "type": "object"
+    },
+    "object": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "object",
+      "properties": {
+       "title": {
+        "description": "as [plot].title, for these pages",
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "title_left": {
+        "description": "as [plot].title_left, for these pages",
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "title_right": {
+        "description": "as [plot].title_right, for these pages",
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "legend_header": {
+        "description": "as [plot].legend_header, for these pages",
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "x_label": {
+        "description": "the x axis title (default: the .plot's)",
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "y_label": {
+        "description": "the y axis title (default: the .plot's)",
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "logx": {
+        "description": "as [plot].logx, for these pages",
+        "anyOf": [
+         {
+          "type": "boolean"
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "logy": {
+        "description": "as [plot].logy, for these pages",
+        "anyOf": [
+         {
+          "type": "boolean"
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "y_gutter": {
+        "description": "as [plot].y_gutter, for these pages",
+        "anyOf": [
+         {
+          "type": "number",
+          "minimum": 0
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "x_gutter": {
+        "description": "as [plot].x_gutter, for these pages",
+        "anyOf": [
+         {
+          "type": "number",
+          "minimum": 0
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "ratio": {
+        "description": "as [plot].ratio, for these pages",
+        "anyOf": [
+         {
+          "type": "boolean"
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "style": {
+        "description": "a style layer for these pages",
+        "type": "object"
+       }
+      },
+      "additionalProperties": false
+     }
+    },
+    "overlay": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "object",
+      "properties": {
+       "title": {
+        "description": "as [plot].title, for these pages",
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "title_left": {
+        "description": "as [plot].title_left, for these pages",
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "title_right": {
+        "description": "as [plot].title_right, for these pages",
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "legend_header": {
+        "description": "as [plot].legend_header, for these pages",
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "x_label": {
+        "description": "the x axis title (default: the .plot's)",
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "y_label": {
+        "description": "the y axis title (default: the .plot's)",
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "logx": {
+        "description": "as [plot].logx, for these pages",
+        "anyOf": [
+         {
+          "type": "boolean"
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "logy": {
+        "description": "as [plot].logy, for these pages",
+        "anyOf": [
+         {
+          "type": "boolean"
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "y_gutter": {
+        "description": "as [plot].y_gutter, for these pages",
+        "anyOf": [
+         {
+          "type": "number",
+          "minimum": 0
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "x_gutter": {
+        "description": "as [plot].x_gutter, for these pages",
+        "anyOf": [
+         {
+          "type": "number",
+          "minimum": 0
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "ratio": {
+        "description": "as [plot].ratio, for these pages",
+        "anyOf": [
+         {
+          "type": "boolean"
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "style": {
+        "description": "a style layer for these pages",
+        "type": "object"
+       },
+       "objects": {
+        "description": "the objects drawn together (names or globs)",
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       },
+       "labels": {
+        "description": "one legend label per object",
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       }
+      },
+      "additionalProperties": false,
+      "required": [
+       "objects"
+      ]
+     }
+    }
+   },
+   "additionalProperties": false
+  }
+ },
+ "required": [
+  "run"
+ ],
+ "additionalProperties": false
+}

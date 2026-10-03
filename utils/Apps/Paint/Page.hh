@@ -26,8 +26,10 @@ namespace Paint {
         std::string name, output, xLabel, yLabel, ratioLabel = "Ratio";
         std::string title, titleLeft, titleRight, legendHeader;   // above the frame: centred, its corners; the legend's first line
         std::vector<std::string> formats{"pdf"};
-        bool logx = false, logy = false, ratio = false, voidEmpty = false, autoRange = true;
-        std::optional<double> yGutter = 0.5, xGutter;          // none: ROOT's own range (0 or "default")
+        // A key the page leaves out is what ROOT does by itself (V55): no gutter, no auto range, no voiding.
+        // The runner writes every key it sets (its defaults are utils/Env/schema/run.toml's), so Paint keeps none.
+        bool logx = false, logy = false, ratio = false, voidEmpty = false, autoRange = false;
+        std::optional<double> yGutter, xGutter;                 // none: ROOT's own range ("default")
         int minEntries = 0, rangePad = 0;
         Style style;
         std::vector<Source> curves;
@@ -35,14 +37,15 @@ namespace Paint {
         Source data;
     };
 
-    // y_gutter / x_gutter: a number ≥ 0, where 0 means none, or "default", which also means none.
+    // y_gutter / x_gutter: a number ≥ 0 (0: the axis ends at the largest value, V55), or "default": none,
+    // ROOT's own range.
     inline std::optional<double> gutter(toml::node_view<toml::node> node, const std::string& key,
                                         std::optional<double> fallback) {
         if (!node) return fallback;
         if (const auto text = node.value<std::string>()) {
             if (*text == "default") return std::nullopt;
         } else if (const auto value = node.value<double>(); value && *value >= 0) {
-            return *value > 0 ? std::optional<double>(*value) : std::nullopt;
+            return *value;
         }
         throw std::runtime_error("[page]." + key + " must be a number >= 0 or \"default\"");
     }
@@ -74,7 +77,7 @@ namespace Paint {
         page.logy = p["logy"].value_or(false);
         page.ratio = p["ratio"].value_or(false);
         page.voidEmpty = p["void_empty"].value_or(false);
-        page.autoRange = p["auto_range"].value_or(true);
+        page.autoRange = p["auto_range"].value_or(false);
         page.yGutter = gutter(p["y_gutter"], "y_gutter", page.yGutter);
         page.xGutter = gutter(p["x_gutter"], "x_gutter", page.xGutter);
         page.minEntries = p["min_entries"].value_or(0);

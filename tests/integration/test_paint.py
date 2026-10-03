@@ -116,10 +116,16 @@ def test_log_y_gutter_is_a_fraction_of_the_decades(inputs):
     assert math.log10(high / largest) == pytest.approx(0.5 * math.log10(largest / low))
 
 
+def test_a_zero_gutter_ends_the_axis_at_the_largest_value(inputs):
+    """V55: 0 is a gutter like any other (no headroom); only "default" leaves the range to ROOT."""
+    ranges = dump(page(inputs, "d02-x01-y01", y_gutter=0, **LEGACY_PAGE))
+    assert not ranges["y_tool"] and ranges["y"][1] == pytest.approx(ranges["largest"], rel=1e-12)
+
+
 def test_no_gutter_leaves_the_range_to_root(inputs):
-    """0 or "default": the range ROOT picks for one histogram holding every drawn value (THistPainter:
+    """"default": the range ROOT picks for one histogram holding every drawn value (THistPainter:
     5% of the span above and below, 0 if that crosses it; on a log axis ×0.5 below and ×2·0.9/0.95 above)."""
-    for value in (0, "default"):
+    for value in ("default",):
         linear = dump(page(inputs, "d02-x01-y01", y_gutter=value, x_gutter=value, **LEGACY_PAGE))
         assert linear["y_tool"] and not linear["x_tool"]                    # x is auto_range's, not the tool's
         assert linear["x"] == dump(page(inputs, "d02-x01-y01", **LEGACY_PAGE))["x"]
@@ -186,6 +192,7 @@ def v1_curve(where: Path, name: str, values, *, edges=(0.0, 1.0, 2.0, 3.0, 4.0),
 
 
 def v1_page(where: Path, curves: list[Path], *, data: Path | None = None, **keys) -> dict:
+    keys = {"auto_range": True, **keys}             # v1's rule, stated: a page without it is ROOT's own range (V55)
     document = {"page": {"name": "v1", "output": str(where / "v1"), **keys},
                 "curve": [{"file": str(c), "object": "photo_eic/d01-x01-y01", "label": c.stem,
                            **({"raw": "RAW/photo_eic/d01-x01-y01"} if keys.get("min_entries") else {})} for c in curves]}

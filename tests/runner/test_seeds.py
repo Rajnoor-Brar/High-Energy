@@ -46,7 +46,7 @@ def test_the_keys_and_where_they_win(scratch):
 
 @pytest.mark.parametrize("changes, message", [
     ({"run__seed_type": "fixed"}, "one of identity, manual, random"),
-    ({"run__manual_seed": 0}, "out of range"),
+    ({"run__manual_seed": 0}, "at least 1"),
     ({"run__seed_type": 3}, "must be a string"),
 ])
 def test_what_is_refused_when_read(scratch, changes, message):

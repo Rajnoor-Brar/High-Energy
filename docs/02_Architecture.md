@@ -87,6 +87,7 @@ half whose layering was not had nine cycles.)
 |---|---|---|
 | 0 | `errors.py` | `HepError(message, where, hint)`, `did_you_mean` |
 | 0 | `paths.py` | the repository root (by markers, or `$HEKIT_ROOT`), the `configs/`, `output/` and `results/` roots, the path rules (04 §2) |
+| 0 | `schema.py` | the run TOML's schema, `utils/Env/schema/run.toml`: every key's type, choices, bounds, default and inheritance; checking a table against it; the editor schema (V55) |
 | 1 | `config.py` | load the TOML, `--set`, the strict schema check; the typed model (`RunConfig`, `Configuration`, `Tool`, `Quantity`) |
 | 1 | `quantities.py` | the master TOML, static values and selectors, who consumes what (C7), provider checks (C10) |
 | 1 | `sweep.py` | points from `sweeps` (grid and zip), point names, pages, `--points` |

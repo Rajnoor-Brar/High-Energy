@@ -37,8 +37,8 @@ def test_the_keys_and_their_defaults(scratch):
 
 
 @pytest.mark.parametrize("changes, message", [
-    ({"run__sweep_runs": 1}, "true/false"),
-    ({"run__one__swept": "no"}, "true/false"),
+    ({"run__sweep_runs": 1}, "true or false"),
+    ({"run__one__swept": "no"}, "true or false"),
     ({"run__configuration": None}, "needs 'configuration'"),
     ({"run__sweep_runs": True, "run__one__swept": False}, "every configuration has swept = false"),
     ({"run__sweep_runs": True, "run__configuration": "nope"}, "not a \\[run.<name>\\] table"),
