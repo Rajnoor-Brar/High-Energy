@@ -2,8 +2,10 @@
 # utils/Env/hep — the `hep` command (docs/04_Config_Reference.md §14).
 #
 #   hep run <config> [<configuration>] [options]   the runner (utils/Env/run)
-#   hep plot <config> [<configuration>] | FILE…     pages: a configuration's, or any YODA/ROOT files
+#   hep plot <config> [<configuration>]            a configuration's pages
+#   hep overlay FILE…                              any YODA/ROOT files overlaid
 #   hep watch [<config>]                           attach the live view
+#   hep ls | explain | status | clean              housekeeping (docs/04_Config_Reference.md §14)
 #   hep build [targets…] [--tests] [--clean] [--configure] [-j N]    make, from the repo root
 set -euo pipefail
 
@@ -15,9 +17,14 @@ usage() {
 usage: hep <command> [options]
 
   run <config> [<configuration>]   plan and run a configuration          (hep run --help)
-  plot <config> | FILE…            draw a configuration's pages, or overlay files (hep plot --help)
+  plot <config> [<configuration>]  draw a configuration's pages from its complete points
+  overlay FILE…                    overlay any YODA/ROOT files (hep overlay --help)
   watch [<config>]                 attach the live view to a running job (hep watch --help)
   check [<config>…]                check run TOMLs: every configuration planned, nothing run
+  ls [<project>]                   every config and its configurations
+  explain <key>                    a run TOML key: type, default and meaning (plot.y_gutter, …)
+  status [<config> [<cfg>]]        each configuration's points: complete, stale, incomplete, to run
+  clean [<config>] [--dry-run]     remove what the runner made and no plan uses (lists, then asks)
   build [targets…]                 compile module programs, apps and Rivet plugins (make all)
         --tests                    also build the C++ tests
         --clean                    empty build/ first
@@ -31,7 +38,7 @@ EOF
 cmd=${1-}
 [ $# -gt 0 ] && shift
 case "$cmd" in
-    run|watch|plot|check)
+    run|watch|plot|overlay|check|ls|explain|status|clean)
         exec python3 "$here/run" "$cmd" "$@"
         ;;
     build)

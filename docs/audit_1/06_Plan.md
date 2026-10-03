@@ -333,4 +333,4 @@ wait for the last steps of the last phase; meanwhile the code accepts what those
 | P2 | S1 S2 S3 | done: S1 (V58), S2 (V59), S3 (V62: option A, the run's beam order into each card's slots) |
 | P3 | S1 S2 S3 | done: S1 (V60), S2 (V61: tables as data, one plugin loader, twins merged, filters key), S3 (V63: PythiaRun.hh, one stage runner, Step.flags) |
 | P4 | S1 S2 S3 | S1 (V64: batch mode; B4b dropped, see V64) done; S2: B5 (V65), F7 placeholders (V66), per-value styles (V67), normalise (V68), bands (V69), index page (V70) done: S2 complete; S3: the B4c note (notes/B4c.md); decided B, "mpl", matching mkhtml until verified; S4: built (V71), pixel-identical to mkhtml, ~18× faster; awaiting the user's verification |
-| P5 | S1 S2 S3 | S1 (V72: one event stream, watch socket, --journal, --logs) done |
+| P5 | S1 S2 S3 | S1 (V72: one event stream, watch socket, --journal, --logs), S2 (V73 C++ kit; V74 CLI, housekeeping, hepkit) done |

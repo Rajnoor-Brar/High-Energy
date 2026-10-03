@@ -103,7 +103,8 @@ half whose layering was not had nine cycles.)
 | 4 | `watch.py` | the reducer of events (`State`), the live and plain views, `hep watch` |
 | 4 | `plot.py` | the plot stage: the merged sweep, page configs, the style layers, Paint and the other backends; `hep plot` on files |
 | 4 | `post.py` | the pre and post stages |
-| 5 | `cli.py` | `argparse`: `run`, `plot`, `watch`; the order of events |
+| 5 | `cli.py` | `argparse`: `run`, `plot`, `overlay`, `watch`, `check`, …; the order of events |
+| 5 | `house.py` | `ls`, `explain`, `status`, `clean` (V74) |
 
 A **tool plugin** (`utils/Env/<tool>/render.py`, a plot backend's `backend.py`) may import only
 `PLUGINS_MAY_IMPORT` (`errors`, `paths`, `quantities`, `labels` and `hepfiles`), and never another plugin. The runner is standard library only,

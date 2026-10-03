@@ -234,6 +234,12 @@ input       = "delphes.root"
 output_file = "jets_reco.json"
 ```
 
+A custom tool in Python gets the kit's half that applies through **`utils/hepkit.py`** (V74): `Exit`
+(Kit::Exit's table), `Status` (the standard protocol, with a heartbeat; plain lines on stderr when the
+fd is not given), `report(output, …)` (`<output>.json`, written whole) and `stopping()`.
+`delphes_jets.py` is its first user, so its table may say `status = "standard"`. A tool puts `utils/`
+on its path, never `utils/Env`, whose tool folders would shadow the `yoda` and `rivet` packages.
+
 ## 8. `module` — a Module.hh program
 
 argv: `{exe} {config} --input={input} --output={partial:output} --events={events}

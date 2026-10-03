@@ -775,7 +775,7 @@ The look of the ROOT pages is TOML (V27). **`utils/Apps/Paint/base.toml`** holds
 default (rivet-mkhtml's look); edit it to change every page. Over it, key by key:
 
 1. `[plot].root_style` — a style file (a bare name under `configs/<project>/`, `.toml` optional);
-   `hep plot FILE… --style FILE` for files;
+   `hep overlay FILE… --style FILE` for files;
 2. `[plot.style]`;
 3. `[plot.object."<glob>"].style`, for the objects it matches.
 
@@ -888,19 +888,40 @@ user (Ctrl-C: SIGINT, then SIGTERM, then SIGKILL to the running tools; a second 
 default behaviour). Under `[run].sweep_runs` (§4.1), each run has these codes; the command exits 6 if
 one was stopped, else 1 if any failed, else 0.
 
-### `hep plot`
+### `hep plot` and `hep overlay`
 
 ```
 hep plot CONFIG [CONFIGURATION] [--set KEY=VALUE]…
-hep plot FILE… [-o DIR] [--labels A,B,…] [--objects GLOB…] [--formats pdf,png] [--ratio] [--style FILE]
+hep overlay FILE… [-o DIR] [--labels A,B,…] [--objects GLOB…] [--formats pdf,png] [--ratio] [--style FILE]
 ```
 
-With a config: its pages, as after a run (`--only plot`); under `[run].sweep_runs`, every swept
-configuration's, each under its `run NN - <title> -` line. With files (every target ends `.yoda`,
-`.yoda.gz` or `.root`): one page per object any of them holds, one curve per file, or one per point
-of a merged sweep file (labelled from the `points.json` inside it). `-o` defaults to
-`results/plots/<first file's stem>/`; `--labels` gives one label per file; `--style` is a style
-file over base.toml.
+`hep plot`: a config's pages, as after a run (`--only plot`); under `[run].sweep_runs`, every swept
+configuration's, each under its `run NN - <title> -` line. `hep overlay` (V74; it was `hep plot FILE…`,
+which is now refused with the hint): files ending `.yoda`, `.yoda.gz` or `.root`, one page per object
+any of them holds, one curve per file, or one per point of a merged sweep file (labelled from the
+`points.json` inside it). `-o` defaults to `results/plots/<first file's stem>/`; `--labels` gives one
+label per file; `--style` is a style file over base.toml.
+
+### `hep ls`, `hep explain`, `hep status`, `hep clean`
+
+```
+hep ls [PROJECT]
+hep explain KEY                       # plot.y_gutter, run.event_count, quantities.<q>.styles, …
+hep status [CONFIG [CONFIGURATION]]
+hep clean [CONFIG] [--dry-run] [--yes]
+```
+
+Housekeeping (V74). `ls`: every config and its configurations, with descriptions; a `*` marks what
+`hep run CONFIG` runs. `explain`: a key's type, default, choices, bounds, inheritance and meaning,
+from the schema (`utils/Env/schema/run.toml`). `status`: every configuration's points and stages,
+each **complete**, **stale** (complete for an earlier identity: it reruns), **incomplete** (begun, not
+done: failed, stopped or running) or **to run**, with when it finished, its results' size, and
+`[running]` for a configuration a job is running now. `clean`: removes what the runner made and no plan
+uses: within each configuration's folder, point folders no plan has (in `output/`) and `.partial`
+leftovers (in `output/` and `results/`); with no config named, every config is planned (all must plan)
+and run folders no configuration has and prepare cache entries no plan references go too. It never
+removes a result: an unused point's `results/` folder is listed as kept. It lists first, then asks on a
+terminal (`--yes` elsewhere); `--dry-run` only lists; it refuses while a job is running.
 
 ### `hep check`
 

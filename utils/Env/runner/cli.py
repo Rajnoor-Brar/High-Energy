@@ -1,4 +1,5 @@
-"""`hep run`, `hep plot` and `hep watch` (rank 5): argument parsing and the order of events.
+"""`hep run`, `hep plot`, `hep overlay`, `hep watch`, `hep check` and the housekeeping commands (`ls`,
+`explain`, `status`, `clean`: house.py) (rank 5): argument parsing and the order of events.
 
 docs/04_Config_Reference.md §14. `hep build` is handled by the shell dispatcher
 (utils/Env/hep), which runs make.
@@ -20,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import config as configmod
-from . import execute, plot, post, record, sweep, tools
+from . import execute, house, plot, post, record, sweep, tools
 from .errors import HepError
 from .paths import output_root
 from .quantities import load_master
@@ -51,16 +52,34 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--logs", action="store_true",
                      help="keep every tool's whole output in logs/<tag>.log (default: only a failed tool's last lines)")
 
-    draw = commands.add_parser("plot", help="draw pages: a configuration's, or any YODA/ROOT files")
-    draw.add_argument("targets", nargs="+", metavar="TARGET",
-                      help="CONFIG [CONFIGURATION] (its pages, as after a run), or FILE… (YODA/ROOT files to overlay)")
-    draw.add_argument("--set", metavar="KEY=VALUE", action="append", default=[], help="as for hep run (config mode)")
-    draw.add_argument("-o", "--output", help="files: where the pages go (default results/plots/<first file>)")
-    draw.add_argument("--labels", help="files: legend labels, comma-separated, one per file")
-    draw.add_argument("--objects", nargs="+", default=[], metavar="GLOB", help="files: only these YODA paths")
-    draw.add_argument("--formats", default="pdf,png", help="files: pdf, png, svg, eps (default pdf,png)")
-    draw.add_argument("--ratio", action="store_true", help="files: a ratio panel against the first curve")
-    draw.add_argument("--style", metavar="FILE", help="files: a style file over utils/Apps/Paint/base.toml")
+    draw = commands.add_parser("plot", help="draw a configuration's pages from its complete points")
+    draw.add_argument("config", help="the run config")
+    draw.add_argument("configuration", nargs="?", help="overrides [run].configuration; under sweep_runs, only it")
+    draw.add_argument("--set", metavar="KEY=VALUE", action="append", default=[], help="as for hep run")
+
+    overlay = commands.add_parser("overlay", help="overlay any YODA/ROOT files through Paint, with no run TOML")
+    overlay.add_argument("files", nargs="+", metavar="FILE", help="YODA (.yoda, .yoda.gz) or ROOT files")
+    overlay.add_argument("-o", "--output", help="where the pages go (default results/plots/<first file>)")
+    overlay.add_argument("--labels", help="legend labels, comma-separated, one per file")
+    overlay.add_argument("--objects", nargs="+", default=[], metavar="GLOB", help="only these YODA paths")
+    overlay.add_argument("--formats", default="pdf,png", help="pdf, png, svg, eps (default pdf,png)")
+    overlay.add_argument("--ratio", action="store_true", help="a ratio panel against the first curve")
+    overlay.add_argument("--style", metavar="FILE", help="a style file over utils/Apps/Paint/base.toml")
+
+    listing = commands.add_parser("ls", help="every config and its configurations")
+    listing.add_argument("project", nargs="?", help="only this project's configs")
+
+    explain = commands.add_parser("explain", help="a run TOML key: its type, default and meaning (the schema's)")
+    explain.add_argument("key", help="e.g. plot.y_gutter, run.event_count, quantities.<q>.styles")
+
+    state = commands.add_parser("status", help="each configuration's points: complete, stale, incomplete or to run")
+    state.add_argument("config", nargs="?", help="one config (default: every config)")
+    state.add_argument("configuration", nargs="?", help="one configuration of it")
+
+    clean = commands.add_parser("clean", help="remove what the runner made and no plan uses (output/ only)")
+    clean.add_argument("config", nargs="?", help="one config (default: every config, and the unused caches)")
+    clean.add_argument("--dry-run", action="store_true", help="list only")
+    clean.add_argument("--yes", action="store_true", help="delete without asking")
 
     check = commands.add_parser("check", help="check run TOMLs: every configuration loaded, validated and planned")
     check.add_argument("configs", nargs="*", metavar="CONFIG",
@@ -422,20 +441,27 @@ def run_one(args, key: str, stopper: execute.Stopper, *, number: int = 0, follow
     return 1 if failed else 0
 
 
+def cmd_overlay(args) -> int:
+    """`hep overlay FILE…` (V74, was `hep plot FILE…`): any YODA/ROOT files overlaid through Paint."""
+    bad = [f for f in args.files if not plot._is_plot_file(f)]
+    if bad:
+        raise HepError(f"{bad[0]} is not a YODA or ROOT file", hint="hep overlay takes files ending .yoda, .yoda.gz "
+                                                                   "or .root; a configuration's pages: hep plot CONFIG")
+    formats = [f.strip() for f in args.formats.split(",") if f.strip()]
+    wrong = [f for f in formats if f not in plot.FORMATS]
+    if wrong:
+        raise HepError(f"format '{wrong[0]}' is not one of {', '.join(plot.FORMATS)}")
+    labels = [x.strip() for x in args.labels.split(",")] if args.labels else None
+    return 1 if plot.files(args.files, Path(args.output) if args.output else None, labels=labels,
+                           objects=args.objects, formats=formats, ratio=args.ratio, style=args.style) else 0
+
+
 def cmd_plot(args) -> int:
     """`hep plot CONFIG [CONFIGURATION]`: the configuration's pages from its complete points (what
-    `hep run … --only plot` does). `hep plot FILE…`: any YODA/ROOT files overlaid through Paint."""
-    if all(plot._is_plot_file(t) for t in args.targets):
-        formats = [f.strip() for f in args.formats.split(",") if f.strip()]
-        bad = [f for f in formats if f not in plot.FORMATS]
-        if bad:
-            raise HepError(f"format '{bad[0]}' is not one of {', '.join(plot.FORMATS)}")
-        labels = [x.strip() for x in args.labels.split(",")] if args.labels else None
-        return 1 if plot.files(args.targets, Path(args.output) if args.output else None, labels=labels,
-                               objects=args.objects, formats=formats, ratio=args.ratio, style=args.style) else 0
-    if len(args.targets) > 2:
-        raise HepError("hep plot takes CONFIG [CONFIGURATION], or files ending .yoda/.yoda.gz/.root")
-    args.config, args.configuration = args.targets[0], (args.targets[1] if len(args.targets) > 1 else None)
+    `hep run … --only plot` does)."""
+    if plot._is_plot_file(args.config):                     # break and migrate (V74)
+        raise HepError("hep plot draws a configuration's pages; files are overlaid by hep overlay",
+                       hint=f"hep overlay {args.config} …")
     args.points = None
     run = configmod.load(args.config, sets=args.set)
     if not run.plot:
@@ -507,6 +533,67 @@ def cmd_watch(args) -> int:
     return follow_events(connect(max(found)[1]), plain=args.plain)
 
 
+def _planned_all(names: list[str], configuration: str | None = None) -> tuple[list, list[str]]:
+    """Every configuration of these configs, planned as for a run: the plans, and what did not plan."""
+    planned, failed = [], []
+    for name in names:
+        try:
+            run = configmod.load(name)
+            for key in ([configuration] if configuration else list(run.configurations)):
+                planned.append(build_plans(argparse.Namespace(config=name, set=[], points=None, rerun=False, only=None), key))
+        except HepError as error:
+            failed.append(f"{name}: {error.message}")
+    return planned, failed
+
+
+def cmd_status(args) -> int:
+    """`hep status [CONFIG [CONFIGURATION]]` (V74): each configuration's points and stages."""
+    names = [args.config] if args.config else house.config_names()
+    planned, failed = _planned_all(names, args.configuration)
+    for line in house.status(planned, house.running_configs()):
+        print(line)
+    for line in failed:
+        print(f"not planned: {line}")
+    return 2 if failed else 0
+
+
+def cmd_clean(args) -> int:
+    """`hep clean [CONFIG] [--dry-run] [--yes]` (V74): the output folders no plan uses, `.partial`
+    leftovers and (with no config) unused run folders and prepare caches. It lists them first, and asks
+    on a terminal (or needs --yes); results/ is never cleaned but for `.partial` leftovers."""
+    if hubs():
+        raise HepError("a job is running on this machine", hint="clean when it has ended (hep watch shows it)")
+    names = [args.config] if args.config else house.config_names()
+    planned, failed = _planned_all(names)
+    if failed and not args.config:
+        for line in failed:
+            print(f"not planned: {line}")
+        raise HepError("every config must plan before a whole clean: one that does not might own what would go",
+                       hint="fix it, or clean one config: hep clean CONFIG")
+    if failed:
+        raise HepError(failed[0])
+    targets, kept = house.clean_targets(planned, everything=not args.config)
+    for path in targets:
+        print(f"remove  {path}")
+    for path in kept:
+        print(f"kept    {path}   (results are yours: remove by hand if you mean to)")
+    if not targets:
+        print("nothing to clean")
+        return 0
+    if args.dry_run:
+        print(f"{len(targets)} to remove (dry run)")
+        return 0
+    if not args.yes:
+        if not sys.stdin.isatty():
+            raise HepError(f"{len(targets)} to remove: not deleted", hint="--yes to delete, --dry-run to only list")
+        if input(f"remove these {len(targets)}? [y/N] ").strip().lower() not in ("y", "yes"):
+            print("nothing removed")
+            return 0
+    freed = house.remove(targets)
+    print(f"removed {len(targets)}, {freed / 1e6:.1f} MB freed")
+    return 0
+
+
 def parse(argv: list[str]) -> argparse.Namespace:
     """The command line, with options and positionals in any order (`hep run eic --plain pdf`, V54):
     argparse's intermixed parsing does not take subcommands, so the subcommand's own parser reads the rest."""
@@ -528,6 +615,20 @@ def main(argv: list[str]) -> int:
             return cmd_plot(args)
         if args.command == "check":
             return cmd_check(args)
+        if args.command == "overlay":
+            return cmd_overlay(args)
+        if args.command == "ls":
+            for line in house.ls(args.project):
+                print(line)
+            return 0
+        if args.command == "explain":
+            for line in house.explain(args.key):
+                print(line)
+            return 0
+        if args.command == "status":
+            return cmd_status(args)
+        if args.command == "clean":
+            return cmd_clean(args)
         return cmd_watch(args)
     except HepError as error:
         print(error.render(), file=sys.stderr)
