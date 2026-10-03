@@ -57,7 +57,7 @@ Every key that takes a path has **one** convention root. There is no search path
 | `[master].master_toml` | `configs/<project>/` | `master.toml` |
 | `[tools.*].baseconfig` | `configs/<project>/` | `photo_ep.cmnd` |
 | `[tools.*].executable` | `build/<project>/`, which must exist; `path:<command>` asks for a command on `PATH` by name (V54) | `Lambda.exe` → `build/Lambda/Lambda.exe`; `path:python3` |
-| `[tools.*].status = "filters:<file>"` | `configs/<project>/` | `filters:fit_filters.toml` |
+| `[tools.*].filters` | `configs/<project>/` | `fit_filters.toml` |
 | `[prelim].fifo`, `[prelim].files` | the point's **output** directory | `events.hepmc` |
 | `[tools.*].input` | a `[prelim]` name or another tool's `output_file` by name; otherwise a path under the point's output directory | `events.hepmc` |
 | `[tools.*].output_file` | a `[prelim]` name → the point's output directory; **any other name → the point's results directory** (a product) | `photo.yoda` → `results/…/<point>/photo.yoda` |
@@ -495,7 +495,8 @@ analyses    = ["photo_eic"]        # a key of the rivet folder's [options]
 | `output_file` | string or array | `[]` | what it writes. An array is fan-out: App_Pythia writes the same events to each (V16). Exactly one writer per output (C6). |
 | `timeout` | number (s) | 0 (none) | the tool fails when it runs longer |
 | `stall_after` | number (s) | 300 | the tool fails when silent this long: no log line, status message or heartbeat (a prepare step waits at least 3600) |
-| `status` | string | the folder's | `"standard"` (`$HEP_STATUS_FD`), `"filters"` (the folder's `filters.toml`), `"filters:<file>"` (your rules, root `configs/<P>/`), `"none"` |
+| `status` | string | the folder's | `"standard"` (`$HEP_STATUS_FD`), `"filters"` (the folder's `filters.toml`), `"none"` |
+| `filters` | string (path) | none | your own rules in place of the folder's, root `configs/<P>/`; implies `status = "filters"` (V61) |
 | `streamable` | bool | the folder's | may it read a FIFO? |
 | `consumes_events` | bool | the folder's | is its event count checked against the producer's sidecar? |
 | `shards` | integer ≥ 1 | 1 | K > 1: K processes of this tool, each on a share of the events, merged into its `output_file` by the folder's merge tool (V31; rivet, [05 §3.1](05_Tools_Reference.md#31-sharded-rivet-shards--k)). The chain is unchanged. |
@@ -515,12 +516,12 @@ unknown key is an error with the keys the tool takes (C1).
 ```toml
 [tools.fit]
 tool        = "custom"
-executable  = "fit_peaks.py"                # build/<P>/fit_peaks.py, else a command on PATH; ./… from the repo
+executable  = "fit_peaks.py"                # build/<P>/fit_peaks.py (path:<command> for PATH); ./… from the repo
 arguments   = ["{in:lambda.yoda}", "{res}/fit.json"]
 input       = "lambda.yoda"
 output_file = "fit.json"
 consumes    = ["energy"]                    # written under [quantities] in its config
-status      = "filters:fit_filters.toml"
+filters     = "fit_filters.toml"
 
 [tools.fit.config]                          # written verbatim to output/…/<point>/config/fit.toml
 model  = "gauss+poly2"

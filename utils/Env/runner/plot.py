@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import fnmatch
 import hashlib
-import importlib.util
 import json
 import subprocess
 import tomllib
@@ -31,7 +30,7 @@ from pathlib import Path
 
 import tomli_w
 
-from . import hepfiles, schema
+from . import hepfiles, plugins, schema
 from .errors import HepError, did_you_mean
 from .labels import labels_of, lines_of, macros, root_text, tlatex  # noqa: F401 (tlatex et al. re-exported)
 from .paths import build_root, output_root, repo_root, resolve, results_root
@@ -82,10 +81,7 @@ def backend(name: str):
     path = repo_root() / "utils" / "Env" / name / "backend.py"
     if not path.is_file():
         raise HepError(f"no plot backend '{name}'", hint=f"expected {path}")
-    spec = importlib.util.spec_from_file_location(f"hep_backend_{name}", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return plugins.load(path, "backend")
 
 
 def backends(settings: dict) -> list[str]:
@@ -225,11 +221,7 @@ def root_name(path: str) -> str:
     return path.lstrip("/").replace(":", "__").replace("=", "-").replace(" ", "_")
 
 
-def base_of(path: str) -> str:
-    """/photo_eic:R=0.4/d01-x01-y01 → /photo_eic/d01-x01-y01: a page is of the object, and each
-    variant (a swept analysis option) is a curve on it, as in v1."""
-    analysis, _, rest = path.strip("/").partition("/")
-    return f"/{analysis.split(':')[0]}/{rest}"
+base_of = hepfiles.base_path
 
 
 def objects_of(yoda: Path) -> list[str]:

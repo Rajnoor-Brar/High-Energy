@@ -276,8 +276,13 @@ min  = 0
 doc  = "seconds of silence before it counts as stalled (default 300)"
 
 [tool.status]
+type    = "str"
+choices = ["standard", "filters", "none"]
+doc     = "how its progress is read: the status protocol, its log's filter rules, or not at all"
+
+[tool.filters]
 type = "str"
-doc  = "standard | filters | none, or filters:<file>"
+doc  = "a filters.toml of your own (configs/<Project>/…), in place of its folder's"
 
 [tool.executable]
 type = "str"

@@ -681,7 +681,7 @@ For a tool that only prints: its log is tailed, each new line matched against th
 **the first match wins**.
 
 ```toml
-# utils/Env/<tool>/filters.toml, or your own via status = "filters:<file>"
+# utils/Env/<tool>/filters.toml, or your own via filters = "<file>" (V61)
 [[rule]]
 match = '^Event (?P<done>\d+) \('     # a Python regex
 emit  = "progress"                    # progress | phase | warn | error | ignore

@@ -90,6 +90,7 @@ half whose layering was not had nine cycles.)
 | 0 | `paths.py` | the repository root (by markers, or `$HEKIT_ROOT`), the `configs/`, `output/` and `results/` roots, the path rules (04 §2) |
 | 0 | `schema.py` | the run TOML's schema, `utils/Env/schema/run.toml`: every key's type, choices, bounds, default and inheritance; checking a table against it; the editor schema (V55) |
 | 0 | `hepfiles.py` | reading YODA text (objects, `/RAW` twins, counters; `.gz` too) and Rivet's data directories, once (V60) |
+| 0 | `plugins.py` | loading a folder's Python by path, once: `render.py`, `backend.py`, `provider.py` (V61) |
 | 1 | `config.py` | load the TOML, `--set`, the strict schema check; the typed model (`RunConfig`, `Configuration`, `Tool`, `Quantity`) |
 | 1 | `quantities.py` | the master TOML, static values and selectors, who consumes what (C7), provider checks (C10) |
 | 1 | `sweep.py` | points from `sweeps` (grid and zip), point names, pages, `--points` |

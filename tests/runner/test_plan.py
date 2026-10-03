@@ -250,3 +250,13 @@ def test_pythia_reads_the_card_and_a_rejected_line_names_its_source(scratch, mon
     with pytest.raises(HepError, match=r"rejects 1 line.*'PDF:pSett = 13' \(\[tools.pythia\].settings\)"):
         tools.check_cards(bad)
     assert list((scratch / "output").glob("*/.cache/checks/pythia/*.json"))   # cached by the card's text
+
+
+def test_a_tables_own_filters_file_replaces_the_folders(scratch, monkeypatch):
+    """V61: filters = "<file>" (configs/<P>/…, ./… from the repo) in place of status = "filters:<file>"."""
+    rules = scratch / "mine.toml"
+    rules.write_text('[[rule]]\nmatch = "^Done"\nemit = "phase"\n', encoding="utf-8")
+    _, _, p = plan(raw(tools__rivet__filters=str(rules)), scratch)
+    assert p.rendered["rivet"].status == "filters" and p.rendered["rivet"].filters == [{"match": "^Done", "emit": "phase"}]
+    with pytest.raises(HepError, match="status must be one of"):
+        plan(raw(tools__rivet__status="filters:mine.toml"), scratch)

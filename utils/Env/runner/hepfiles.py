@@ -41,6 +41,13 @@ def objects(path: Path) -> list[str]:
             if not p.startswith(TECHNICAL) and p not in COUNTERS and not p.endswith("]")]
 
 
+def base_path(path: str) -> str:
+    """/photo_eic:R=0.4/d01-x01-y01 → /photo_eic/d01-x01-y01: the object without its analysis's options
+    (a page is of the object; each variant is a curve on it)."""
+    analysis, _, rest = path.strip("/").partition("/")
+    return f"/{analysis.split(':')[0]}/{rest}"
+
+
 def raw_twins(path: Path) -> set[str]:
     """The /RAW Histo1D twins a file has, whose entries App_yd2rt keeps (a ratio made in finalize has none)."""
     return set(re.findall(r"^BEGIN YODA_HISTO1D_V\d+ (/RAW/\S+)$", yoda_text(path), re.M))

@@ -305,7 +305,16 @@
       "minimum": 0
      },
      "status": {
-      "description": "standard | filters | none, or filters:<file>",
+      "description": "how its progress is read: the status protocol, its log's filter rules, or not at all",
+      "type": "string",
+      "enum": [
+       "standard",
+       "filters",
+       "none"
+      ]
+     },
+     "filters": {
+      "description": "a filters.toml of your own (configs/<Project>/…), in place of its folder's",
       "type": "string"
      },
      "executable": {

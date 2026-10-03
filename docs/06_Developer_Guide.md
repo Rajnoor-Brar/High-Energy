@@ -198,7 +198,7 @@ Every section and key is checked when the folders load: an unknown one is an err
 | | `footer` | lines after the values (placeholders `{output_name}`, `{tag}`, `{input}`); a line whose placeholders are all empty is left out |
 | | `seed`, `seed_parallel` | seed lines, after everything (`{seed}`; `{seeds}`, the block, only at threads > 1) |
 | | `seed_range` | `[lo, hi]`: the seeds the tool accepts (default `[1, 900_000_000]`, Pythia's); a point's seeds come from the intersection over its seeded steps (V54) |
-| | `merge`, `repeatable`, `owned` | `merge = true`: the combined card holds each key once, parsed with the folder's `line` (V59); `repeatable`: commands kept every time (Pythia's particle-data `onIfMatch`, …); `owned`: keys the runner sets, a base card's value of which `--plan` reports |
+| | `merge`, `repeatable`, `owned` | `merge = true`: the combined card holds each key once, parsed with the folder's `line` (V59); `repeatable`: commands kept every time (Pythia's particle-data `onIfMatch`, …); `owned`: keys the runner sets: a base card's value of one is reported by `--plan` (append), or refused by `render.py`, which gets the list as `context["owned"]` (V61) |
 | | `drop`, `trailing`, `drop_inside_braces` | how the combined card leaves out a base card's comments (V54): `drop` a full-line comment (a regex; default: a line starting with `comment`), `trailing` a comment after a value, `drop_inside_braces = false` keeps comment-looking lines inside `{ … }` (Tcl) |
 | `[command]` | `argv` | the argv template (04 §10); default `["{exe}"]` |
 | | `env` | extra environment (`RIVET_ANALYSIS_PATH = "{repo}/build/Rivet"`) |
@@ -221,6 +221,7 @@ Every section and key is checked when the folders load: an unknown one is an err
 | `[identity]` | `files` | files whose sha256 enters the identity (`{repo}`, `{exe}`, `{analysis}`) |
 | | `version` | a command whose first line is the version, for provenance |
 | `[shard]` | `merge` | the tool folder that joins K shards' products into the table's `output_file`; without it, `shards` is refused (rivet: `merge`, i.e. `rivet-merge -e`) |
+| `[render]` | (free) | data for the folder's `render.py`, handed over as `context["render"]` (MadGraph's `[render.lpp]`, PDG → lpp) (V61) |
 | `[checks]` | `files` | files that must exist at plan time (C10) |
 | | `card` | argv that reads a card (`{card}`) and prints one JSON line `{"line": N, "text": …}` per line it rejects; run at plan time, cached by the card's text (V59) |
 | | `info_dirs`, `info_dirs_command` | where analyses' `.info` files are, for C9 |
@@ -237,7 +238,8 @@ from runner.errors import HepError        # PLUGINS_MAY_IMPORT only (runner/__in
 def card(bases: list[str], overrides: list, context: dict) -> str:
     """The whole point card, before seeds. `bases` are the base cards' texts in order; each override
     is the runner's Override(key, value, origin), in order; context has point, tag, output_name,
-    output and base_paths. The runner adds a header comment, the [card] footer and the seed lines."""
+    output, base_paths, owned ([card] owned) and render (the folder's [render] table). The runner adds
+    a header comment, the [card] footer and the seed lines."""
 
 def prepare_card(lines: list[str], bases: list[str], context: dict) -> str:   # optional
     """The card the prepare step reads ({prepare_card}), from the final point card's lines

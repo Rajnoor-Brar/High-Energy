@@ -22,7 +22,6 @@ import yaml
 
 from runner.errors import HepError
 
-OWNED = ("BEAMS", "BEAM_ENERGIES", "RANDOM_SEED", "EVENTS", "EVENT_OUTPUT", "RESULT_DIRECTORY")
 _STEP = re.compile(r"^(?P<name>[^\[\]]+)(?:\[(?P<index>\d+)\])?$")
 
 
@@ -68,7 +67,7 @@ def card(bases: list[str], overrides: list, context: dict) -> str:
         loaded = yaml.safe_load(text) or {}
         if not isinstance(loaded, dict):
             raise HepError("a Sherpa base card must be a YAML mapping", where=context.get("tag", "sherpa"))
-        owned = [k for k in loaded if k in OWNED]
+        owned = [k for k in loaded if k in context["owned"]]
         if owned:
             raise HepError(f"the base card sets {', '.join(owned)}, which the plan owns",
                            where=f"[tools.{context.get('tag', 'sherpa')}].baseconfig",

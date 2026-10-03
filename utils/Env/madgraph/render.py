@@ -19,7 +19,6 @@ import re
 
 from runner.errors import HepError
 
-LPP = {2212: 1, -2212: -1, 11: 0, -11: 0, 13: 0, -13: 0}
 QUIET = "set automatic_html_opening False"
 
 
@@ -37,9 +36,10 @@ def card(bases: list[str], overrides: list, context: dict) -> str:
     for key, value, origin in overrides:               # the runner's Override (L26)
         if key == "beams":
             for index, code in enumerate(value, start=1):
-                if int(code) not in LPP:
+                lpp = {int(k): v for k, v in context["render"]["lpp"].items()}
+                if int(code) not in lpp:
                     raise HepError(f"no MadGraph beam type (lpp) for PDG {code}", where=origin)
-                lines.append(f"set lpp{index} {LPP[int(code)]}")
+                lines.append(f"set lpp{index} {lpp[int(code)]}")
         elif isinstance(value, list):
             raise HepError(f"'{key}' takes one value, not a list", where=origin)
         else:

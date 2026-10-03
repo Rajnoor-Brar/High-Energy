@@ -24,6 +24,7 @@ from typing import Any
 
 import tomli_w
 
+from . import plugins
 from . import quantities as qmod
 from .config import Tool
 from .errors import HepError, did_you_mean
@@ -45,6 +46,7 @@ FOLDER_SECTIONS = {
     "prepare": {"argv", "marker", "ignore", "key"},
     "checks": {"info_dirs", "info_dirs_command", "files", "card"},
     "shard": {"merge"},
+    "render": None,                                       # free: data for the folder's render.py (V61)
 }
 CARD_STYLES = ("append", "none", "render")
 EXPORT = re.compile(r"^(?P<tool>[a-z0-9]+)_(?P<export>[a-z0-9_]+)$")
@@ -74,11 +76,7 @@ class Folder:
         path = self.dir / "render.py"
         if not path.is_file():
             raise HepError(f'{self.name} has [card] style = "render" but no render.py', where=str(self.dir))
-        import importlib.util
-        spec = importlib.util.spec_from_file_location(f"hep_render_{self.name}", path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
+        return plugins.load(path, "render")
 
     def hook(self, name: str):
         """A function of the folder's render.py, or None (V60): the folder's own code, called by name."""
@@ -597,8 +595,8 @@ def plan_point(run, configuration, point, master: dict, *, post: dict | None = N
         step = Step(tag=tag, tool=tool, folder=folder, group=group_of.get(tag, -1),
                     exe=executable_of(tool, folder, run.project))
         step.status = tool.status or folder.get("tool", "status", "none")
-        if step.status.startswith("filters:"):
-            rules = resolve(step.status.split(":", 1)[1], "filters", project=run.project, where=f"{where}.status")
+        if tool.filters:                                    # your rules, configs/<P>/… (V61)
+            rules = resolve(tool.filters, "filters", project=run.project, where=f"{where}.filters")
             step.filters = tomllib.loads(rules.read_text(encoding="utf-8")).get("rule", [])
             step.status = "filters"
         elif step.status == "filters":
@@ -811,11 +809,13 @@ def _render(plan: PointPlan, step: Step, run, master: dict) -> None:
             text = folder.plugin.card([b.read_text(encoding="utf-8") for b in step.card_base], overrides,
                                       {"point": plan.point.name, "tag": step.tag, "output_name": output_name,
                                        "output": str(step.outputs[0].path) if step.outputs else "",
-                                       "base_paths": [str(b) for b in step.card_base]})
+                                       "base_paths": [str(b) for b in step.card_base],
+                                       "owned": list(folder.get("card", "owned", [])),       # V61: the folder's data
+                                       "render": folder.spec.get("render", {})})
             step.card_lines = [header, *text.rstrip("\n").splitlines(), *footer]
         step.card_combined = plan.out / "cards" / f"{step.tag}.{ext}"
         step.identity_parts["base_sha256"] = [sha256_file(b) for b in step.card_base]
-        owned = {_normal(k) for k in folder.get("card", "owned", [])}
+        owned = {_normal(k) for k in folder.get("card", "owned", [])} if style == "append" else set()
         parse_line = card_parser(folder)
         for base in step.card_base if owned else ():
             for line in clean_base(base, folder)[1:]:

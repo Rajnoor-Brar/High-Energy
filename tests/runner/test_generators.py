@@ -14,7 +14,7 @@ from runner import execute, tools
 from runner.errors import HepError
 from runner.quantities import Override
 
-from helpers import plans
+from helpers import plans, render_context
 
 NEEDS = {"sherpa": shutil.which("Sherpa"), "herwig": shutil.which("Herwig"), "delphes": shutil.which("DelphesHepMC3")}
 
@@ -60,7 +60,7 @@ def test_render_merges_the_overrides_into_the_whole_card():
     yaml = pytest.importorskip("yaml")
     text = render().card([BASE], [Override("PDF_SET[0]", "MSTW2008lo68cl", "[quantities.pdf] = MSTW08lo"),
                                   Override("BEAM_ENERGIES", [275, 18], "[quantities.energies] = 18x275"),
-                                  Override("EPA:Q2Max", 2.0, "test")], {"tag": "sherpa"})
+                                  Override("EPA:Q2Max", 2.0, "test")], render_context("sherpa", tag="sherpa"))
     card = yaml.safe_load(text)
     assert card["PDF_SET"] == ["MSTW2008lo68cl", "CJKLLO"]
     assert card["MPI_PDF_SET"] == card["PDF_SET"]                 # MPI follows the PDF it agreed with
@@ -70,15 +70,15 @@ def test_render_merges_the_overrides_into_the_whole_card():
 def test_render_leaves_a_deliberately_different_mpi_pdf_alone():
     yaml = pytest.importorskip("yaml")
     base = BASE.replace("MPI_PDF_SET: [NNPDF23_lo_as_0130_qed", "MPI_PDF_SET: [CT18NLO")
-    card = yaml.safe_load(render().card([base], [Override("PDF_SET[0]", "MSTW2008lo68cl", "x")], {}))
+    card = yaml.safe_load(render().card([base], [Override("PDF_SET[0]", "MSTW2008lo68cl", "x")], render_context("sherpa")))
     assert card["MPI_PDF_SET"][0] == "CT18NLO"
 
 
 def test_render_refuses_what_the_plan_owns_and_missing_entries():
     with pytest.raises(HepError, match="plan owns"):
-        render().card([BASE + "RANDOM_SEED: 7\n"], [], {"tag": "sherpa"})
+        render().card([BASE + "RANDOM_SEED: 7\n"], [], render_context("sherpa", tag="sherpa"))
     with pytest.raises(HepError, match=r"no PDF_SET\[2\]"):
-        render().card([BASE], [Override("PDF_SET[2]", "X", "x")], {})
+        render().card([BASE], [Override("PDF_SET[2]", "X", "x")], render_context("sherpa"))
 
 
 @pytest.mark.skipif(not NEEDS["sherpa"], reason="load_hep: Sherpa")

@@ -331,6 +331,6 @@ wait for the last steps of the last phase; meanwhile the code accepts what those
 | P0 | S1 S2 S3 | S1 (V52), S2 (V53), S3 (V54) done; held: the C++ and Rivet items of S3 (K3, K4, K7, K8, K10's define, yd2rt's dead parameter), which rebuild binaries in the user's points' identities |
 | P1 | S1 S2 S3 | done: S1 (V55 schema, "default"), S2 (V56 layers, include, --show-config), S3 (V57 --why, hep check) |
 | P2 | S1 S2 S3 | S1 (V58 vocabulary), S2 (V59 cards: merge, owned, settings, Pythia checks its cards) done; S3 (beam order) waits for the user's choice |
-| P3 | S1 S2 S3 | S1 (V60: no tool names in the core, rivet hook, lhapdf provider, hepfiles) done |
+| P3 | S1 S2 S3 | S1 (V60), S2 (V61: tables as data, one plugin loader, twins merged, filters key) done |
 | P4 | S1 S2 S3 | not started |
 | P5 | S1 S2 S3 | not started |

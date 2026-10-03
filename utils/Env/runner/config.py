@@ -44,6 +44,7 @@ class Tool:
     shards: int = 1                                  # K > 1: K processes on a share of the events each (V31)
     settings: dict = field(default_factory=dict)     # native card settings, as written (V59)
     cores: int = 0                                   # cores it keeps busy, for --plan's note (0: estimated, V60)
+    filters: str = ""                                # its own filters.toml (configs/<P>/…), V61
     extra: dict = field(default_factory=dict)       # tool-specific keys and export requests
 
 
@@ -406,6 +407,7 @@ def parse(raw: dict, path: Path) -> RunConfig:
                           config=table.get("config"), streamable=table.get("streamable"),
                           consumes_events=table.get("consumes_events"), shards=int(table.get("shards", 1)),
                           settings=dict(table.get("settings", {})), cores=int(table.get("cores", 0)),
+                          filters=table.get("filters", ""),
                           extra=extras)
 
     static = raw.get("static", {})

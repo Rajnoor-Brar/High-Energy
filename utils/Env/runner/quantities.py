@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from . import plugins
 from .errors import HepError, did_you_mean
 from .paths import repo_root, resolve
 
@@ -250,17 +251,9 @@ def check_shapes(quantity, where: str) -> None:
 
 # ── providers: things a value needs installed (02 §4, category 1) ─────────────────────────────
 
-@functools.cache
 def _provider(name: str):
     """utils/Env/<name>/provider.py (V60): a provider's checks, loaded by name."""
-    import importlib.util
-    path = repo_root() / "utils" / "Env" / name / "provider.py"
-    if not path.is_file():
-        raise HepError(f"no provider '{name}'", hint=f"expected {path}")
-    spec = importlib.util.spec_from_file_location(f"hep_provider_{name}", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return plugins.load(repo_root() / "utils" / "Env" / name / "provider.py", "provider")
 
 
 def check_provider(kind: str, value, where: str) -> None:
