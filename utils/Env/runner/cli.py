@@ -15,6 +15,8 @@ import argparse
 import json
 import os
 import signal
+import threading
+import time
 import tomllib
 import sys
 from dataclasses import dataclass
@@ -25,7 +27,7 @@ from . import execute, house, plot, post, record, sweep, tools
 from .errors import HepError
 from .paths import output_root
 from .quantities import load_master
-from .events import Bus, Hub, Journal, greeting, connect, hubs
+from .events import Bus, Hub, Journal, RunBus, greeting, connect, hubs
 from .watch import follow_events, follow_file, view
 
 
@@ -123,6 +125,8 @@ def build_plans(args, key: str | None) -> Planned:
     for plan in plans:
         tools.finalise(plan, plan.seed)
         tools.check_cards(plan)                  # the tools read their cards (V59), cached by text
+    if configuration.parallelism_auto:           # "auto" (V75): from the plans' cores
+        configuration.parallelism = execute.auto_parallelism(plans)
     plot.check_texts(run, plans)                 # a placeholder typo costs no point run (V66) …
     plot.check_band(run, configuration)          # … nor a band's (V69)
     return Planned(run, configuration, plans, [p for p in plans if p.point.index in chosen],
@@ -266,6 +270,8 @@ def _runs(args, run, keys: list[str], stopper: execute.Stopper, bus) -> int:
             skipped[key] = f"   no {args.only} tools: skipped"
     if len(skipped) == len(keys):
         raise HepError(f"no configuration of this sweep has {args.only} tools", where=f"{run.path}: [run].sweep_runs")
+    if bus is not None and args.only is None:
+        return _pipelined(args, run, keys, stopper, bus, ahead, stamp)
     failed = False
     for number, key in enumerate(keys, 1):
         if stopper.requested:
@@ -292,6 +298,68 @@ def _runs(args, run, keys: list[str], stopper: execute.Stopper, bus) -> int:
     return 1 if failed else 0
 
 
+def _pipelined(args, run, keys: list[str], stopper: execute.Stopper, bus: Bus, ahead: dict, stamp: int) -> int:
+    """A sweep of runs, pipelined (V75, the user's B8 decision): each run starts once the one before has
+    started all its points, and its points take the free cores of a budget the runs share (never more
+    than the largest run alone would use), so a run's last points and the next run's first overlap. Each
+    run's own order (pre, points, combined, post, plots) is kept. One view for the sweep; each run's
+    events carry its key. A stop starts no more runs; a failed run leaves the next to start."""
+    each = {key: max((execute.cores(p) for p in ahead[key].plans), default=1) for key in keys}
+    budget = execute.Budget(max(os.cpu_count() or 1,
+                                *(max(1, ahead[key].configuration.parallelism) * each[key] for key in keys)))
+    shown = view(args.plain)
+    bus.subscribe(shown)
+    catch_signals(stopper)
+    codes: dict[str, int] = {}
+    errors: list[BaseException] = []
+    threads: list[threading.Thread] = []
+    gate: threading.Event | None = None
+    try:
+        for number, key in enumerate(keys, 1):
+            while gate is not None and not gate.wait(0.25) and not stopper.requested:
+                pass
+            if stopper.requested:
+                break
+            following = next((journal_path(run, run.configurations[k]) for k in keys[number:]), None) \
+                if args.journal else None
+            gate = threading.Event()
+
+            def job(key=key, number=number, following=following, gate=gate) -> None:
+                voice = RunBus(bus, key)
+                try:                         # planned again only if the TOML was edited meanwhile (V38, V54)
+                    unchanged = run.path.stat().st_mtime_ns == stamp
+                    codes[key] = run_one(args, key, stopper, number=number, following=following,
+                                         planned=ahead[key] if unchanged else None, bus=voice, shown=shown,
+                                         budget=budget, gate=gate)
+                except HepError as error:    # the TOML was edited since the check: this run fails alone
+                    voice.say(header(number, run.configurations[key]))
+                    voice.say(error.render())
+                    not_run(journal_path(run, run.configurations[key]) if args.journal else None,
+                            header(number, run.configurations[key]), error.message, following, voice)
+                    codes[key] = 2
+                except BaseException as error:           # the runner's own error: raised once all have ended
+                    errors.append(error)
+                    codes[key] = 1
+                finally:
+                    gate.set()
+
+            thread = threading.Thread(target=job, name=f"hep-run-{key}")
+            thread.start()
+            threads.append(thread)
+        while any(t.is_alive() for t in threads):        # the main thread takes the signals
+            time.sleep(0.25)
+    finally:
+        for thread in threads:
+            thread.join()
+        bus.unsubscribe(shown)
+        shown.end()
+    if errors:
+        raise errors[0]
+    if stopper.requested or 6 in codes.values():
+        return 6
+    return 1 if any(codes.values()) else 0
+
+
 def show_config(run, keys: list[str]) -> list[str]:
     """--show-config (V56): every resolved value of each configuration with the layer it came from: its
     own table, one it extends, [run.defaults], [run], or the schema's default; and what [master].include
@@ -305,7 +373,8 @@ def show_config(run, keys: list[str]) -> list[str]:
         fields = {"serial": configuration.serial, "name": configuration.run_folder, "label": configuration.label,
                   "title": configuration.title, "description": configuration.description,
                   "event_count": configuration.event_count, "threads": configuration.threads,
-                  "parallelism": configuration.parallelism, "swept": configuration.swept,
+                  "parallelism": "auto" if configuration.parallelism_auto else configuration.parallelism,
+                  "swept": configuration.swept,
                   "seed_type": configuration.seed_type, "manual_seed": configuration.manual_seed,
                   "sweeps": configuration.sweeps, "plot_points": configuration.plot_points,
                   "combine": configuration.combine, "tools": configuration.tools, "pre": configuration.pre,
@@ -339,7 +408,8 @@ def not_run(path: Path | None, title: str, message: str, following: Path | None,
 
 
 def run_one(args, key: str, stopper: execute.Stopper, *, number: int = 0, following: Path | None = None,
-            planned: Planned | None = None, bus: Bus | None = None) -> int:
+            planned: Planned | None = None, bus: Bus | None = None, shown=None, budget=None,
+            gate: threading.Event | None = None) -> int:
     """One run: the pre stage, every point not complete, the combined groups, the post stage and the
     plots, said on `bus` (V72). In a sweep of runs, `number` is its place (a `run NN - <title> -` line
     first), and `following` is the next run's journal (--journal), named in this one's `run finished`
@@ -368,13 +438,17 @@ def run_one(args, key: str, stopper: execute.Stopper, *, number: int = 0, follow
         return 6
 
     bus = bus if bus is not None else Bus()
-    shown = view(args.plain)
-    bus.subscribe(shown)
-    catch_signals(stopper)
+    own_view = shown is None                 # a pipelined sweep's runs share the sweep's view (V75)
+    if own_view:
+        shown = view(args.plain)
+        bus.subscribe(shown)
+    if threading.current_thread() is threading.main_thread():
+        catch_signals(stopper)
     logs = bool(getattr(args, "logs", False))
 
     base = plans[0].out.parent if plans else None
-    journal = Journal(base / "status.jsonl") if base and getattr(args, "journal", False) else None
+    journal = Journal(base / "status.jsonl", run=getattr(bus, "run", None)) \
+        if base and getattr(args, "journal", False) else None
     if journal:
         bus.subscribe(journal)
     title = (f"{run.name} · {configuration.key}: {len(plans)} point(s), {configuration.event_count} events, "
@@ -405,7 +479,8 @@ def run_one(args, key: str, stopper: execute.Stopper, *, number: int = 0, follow
                 return 0
         if args.only != "post":
             done, failed, stopped = execute.run_points(plans, run, configuration, bus=bus, stopper=stopper,
-                                                       rerun=args.rerun, logs=logs)
+                                                       rerun=args.rerun, logs=logs, budget=budget,
+                                                       started_all=gate.set if gate is not None else None)
             if stopped:
                 return 6
         verdict = f"{done} done, {failed} failed, {len(plans) - done - failed} skipped" if args.only != "post" else ""
@@ -432,8 +507,9 @@ def run_one(args, key: str, stopper: execute.Stopper, *, number: int = 0, follow
     finally:
         onward = {"next": str(following)} if following and not stopper.requested else {}
         bus.emit("", "", {"k": "run", "state": "finished", "verdict": verdict, **onward})
-        bus.unsubscribe(shown)
-        shown.end()
+        if own_view:
+            bus.unsubscribe(shown)
+            shown.end()
         manifest()
         if journal:
             bus.unsubscribe(journal)

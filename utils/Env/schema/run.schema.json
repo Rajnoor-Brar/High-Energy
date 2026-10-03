@@ -54,9 +54,15 @@
      "default": 1
     },
     "parallelism": {
-     "description": "points run at once",
-     "type": "integer",
+     "description": "points run at once; \"auto\": as many as the cores hold, cores ÷ a point's cores (V75)",
+     "type": [
+      "integer",
+      "string"
+     ],
      "minimum": 1,
+     "enum": [
+      "auto"
+     ],
      "default": 1
     },
     "description": {
@@ -147,11 +153,17 @@
       ]
      },
      "parallelism": {
-      "description": "points run at once (else [run]'s)",
+      "description": "points run at once (else [run]'s); \"auto\": cores ÷ a point's cores (V75)",
       "anyOf": [
        {
-        "type": "integer",
-        "minimum": 1
+        "type": [
+         "integer",
+         "string"
+        ],
+        "minimum": 1,
+        "enum": [
+         "auto"
+        ]
        },
        {
         "const": "default"

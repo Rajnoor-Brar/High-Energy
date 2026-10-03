@@ -67,11 +67,12 @@ inherit = true
 doc     = "threads per generator; 0 = every core"
 
 [run.parallelism]
-type    = "int"
+type    = "int|str"
+choices = ["auto"]
 min     = 1
 default = 1
 inherit = true
-doc     = "points run at once"
+doc     = "points run at once; \"auto\": as many as the cores hold, cores ÷ a point's cores (V75)"
 
 [run.description]
 type = "str"
@@ -138,10 +139,11 @@ default_ok = true
 doc        = "threads per generator (else [run]'s); 0 = every core"
 
 [configuration.parallelism]
-type       = "int"
+type       = "int|str"
+choices    = ["auto"]
 min        = 1
 default_ok = true
-doc        = "points run at once (else [run]'s)"
+doc        = "points run at once (else [run]'s); \"auto\": cores ÷ a point's cores (V75)"
 
 [configuration.swept]
 type    = "bool"

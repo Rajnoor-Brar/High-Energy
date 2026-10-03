@@ -89,39 +89,45 @@ class _Point:
 
 class State:
     """Events in, what to print out: `apply` returns ("title", header, title), ("say", text) and
-    ("block", point, verdict, seconds, lines) items. Points are numbered in the order they start."""
+    ("block", point, verdict, seconds, lines) items. Points are numbered in the order they start, per run;
+    in a sweep of runs (events with `run`, V75) a heading names its run, since a pipelined sweep's runs
+    overlap and two runs have points of the same name."""
 
     def __init__(self):
-        self.total = 0
-        self.number = 0
-        self.points: dict[str, _Point] = {}
+        self.total: dict[str, int] = {}
+        self.number: dict[str, int] = {}
+        self.points: dict[tuple[str, str], _Point] = {}
 
     def _heading(self, event: dict) -> tuple[str, str]:
-        name, index = event["point"], event.get("index", 1)
+        name, index, run = event["point"], event.get("index", 1), event.get("run", "")
+        of = f" ({run})" if run else ""
         if event.get("stage") == "combined":
-            return "── combined: ", name
+            return f"── combined{of}: ", name
         if index == 0:
-            return "── post (after every point)", ""
+            return f"── post (after every point){of}", ""
         if index < 0:
-            return "── pre (before every point)", ""
-        self.number += 1
-        return f"── point {self.number}/{self.total or '?'}: ", name
+            return f"── pre (before every point){of}", ""
+        self.number[run] = self.number.get(run, 0) + 1
+        return f"── point {self.number[run]}/{self.total.get(run) or '?'}{of}: ", name
 
-    def _state(self, point: str, tag: str) -> ToolState | None:
-        part = self.points.get(point)
+    def _state(self, key: tuple[str, str], tag: str) -> ToolState | None:
+        part = self.points.get(key)
         if part is None:
             return None
         found = next((s for s in part.states if s.tag == tag), None)
         if found is None:
-            found = ToolState(point=point, tag=tag)
+            found = ToolState(point=key[1], tag=tag)
             part.states.append(found)
         return found
 
     def apply(self, event: dict) -> list[tuple]:
-        kind, point, tag = event.get("k"), event.get("point", ""), event.get("tool", "")
+        kind, point, tag, run = event.get("k"), event.get("point", ""), event.get("tool", ""), event.get("run", "")
+        key = (run, point)
         if kind == "run":
             if event.get("state") == "started":
-                self.total, self.number, self.points = event.get("points", 0), 0, {}
+                self.total[run], self.number[run] = event.get("points", 0), 0
+                if not run:                              # a run of its own: a new start
+                    self.points = {}
                 return [("title", event.get("header", ""), event.get("title", ""))]
             return []
         if kind == "say":
@@ -130,12 +136,12 @@ class State:
             state = event.get("state")
             if state == "started":
                 prefix, name = self._heading(event)
-                self.points[point] = _Point(prefix, name, event.get("t", time.time()))
+                self.points[key] = _Point(prefix, name, event.get("t", time.time()))
                 return []
             if state == "skipped":
                 prefix, name = self._heading(event)
                 return [("say", f"{prefix}{name}: complete, skipped (--rerun to run it again)")]
-            part = self.points.pop(point, None) or _Point("── ", point, event.get("t", time.time()))
+            part = self.points.pop(key, None) or _Point("── ", point, event.get("t", time.time()))
             seconds = event.get("t", time.time()) - part.started
             if state == "done":
                 return [("block", part, "ok", seconds, [*part.notes, f"   done → {event.get('res', '')}"])]
@@ -144,15 +150,15 @@ class State:
                                                              "   partial outputs keep their .partial names"])]
             blame = f" [{event['cause']}]" if event.get("cause") else ""
             return [("block", part, f"FAILED{blame}", seconds, [*part.notes, *part.failed, f"   {event.get('msg', '')}"])]
-        part = self.points.get(point)
+        part = self.points.get(key)
         if kind == "note":
             if part is not None:
                 part.notes.append(event.get("msg", ""))
             return []
         if kind == "tool":
-            self._state(point, tag)
+            self._state(key, tag)
             return []
-        tool = self._state(point, tag)
+        tool = self._state(key, tag)
         if tool is None:
             return []
         if kind == "exit":

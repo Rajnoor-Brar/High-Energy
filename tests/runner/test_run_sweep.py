@@ -116,7 +116,7 @@ def args_for(path: Path, **changes):
 
 
 def fake_runs(monkeypatch, codes: dict, calls: list, given: list | None = None):
-    def run_one(args, key, stopper, *, number=0, following=None, planned=None, bus=None):
+    def run_one(args, key, stopper, *, number=0, following=None, planned=None, bus=None, **pipelined):
         calls.append((key, number, following.parent.name if following else None))
         if given is not None:
             given.append(planned)

@@ -103,6 +103,7 @@ class Configuration:
     pre: list[list[str]] = field(default_factory=list)   # tools run once before every point
     combine: list[str] = field(default_factory=list)    # swept quantities whose points are merged into one (V35)
     parallelism: int = 1                                # points run at once (V36); never in an identity
+    parallelism_auto: bool = False                      # "auto" (V75): set from the plans, cores ÷ a point's
     swept: bool = True                                  # run by [run].sweep_runs (V38)
     title: str = ""                                     # the `run NN - <title> -` header of a sweep
     run_folder: str = ""                                # <project>/<run_folder>/…: [run.<cfg>].name, else [run].name (V46)
@@ -514,7 +515,8 @@ def parse(raw: dict, path: Path) -> RunConfig:
             swept=table.get("swept", schema.default("configuration", "swept")), title=table.get("title", key),
             seed_type=inherited("seed_type"), manual_seed=inherited("manual_seed"),
             description=inherited("description", ""), event_count=int(event_count),
-            threads=_resolved_threads(int(inherited("threads"))), parallelism=int(inherited("parallelism")),
+            threads=_resolved_threads(int(inherited("threads"))), parallelism=1 if inherited("parallelism") == "auto" else int(inherited("parallelism")),
+            parallelism_auto=inherited("parallelism") == "auto",
             sweeps=sweeps, plot_points=list(plot_points), combine=list(combine),
             tools=_groups(tools_entries, f"{at}.tools", tools),
             post=_groups(inherited("post", []), f"{at}.post", tools),

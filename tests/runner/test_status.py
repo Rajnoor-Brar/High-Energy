@@ -208,7 +208,7 @@ def test_the_live_view_puts_each_running_point_over_its_tools():
             bus.emit(name, "", {"k": "point", "state": "skipped", "index": index})
         for index, name in ((3, "MSTW08lo"), (4, "PDF4LHC21")):
             bus.emit(name, "", {"k": "point", "state": "started", "index": index})
-        view.state.points["PDF4LHC21"].started = time.time() - 35237
+        view.state.points[("", "PDF4LHC21")].started = time.time() - 35237   # (run, point): a run of its own
         bus.emit("MSTW08lo", "pythia", {"k": "phase", "phase": "init"})
         bus.emit("PDF4LHC21", "pythia", {"k": "phase", "phase": "generating"})
         bus.emit("PDF4LHC21", "pythia", {"k": "progress", "done": 1_700_000, "total": 10_000_000, "rate": 2812})

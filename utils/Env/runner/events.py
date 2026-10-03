@@ -21,7 +21,8 @@ Runtime state stays off disk (the user, 2026-10-03). Who hears the bus:
   for replay (`hep watch --file`) and tests.
 
 A subscriber is called on the emitting thread and must not block; the Hub queues for each client and
-drops a client that stops reading.
+drops a client that stops reading. In a sweep of runs, each run emits through a `RunBus`, which adds
+`run` (its configuration's key) to every event, since a pipelined sweep's runs overlap (V75).
 """
 
 from __future__ import annotations
@@ -66,15 +67,37 @@ class Bus:
         self.emit("", "", {"k": "say", "msg": text})
 
 
-class Journal:
-    """--journal: every event of one run in its status.jsonl, the file begun afresh."""
+class RunBus:
+    """One run's voice on a shared bus (V75): every event it emits says which run it is of."""
 
-    def __init__(self, path: Path):
+    def __init__(self, bus: Bus, run: str):
+        self.bus, self.run = bus, run
+
+    def emit(self, point: str, tool: str, message: dict) -> dict:
+        return self.bus.emit(point, tool, {**message, "run": self.run})
+
+    def say(self, text: str) -> None:
+        self.emit("", "", {"k": "say", "msg": text})
+
+    def subscribe(self, subscriber) -> None:
+        self.bus.subscribe(subscriber)
+
+    def unsubscribe(self, subscriber) -> None:
+        self.bus.unsubscribe(subscriber)
+
+
+class Journal:
+    """--journal: every event of one run in its status.jsonl, the file begun afresh. With `run`, only
+    that run's events (a pipelined sweep's runs share one bus, V75)."""
+
+    def __init__(self, path: Path, run: str | None = None):
         path.parent.mkdir(parents=True, exist_ok=True)
-        self.path = path
+        self.path, self.run = path, run
         self.handle = open(path, "w", encoding="utf-8")
 
     def event(self, event: dict) -> None:
+        if self.run is not None and event.get("run") != self.run:
+            return
         self.handle.write(json.dumps(event) + "\n")
         self.handle.flush()
 
@@ -101,8 +124,8 @@ class Hub:
 
     def event(self, event: dict) -> None:
         with self._lock:
-            if event.get("k") == "run" and event.get("state") == "started":
-                self._kept, self._latest = [], {}
+            if event.get("k") == "run" and event.get("state") == "started" and not event.get("run"):
+                self._kept, self._latest = [], {}             # a single run: the new run is all a watcher needs
             if event.get("k") in ("progress", "line"):
                 self._latest[(event["point"], event["tool"], event["k"])] = event
             else:

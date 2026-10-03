@@ -117,7 +117,11 @@ def test_points_belong_to_one_configuration(scratch):
 
 
 def test_ctrl_c_starts_no_more_runs(scratch):
-    config = sweep_config(scratch, b_nap="yes")                        # b sleeps a minute
+    config = sweep_config(scratch, b_nap="yes")                        # b sleeps a minute …
+    text = config.read_text(encoding="utf-8")                          # … on the first of two points, one at a
+    text = text.replace('title  = "Bee"\n', 'title  = "Bee"\nsweeps = ["twice"]\n')   # time: its run has not
+    text = text.replace('consumes   = ["fail", "nap"]', 'consumes   = ["fail", "nap", "twice"]')   # started all its
+    config.write_text(text + '\n[quantities.twice]\nvalues = [1, 2]\n', encoding="utf-8")       # points (V75)
     runner = subprocess.Popen([str(HEP), "run", str(config), "--plain", "--journal"], cwd=REPO, env=env(scratch),
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8")
     journal = base(scratch) / "b" / "status.jsonl"
@@ -132,3 +136,60 @@ def test_ctrl_c_starts_no_more_runs(scratch):
     assert "run 02 - Bee -" in text and "run 03" not in text
     assert not (base(scratch) / "d").exists()
     assert "next" not in records(journal)[-1]
+
+
+PIPE = """\
+[run]
+name        = "pipe"
+project     = "PhotoProduction"
+sweep_runs  = true
+event_count = 1
+parallelism = 2
+
+[run.x]
+sweeps = ["slot"]
+tools  = ["check"]
+
+[run.y]
+sweeps = ["slot"]
+tools  = ["check"]
+
+[static]
+fail = "ok"
+nap  = "two"
+
+[tools.check]
+tool       = "custom"
+executable = "{script}"
+consumes   = ["fail", "nap", "slot"]
+
+[quantities.slot]
+values = [1, 2, 3]
+
+[quantities.fail]
+values = [0]
+tags   = ["ok"]
+
+[quantities.nap]
+values = [2]
+tags   = ["two"]
+"""
+
+
+def test_a_sweep_of_runs_is_pipelined(scratch):
+    """V75 (B8, option B): run y starts its points once run x has started all of its own, in the slot
+    x's last wave leaves free: three 2 s points a run, two at once, overlap across the runs."""
+    script = scratch / "check.py"
+    script.write_text(CHECK, encoding="utf-8")
+    script.chmod(script.stat().st_mode | stat.S_IXUSR)
+    config = scratch / "pipe.toml"
+    config.write_text(PIPE.format(script=script), encoding="utf-8")
+    done = hep(config, scratch)
+    assert done.returncode == 0, done.stdout[-2000:] + done.stderr[-2000:]
+    root = scratch / "output" / "PhotoProduction" / "pipe"
+    x, y = (records(next(root.glob(f"*{k}/status.jsonl"))) for k in ("x", "y"))
+    assert all(r.get("run") == "x" for r in x) and all(r.get("run") == "y" for r in y)   # each journal its own run's
+    x_last_end = max(r["t"] for r in x if r.get("k") == "point" and r.get("state") == "done")
+    y_first_start = min(r["t"] for r in y if r.get("k") == "point" and r.get("state") == "started")
+    assert y_first_start < x_last_end - 1.0, (y_first_start, x_last_end)
+    assert "── point 1/3 (y): " in done.stdout and "run 02 - y -" in done.stdout

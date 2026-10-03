@@ -173,7 +173,7 @@ description   = "EIC photoproduction studies"
 | `serial` | integer | none | the prefix `NN_` of each configuration's folder, `<name>/NN_<label>`: **location, never identity** (V12). A configuration's `serial` overrides it (V45). Changing it starts a fresh location. |
 | `event_count` | integer | none | default for configurations; one of the two must set it |
 | `threads` | integer | 1 | default for configurations. `0` means every core, **resolved to a number at plan time** |
-| `parallelism` | integer | 1 | default for configurations: how many points run at once (V36). `threads` stays each point's; never part of an identity or a seed, so changing it reruns nothing |
+| `parallelism` | integer or `"auto"` | 1 | default for configurations: how many points run at once (V36); `"auto"` (V75): as many as the cores hold, `os.cpu_count() // the costliest point's cores`. `threads` stays each point's; never part of an identity or a seed, so changing it reruns nothing |
 | `description` | string | "" | |
 
 Every other table inside `[run]` is a configuration (§5). Any other key is an error (C1).
@@ -200,7 +200,14 @@ eic · energies: 4 point(s), 1000000 events, 12 threads
 - **Every run is planned before the first starts**, so a config error in any of them exits 2 with
   nothing run. Each is planned again when its turn comes, so edits to the TOML made meanwhile
   count; a run an edit has broken fails alone (exit 2 for it, and the next one starts).
-- **A failed run leaves the next to start.** Ctrl-C stops the running run (exit 6, as always) and
+- **The runs are pipelined** (V75, the user's B8 decision): a run starts once the one before has started
+  all its points, and its points take the cores that run's last points leave free (a budget the runs
+  share: the machine's cores, or more if a run alone was set to use more). Each run's own order (pre,
+  points, combined, post, plots) is kept, and so is its folder, journal and verdict; while two runs
+  overlap, a block's heading names its run: `── point 1/4 (energies): 5x41 ── ok after …`. On the zeus
+  sweep (4 equal points a run, 2 at a time) nothing overlaps; a run whose point count does not divide by
+  its `parallelism` saves its last wave's idle slots (docs/audit_1/notes/B8.md).
+- **A failed run leaves the next to start.** Ctrl-C stops the running runs (exit 6, as always) and
   **starts no more**.
 - The exit code: 6 if a run was stopped; else 1 if any failed; else 0.
 - `hep run <config> <cfg>` runs just that one, whether or not the sweep is on or it is `swept`.
@@ -260,7 +267,7 @@ label       = "PDFs_100M"
 | `combine` | array of strings | `[]` | swept quantities whose points are merged into one curve (§5.5) |
 | `event_count` | integer | `[run].event_count` | required here if `[run]` has none |
 | `threads` | integer | `[run].threads`, else 1 | `0` = every core |
-| `parallelism` | integer | `[run].parallelism`, else 1 | points at once; `--plan` and the run's title say about how many cores that is, and warn past the machine's |
+| `parallelism` | integer or `"auto"` | `[run].parallelism`, else 1 | points at once (`"auto"`: cores ÷ a point's cores, V75); `--plan` and the run's title say about how many cores that is, and warn past the machine's |
 | `pre`, `post` | array | `[]` | the form of `tools` (§5.4) |
 | `static` | table | `{}` | merged over `[static]` and the layers', key by key (§7); a `"default"` keeps the layer below's |
 | `prelim` | table | `[prelim]` | the nearest layer's **replaces** `[prelim]` whole for this configuration (its chain's interfaces); `{}` means none |

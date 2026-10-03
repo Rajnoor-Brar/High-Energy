@@ -89,12 +89,35 @@ def _bus(bus):
     return bus if bus is not None else _Quiet()
 
 
+class Budget:
+    """Cores shared by the runs of a pipelined sweep (V75): a point takes its cores while it runs; one
+    that needs more than is free waits, unless nothing is running (a point bigger than the budget runs
+    alone)."""
+
+    def __init__(self, total: int):
+        self.total, self.used = max(1, total), 0
+        self._lock = threading.Lock()
+
+    def take(self, count: int) -> bool:
+        with self._lock:
+            if self.used and self.used + count > self.total:
+                return False
+            self.used += count
+            return True
+
+    def give(self, count: int) -> None:
+        with self._lock:
+            self.used = max(0, self.used - count)
+
+
 def run_points(plans: list[PointPlan], run, configuration, *, bus=None, stopper: Stopper,
-               rerun: bool, logs: bool = False) -> tuple[int, int, bool]:
+               rerun: bool, logs: bool = False, budget: Budget | None = None,
+               started_all=None) -> tuple[int, int, bool]:
     """Every point not already complete, `configuration.parallelism` at a time, in order: (done,
     failed, stopped). A stop (Ctrl-C) starts nothing more and stops the running points through
     their groups' stop ladder. An error of the runner itself is raised once the running points
-    have ended."""
+    have ended. In a pipelined sweep (V75) a point also waits for its cores in the shared `budget`, and
+    `started_all()` is called once every point has started (the next run may then start)."""
     bus = _bus(bus)
     todo = []
     for plan in plans:
@@ -103,28 +126,53 @@ def run_points(plans: list[PointPlan], run, configuration, *, bus=None, stopper:
                                            **({"stage": plan.point.stage} if plan.point.stage else {})})
         else:
             todo.append(plan)
+    signalled = False
+
+    def all_started() -> None:
+        nonlocal signalled
+        if not signalled and started_all is not None:
+            signalled = True
+            started_all()
+
     done = failed = 0
     stopped = False
     at_once = max(1, configuration.parallelism)
-    if at_once == 1:
-        for plan in todo:
+    if at_once == 1 and budget is None:
+        for i, plan in enumerate(todo):
+            if i == len(todo) - 1:
+                all_started()
             result = run_point(plan, run, configuration, bus=bus, stopper=stopper, logs=logs)
             if result.stopped or stopper.requested:
                 return done, failed, True
             failed += not result.ok
             done += result.ok
+        all_started()
         return done, failed, False
     error: BaseException | None = None
+    held: dict = {}                                   # a running point's future → the cores it took
     with ThreadPoolExecutor(max_workers=at_once, thread_name_prefix="hep-point") as pool:
         running: set = set()
         while todo or running:
             while todo and len(running) < at_once and not stopper.requested and error is None:
-                plan = todo.pop(0)
-                running.add(pool.submit(run_point, plan, run, configuration, bus=bus, stopper=stopper, logs=logs))
+                plan = todo[0]
+                need = cores(plan) if budget is not None else 0
+                if budget is not None and not budget.take(need):
+                    break                             # its cores are another run's for now
+                todo.pop(0)
+                future = pool.submit(run_point, plan, run, configuration, bus=bus, stopper=stopper, logs=logs)
+                held[future] = need
+                running.add(future)
+            if not todo:
+                all_started()
             if not running:
+                if todo and not stopper.requested and error is None:
+                    time.sleep(POLL)                  # waiting for the budget
+                    continue
                 break
             finished, running = wait(running, timeout=0.5, return_when=FIRST_COMPLETED)   # SIGINT gets in
             for future in finished:
+                if budget is not None:
+                    budget.give(held.pop(future, 0))
                 try:
                     result = future.result()
                 except BaseException as caught:          # the runner's own error, not a tool's
@@ -133,6 +181,7 @@ def run_points(plans: list[PointPlan], run, configuration, *, bus=None, stopper:
                 stopped |= result.stopped
                 failed += not result.ok and not result.stopped
                 done += result.ok
+    all_started()
     if error is not None:
         raise error
     return done, failed, stopped or stopper.requested
@@ -160,6 +209,13 @@ def cores(plan: PointPlan) -> int:
                 count += 1
         busiest = max(busiest, count)
     return max(busiest, 1)
+
+
+def auto_parallelism(plans: list[PointPlan]) -> int:
+    """`parallelism = "auto"` (V75): as many points at once as the machine's cores hold, by the
+    costliest point's cores (at least one)."""
+    each = max((cores(p) for p in plans), default=1)
+    return max(1, (os.cpu_count() or 1) // each)
 
 
 _PREPARE_LOCKS: dict[Path, threading.Lock] = {}

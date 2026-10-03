@@ -140,3 +140,62 @@ def test_a_prepare_entry_is_filled_by_one_point_at_a_time(scratch):
         t.join()
     assert peak[0] == 1
     assert (scratch / "cache" / "abc.lock").exists() and not entry.exists()   # the lock sits beside the entry
+
+
+def test_auto_parallelism_is_the_cores_over_a_points_cores(scratch, monkeypatch):
+    """V75: "auto" is os.cpu_count() // the costliest point's cores, at least 1."""
+    import os
+    from runner import cli
+    monkeypatch.setattr(os, "cpu_count", lambda: 24)
+    _, conf, p = plan(raw(run__threads=6, run__parallelism="auto"), scratch)
+    assert conf.parallelism_auto and execute.auto_parallelism([p]) == 24 // execute.cores(p)
+    monkeypatch.setattr(os, "cpu_count", lambda: 2)
+    assert execute.auto_parallelism([p]) == 1
+    with pytest.raises(HepError, match="one of auto"):
+        parse(raw(run__parallelism="many"), scratch)
+
+
+def test_the_budget_holds_a_point_until_its_cores_are_free():
+    budget = execute.Budget(24)
+    assert budget.take(12) and budget.take(12) and not budget.take(1)
+    budget.give(12)
+    assert budget.take(12)
+    alone = execute.Budget(4)
+    assert alone.take(12)                                          # bigger than the budget: it runs alone
+    assert not alone.take(1)
+
+
+def test_a_pipelined_run_says_when_every_point_has_started(monkeypatch):
+    """V75: the gate opens once the last point has started, not when it ends; the budget is shared."""
+    events, gate = [], threading.Event()
+
+    def run_point(plan, run, configuration, *, bus, stopper, logs):
+        events.append(("start", plan.point.name, gate.is_set()))
+        time.sleep(0.05)
+        return PointResult(True)
+
+    monkeypatch.setattr(execute, "run_point", run_point)
+    monkeypatch.setattr(execute, "is_complete", lambda plan: False)
+    monkeypatch.setattr(execute, "cores", lambda plan: 2)
+    budget = execute.Budget(4)
+    done, failed, stopped = execute.run_points(fake_plans(3), None, SimpleNamespace(parallelism=3), stopper=Stopper(),
+                                               rerun=False, budget=budget, started_all=gate.set)
+    assert (done, failed, stopped) == (3, 0, False) and gate.is_set() and budget.used == 0
+    assert [e[2] for e in events[:2]] == [False, False]             # shut while p3 waited for its cores
+    assert len(events) == 3                                          # (it opens as p3 is handed its thread)
+
+
+def test_overlapping_runs_keep_their_points_apart():
+    """V75: in a pipelined sweep two runs have points of the same name at once; each heading names its run."""
+    out = io.StringIO()
+    view, bus = PlainView(stream=out), Bus()
+    bus.subscribe(view)
+    for run in ("a", "b"):
+        bus.emit("", "", {"k": "run", "state": "started", "points": 2, "run": run})
+        bus.emit("MSTW08lo", "", {"k": "point", "state": "started", "index": 1, "run": run})
+    bus.emit("MSTW08lo", "", {"k": "point", "state": "done", "res": "results/b/MSTW08lo", "run": "b"})
+    bus.emit("MSTW08lo", "", {"k": "point", "state": "done", "res": "results/a/MSTW08lo", "run": "a"})
+    view.end()
+    lines = out.getvalue().splitlines()
+    assert lines[0].startswith("── point 1/2 (b): MSTW08lo ── ok") and lines[1] == "   done → results/b/MSTW08lo"
+    assert lines[2].startswith("── point 1/2 (a): MSTW08lo ── ok") and lines[3] == "   done → results/a/MSTW08lo"
