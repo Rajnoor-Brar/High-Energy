@@ -56,7 +56,7 @@ def point_dirs(where: Path) -> tuple[Path, Path]:
 
 
 def start(config: str, where: Path) -> subprocess.Popen:
-    return hep(where, config, plain=False, wait=False)
+    return hep(where, config, "--journal", plain=False, wait=False)          # the test reads its events (V72)
 
 
 def wait_for_progress(out: Path, tool: str, timeout: float = 120) -> None:

@@ -27,7 +27,7 @@ values = { analyses = "identity:analyses", plugin_path = "{repo}/build/Rivet" }
 
 [identity]
 files   = ["{repo}/build/Rivet/Rivet_{analysis}.so"]
-version = ["rivet", "--version"]
+version = "stack:rivet"                # utils/Env/stack.toml's (V78)
 
 [shard]
 # shards = K on a rivet table: K rivet processes, each on a share of the events, then rivet-merge -e

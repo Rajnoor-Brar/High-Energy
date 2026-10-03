@@ -45,4 +45,4 @@ card = ["{repo}/build/App_PythiaCheck.exe", "{card}"]   # Pythia reads the card 
 
 [identity]
 files   = ["{exe}"]
-version = ["pythia8-config", "--version"]
+version = "stack:pythia8"                # utils/Env/stack.toml's (V78)

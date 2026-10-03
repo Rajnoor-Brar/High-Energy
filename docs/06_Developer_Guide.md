@@ -16,7 +16,7 @@ C++, the tests, and the conventions. The design it serves is [02_Architecture.md
 | `utils/Env/patches/` | patches this repository needs in the `~/HEP` stack, applied by hand (each file says to which source; `fastjet-3.5.0-siscone-thread-local-ranlux.patch`: `cd ~/HEP/src/fastjet-3.5.0 && patch -p0 < …`, rebuild, `make install`) | yes |
 | `utils/App_Pythia.cc`, `utils/App_yd2rt.cc` | single-file apps | yes |
 | `utils/Apps/Paint/` | the multi-file Paint app, and `base.toml` (the style) | yes |
-| `utils/Env/` | `hep`, `run`, `hep_env.sh`, `flags.sh`, `quantities.toml` (the vocabulary), `schema/`, `runner/`, the tool folders | yes |
+| `utils/Env/` | `hep`, `run`, `hep_env.sh`, `flags.sh`, `stack.toml` (the software stack), `quantities.toml` (the vocabulary), `schema/`, `runner/`, the tool folders | yes |
 | `tests/` | `runner/` (unit), `integration/` (real processes), `cxx/`, `reference/` (data the gates compare against) | yes |
 | `docs/` | this manual | yes |
 | `bots/` | agent rules (`BOT.md`), the working plan, `intent.md` (ideas) | yes |
@@ -88,11 +88,19 @@ name whose `*-config` was not found, is a make error saying which.
 
 ### 2.3 The flag cache
 
-`build/flags.mk` holds every library's flags and `FOUND`, written by `utils/Env/flags.sh`, which
-runs each `*-config` once. It records a key: the resolved path of every `*-config` it used and the
-two install directories. Make recomputes the key on every call and rewrites the cache when it
-differs (L22: a cache keyed on less than it reads is a correctness bug). `hep build --configure`
-forces it; `build/flags.log` records each probe.
+**The stack is one file**, `utils/Env/stack.toml` (V78): each library and program, the command that
+prints its flags (or, for a library with no `*-config`, its install directory and library) and the
+command that prints its version (or a `{ file = … }` to read it from). A new library is one entry there.
+`utils/Env/stack.py` reads it for `flags.sh` (its probes), for the tool folders (`[identity] version =
+"stack:<name>"`, the version in a point's provenance) and for `hep status --stack`. `hep_env.sh` keeps its
+own list: it runs at login and stays bash-only.
+
+`build/flags.mk` holds every library's flags, `FOUND` and `KNOWN` (the stack's libraries: what a
+`// requires:` line may name), written by `utils/Env/flags.sh`, which runs each `*-config` once. It
+records a key: the resolved path of every `*-config` it used, the two install directories and the stack
+file's checksum. Make recomputes the key on every call and rewrites the cache when it differs (L22: a
+cache keyed on less than it reads is a correctness bug). `hep build --configure` forces it;
+`build/flags.log` records each probe.
 
 ---
 
@@ -112,7 +120,9 @@ The package and its ranks are [02 §3.1](02_Architecture.md#31-the-runner). The 
 | `Interface` | `tools` | `name`, `path`, `kind` (`fifo`, `file`, `product`, `pre`, `points`), `producer`, `readers`, `group`, for `points` the `paths` and `names` of every point, and `shard` (a shard's product: technical, not the point's) |
 | `Step` | `tools` | one tool of one point: its folder, group, executable, argv, env, cwd, log, status mode, filters, inputs, outputs, products (final, partial), sidecar, count check, card lines and paths, config, prepare entry and argv, `identity_parts` |
 | `PointPlan` | `tools` | one point (or stage): `values`, `out`, `res`, `groups` of steps, `rendered` (every step, export-only ones included), `interfaces`, `consumers`, `identity`, `seed`, `writes` (files to write), `context`, `upstream`, `deal` (a dealt interface → its group) |
-| `ToolState`, `Journal`, `Reader` | `status` | what the views show per tool; `status.jsonl`; one process's pipe or log tail |
+| `ToolState`, `Reader` | `status` | what the views show per tool; one process's status and output pipes, on a thread (V72) |
+| `Bus`, `Hub`, `Journal` | `events` | the event stream; the watch socket; `status.jsonl` with `--journal` (V72) |
+| `State`, `PlainView`, `LiveView` | `watch` | the reducer of events, and the views that render it |
 | `ToolResult`, `PointResult` | `execute` | exits, causes and messages |
 | `Page` | `plot` | one page: its config path, output, cell, object, document, sources, variants, data, overrides, ranges, merged style |
 
@@ -147,11 +157,11 @@ own name), `upstream` = the members' identities, `Point.stage = "combined"` and 
 **Several runs** (`[run].sweep_runs`, V38): `cmd_run` asks `RunConfig.runs(name)` which configurations
 to run (the named one; else the `swept` ones in file order; else `[run].configuration`). With one,
 it is `run_one`. With several, it calls `build_plans` for each first (a `HepError` names the
-configuration and nothing runs), then `run_one(…, number=N, following=<next journal>)` in turn.
-There is one `Stopper` for all of them; a run's `run finished` record carries `"next"` unless a stop
-was asked; a run whose planning fails at its turn gets a `not run` pair of records from `not_run`,
-so `watch.follow` (which moves on through `"next"`, to the first run started after it) never waits
-on it.
+configuration and nothing runs), then `run_one(…, number=N, following=<next journal>, bus=…)` in turn.
+There is one `Stopper`, one event `Bus` and one watch socket (`events.Hub`) for all of them (V72), so
+`hep watch` follows the sweep as one stream; with `--journal`, a run's `run finished` event carries
+`"next"` unless a stop was asked, and a run whose planning fails at its turn gets a `not run` pair of
+events from `not_run`, so `watch.follow_file` never waits on it.
 
 **Seeds** (`record`, V39): `seed_rule(plan)` is what the identity says ("generator", ["manual",
 seed] or "random"); `manual_seed_of` reads a seed quantity's value (the step's `replica` identity
@@ -350,7 +360,9 @@ Add the name to `plot.BACKENDS`. **A key the backend cannot honour is an error**
 
 - **A few headers only.** A helper a second program needs goes into `utils/` as one more header;
   until then it lives in `modules/<P>/`. `Status.hh` and `Module.hh` were the first; `PythiaRun.hh`
-  (V63: σ combination, stamping, seed check, chunking) is App_Pythia's and the integrated programs'. v1's libraries (`Phys`, `ML`, …) come back from git only when a
+  (V63: σ combination, stamping, seed check, chunking) is App_Pythia's and the integrated programs';
+  `Kit.hh` (V73: `Kit::Exit`, the one exit-code table; `Kit::Args`; `Kit::Json::Object` and `Flat`, the
+  sidecars' and reports' writer and reader) is every app's and module program's. v1's libraries (`Phys`, `ML`, …) come back from git only when a
   program needs them, as a deliberate copy (V7).
 - **A header holds one PascalCase namespace**, checked against the installed toolchain first: X11
   `#define`s `Status` (so `Status.hh` guards it), and Delphes declares a global `class Event`.

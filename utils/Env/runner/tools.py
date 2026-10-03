@@ -12,6 +12,7 @@ else (02 §8).
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import re
@@ -237,6 +238,8 @@ _OUTPUTS: dict[str, str] = {}                       # [checks] info_dirs_command
 
 def version_of(folder: Folder) -> str:
     command = folder.get("identity", "version")
+    if isinstance(command, str) and command.startswith("stack:"):    # utils/Env/stack.toml's command (V78)
+        command = _stack().version_command(command.removeprefix("stack:"))
     if not command:
         return ""
     key = " ".join(command)
@@ -247,6 +250,12 @@ def version_of(folder: Folder) -> str:
         except (OSError, subprocess.SubprocessError):
             _VERSIONS[key] = "?"
     return _VERSIONS[key]
+
+
+@functools.lru_cache(maxsize=1)
+def _stack():
+    """utils/Env/stack.py, the stack registry's reader (V78)."""
+    return plugins.load(repo_root() / "utils" / "Env" / "stack.py", "stack")
 
 
 # ── the plan of one point ──────────────────────────────────────────────────────────────────────

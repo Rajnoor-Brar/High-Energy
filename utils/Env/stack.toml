@@ -1,0 +1,77 @@
+# utils/Env/stack.toml — the software stack, in one place (audit 1 B7, V78).
+#
+# Each entry is one library or program of the stack (~/HEP, docs/06_Developer_Guide.md §2.3):
+#   flags    the command that prints its compile and link flags: build/flags.mk's FLAGS_<name>, which a
+#            source asks for by `// requires: <name>` (utils/Env/flags.sh reads this file)
+#   dir      a library with no *-config: its install directory (shell text, expanded) …
+#   lib      … and the library to link (-l<lib>), from <dir>/include and <dir>/lib
+#   version  the command that prints its version: `hep status --stack`, and a tool folder's
+#            `[identity] version = "stack:<name>"`; or { file = "<shell path>" }: the file's first
+#            line that holds "version"
+# Read by utils/Env/stack.py. utils/Env/hep_env.sh (sourced at login) keeps its own list, on purpose:
+# it must stay fast and bash-only (the user, 2026-10-03).
+
+[pythia8]
+flags   = ["pythia8-config", "--cxxflags", "--ldflags"]
+version = ["pythia8-config", "--version"]
+
+[hepmc3]
+flags   = ["HepMC3-config", "--cflags", "--libs"]
+version = ["HepMC3-config", "--version"]
+
+[yoda]
+flags   = ["yoda-config", "--cppflags", "--libs"]
+version = ["yoda-config", "--version"]
+
+[root]
+flags   = ["root-config", "--cflags", "--libs"]
+version = ["root-config", "--version"]
+
+[fastjet]
+flags   = ["fastjet-config", "--cxxflags", "--libs", "--plugins=yes"]
+version = ["fastjet-config", "--version"]
+
+[lhapdf]
+flags   = ["lhapdf-config", "--cppflags", "--ldflags"]
+version = ["lhapdf-config", "--version"]
+
+[rivet]
+flags   = ["rivet-config", "--cppflags", "--ldflags", "--libs"]
+version = ["rivet", "--version"]
+
+[geant4]
+flags   = ["geant4-config", "--cflags", "--libs"]
+version = ["geant4-config", "--version"]
+
+[toml]
+flags   = ["pkg-config", "--cflags", "--libs", "tomlplusplus"]
+version = ["pkg-config", "--modversion", "tomlplusplus"]
+
+[zstd]
+flags   = ["pkg-config", "--cflags", "--libs", "libzstd"]
+version = ["pkg-config", "--modversion", "libzstd"]
+
+[zlib]
+flags   = ["pkg-config", "--cflags", "--libs", "zlib"]
+version = ["pkg-config", "--modversion", "zlib"]
+
+[onnx]
+dir = "${ONNXRUNTIME_DIR:-${HEP_INSTALL-}/onnxruntime}"
+lib = "onnxruntime"
+
+[delphes]
+dir = "${HEP_INSTALL-}/delphes"
+lib = "Delphes"
+
+# programs: no flags, a version only
+[herwig]
+version = ["Herwig", "--version"]
+
+[sherpa]
+version = ["Sherpa-config", "--version"]
+
+[whizard]
+version = ["whizard", "--version"]
+
+[madgraph]
+version = { file = "${HEP_INSTALL-}/madgraph/VERSION" }

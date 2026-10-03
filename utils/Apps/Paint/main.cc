@@ -14,9 +14,10 @@
 // `--dump-ranges` prints one page's ranges as JSON and draws nothing, which is how the arithmetic is
 // tested without looking at pixels. `--dump-style` prints the page's style — utils/Apps/Paint/base.toml
 // with the page's [style] over it — as TOML; with no page, base.toml's.
-// Exit codes (02 §11): 0 ok, 1 page config, 2 usage, 4 input, 5 output (with several pages: 1 when any
-// failed).
+// Exit codes: utils/Kit.hh's one table (V73): 0 ok, 1 page config, 2 usage, 4 input, 5 output (with
+// several pages: 1 when any failed).
 
+#include "Kit.hh"
 #include "Status.hh"
 
 #include "Draw.hh"
@@ -59,7 +60,7 @@ namespace {
         try {
             page = Paint::readPage(pagePath);
         } catch (const std::exception& error) {
-            return {1, error.what()};
+            return {Kit::Config, error.what()};
         }
         std::vector<Paint::Series> curves;
         std::vector<std::vector<Paint::Series>> members;      // V69: each curve's band members
@@ -73,7 +74,7 @@ namespace {
             }
             if (page.hasData) data = Paint::load(page.data, true), haveData = true;
         } catch (const std::exception& error) {
-            return {4, error.what()};
+            return {Kit::Input, error.what()};
         }
 
         // void, across the page
@@ -120,13 +121,13 @@ namespace {
         if (ranges) {
             std::ofstream out(pagePath + ".ranges.json");
             out << json << "\n";
-            if (!out) return {5, "cannot write " + pagePath + ".ranges.json"};
+            if (!out) return {Kit::Output, "cannot write " + pagePath + ".ranges.json"};
         }
         if (!drawIt) return {};
         try {
             Paint::draw(page, curves, haveData ? &data : nullptr, x, y);
         } catch (const std::exception& error) {
-            return {5, error.what()};
+            return {Kit::Output, error.what()};
         }
         status.summary("\"page\": " + Status::quote(page.name) + ", \"formats\": " + std::to_string(page.formats.size()));
         return {};
@@ -135,21 +136,15 @@ namespace {
 }  // namespace
 
 int main(int argc, char** argv) {
-    std::vector<std::string> pages;
-    bool dump = false, dumpStyle = false, ranges = false, drawIt = true, bad = false;
-    for (int i = 1; i < argc; ++i) {
-        const std::string arg = argv[i];
-        if (arg == "--dump-ranges") dump = true;
-        else if (arg == "--dump-style") dumpStyle = true;
-        else if (arg == "--ranges") ranges = true;
-        else if (arg == "--ranges-only") ranges = true, drawIt = false;
-        else if (arg.rfind("-", 0) == 0) bad = true;
-        else pages.push_back(arg);
-    }
-    if (bad || (pages.empty() && !dumpStyle) || ((dump || dumpStyle) && pages.size() > 1)) {
-        std::fputs("usage: Paint.exe PAGE.toml [PAGE.toml …] [--ranges]  |  Paint.exe PAGE.toml --dump-ranges"
+    const Kit::Args args(argc, argv, {}, {"dump-ranges", "dump-style", "ranges", "ranges-only"});
+    const std::vector<std::string>& pages = args.positional();
+    const bool dump = args.has("dump-ranges"), dumpStyle = args.has("dump-style");
+    const bool ranges = args.has("ranges") || args.has("ranges-only"), drawIt = !args.has("ranges-only");
+    if (!args.ok() || (pages.empty() && !dumpStyle) || ((dump || dumpStyle) && pages.size() > 1)) {
+        if (!args.error().empty()) std::fprintf(stderr, "Paint: %s\n", args.error().c_str());
+        std::fputs("usage: Paint.exe PAGE.toml [PAGE.toml …] [--ranges | --ranges-only]  |  Paint.exe PAGE.toml --dump-ranges"
                    "  |  Paint.exe [PAGE.toml] --dump-style\n", stderr);
-        return 2;
+        return Kit::Usage;
     }
     if (dumpStyle) {
         try {
@@ -158,9 +153,9 @@ int main(int argc, char** argv) {
             std::cout << Paint::readStyle(doc["style"].as_table()).merged << "\n";
         } catch (const std::exception& error) {
             std::fprintf(stderr, "%s\n", error.what());
-            return 1;
+            return Kit::Config;
         }
-        return 0;
+        return Kit::Ok;
     }
     Status::Reporter status(0);
     if (pages.size() == 1) {                                  // one page: its exit code says how it went
@@ -176,5 +171,5 @@ int main(int argc, char** argv) {
         std::fflush(stdout);
         failed += outcome.code != 0;
     }
-    return failed ? 1 : 0;
+    return failed ? Kit::Config : Kit::Ok;
 }

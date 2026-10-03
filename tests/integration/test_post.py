@@ -15,6 +15,7 @@ import pytest
 
 from runner import execute, post, quantities, record, sweep, tools
 from runner.errors import HepError
+from runner.events import Bus
 from runner.watch import PlainView
 
 REPO = Path(__file__).resolve().parents[2]
@@ -70,9 +71,9 @@ def complete(plans, run, configuration):
 
 def run_post(post_plan, plans, run, configuration, rerun=False):
     out = io.StringIO()
-    view = PlainView(stream=out)
-    ok = post.run(post_plan, plans, run, configuration, sink=view, journal=None,
-                  stopper=execute.Stopper(), rerun=rerun, say=view.say)
+    view, bus = PlainView(stream=out), Bus()
+    bus.subscribe(view)
+    ok = post.run(post_plan, plans, run, configuration, bus=bus, stopper=execute.Stopper(), rerun=rerun, say=bus.say)
     view.flush()                                                       # the view writes on its own thread (V32)
     return ok, out.getvalue()
 
@@ -162,8 +163,7 @@ def test_a_pre_product_is_an_input_every_point_may_name(scratch):
     assert other[0].identity != plans[0].identity                     # a changed pre reruns the points
     shutil.rmtree(pre.res, ignore_errors=True)
     shutil.rmtree(pre.out, ignore_errors=True)
-    ok = post.run_pre(pre, run, configuration, sink=PlainView(stream=io.StringIO()), journal=None,
-                      stopper=execute.Stopper(), rerun=False)
+    ok = post.run_pre(pre, run, configuration, stopper=execute.Stopper(), rerun=False)
     assert ok and shared.read_text() == "made before every point\n" and record.is_complete(pre)
 
 
@@ -172,8 +172,9 @@ def test_a_failing_pre_stops_the_run(scratch):
     pre.rendered["fetch"].argv = [sys.executable, "-c", "raise SystemExit(3)"]
     shutil.rmtree(pre.out, ignore_errors=True)
     out = io.StringIO()
-    view = PlainView(stream=out)
-    assert not post.run_pre(pre, run, configuration, sink=view, journal=None, stopper=execute.Stopper(), rerun=True)
+    view, bus = PlainView(stream=out), Bus()
+    bus.subscribe(view)
+    assert not post.run_pre(pre, run, configuration, bus=bus, stopper=execute.Stopper(), rerun=True)
     view.flush()
     assert "── pre (before every point) ── FAILED [fetch]" in out.getvalue()
 

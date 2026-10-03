@@ -64,7 +64,20 @@ def test_herwig_sigma_is_its_own_and_the_run_file_is_shared(scratch):
     value, _ = xsec(scratch / "results" / folder("PhotoProduction/herwig") / "point/photo.yoda")
     digits = len(stated[2].split(".")[1]) if "." in stated[2] else 0
     assert abs(value / 1000 - nb) <= 0.5 * 10 ** (int(stated[4]) - digits) * 1.0001   # to the digits Herwig prints
-    out = hep_run(scratch, "PhotoProduction/herwig", "export")
+    out = hep_run(scratch, "PhotoProduction/herwig", "export", "--logs")    # the probe's log is read (V72)
     assert "herwig:prepare: cached" in out                               # the same card: one read
     probe = (scratch / "output" / folder("PhotoProduction/herwig", "export") / "point/logs/probe.log").read_text(encoding="utf-8", errors="replace")
     assert "point.run" in probe
+
+
+def test_a_point_is_reproduced_from_its_provenance(scratch):
+    """V77: hep reproduce runs a finished point again (its --set overrides too) beside it, and its
+    products hold the same values (a sharded Rivet's bytes differ: merge order)."""
+    hep_run(scratch, "PhotoProduction/eic", "single", "--set", "run.event_count=400", "--set", "run.threads=2")
+    provenance = scratch / "output" / folder("PhotoProduction/eic", "single") / "point" / "provenance.json"
+    import support
+    assert json.loads(provenance.read_text(encoding="utf-8"))["sets"] == ["run.event_count=400", "run.threads=2"]
+    done = support.hep(scratch, provenance, command="reproduce")
+    assert done.returncode == 0, done.stdout[-2000:] + done.stderr[-2000:]
+    assert "photo.yoda: the same values" in done.stdout or "photo.yoda: identical" in done.stdout
+    assert (scratch / "output" / "PhotoProduction" / ".reproduce").is_dir()

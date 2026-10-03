@@ -169,11 +169,12 @@ description   = "EIC photoproduction studies"
 | `configuration` | string | **required** unless `sweep_runs` | must name a `[run.<cfg>]` table (C2). Under `sweep_runs` it may be left out; `hep run <config>` then ignores it |
 | `sweep_runs` | boolean | false | `hep run <config>` runs every configuration not `swept = false`, one after another (§4.1) |
 | `seed_type` | string | `"identity"` | default for configurations: how a point's seeds are chosen, `"identity"`, `"manual"` or `"random"` (02 §8) |
+| `notify` | string | `"none"` | `"desktop"` (V76): a desktop notification (`notify-send`) when `hep run` ends, with its verdict; never fails a run |
 | `manual_seed` | integer | none | default for configurations: under `seed_type = "manual"`, every point's seed (from 1 to the point's generators' `[card] seed_range`: 899,999,999 for Pythia, checked when the point is planned, V54); ignored otherwise (`--plan` says so) |
 | `serial` | integer | none | the prefix `NN_` of each configuration's folder, `<name>/NN_<label>`: **location, never identity** (V12). A configuration's `serial` overrides it (V45). Changing it starts a fresh location. |
 | `event_count` | integer | none | default for configurations; one of the two must set it |
 | `threads` | integer | 1 | default for configurations. `0` means every core, **resolved to a number at plan time** |
-| `parallelism` | integer | 1 | default for configurations: how many points run at once (V36). `threads` stays each point's; never part of an identity or a seed, so changing it reruns nothing |
+| `parallelism` | integer or `"auto"` | 1 | default for configurations: how many points run at once (V36); `"auto"` (V75): as many as the cores hold, `os.cpu_count() // the costliest point's cores`. `threads` stays each point's; never part of an identity or a seed, so changing it reruns nothing |
 | `description` | string | "" | |
 
 Every other table inside `[run]` is a configuration (§5). Any other key is an error (C1).
@@ -200,7 +201,14 @@ eic · energies: 4 point(s), 1000000 events, 12 threads
 - **Every run is planned before the first starts**, so a config error in any of them exits 2 with
   nothing run. Each is planned again when its turn comes, so edits to the TOML made meanwhile
   count; a run an edit has broken fails alone (exit 2 for it, and the next one starts).
-- **A failed run leaves the next to start.** Ctrl-C stops the running run (exit 6, as always) and
+- **The runs are pipelined** (V75, the user's B8 decision): a run starts once the one before has started
+  all its points, and its points take the cores that run's last points leave free (a budget the runs
+  share: the machine's cores, or more if a run alone was set to use more). Each run's own order (pre,
+  points, combined, post, plots) is kept, and so is its folder, journal and verdict; while two runs
+  overlap, a block's heading names its run: `── point 1/4 (energies): 5x41 ── ok after …`. On the zeus
+  sweep (4 equal points a run, 2 at a time) nothing overlaps; a run whose point count does not divide by
+  its `parallelism` saves its last wave's idle slots (docs/audit_1/notes/B8.md).
+- **A failed run leaves the next to start.** Ctrl-C stops the running runs (exit 6, as always) and
   **starts no more**.
 - The exit code: 6 if a run was stopped; else 1 if any failed; else 0.
 - `hep run <config> <cfg>` runs just that one, whether or not the sweep is on or it is `swept`.
@@ -260,7 +268,7 @@ label       = "PDFs_100M"
 | `combine` | array of strings | `[]` | swept quantities whose points are merged into one curve (§5.5) |
 | `event_count` | integer | `[run].event_count` | required here if `[run]` has none |
 | `threads` | integer | `[run].threads`, else 1 | `0` = every core |
-| `parallelism` | integer | `[run].parallelism`, else 1 | points at once; `--plan` and the run's title say about how many cores that is, and warn past the machine's |
+| `parallelism` | integer or `"auto"` | `[run].parallelism`, else 1 | points at once (`"auto"`: cores ÷ a point's cores, V75); `--plan` and the run's title say about how many cores that is, and warn past the machine's |
 | `pre`, `post` | array | `[]` | the form of `tools` (§5.4) |
 | `static` | table | `{}` | merged over `[static]` and the layers', key by key (§7); a `"default"` keeps the layer below's |
 | `prelim` | table | `[prelim]` | the nearest layer's **replaces** `[prelim]` whole for this configuration (its chain's interfaces); `{}` means none |
@@ -423,6 +431,7 @@ values = [0.05, 0.10, 0.15, 0.25]
 | `tags` | array of strings | derived | one per value. The default is the value with anything but `A–Za–z0–9.+-` replaced by `-`. Tags name point directories: keep them short and unique. |
 | `labels` | array of strings | the tags | legend text, in **LaTeX** (`$e^-$`, `$\sqrt{s}$`), the one label language of every text a run TOML gives a page (V65): math in `$…$`, the rest text, where a bare `_` or `^` is the character (`"PDF4LHC21_40"`). A label written in ROOT's TLatex (`#sqrt{s}`, `p_{T}`), as configs did before V65, is still read: it is converted faithfully (TLatex's upright letters become `\mathrm{…}`), until the configs are migrated. `\_`, `\^` and `\#` also give the character, even before a brace; in TOML write them in single quotes, `'PDF4LHC21\_40'`, since in `"…"` a backslash starts a TOML escape |
 | `styles` | array of tables | the palette | one per value (V67): its curves' look, `{ colour, line, width }`. `colour` is `"#rrggbb"`, a ROOT name (`"kBlue+1"`) or number (the yoda backend draws `#rrggbb` only); `line` is `solid`, `dashed`, `dotted` or `dashdot`; `width` is in points. A key left out, or `"default"`, is the style's; curves with no colour take the palette in turn, as mkhtml's take its cycle. A value keeps its look on every page, so a PDF is one colour throughout. With two curve axes, the later one's keys win |
+| `shape` | string or array | none | the values' shape, in the vocabulary's grammar (V76): `"pdg"`, `"float\|int"`, `["float", "float"]`; checked when the TOML is read. For a quantity of your own (one the vocabulary, `utils/Env/quantities.toml`, does not name); a vocabulary quantity has its own shape |
 | `exclude` | array of integers | `[]` | values a sweep leaves out, by their **1-based** place (as `static = "#2"` and `--points 2` count): `exclude = [2]` sweeps the others. The remaining points keep their names and identities and are numbered 1… over what is swept. In an entangled group, a value any member excludes leaves the group. `static` may still pick an excluded value. Refused: a place outside 1…len(values), or none left (V42) |
 | `key` | string, or table `{<tag or tool type> = "<key>"}` | none | the native key. A string needs a `target`. A table entry for a tool tag wins over one for its type. |
 | `target` | string or array | none | restricts the consumers (§8.1) |
@@ -775,7 +784,7 @@ The look of the ROOT pages is TOML (V27). **`utils/Apps/Paint/base.toml`** holds
 default (rivet-mkhtml's look); edit it to change every page. Over it, key by key:
 
 1. `[plot].root_style` — a style file (a bare name under `configs/<project>/`, `.toml` optional);
-   `hep plot FILE… --style FILE` for files;
+   `hep overlay FILE… --style FILE` for files;
 2. `[plot.style]`;
 3. `[plot.object."<glob>"].style`, for the objects it matches.
 
@@ -878,6 +887,8 @@ Options and positionals may come in any order (`hep run eic --plain pdf`, V54).
 | `--only plot` | draw the pages from the complete points; run nothing |
 | `--only pre`, `--only post` | run only that stage, whether or not it is complete |
 | `--plain` | plain lines instead of the live view (also when stdout is not a terminal) |
+| `--journal` | also write the run's events to `output/…/<cfg>/status.jsonl` (V72), for `hep watch --file` and replay; without it nothing of the run's state is on disk |
+| `--logs` | keep every tool's whole output in `logs/<tag>.log`; without it only a failed tool's last 200 lines are written (V72) |
 
 The order: pre stage → every point not complete (in point order) → `points.json` → post stage →
 plot stage. A failed point does not stop the others. **Exit codes:** 0 everything done or skipped;
@@ -886,19 +897,41 @@ user (Ctrl-C: SIGINT, then SIGTERM, then SIGKILL to the running tools; a second 
 default behaviour). Under `[run].sweep_runs` (§4.1), each run has these codes; the command exits 6 if
 one was stopped, else 1 if any failed, else 0.
 
-### `hep plot`
+### `hep plot` and `hep overlay`
 
 ```
 hep plot CONFIG [CONFIGURATION] [--set KEY=VALUE]…
-hep plot FILE… [-o DIR] [--labels A,B,…] [--objects GLOB…] [--formats pdf,png] [--ratio] [--style FILE]
+hep overlay FILE… [-o DIR] [--labels A,B,…] [--objects GLOB…] [--formats pdf,png] [--ratio] [--style FILE]
 ```
 
-With a config: its pages, as after a run (`--only plot`); under `[run].sweep_runs`, every swept
-configuration's, each under its `run NN - <title> -` line. With files (every target ends `.yoda`,
-`.yoda.gz` or `.root`): one page per object any of them holds, one curve per file, or one per point
-of a merged sweep file (labelled from the `points.json` inside it). `-o` defaults to
-`results/plots/<first file's stem>/`; `--labels` gives one label per file; `--style` is a style
-file over base.toml.
+`hep plot`: a config's pages, as after a run (`--only plot`); under `[run].sweep_runs`, every swept
+configuration's, each under its `run NN - <title> -` line. `hep overlay` (V74; it was `hep plot FILE…`,
+which is now refused with the hint): files ending `.yoda`, `.yoda.gz` or `.root`, one page per object
+any of them holds, one curve per file, or one per point of a merged sweep file (labelled from the
+`points.json` inside it). `-o` defaults to `results/plots/<first file's stem>/`; `--labels` gives one
+label per file; `--style` is a style file over base.toml.
+
+### `hep ls`, `hep explain`, `hep status`, `hep clean`
+
+```
+hep ls [PROJECT]
+hep explain KEY                       # plot.y_gutter, run.event_count, quantities.<q>.styles, …
+hep status [CONFIG [CONFIGURATION]] | --stack
+hep clean [CONFIG] [--dry-run] [--yes]
+```
+
+Housekeeping (V74). `ls`: every config and its configurations, with descriptions; a `*` marks what
+`hep run CONFIG` runs. `explain`: a key's type, default, choices, bounds, inheritance and meaning,
+from the schema (`utils/Env/schema/run.toml`). `status`: every configuration's points and stages,
+each **complete**, **stale** (complete for an earlier identity: it reruns), **incomplete** (begun, not
+done: failed, stopped or running) or **to run**, with when it finished, its results' size, and
+`[running]` for a configuration a job is running now; `status --stack`: each package of
+`utils/Env/stack.toml`, its version and where it is (V78). `clean`: removes what the runner made and no plan
+uses: within each configuration's folder, point folders no plan has (in `output/`) and `.partial`
+leftovers (in `output/` and `results/`); with no config named, every config is planned (all must plan)
+and run folders no configuration has and prepare cache entries no plan references go too. It never
+removes a result: an unused point's `results/` folder is listed as kept. It lists first, then asks on a
+terminal (`--yes` elsewhere); `--dry-run` only lists; it refuses while a job is running.
 
 ### `hep check`
 
@@ -915,13 +948,38 @@ and exits 0, or 2 when any failed: for a pre-commit hook, or before a long sweep
 
 ```
 hep watch [CONFIG [CONFIGURATION]] [--plain]
+hep watch --file output/<P>/<run>/<cfg>/status.jsonl [--plain]
 ```
 
-Follows a job from another terminal through its journal, `output/…/<cfg>/status.jsonl`; with no
-config, the most recently written journal; under `[run].sweep_runs` with no configuration, the swept
-configuration's journal written to last. It prints the same blocks as the run, and leaves when the
-run finishes. A run of a sweep names the next run's journal when it finishes, so the watch follows
-on to it, and leaves after the last or on a stop.
+Follows a running job from another terminal (V72) through the watch socket its `hep run` serves while
+it lives: with no config, the latest job started on this machine; with one, the job running that config
+(and that configuration). It prints the run so far and then what follows, the same blocks as the run,
+and leaves when the job's process ends; under `[run].sweep_runs` the job is one process, so the watch
+follows it from run to run. `--file` follows a `--journal` run's status file instead (a finished run's,
+too): it leaves when the run finishes, or follows on to the next run's journal in a sweep.
+
+### `hep reproduce`
+
+```
+hep reproduce output/<P>/<run>/<cfg>/<point>/provenance.json [--anyway] [--plain]
+```
+
+Runs a finished point again (V77), exactly as it ran: its config, its configuration, its `--set`
+overrides (the provenance records them) and its seed (a `random` seed is the recorded one; any other
+seed follows from the identity, as it did). It runs into `output/<P>/.reproduce/<identity>/` (its own
+`output/` and `results/`), never over the original, then compares each product with the original's: a
+YODA file object by object, a ROOT file histogram by histogram, anything else byte for byte (`identical`,
+`the same values`, `differs`; exit 1 if any differs). If the setup has changed since (the identity is not
+the one the provenance records) it prints what changed, as `--why`, and stops; `--anyway` runs today's
+setup with the recorded seed.
+
+### Reading results from Python
+
+`runner.results.load(CONFIG, CONFIGURATION)` (V77) reads a configuration's `points.json` and returns its
+points: `name`, `values` (each quantity's `tag`, `label`, `value`, `swept`), `products` (name → path),
+`results`, `output`, `complete`, `identity`, `seed`, and `yoda()` / `root()` for the product of that
+kind; `results.runs(CONFIG)` gives every configuration that has run. It plans nothing, so it needs no tool
+installed: for notebooks and statistics tools, with `utils/Env` on `sys.path`.
 
 ### `hep build` and `make`
 
@@ -960,7 +1018,7 @@ Herwig's repository), on every core by default. `--tests` adds the C++ tests, `-
 | `cards/<tag>.<ext>` | base + point card in one file (what an export hands out); for render style, the whole card |
 | `cards/<tag>.prepare.<ext>` | the card a prepare step reads, when the tool's `render.py` makes one |
 | `config/<tag>.toml` | a custom or module tool's extracted config |
-| `logs/<tag>.log`, `logs/<tag>.prepare.log`, `logs/prelim.log` | stdout and stderr |
+| `logs/<tag>.log`, `logs/<tag>.prepare.log`, `logs/prelim.log` | a failed tool's last 200 lines of stdout and stderr (a failed `[prelim]` command's output); with `--logs`, every tool's whole output (V72) |
 | `provenance.json` | `point`, `run`, `project`, `configuration`, `config_file`; `values` (each active quantity's index, tag and value); `identity`, `seed`, `threads`, `events`; per tool `tag`, `tool`, `exe`, `exe_sha256`, `version`, `argv`, `ran`, `card`, `card_sha256`, `config`, `result` (exit, seconds, note); `host`, `platform`, `user`, `git` (`revision`, `dirty`), `started`, `finished` |
 | `identity.json` | the parts the identity hashes (each tool's card lines, argv, binaries, options; threads, events, groups, prelim, the seed rule), written when the point completes, for `--why` (V57) |
 | `.complete` | the point's identity, written **last**; its absence means the point is not done |
@@ -970,7 +1028,7 @@ Herwig's repository), on every core by default. `--tests` adds the C++ tests, `-
 | File | Holds |
 |---|---|
 | `points.json` | `run`, `project`, `configuration`, `config_file`, `plot_points`, and per point: `name`, `index`, `values` (tag, label, value, swept), `page`, `products` (name → path), `results`, `output`, `identity`, `seed`, `complete`. Every point, even under `--points`. |
-| `status.jsonl` | the journal: every status message as `{"point", "tool", "t", "k", …}`, plus the runner's own `run` (started, finished with a `verdict`), `point` (started, done / failed / stopped with `cause` and `msg`) and `exit` (`code`, `seconds`) records |
+| `status.jsonl` | only with `--journal` (V72): the run's events as `{"v", "point", "tool", "t", "k", …}`: every status message, plus the runner's own `run` (started, finished with a `verdict`), `point` (started, done / failed / stopped with `cause` and `msg`) and `exit` (`code`, `seconds`) records |
 | `plots/[<cell>/]<object>.toml` | each page's Paint config ([05 §17](05_Tools_Reference.md#17-paint)) |
 | `plots/merged.sha256` | what the merged sweep file was built from |
 

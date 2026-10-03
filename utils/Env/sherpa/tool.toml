@@ -42,4 +42,4 @@ alias = "card"                      # sherpa_yaml = sherpa_card
 
 [identity]
 files   = ["{exe}"]
-version = ["Sherpa-config", "--version"]
+version = "stack:sherpa"                # utils/Env/stack.toml's (V78)

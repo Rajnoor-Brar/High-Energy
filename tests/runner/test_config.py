@@ -116,3 +116,15 @@ def test_every_folder_maps_only_vocabulary_names():
     for tool, table in master["quantities"].items():
         assert set(table["compatible_quantities"]) <= names, tool
     assert quantities.BUILTIN == ("events", "threads")
+
+
+def test_a_users_quantity_may_state_its_shape(scratch):
+    """V76: shape = "pdg" (the vocabulary's grammar) checks a quantity the vocabulary does not name."""
+    good = raw(quantities__lepton={"key": {"pythia": "Beams:idB"}, "values": [11, -11], "shape": "pdg"})
+    parse(good, scratch)
+    with pytest.raises(HepError, match="value 2 is '-11', not"):
+        parse(raw(quantities__lepton={"key": {"pythia": "Beams:idB"}, "values": [11, "-11"], "shape": "pdg"}), scratch)
+    with pytest.raises(HepError, match="is not one"):
+        parse(raw(quantities__lepton={"key": {"pythia": "Beams:idB"}, "values": [11], "shape": "integer"}), scratch)
+    with pytest.raises(HepError, match="the vocabulary's is"):
+        parse(raw(quantities__energies={"values": [[275, 18]], "shape": "float"}), scratch)

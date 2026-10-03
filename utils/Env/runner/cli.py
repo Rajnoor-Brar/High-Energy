@@ -1,4 +1,5 @@
-"""`hep run`, `hep plot` and `hep watch` (rank 5): argument parsing and the order of events.
+"""`hep run`, `hep plot`, `hep overlay`, `hep watch`, `hep check` and the housekeeping commands (`ls`,
+`explain`, `status`, `clean`: house.py) (rank 5): argument parsing and the order of events.
 
 docs/04_Config_Reference.md §14. `hep build` is handled by the shell dispatcher
 (utils/Env/hep), which runs make.
@@ -13,19 +14,23 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import signal
+import subprocess
+import threading
+import time
 import tomllib
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 from . import config as configmod
-from . import execute, plot, post, record, sweep, tools
+from . import execute, house, plot, post, record, sweep, tools
 from .errors import HepError
-from .paths import output_root
+from .paths import output_root, results_root
 from .quantities import load_master
-from .status import Journal
-from .watch import follow, view
+from .events import Bus, Hub, Journal, RunBus, greeting, connect, hubs
+from .watch import follow_events, follow_file, view
 
 
 def parser() -> argparse.ArgumentParser:
@@ -46,17 +51,45 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--rerun", action="store_true", help="ignore skip-unchanged")
     run.add_argument("--only", choices=["pre", "post", "plot"], help="rerun only the pre tools, the post tools or the plots")
     run.add_argument("--plain", action="store_true", help="plain lines instead of the live view")
+    run.add_argument("--journal", action="store_true",
+                     help="also write every status event to output/…/status.jsonl (for hep watch --file and replay)")
+    run.add_argument("--logs", action="store_true",
+                     help="keep every tool's whole output in logs/<tag>.log (default: only a failed tool's last lines)")
 
-    draw = commands.add_parser("plot", help="draw pages: a configuration's, or any YODA/ROOT files")
-    draw.add_argument("targets", nargs="+", metavar="TARGET",
-                      help="CONFIG [CONFIGURATION] (its pages, as after a run), or FILE… (YODA/ROOT files to overlay)")
-    draw.add_argument("--set", metavar="KEY=VALUE", action="append", default=[], help="as for hep run (config mode)")
-    draw.add_argument("-o", "--output", help="files: where the pages go (default results/plots/<first file>)")
-    draw.add_argument("--labels", help="files: legend labels, comma-separated, one per file")
-    draw.add_argument("--objects", nargs="+", default=[], metavar="GLOB", help="files: only these YODA paths")
-    draw.add_argument("--formats", default="pdf,png", help="files: pdf, png, svg, eps (default pdf,png)")
-    draw.add_argument("--ratio", action="store_true", help="files: a ratio panel against the first curve")
-    draw.add_argument("--style", metavar="FILE", help="files: a style file over utils/Apps/Paint/base.toml")
+    draw = commands.add_parser("plot", help="draw a configuration's pages from its complete points")
+    draw.add_argument("config", help="the run config")
+    draw.add_argument("configuration", nargs="?", help="overrides [run].configuration; under sweep_runs, only it")
+    draw.add_argument("--set", metavar="KEY=VALUE", action="append", default=[], help="as for hep run")
+
+    overlay = commands.add_parser("overlay", help="overlay any YODA/ROOT files through Paint, with no run TOML")
+    overlay.add_argument("files", nargs="+", metavar="FILE", help="YODA (.yoda, .yoda.gz) or ROOT files")
+    overlay.add_argument("-o", "--output", help="where the pages go (default results/plots/<first file>)")
+    overlay.add_argument("--labels", help="legend labels, comma-separated, one per file")
+    overlay.add_argument("--objects", nargs="+", default=[], metavar="GLOB", help="only these YODA paths")
+    overlay.add_argument("--formats", default="pdf,png", help="pdf, png, svg, eps (default pdf,png)")
+    overlay.add_argument("--ratio", action="store_true", help="a ratio panel against the first curve")
+    overlay.add_argument("--style", metavar="FILE", help="a style file over utils/Apps/Paint/base.toml")
+
+    listing = commands.add_parser("ls", help="every config and its configurations")
+    listing.add_argument("project", nargs="?", help="only this project's configs")
+
+    explain = commands.add_parser("explain", help="a run TOML key: its type, default and meaning (the schema's)")
+    explain.add_argument("key", help="e.g. plot.y_gutter, run.event_count, quantities.<q>.styles")
+
+    state = commands.add_parser("status", help="each configuration's points: complete, stale, incomplete or to run")
+    state.add_argument("config", nargs="?", help="one config (default: every config)")
+    state.add_argument("configuration", nargs="?", help="one configuration of it")
+    state.add_argument("--stack", action="store_true", help="the software stack instead: each package's version (V78)")
+
+    again = commands.add_parser("reproduce", help="run a finished point again, from its provenance, beside it")
+    again.add_argument("provenance", help="output/…/<point>/provenance.json")
+    again.add_argument("--anyway", action="store_true", help="run it even though the setup changed since")
+    again.add_argument("--plain", action="store_true", help="plain lines instead of the live view")
+
+    clean = commands.add_parser("clean", help="remove what the runner made and no plan uses (output/ only)")
+    clean.add_argument("config", nargs="?", help="one config (default: every config, and the unused caches)")
+    clean.add_argument("--dry-run", action="store_true", help="list only")
+    clean.add_argument("--yes", action="store_true", help="delete without asking")
 
     check = commands.add_parser("check", help="check run TOMLs: every configuration loaded, validated and planned")
     check.add_argument("configs", nargs="*", metavar="CONFIG",
@@ -66,6 +99,7 @@ def parser() -> argparse.ArgumentParser:
     watch.add_argument("config", nargs="?", help="the run config whose job to watch (default: the latest job)")
     watch.add_argument("configuration", nargs="?", help="overrides [run].configuration (or the sweep's latest)")
     watch.add_argument("--plain", action="store_true", help="plain lines instead of the live view")
+    watch.add_argument("--file", metavar="STATUS.JSONL", help="follow a --journal run's status file instead")
     return top
 
 
@@ -99,6 +133,8 @@ def build_plans(args, key: str | None) -> Planned:
     for plan in plans:
         tools.finalise(plan, plan.seed)
         tools.check_cards(plan)                  # the tools read their cards (V59), cached by text
+    if configuration.parallelism_auto:           # "auto" (V75): from the plans' cores
+        configuration.parallelism = execute.auto_parallelism(plans)
     plot.check_texts(run, plans)                 # a placeholder typo costs no point run (V66) …
     plot.check_band(run, configuration)          # … nor a band's (V69)
     return Planned(run, configuration, plans, [p for p in plans if p.point.index in chosen],
@@ -107,7 +143,7 @@ def build_plans(args, key: str | None) -> Planned:
 
 
 def journal_path(run, configuration) -> Path:
-    """output/<P>/<run>/<cfg>/status.jsonl: a run's journal, which hep watch follows."""
+    """output/<P>/<run>/<cfg>/status.jsonl: a --journal run's events, which hep watch --file follows."""
     return output_root() / tools.run_dir(run, configuration) / "status.jsonl"
 
 
@@ -211,8 +247,39 @@ def cmd_run(args) -> int:
             print(line)
         return 0
     stopper = execute.Stopper()
+    if getattr(args, "why", False) or args.plan or args.only == "plot":
+        bus = None                           # nothing runs: nothing to watch
+    else:                                    # one stream for the whole process, served while it lives (V72)
+        bus = Bus()
+        hub = Hub({"config": str(run.path), "run": run.name, "configurations": keys})
+        bus.subscribe(hub)
+    code = 2
+    try:
+        code = _runs(args, run, keys, stopper, bus)
+        return code
+    finally:
+        if bus is not None:
+            hub.close()
+            notify(run, code)
+
+
+def notify(run, code: int) -> bool:
+    """[run] notify = "desktop" (V76): a notify-send when the command ends, for runs of hours. Never
+    fails the run: no notify-send, or no desktop, and it says nothing."""
+    if run.raw.get("run", {}).get("notify", "none") != "desktop" or not shutil.which("notify-send"):
+        return False
+    verdict = {0: "done", 1: "a point failed", 2: "a config error", 6: "stopped"}.get(code, f"exit {code}")
+    try:
+        subprocess.Popen(["notify-send", "--app-name=hep", f"hep run {run.name}", f"{run.path.name}: {verdict}"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    except OSError:
+        return False
+    return True
+
+
+def _runs(args, run, keys: list[str], stopper: execute.Stopper, bus) -> int:
     if len(keys) == 1:
-        return run_one(args, keys[0], stopper)
+        return run_one(args, keys[0], stopper, bus=bus)
     if args.points:
         raise HepError("--points picks points of one configuration, and this sweep runs several",
                        where=f"{run.path}: [run].sweep_runs", hint=f"name it: hep run {args.config} <configuration> --points …")
@@ -228,11 +295,14 @@ def cmd_run(args) -> int:
             skipped[key] = f"   no {args.only} tools: skipped"
     if len(skipped) == len(keys):
         raise HepError(f"no configuration of this sweep has {args.only} tools", where=f"{run.path}: [run].sweep_runs")
+    if bus is not None and args.only is None:
+        return _pipelined(args, run, keys, stopper, bus, ahead, stamp)
     failed = False
     for number, key in enumerate(keys, 1):
         if stopper.requested:
             return 6
-        following = next((journal_path(run, run.configurations[k]) for k in keys[number:] if k not in skipped), None)
+        following = next((journal_path(run, run.configurations[k]) for k in keys[number:] if k not in skipped), None) \
+            if args.journal else None
         if key in skipped:
             print(("\n" if number > 1 else "") + header(number, run.configurations[key]))
             print(skipped[key])
@@ -240,17 +310,79 @@ def cmd_run(args) -> int:
         try:                                 # planned again only if the TOML was edited meanwhile (V38, V54)
             unchanged = run.path.stat().st_mtime_ns == stamp
             code = run_one(args, key, stopper, number=number, following=following,
-                           planned=ahead[key] if unchanged else None)
+                           planned=ahead[key] if unchanged else None, bus=bus)
         except HepError as error:            # the TOML was edited since the check: this run fails alone
             print(("\n" if number > 1 else "") + header(number, run.configurations[key]))
             print(error.render(), file=sys.stderr)
-            not_run(journal_path(run, run.configurations[key]), header(number, run.configurations[key]),
-                    error.message, following)
+            not_run(journal_path(run, run.configurations[key]) if args.journal else None,
+                    header(number, run.configurations[key]), error.message, following, bus)
             code = 2
         if code == 6:
             return 6
         failed = failed or code != 0
     return 1 if failed else 0
+
+
+def _pipelined(args, run, keys: list[str], stopper: execute.Stopper, bus: Bus, ahead: dict, stamp: int) -> int:
+    """A sweep of runs, pipelined (V75, the user's B8 decision): each run starts once the one before has
+    started all its points, and its points take the free cores of a budget the runs share (never more
+    than the largest run alone would use), so a run's last points and the next run's first overlap. Each
+    run's own order (pre, points, combined, post, plots) is kept. One view for the sweep; each run's
+    events carry its key. A stop starts no more runs; a failed run leaves the next to start."""
+    each = {key: max((execute.cores(p) for p in ahead[key].plans), default=1) for key in keys}
+    budget = execute.Budget(max(os.cpu_count() or 1,
+                                *(max(1, ahead[key].configuration.parallelism) * each[key] for key in keys)))
+    shown = view(args.plain)
+    bus.subscribe(shown)
+    catch_signals(stopper)
+    codes: dict[str, int] = {}
+    errors: list[BaseException] = []
+    threads: list[threading.Thread] = []
+    gate: threading.Event | None = None
+    try:
+        for number, key in enumerate(keys, 1):
+            while gate is not None and not gate.wait(0.25) and not stopper.requested:
+                pass
+            if stopper.requested:
+                break
+            following = next((journal_path(run, run.configurations[k]) for k in keys[number:]), None) \
+                if args.journal else None
+            gate = threading.Event()
+
+            def job(key=key, number=number, following=following, gate=gate) -> None:
+                voice = RunBus(bus, key)
+                try:                         # planned again only if the TOML was edited meanwhile (V38, V54)
+                    unchanged = run.path.stat().st_mtime_ns == stamp
+                    codes[key] = run_one(args, key, stopper, number=number, following=following,
+                                         planned=ahead[key] if unchanged else None, bus=voice, shown=shown,
+                                         budget=budget, gate=gate)
+                except HepError as error:    # the TOML was edited since the check: this run fails alone
+                    voice.say(header(number, run.configurations[key]))
+                    voice.say(error.render())
+                    not_run(journal_path(run, run.configurations[key]) if args.journal else None,
+                            header(number, run.configurations[key]), error.message, following, voice)
+                    codes[key] = 2
+                except BaseException as error:           # the runner's own error: raised once all have ended
+                    errors.append(error)
+                    codes[key] = 1
+                finally:
+                    gate.set()
+
+            thread = threading.Thread(target=job, name=f"hep-run-{key}")
+            thread.start()
+            threads.append(thread)
+        while any(t.is_alive() for t in threads):        # the main thread takes the signals
+            time.sleep(0.25)
+    finally:
+        for thread in threads:
+            thread.join()
+        bus.unsubscribe(shown)
+        shown.end()
+    if errors:
+        raise errors[0]
+    if stopper.requested or 6 in codes.values():
+        return 6
+    return 1 if any(codes.values()) else 0
 
 
 def show_config(run, keys: list[str]) -> list[str]:
@@ -266,7 +398,8 @@ def show_config(run, keys: list[str]) -> list[str]:
         fields = {"serial": configuration.serial, "name": configuration.run_folder, "label": configuration.label,
                   "title": configuration.title, "description": configuration.description,
                   "event_count": configuration.event_count, "threads": configuration.threads,
-                  "parallelism": configuration.parallelism, "swept": configuration.swept,
+                  "parallelism": "auto" if configuration.parallelism_auto else configuration.parallelism,
+                  "swept": configuration.swept,
                   "seed_type": configuration.seed_type, "manual_seed": configuration.manual_seed,
                   "sweeps": configuration.sweeps, "plot_points": configuration.plot_points,
                   "combine": configuration.combine, "tools": configuration.tools, "pre": configuration.pre,
@@ -284,21 +417,28 @@ def show_config(run, keys: list[str]) -> list[str]:
     return lines
 
 
-def not_run(path: Path, title: str, message: str, following: Path | None) -> None:
-    """A run that could not be planned at its turn still says so in its journal, so hep watch moves on."""
-    journal = Journal(path)
-    journal.write("", "", {"k": "run", "state": "started", "points": 0, "title": title, "header": title})
-    journal.write("", "", {"k": "run", "state": "finished", "verdict": f"not run: {message}",
-                           **({"next": str(following)} if following else {})})
-    journal.close()
+def not_run(path: Path | None, title: str, message: str, following: Path | None, bus=None) -> None:
+    """A run that could not be planned at its turn still says so: to the watchers, and in its journal
+    (--journal), so hep watch --file moves on."""
+    journal = Journal(path) if path is not None else None
+    for event in ({"k": "run", "state": "started", "points": 0, "title": title, "header": title},
+                  {"k": "run", "state": "finished", "verdict": f"not run: {message}",
+                   **({"next": str(following)} if following else {})}):
+        if bus is not None:
+            bus.emit("", "", event)
+        if journal is not None:
+            journal.event({"v": 1, "point": "", "tool": "", **event})
+    if journal is not None:
+        journal.close()
 
 
 def run_one(args, key: str, stopper: execute.Stopper, *, number: int = 0, following: Path | None = None,
-            planned: Planned | None = None) -> int:
+            planned: Planned | None = None, bus: Bus | None = None, shown=None, budget=None,
+            gate: threading.Event | None = None) -> int:
     """One run: the pre stage, every point not complete, the combined groups, the post stage and the
-    plots. In a sweep of runs, `number` is its place (a `run NN - <title> -` line first), and
-    `following` is the next run's journal, named in this one's `run finished` record so that hep
-    watch follows on."""
+    plots, said on `bus` (V72). In a sweep of runs, `number` is its place (a `run NN - <title> -` line
+    first), and `following` is the next run's journal (--journal), named in this one's `run finished`
+    event so that hep watch --file follows on."""
     planned = planned or build_plans(args, key)
     run, configuration, every, plans = planned.run, planned.configuration, planned.every, planned.plans
     post_plan, pre_plan, combined = planned.post, planned.pre, planned.combined
@@ -322,23 +462,30 @@ def run_one(args, key: str, stopper: execute.Stopper, *, number: int = 0, follow
     if stopper.requested:                    # Ctrl-C while this run was being planned
         return 6
 
-    shown = view(args.plain)
-    catch_signals(stopper)
+    bus = bus if bus is not None else Bus()
+    own_view = shown is None                 # a pipelined sweep's runs share the sweep's view (V75)
+    if own_view:
+        shown = view(args.plain)
+        bus.subscribe(shown)
+    if threading.current_thread() is threading.main_thread():
+        catch_signals(stopper)
+    logs = bool(getattr(args, "logs", False))
 
     base = plans[0].out.parent if plans else None
-    journal = Journal(base / "status.jsonl") if base else None
+    journal = Journal(base / "status.jsonl", run=getattr(bus, "run", None)) \
+        if base and getattr(args, "journal", False) else None
+    if journal:
+        bus.subscribe(journal)
     title = (f"{run.name} · {configuration.key}: {len(plans)} point(s), {configuration.event_count} events, "
              f"{configuration.threads} threads" + parallel_note(configuration, plans))
     if number > 1:
-        shown.say("")
-    shown.begin(len(plans), title, header=title_line)
+        bus.say("")
+    bus.emit("", "", {"k": "run", "state": "started", "points": len(plans), "title": title,
+                      **({"header": title_line} if title_line else {})})
     if crowded(configuration, plans):
-        shown.say(f"   note: {crowded(configuration, plans)}")
+        bus.say(f"   note: {crowded(configuration, plans)}")
     for note in notes_of(plans):
-        shown.say(f"   note: {note}")
-    if journal:
-        journal.write("", "", {"k": "run", "state": "started", "points": len(plans), "title": title,
-                               **({"header": title_line} if title_line else {})})
+        bus.say(f"   note: {note}")
     def manifest() -> None:
         if base:
             record.write_atomic(base / "points.json",
@@ -348,7 +495,7 @@ def run_one(args, key: str, stopper: execute.Stopper, *, number: int = 0, follow
     verdict = "stopped"
     try:
         if args.only in (None, "pre"):
-            if not post.run_pre(pre_plan, run, configuration, sink=shown, journal=journal, stopper=stopper,
+            if not post.run_pre(pre_plan, run, configuration, bus=bus, stopper=stopper, logs=logs,
                                 rerun=args.rerun or args.only == "pre"):
                 verdict = "pre failed: no point ran"
                 return 6 if stopper.requested else 1
@@ -356,22 +503,23 @@ def run_one(args, key: str, stopper: execute.Stopper, *, number: int = 0, follow
                 verdict = "pre done"
                 return 0
         if args.only != "post":
-            done, failed, stopped = execute.run_points(plans, run, configuration, sink=shown, journal=journal,
-                                                       stopper=stopper, rerun=args.rerun)
+            done, failed, stopped = execute.run_points(plans, run, configuration, bus=bus, stopper=stopper,
+                                                       rerun=args.rerun, logs=logs, budget=budget,
+                                                       started_all=gate.set if gate is not None else None)
             if stopped:
                 return 6
         verdict = f"{done} done, {failed} failed, {len(plans) - done - failed} skipped" if args.only != "post" else ""
         manifest()                           # post tools read it: it must say which points are complete
         if combined and args.only != "post":
-            bad = post.run_combined(combined, every, run, configuration, sink=shown, journal=journal, stopper=stopper,
-                                    rerun=args.rerun, say=shown.say)
+            bad = post.run_combined(combined, every, run, configuration, bus=bus, stopper=stopper, logs=logs,
+                                    rerun=args.rerun, say=bus.say)
             if stopper.requested:
                 return 6
             if bad:
                 failed += bad
                 verdict = f"{verdict}, {bad} combined group(s) failed"
-        if not post.run(post_plan, every, run, configuration, sink=shown, journal=journal, stopper=stopper,
-                        rerun=args.rerun or args.only == "post", say=shown.say):
+        if not post.run(post_plan, every, run, configuration, bus=bus, stopper=stopper, logs=logs,
+                        rerun=args.rerun or args.only == "post", say=bus.say):
             if stopper.requested:
                 return 6
             failed += 1
@@ -379,32 +527,42 @@ def run_one(args, key: str, stopper: execute.Stopper, *, number: int = 0, follow
         elif post_plan is not None and args.only == "post":
             verdict = "post done"
         if args.only != "post":
-            failed += plot.draw(run, configuration, combined or every, shown.say) > 0   # the groups, when combined
-        shown.say(verdict)                   # before end(): the view's thread prints it (V32)
+            failed += plot.draw(run, configuration, combined or every, bus.say) > 0   # the groups, when combined
+        bus.say(verdict)                     # before end(): the view's thread prints it (V32)
     finally:
-        shown.end()
+        onward = {"next": str(following)} if following and not stopper.requested else {}
+        bus.emit("", "", {"k": "run", "state": "finished", "verdict": verdict, **onward})
+        if own_view:
+            bus.unsubscribe(shown)
+            shown.end()
         manifest()
         if journal:
-            onward = {"next": str(following)} if following and not stopper.requested else {}
-            journal.write("", "", {"k": "run", "state": "finished", "verdict": verdict, **onward})
+            bus.unsubscribe(journal)
             journal.close()
     return 1 if failed else 0
 
 
+def cmd_overlay(args) -> int:
+    """`hep overlay FILE…` (V74, was `hep plot FILE…`): any YODA/ROOT files overlaid through Paint."""
+    bad = [f for f in args.files if not plot._is_plot_file(f)]
+    if bad:
+        raise HepError(f"{bad[0]} is not a YODA or ROOT file", hint="hep overlay takes files ending .yoda, .yoda.gz "
+                                                                   "or .root; a configuration's pages: hep plot CONFIG")
+    formats = [f.strip() for f in args.formats.split(",") if f.strip()]
+    wrong = [f for f in formats if f not in plot.FORMATS]
+    if wrong:
+        raise HepError(f"format '{wrong[0]}' is not one of {', '.join(plot.FORMATS)}")
+    labels = [x.strip() for x in args.labels.split(",")] if args.labels else None
+    return 1 if plot.files(args.files, Path(args.output) if args.output else None, labels=labels,
+                           objects=args.objects, formats=formats, ratio=args.ratio, style=args.style) else 0
+
+
 def cmd_plot(args) -> int:
     """`hep plot CONFIG [CONFIGURATION]`: the configuration's pages from its complete points (what
-    `hep run … --only plot` does). `hep plot FILE…`: any YODA/ROOT files overlaid through Paint."""
-    if all(plot._is_plot_file(t) for t in args.targets):
-        formats = [f.strip() for f in args.formats.split(",") if f.strip()]
-        bad = [f for f in formats if f not in plot.FORMATS]
-        if bad:
-            raise HepError(f"format '{bad[0]}' is not one of {', '.join(plot.FORMATS)}")
-        labels = [x.strip() for x in args.labels.split(",")] if args.labels else None
-        return 1 if plot.files(args.targets, Path(args.output) if args.output else None, labels=labels,
-                               objects=args.objects, formats=formats, ratio=args.ratio, style=args.style) else 0
-    if len(args.targets) > 2:
-        raise HepError("hep plot takes CONFIG [CONFIGURATION], or files ending .yoda/.yoda.gz/.root")
-    args.config, args.configuration = args.targets[0], (args.targets[1] if len(args.targets) > 1 else None)
+    `hep run … --only plot` does)."""
+    if plot._is_plot_file(args.config):                     # break and migrate (V74)
+        raise HepError("hep plot draws a configuration's pages; files are overlaid by hep overlay",
+                       hint=f"hep overlay {args.config} …")
     args.points = None
     run = configmod.load(args.config, sets=args.set)
     if not run.plot:
@@ -451,21 +609,180 @@ def cmd_check(args) -> int:
 
 
 def cmd_watch(args) -> int:
-    """Follow a job from another terminal: its status.jsonl, or the most recent one under output/."""
-    if args.config:                          # under [run].sweep_runs: the swept run written to last (V38)
-        run = configmod.load(args.config)
-        journals = [journal_path(run, run.configurations[key]) for key in run.runs(args.configuration)]
-        present = [j for j in journals if j.exists()]
-        journal = max(present, key=lambda j: j.stat().st_mtime) if present else journals[0]
-    else:
-        found = sorted(output_root().glob("*/*/*/status.jsonl"), key=lambda p: p.stat().st_mtime)
-        if not found:
-            raise HepError("no job to watch", where=str(output_root()), hint="start one with hep run")
-        journal = found[-1]
-    if not journal.exists():
-        raise HepError("that configuration has no status yet", where=str(journal),
-                       hint="it has not been run, or is about to start")
-    return follow(journal, plain=args.plain)
+    """Follow a job from another terminal (V72): a running `hep run`'s watch socket (the latest one, or
+    the one running CONFIG [CONFIGURATION]), or with --file a --journal run's status.jsonl."""
+    if args.file:
+        path = Path(args.file)
+        if not path.exists():
+            raise HepError("no such status file", where=str(path), hint="a run writes one with hep run … --journal")
+        return follow_file(path, plain=args.plain)
+    wanted = configmod.load(args.config) if args.config else None
+    found = []
+    for name in hubs():
+        hello = greeting(name)
+        if not hello:
+            continue
+        if wanted is not None and hello.get("config") != str(wanted.path):
+            continue
+        if args.configuration and args.configuration not in hello.get("configurations", []):
+            continue
+        found.append((hello.get("started", 0), name))
+    if not found:
+        raise HepError("no running job to watch" + (f" for {wanted.path}" if wanted else ""),
+                       hint="start one with hep run; a finished run's events: hep run … --journal, then hep watch --file "
+                            "output/<P>/<run>/<cfg>/status.jsonl")
+    return follow_events(connect(max(found)[1]), plain=args.plain)
+
+
+def _planned_all(names: list[str], configuration: str | None = None) -> tuple[list, list[str]]:
+    """Every configuration of these configs, planned as for a run: the plans, and what did not plan."""
+    planned, failed = [], []
+    for name in names:
+        try:
+            run = configmod.load(name)
+            for key in ([configuration] if configuration else list(run.configurations)):
+                planned.append(build_plans(argparse.Namespace(config=name, set=[], points=None, rerun=False, only=None), key))
+        except HepError as error:
+            failed.append(f"{name}: {error.message}")
+    return planned, failed
+
+
+def cmd_status(args) -> int:
+    """`hep status [CONFIG [CONFIGURATION]]` (V74): each configuration's points and stages. `--stack`
+    (V78): each package of utils/Env/stack.toml, its version and where it is."""
+    if getattr(args, "stack", False):
+        from .plugins import load
+        from .paths import repo_root
+        for line in load(repo_root() / "utils" / "Env" / "stack.py", "stack").versions():
+            print(line)
+        return 0
+    names = [args.config] if args.config else house.config_names()
+    planned, failed = _planned_all(names, args.configuration)
+    for line in house.status(planned, house.running_configs()):
+        print(line)
+    for line in failed:
+        print(f"not planned: {line}")
+    return 2 if failed else 0
+
+
+def cmd_clean(args) -> int:
+    """`hep clean [CONFIG] [--dry-run] [--yes]` (V74): the output folders no plan uses, `.partial`
+    leftovers and (with no config) unused run folders and prepare caches. It lists them first, and asks
+    on a terminal (or needs --yes); results/ is never cleaned but for `.partial` leftovers."""
+    if hubs():
+        raise HepError("a job is running on this machine", hint="clean when it has ended (hep watch shows it)")
+    names = [args.config] if args.config else house.config_names()
+    planned, failed = _planned_all(names)
+    if failed and not args.config:
+        for line in failed:
+            print(f"not planned: {line}")
+        raise HepError("every config must plan before a whole clean: one that does not might own what would go",
+                       hint="fix it, or clean one config: hep clean CONFIG")
+    if failed:
+        raise HepError(failed[0])
+    targets, kept = house.clean_targets(planned, everything=not args.config)
+    for path in targets:
+        print(f"remove  {path}")
+    for path in kept:
+        print(f"kept    {path}   (results are yours: remove by hand if you mean to)")
+    if not targets:
+        print("nothing to clean")
+        return 0
+    if args.dry_run:
+        print(f"{len(targets)} to remove (dry run)")
+        return 0
+    if not args.yes:
+        if not sys.stdin.isatty():
+            raise HepError(f"{len(targets)} to remove: not deleted", hint="--yes to delete, --dry-run to only list")
+        if input(f"remove these {len(targets)}? [y/N] ").strip().lower() not in ("y", "yes"):
+            print("nothing removed")
+            return 0
+    freed = house.remove(targets)
+    print(f"removed {len(targets)}, {freed / 1e6:.1f} MB freed")
+    return 0
+
+
+def cmd_reproduce(args) -> int:
+    """`hep reproduce output/…/<point>/provenance.json` (V77, F10): the point again, exactly as it ran,
+    into output/<P>/.reproduce/<identity>/ (its own output/ and results/), never over the original; then
+    each product compared with the original's. The setup must still be the one that ran (the identity
+    the provenance records), else it says what changed (--why) and stops, unless --anyway. A random
+    seed is the recorded one; any other seed follows from the identity, as it did."""
+    import hashlib
+    path = Path(args.provenance)
+    if path.is_dir():
+        path = path / "provenance.json"
+    try:
+        record_ = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise HepError(f"cannot read {path}: {error}", hint="give a finished point's provenance.json")
+    config_file, key, name = record_["config_file"], record_["configuration"], record_["point"]
+    given = list(record_.get("sets", []))                     # the --set overrides it ran with
+    planned = build_plans(argparse.Namespace(config=config_file, set=given, points=None, rerun=False, only=None), key)
+    plan = next((p for p in planned.every if p.point.name == name), None)
+    if plan is None:
+        raise HepError(f"configuration '{key}' has no point '{name}' any more", where=config_file)
+    if plan.identity != record_["identity"]:
+        print(f"the setup of {name} changed since it ran ({record_['identity'][:12]} → {plan.identity[:12]}):")
+        for line in record.why(plan):
+            print(f"  {line}")
+        if not args.anyway:
+            raise HepError("not reproduced: this would be a different point", hint="--anyway runs today's setup with its seed")
+    where = output_root() / record_["project"] / ".reproduce" / record_["identity"][:12]
+    sets = []
+    if planned.configuration.seed_type == "random":
+        sets = ["--set", f'run.{key}.seed_type="manual"', "--set", f"run.{key}.manual_seed={record_['seed']}"]
+    argv = [sys.executable, str(Path(__file__).resolve().parents[1] / "run"), "run", config_file, key,
+            "--points", name, "--rerun", *[x for item in given for x in ("--set", item)], *sets,
+            *(["--plain"] if args.plain else [])]
+    env = dict(os.environ, HEKIT_OUTPUT=str(where / "output"), HEKIT_RESULTS=str(where / "results"))
+    print(f"reproducing {record_['run']} · {key} · {name} (seed {record_['seed']}) in {where}", flush=True)
+    code = subprocess.run(argv, env=env).returncode
+    if code != 0:
+        return code
+    original, again_ = plan.res, where / "results" / plan.res.relative_to(results_root())
+
+    same = True
+    for made in sorted(f for f in again_.rglob("*") if f.is_file() and not f.name.endswith(".json")):
+        rel = made.relative_to(again_)
+        before = original / rel
+        verdict = same_contents(before, made) if before.is_file() else "missing in the original"
+        same = same and verdict in ("identical", "the same values")
+        print(f"  {rel}: {verdict}")
+    return 0 if same else 1
+
+
+def same_contents(a: Path, b: Path) -> str:
+    """Two products compared by what they hold (V77): a YODA file object by object (values and errors),
+    a ROOT file histogram by histogram (uproot), anything else byte for byte. Bytes alone differ for
+    the same physics: a sharded Rivet's merge order and ROOT's write times are in the files."""
+    import hashlib
+    if hashlib.sha256(a.read_bytes()).digest() == hashlib.sha256(b.read_bytes()).digest():
+        return "identical"
+    try:
+        if a.name.endswith((".yoda", ".yoda.gz")):
+            import yoda
+
+            def table(path):
+                out = {}
+                for key, obj in yoda.read(str(path)).items():
+                    vals = [obj.vals()] if hasattr(obj, "vals") else []
+                    errs = [obj.errs()] if hasattr(obj, "errs") else []
+                    out[key] = (obj.type(), repr(vals), repr(errs))
+                return out
+            return "the same values" if table(a) == table(b) else "differs"
+        if a.suffix == ".root":
+            import numpy as np
+            import uproot
+
+            def histograms(path):
+                with uproot.open(path) as file:
+                    return {k: np.asarray(file[k].values()).tolist() for k in file.keys(cycle=False)
+                            if hasattr(file[k], "values") and callable(getattr(file[k], "values"))}
+            return "the same values" if histograms(a) == histograms(b) else "differs"
+    except ImportError:
+        return "differs in bytes (not read: no yoda/uproot)"
+    return "differs"
 
 
 def parse(argv: list[str]) -> argparse.Namespace:
@@ -489,6 +806,22 @@ def main(argv: list[str]) -> int:
             return cmd_plot(args)
         if args.command == "check":
             return cmd_check(args)
+        if args.command == "overlay":
+            return cmd_overlay(args)
+        if args.command == "ls":
+            for line in house.ls(args.project):
+                print(line)
+            return 0
+        if args.command == "explain":
+            for line in house.explain(args.key):
+                print(line)
+            return 0
+        if args.command == "status":
+            return cmd_status(args)
+        if args.command == "clean":
+            return cmd_clean(args)
+        if args.command == "reproduce":
+            return cmd_reproduce(args)
         return cmd_watch(args)
     except HepError as error:
         print(error.render(), file=sys.stderr)

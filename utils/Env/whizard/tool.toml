@@ -33,4 +33,4 @@ alias = "card"                      # whizard_sin = whizard_card
 
 [identity]
 files   = ["{exe}"]
-version = ["whizard", "--version"]
+version = "stack:whizard"                # utils/Env/stack.toml's (V78)

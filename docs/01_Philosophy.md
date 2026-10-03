@@ -125,7 +125,8 @@ is a rule; a rule in a document is a hope.
 
 ### 2.12 Small by surface area
 
-Three commands (`hep run`, `hep plot`, `hep watch`) plus `hep build` and `make`; seven config
+A few commands (`hep run`, `hep plot`, `hep overlay`, `hep watch`, and `ls`, `explain`, `status`,
+`clean`, `check` to look after them) plus `hep build` and `make`; seven config
 sections; two C++ headers; one flat runner package. Anything a user does not ask for is not there
 (v1 had 19 commands).
 

@@ -47,7 +47,7 @@ def _plan_stage(run, configuration, master: dict, point: Point, groups: list, pr
     return plan
 
 
-def _run_stage(stage: tools.PointPlan, waits_on: list, run_config, configuration, *, sink, journal, stopper,
+def _run_stage(stage: tools.PointPlan, waits_on: list, run_config, configuration, *, bus=None, stopper, logs: bool = False,
                rerun: bool, say, missing: str):
     """One stage, once every plan it waits on is complete (V63): its result, or None when it did not run
     (incomplete upstream: `missing`, formatted with the count and the names, is said; or complete)."""
@@ -56,9 +56,11 @@ def _run_stage(stage: tools.PointPlan, waits_on: list, run_config, configuration
         say(missing.format(count=len(incomplete), names=", ".join(incomplete[:4]) + (", …" if len(incomplete) > 4 else "")))
         return None
     if not rerun and record.is_complete(stage):
-        sink.skipped(stage)
+        if bus is not None:
+            bus.emit(stage.point.name, "", {"k": "point", "state": "skipped", "index": stage.point.index,
+                                            **({"stage": stage.point.stage} if stage.point.stage else {})})
         return None
-    return execute.run_point(stage, run_config, configuration, sink=sink, journal=journal, stopper=stopper)
+    return execute.run_point(stage, run_config, configuration, bus=bus, stopper=stopper, logs=logs)
 
 
 def _reserved(run, configuration, names, name: str, stage: str) -> None:
@@ -77,11 +79,11 @@ def plan_pre(run, configuration, master: dict, points: list) -> tools.PointPlan 
     return _plan_stage(run, configuration, master, Point(index=-1, name=PRE), configuration.pre, {}, manifest)
 
 
-def run_pre(pre: tools.PointPlan | None, run_config, configuration, *, sink, journal, stopper, rerun: bool) -> bool:
+def run_pre(pre: tools.PointPlan | None, run_config, configuration, *, bus=None, stopper, logs: bool = False, rerun: bool) -> bool:
     """True unless the pre stage ran and failed (the points then do not run)."""
     if pre is None:
         return True
-    result = _run_stage(pre, [], run_config, configuration, sink=sink, journal=journal, stopper=stopper,
+    result = _run_stage(pre, [], run_config, configuration, bus=bus, stopper=stopper, logs=logs,
                         rerun=rerun, say=print, missing="")
     return result is None or result.ok
 
@@ -99,12 +101,12 @@ def plan(run, configuration, master: dict, plans: list) -> tools.PointPlan | Non
                        plans[0].out.parent / "points.json", upstream=[p.identity for p in plans])
 
 
-def run(post: tools.PointPlan | None, every: list, run_config, configuration, *, sink, journal, stopper,
+def run(post: tools.PointPlan | None, every: list, run_config, configuration, *, bus=None, stopper, logs: bool = False,
         rerun: bool, say) -> bool:
     """True unless the post stage ran and failed. It runs only when every point is complete."""
     if post is None:
         return True
-    result = _run_stage(post, every, run_config, configuration, sink=sink, journal=journal, stopper=stopper,
+    result = _run_stage(post, every, run_config, configuration, bus=bus, stopper=stopper, logs=logs,
                         rerun=rerun, say=say, missing="post: not run, {count} point(s) incomplete ({names})")
     return result is None or result.ok
 
@@ -169,13 +171,13 @@ def plan_combined(run, configuration, master: dict, plans: list) -> list[tools.P
     return out
 
 
-def run_combined(groups: list, every: list, run_config, configuration, *, sink, journal, stopper, rerun: bool,
+def run_combined(groups: list, every: list, run_config, configuration, *, bus=None, stopper, logs: bool = False, rerun: bool,
                  say) -> int:
     """Each group once its own points are complete; the number that failed."""
     failed = 0
     for group in groups:
         members = [p for p in every if p.identity in set(group.upstream)]
-        result = _run_stage(group, members, run_config, configuration, sink=sink, journal=journal, stopper=stopper,
+        result = _run_stage(group, members, run_config, configuration, bus=bus, stopper=stopper, logs=logs,
                             rerun=rerun, say=say, missing=f"combine: {group.point.name} not merged, {{count}} of its points incomplete")
         if result is None:
             continue

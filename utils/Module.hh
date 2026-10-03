@@ -19,8 +19,8 @@
 // once, after the loop. RootOut::scale refuses a second call. A histogram drawn beside Rivet's is
 // a density: scale with "width" as well (L21).
 //
-// Exit codes (02 §11): 0 ok, 1 config, 2 usage, 3 init, 4 input, 5 output, 6 stopped, 70 internal.
-// A module runs single-threaded.
+// Exit codes (02 §11): utils/Kit.hh's one table (V73): 0 ok, 1 config, 2 usage, 3 init, 4 input,
+// 5 output, 6 stopped, 70 internal. A module runs single-threaded.
 
 #include "Status.hh"
 
@@ -52,7 +52,15 @@
 
 namespace Module {
 
-    enum Exit : int { Ok = 0, Config = 1, Usage = 2, Init = 3, Input = 4, Output = 5, Stopped = 6, Internal = 70 };
+    using Kit::Exit;                             // V73: the one table, as Module::Output etc.
+    using Kit::Ok;
+    using Kit::Config;
+    using Kit::Usage;
+    using Kit::Init;
+    using Kit::Input;
+    using Kit::Output;
+    using Kit::Stopped;
+    using Kit::Internal;
 
     namespace detail {
         inline std::atomic<bool> stop{false};
@@ -138,24 +146,11 @@ namespace Module {
         Job(int argc, char** argv) {
             std::signal(SIGINT, detail::onSignal);
             std::signal(SIGTERM, detail::onSignal);
-            std::vector<std::string> positional;
-            for (int i = 1; i < argc; ++i) {
-                std::string arg = argv[i], value;
-                const auto equals = arg.find('=');
-                if (arg.rfind("--", 0) == 0 && equals != std::string::npos) {
-                    value = arg.substr(equals + 1), arg = arg.substr(0, equals);
-                } else if (arg.rfind("--", 0) == 0 && i + 1 < argc) {
-                    value = argv[++i];
-                } else if (arg.rfind("--", 0) == 0) {
-                    usage(argv[0], arg + " needs a value");
-                }
-                if (arg == "--input") input_ = value;
-                else if (arg == "--output") output_ = value;
-                else if (arg == "--sidecar") sidecar_ = value;
-                else if (arg == "--events") expected_ = std::atol(value.c_str());
-                else if (arg.rfind("--", 0) == 0) usage(argv[0], "unknown option " + arg);
-                else positional.push_back(arg);
-            }
+            const Kit::Args args(argc, argv, {"input", "output", "sidecar", "events"});
+            if (!args.ok()) usage(argv[0], args.error());
+            input_ = args.get("input"), output_ = args.get("output"), sidecar_ = args.get("sidecar");
+            expected_ = std::atol(args.get("events", "0").c_str());
+            const std::vector<std::string>& positional = args.positional();
             if (positional.size() != 1) usage(argv[0], "one CONFIG.toml expected");
             try {
                 document_ = toml::parse_file(positional.front());
@@ -247,16 +242,15 @@ namespace Module {
             bool ok = true;
             for (auto& write : detail::writers()) ok = write() && ok;
             if (!output_.empty()) {
-                std::ofstream report(output_ + ".json");
-                report.precision(12);
-                report << "{\n  \"events\": " << count_ << ",\n  \"sum_w\": " << sumW_ << ",\n  \"sigma_pb\": "
-                       << crossSectionPb() << ",\n  \"sigma_err_pb\": " << crossSectionErrPb()
-                       << ",\n  \"sigma_from\": \"" << (haveSidecar_ ? "sidecar" : sigmaFrom_) << "\",\n  \"input\": "
-                       << Status::quote(input_) << ",\n  \"stopped\": " << (stopping() ? "true" : "false") << "\n}\n";
-                ok = ok && report.good();
+                const auto report = Kit::Json::Object()
+                                        .add("events", count_).add("sum_w", sumW_).add("sigma_pb", crossSectionPb())
+                                        .add("sigma_err_pb", crossSectionErrPb())
+                                        .add("sigma_from", haveSidecar_ ? std::string("sidecar") : std::string(sigmaFrom_))
+                                        .add("input", input_).add("stopped", stopping());
+                ok = report.write(output_ + ".json") && ok;
             }
-            status().summary("\"events\": " + std::to_string(count_) + ", \"sum_w\": " + Status::number(sumW_) +
-                             ", \"sigma_pb\": " + Status::number(crossSectionPb()));
+            status().summary(Kit::Json::Object().add("events", count_).add("sum_w", sumW_)
+                                 .add("sigma_pb", crossSectionPb()).fields());
             if (!ok) {
                 status().log("error", "an output could not be written");
                 return Output;
@@ -278,18 +272,12 @@ namespace Module {
             return table;
         }
 
-        void readSidecar() {                       // App_Pythia's flat JSON object: two numbers are enough
-            std::ifstream in(sidecar_);
-            std::stringstream buffer;
-            buffer << in.rdbuf();
-            const std::string text = buffer.str();
-            auto number = [&](const std::string& key, double& out) {
-                const auto at = text.find("\"" + key + "\"");
-                if (at == std::string::npos) return false;
-                out = std::atof(text.c_str() + text.find(':', at) + 1);
-                return true;
-            };
-            haveSidecar_ = number("sigma_pb", sidecarPb_) && number("sigma_err_pb", sidecarErrPb_);
+        void readSidecar() {                       // App_Pythia's flat JSON object, by the kit's reader (L9)
+            const auto sidecar = Kit::Json::Flat::read(sidecar_);
+            const auto pb = sidecar ? sidecar->number("sigma_pb") : std::nullopt;
+            const auto err = sidecar ? sidecar->number("sigma_err_pb") : std::nullopt;
+            haveSidecar_ = pb && err;
+            if (haveSidecar_) sidecarPb_ = *pb, sidecarErrPb_ = *err;
             if (!haveSidecar_) status().log("warn", "sidecar " + sidecar_ + " unreadable; σ from the events");
         }
 

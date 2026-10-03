@@ -22,4 +22,4 @@ products = ["yoda"]
 combines = ["yoda"]                  # combine (V35) merges the points' YODA products with this folder (V60)
 
 [identity]
-version = ["rivet", "--version"]
+version = "stack:rivet"                # utils/Env/stack.toml's (V78)

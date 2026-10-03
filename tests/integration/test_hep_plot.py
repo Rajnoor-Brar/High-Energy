@@ -1,4 +1,4 @@
-"""`hep plot FILE…`: any YODA or ROOT files overlaid through Paint, with no run TOML; and the merged
+"""`hep overlay FILE…` (V74; was `hep plot FILE…`): any YODA or ROOT files overlaid through Paint, with no run TOML; and the merged
 sweep file (App_yd2rt --merge) read back as one curve per point."""
 
 from __future__ import annotations
@@ -62,10 +62,10 @@ def test_mistakes_are_named(scratch):
         plot.files([str(YODAS[0])], scratch / "pages", labels=["x", "y"])
 
 
-def test_hep_plot_picks_file_mode_by_the_names(scratch):
+def test_hep_overlay_draws_files(scratch):
     env = {"HEKIT_OUTPUT": str(scratch / "output"), "HEKIT_RESULTS": str(scratch / "results")}
     import os
-    done = subprocess.run(["python3", str(REPO / "utils" / "Env" / "run"), "plot", str(YODAS[0]), "--objects", "/photo_eic/d01*",
+    done = subprocess.run(["python3", str(REPO / "utils" / "Env" / "run"), "overlay", str(YODAS[0]), "--objects", "/photo_eic/d01*",
                            "--formats", "png"], capture_output=True, text=True, encoding="utf-8",
                           errors="replace", env=dict(os.environ, **env))
     assert done.returncode == 0, done.stderr
