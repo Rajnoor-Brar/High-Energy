@@ -104,19 +104,35 @@ def yoda_backend():
 
 @pytest.mark.parametrize("root, latex", [
     ("MSTW 2008 LO", "MSTW 2008 LO"),
-    ("5x41 GeV (#sqrt{s} = 28.6 GeV)", r"5x41 GeV $(\sqrt{s}$ = 28.6 GeV)"),
-    ("p_{T0}^{ref} = 3.0 GeV", "$p_{T0}^{ref}$ = 3.0 GeV"),
-    ("#hat{p}_{T} > 2 GeV", r"$\hat{p}_{T}$ $>$ 2 GeV"),
+    ("5x41 GeV (#sqrt{s} = 28.6 GeV)", r"5x41 GeV $(\sqrt{\mathrm{s}}$ = 28.6 GeV)"),   # upright, as TLatex drew it
+    ("p_{T0}^{ref} = 3.0 GeV", r"$\mathrm{p}_{\mathrm{T0}}^{\mathrm{ref}}$ = 3.0 GeV"),
+    ("#hat{p}_{T} > 2 GeV", r"$\hat{\mathrm{p}}_{\mathrm{T}}$ $>$ 2 GeV"),
     ("R: 0.4", "R  0.4"),                                                 # ':' separates mkhtml's options
     ("PDF4LHC21_40_pdfas", "PDF4LHC21_40_pdfas"),                        # TLatex's rule: a bare _ is itself
     ("E_T jets", "E_T jets"),
     (r"PDF4LHC21\_40", "PDF4LHC21_40"),                                  # the escapes are the characters
     (r"\#1 \^2", "#1 ^2"),
-    (r"x_1\_a_{2}", r"$x\_1\_a_{2}$"),                                   # literal underscores inside math
-    ("E_{T} > 5", "$E_{T}$ $>$ 5"),                                       # V51: > in LaTeX's text font is ¿
+    (r"x_1\_a_{2}", r"$\mathrm{x}\_1\_\mathrm{a}_{2}$"),                 # literal underscores inside math
+    ("E_{T} > 5", r"$\mathrm{E}_{\mathrm{T}}$ $>$ 5"),                    # V51: > in LaTeX's text font is ¿
 ])
-def test_tlatex_becomes_latex_for_mkhtml(yoda_backend, root, latex):
-    assert yoda_backend.latex(root) == latex
+def test_a_tlatex_label_is_read_as_latex_and_mkhtml_gets_it(root, latex):
+    """V65: one label language. A TLatex label (a config not yet migrated) is converted on reading."""
+    from runner import labels
+    assert labels.mathtext(labels.canonical(root)) == latex
+
+
+@pytest.mark.parametrize("label", ["5x41 GeV (#sqrt{s} = 28.6 GeV)", "p_{T0}^{ref} = 3.0 GeV", "#hat{p}_{T} > 2 GeV",
+                                   "PDF4LHC21_40_pdfas", "e^{-}", "E_{T} > 5", "#bf{x}_{1}", "k_{T}, 18x275"])
+def test_a_tlatex_label_draws_the_same_in_root_after_the_round_trip(label):
+    from runner import labels
+    assert labels.tlatex(labels.canonical(label)) == label
+
+
+def test_tlatex_keeps_text_as_text():
+    """V65: the sub- and superscript rule is math's; a bare _ in text stays the character (V41)."""
+    from runner import labels
+    assert labels.tlatex("PDF4LHC21_40 x_1") == "PDF4LHC21_40 x_1"
+    assert labels.tlatex(r"$x\_1$") == "#it{x}_1"           # math italic; \_ the character
 
 
 @pytest.mark.parametrize("label, root", [

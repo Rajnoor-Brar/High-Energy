@@ -478,6 +478,8 @@ App_yd2rt.exe --merge OUT.root|OUT.yoda NAME=IN.yoda … [--keep-raw] [--select 
 
 ## 17. Paint
 
+`Paint.exe PAGE.toml [PAGE.toml …] [--ranges | --ranges-only]` draws many pages in one ROOT process (V64); with several pages each page's outcome is a JSON line `{"page", "ok", "error"}`, and `--ranges` writes each page's ranges to `<page>.ranges.json`. `--dump-ranges` and `--dump-style` take one page.
+
 ```
 Paint.exe PAGE.toml [--dump-ranges]
 Paint.exe [PAGE.toml] --dump-style

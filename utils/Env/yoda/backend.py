@@ -34,6 +34,7 @@ from pathlib import Path
 
 from runner.errors import HepError
 from runner.hepfiles import base_path
+from runner.labels import canonical, mathtext
 from runner.paths import build_root
 
 _SPEC = tomllib.loads((Path(__file__).with_name("backend.toml")).read_text(encoding="utf-8"))   # V61
@@ -60,24 +61,6 @@ def validate(settings: dict, beside_root: bool = False) -> None:
                     name = f"{table}.{key}" if key else table
                     raise HepError(f'{where} {name} cannot be honoured by backend = "yoda"', where=where,
                                    hint=hint + " (only legend.position, text.legend, text.header and ratio.divisions, range and limits carry over)")
-
-
-def _math() -> dict:
-    from runner.labels import latex as table
-    return table()["mathtext"]
-
-
-def latex(text: str) -> str:
-    """TLatex → matplotlib mathtext for the common subset, word by word: '#sqrt{s} = 28.6 GeV' →
-    '$\\sqrt{s}$ = 28.6 GeV'. TLatex's rules hold (V41): only `_{…}`, `^{…}` and `#<name>` are math;
-    a bare _ or ^, and the escapes \\_ \\^ \\#, are the characters ('PDF4LHC21_40' stays as written)."""
-    def word(w: str) -> str:
-        if not re.search(r"(?<!\\)(?:[_^]\{|#[A-Za-z])", w):     # text; LaTeX's text font prints > as ¿
-            return re.sub(r"[<>]", lambda m: f"${m[0]}$", re.sub(r"\\([_^#\\])", r"\1", w))
-        w = re.sub(r"(?<!\\)#([A-Za-z]+)", lambda m: _math().get(m.group(1), "\\" + m.group(1)), w)
-        w = re.sub(r"\\_|(?<!\\)_(?!\{)", "\x00", w).replace("\x00", r"\_")     # literal underscores in math
-        return f"${w}$"
-    return " ".join(word(w) for w in text.split(" ")).replace(":", " ")    # ':' separates mkhtml options
 
 
 def _voided(yoda, source: Path, pages: list, target: Path) -> Path:
@@ -168,11 +151,11 @@ def _plot_block(page, window: tuple[float, float] | None = None) -> str:
     overlay = getattr(page, "overlay", "")
     for key, native in (("x_label", "XLabel"), ("y_label", "YLabel")):
         if key in page.overrides or overlay:              # an overlay's path has no .plot of its own
-            keys[native] = latex(settings[key])
-    from runner.labels import labels_of, lines_of, macros, tlatex
+            keys[native] = mathtext(settings[key])
+    from runner.labels import labels_of, lines_of, macros
     own = labels_of(page.object)
-    if settings.get("legend_header", "") != tlatex(own.get("LegendTitle", "")):   # [plot], a child or an overlay's
-        keys["LegendTitle"] = latex(settings.get("legend_header", ""))
+    if settings.get("legend_header", "") != own.get("LegendTitle", ""):   # [plot], a child or an overlay's (both LaTeX, V65)
+        keys["LegendTitle"] = mathtext(settings.get("legend_header", ""))
     for native, text in own.items():  # mkhtml draws each line apart: close math per line (V47)
         if native in ("Title", "LegendTitle", "XLabel", "YLabel") and native not in keys:   # and our macros (V48)
             fixed = "\\newline".join(lines_of(macros(text)))
@@ -234,7 +217,7 @@ def titles(script: Path, page) -> bool:
     blanked in pages.plot and these are added to the page's script, with a tight bounding box so the
     margin holds them. True when the script changed and must run again."""
     settings, text = page.document["page"], page.style["text"]
-    left, right, main = (latex(settings.get(k, "")) for k in ("title_left", "title_right", "title"))
+    left, right, main = (mathtext(settings.get(k, "")) for k in ("title_left", "title_right", "title"))
     if not (left or right or main):
         return False
     code = script.read_text(encoding="utf-8")
@@ -312,7 +295,7 @@ def _overlay(yoda, page, work: Path, outdir: Path, settings: dict, say) -> bool:
     formats = settings.get("formats", ["pdf"])
     argv += [x for f in (["pdf"] if formats == "default" else formats) if FORMATS[f] for x in ("-f", FORMATS[f])]
     argv += [] if page.document["page"]["ratio"] else ["--no-ratio"]
-    argv += [f"{f}:Title={latex(label)}" for f, label in zip(files, labels)]
+    argv += [f"{f}:Title={mathtext(label)}" for f, label in zip(files, labels)]
     if not _mkhtml(argv, work, own, [page], _plot_block(page, window), work / f"overlay_{page.overlay}.plot", say):
         return False
     (outdir / "overlay").mkdir(parents=True, exist_ok=True)
@@ -351,12 +334,12 @@ def _cell(yoda, pages: list, work: Path, outdir: Path, settings: dict, say) -> i
     formats = settings.get("formats", ["pdf"])
     argv += [x for f in (["pdf"] if formats == "default" else formats) if FORMATS[f] for x in ("-f", FORMATS[f])]
     argv += [] if any(p.document["page"]["ratio"] for p in pages) else ["--no-ratio"]
-    argv += [f"{path}:Title={latex(label)}" for path, label in zip(curves, labels)]
+    argv += [f"{path}:Title={mathtext(label)}" for path, label in zip(curves, labels)]
 
     references = [_reference(yoda, page) for page in pages if page.data and page.ranges.get("data_bins", 0) > 0]
     if references:
         yoda.write(references, str(work / "reference.yoda"))
-        argv += [str(work / "reference.yoda"), "--reflabel", latex(settings.get("data", {}).get("legend", "Data"))]
+        argv += [str(work / "reference.yoda"), "--reflabel", mathtext(canonical(settings.get("data", {}).get("legend", "Data")))]
     voided, cache = dict(zip(sources, curves)), {}
 
     def objects(path):

@@ -421,7 +421,7 @@ values = [0.05, 0.10, 0.15, 0.25]
 |---|---|---|---|
 | `values` | array | **required**, non-empty | scalars or arrays (an energy pair) |
 | `tags` | array of strings | derived | one per value. The default is the value with anything but `A–Za–z0–9.+-` replaced by `-`. Tags name point directories: keep them short and unique. |
-| `labels` | array of strings | the tags | legend text, in ROOT **TLatex** (`e^{-}`, `#sqrt{s}`; V11). Only `_{…}`, `^{…}` and `#<name>` are markup: a bare `_` or `^` is the character (`"PDF4LHC21_40"`), in ROOT and yoda alike (V41). `\_`, `\^` and `\#` also give the character, even before a brace; in TOML write them in single quotes, `'PDF4LHC21\_40'`, since in `"…"` a backslash starts a TOML escape |
+| `labels` | array of strings | the tags | legend text, in **LaTeX** (`$e^-$`, `$\sqrt{s}$`), the one label language of every text a run TOML gives a page (V65): math in `$…$`, the rest text, where a bare `_` or `^` is the character (`"PDF4LHC21_40"`). A label written in ROOT's TLatex (`#sqrt{s}`, `p_{T}`), as configs did before V65, is still read: it is converted faithfully (TLatex's upright letters become `\mathrm{…}`), until the configs are migrated. `\_`, `\^` and `\#` also give the character, even before a brace; in TOML write them in single quotes, `'PDF4LHC21\_40'`, since in `"…"` a backslash starts a TOML escape |
 | `exclude` | array of integers | `[]` | values a sweep leaves out, by their **1-based** place (as `static = "#2"` and `--points 2` count): `exclude = [2]` sweeps the others. The remaining points keep their names and identities and are numbered 1… over what is swept. In an entangled group, a value any member excludes leaves the group. `static` may still pick an excluded value. Refused: a place outside 1…len(values), or none left (V42) |
 | `key` | string, or table `{<tag or tool type> = "<key>"}` | none | the native key. A string needs a `target`. A table entry for a tool tag wins over one for its type. |
 | `target` | string or array | none | restricts the consumers (§8.1) |
@@ -757,7 +757,7 @@ every matching table applies, in file order.
 
 | Key | Overrides |
 |---|---|
-| `title`, `x_label`, `y_label` | the `.plot` labels (TLatex as written) |
+| `title`, `x_label`, `y_label` | the `.plot` labels (LaTeX, V65; a TLatex value is converted) |
 | `logx`, `logy`, `ratio` | the `[plot]` values |
 | `y_gutter`, `x_gutter` | the `[plot]` values (same rules) |
 | `style` | a style layer for these objects only (§12) |

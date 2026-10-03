@@ -32,7 +32,7 @@ import tomli_w
 
 from . import hepfiles, plugins, schema
 from .errors import HepError, did_you_mean
-from .labels import labels_of, lines_of, macros, root_text, tlatex  # noqa: F401 (tlatex et al. re-exported)
+from .labels import canonical, labels_of, lines_of, macros, root_text, tlatex  # noqa: F401 (tlatex et al. re-exported)
 from .paths import build_root, output_root, repo_root, resolve, results_root
 from .record import is_complete
 from .tools import sha256_file
@@ -55,6 +55,8 @@ def formats_of(settings: dict) -> list[str]:
 STYLE_CHOICES = {"page.font": ("serif", "sans", "mono"), "curves.errors": ("bars", "band", "none"),
                  "legend.position": LEGENDS}
 COUNTERS = hepfiles.COUNTERS
+#: Pages per Paint process (V64): ROOT starts once per batch, and argv stays short.
+PAINT_BATCH = 200
 
 
 @dataclass
@@ -205,11 +207,11 @@ def run_style(run) -> dict:
 def for_root(document: dict) -> dict:
     """The page document Paint reads: every label through root_text (the in-memory document keeps the
     labels as written, which the yoda backend converts its own way)."""
-    out = {**document, "page": {k: root_text(v) if k in (*TITLE_KEYS, "x_label", "y_label") and isinstance(v, str) else v
+    out = {**document, "page": {k: tlatex(v) if k in (*TITLE_KEYS, "x_label", "y_label") and isinstance(v, str) else v
                                 for k, v in document["page"].items()},
-           "curve": [{**c, "label": root_text(c["label"])} for c in document["curve"]]}
+           "curve": [{**c, "label": tlatex(c["label"])} for c in document["curve"]]}
     if "data" in document:
-        out["data"] = {**document["data"], "label": root_text(document["data"]["label"])}
+        out["data"] = {**document["data"], "label": tlatex(document["data"]["label"])}
     return out
 
 
@@ -370,7 +372,7 @@ def pages(run, configuration, plans) -> list[Page]:
                 for plan, full in curves]}
             if reference:
                 document["data"] = {"file": str(data_file), "object": root_name(reference),
-                                    "label": data.get("legend", "Data")}
+                                    "label": canonical(data.get("legend", "Data"))}
             config = out_dir / f"{rel}.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(tomli_w.dumps(for_root(document)), encoding="utf-8")
@@ -388,7 +390,7 @@ def pages(run, configuration, plans) -> list[Page]:
                 raise HepError(f"overlay '{name}': '{glob}' matches no object of the points' YODAs",
                                where=f"{run.path}: [plot.overlay.{name}].objects")
             paths.append(found[0])
-        labels = table.get("labels") or [p.rsplit("/", 1)[-1] for p in paths]
+        labels = [canonical(l) for l in table.get("labels") or [p.rsplit("/", 1)[-1] for p in paths]]
         for key, members in by_page.items():
             rel = f"{key}/{name}" if key else name
             page, override = page_settings(settings, paths[0], rel, res_dir / rel, False, child=table)
@@ -440,18 +442,18 @@ def page_settings(settings: dict, path: str, rel: str, output: Path, with_data: 
     def ours(name):
         return schema.default("plot", name)
 
-    title, header = tlatex(labels.get("Title", "")), tlatex(labels.get("LegendTitle", ""))     # as mkhtml (V51)
-    x_label, y_label = tlatex(labels.get("XLabel", "")), tlatex(labels.get("YLabel", ""))
+    title, header = labels.get("Title", ""), labels.get("LegendTitle", "")     # as mkhtml (V51); LaTeX, as all text (V65)
+    x_label, y_label = labels.get("XLabel", ""), labels.get("YLabel", "")
     log_x, log_y = labels.get("LogX") == "1", labels.get("LogY") == "1"
     ratio = labels["RatioPlot"] == "1" if labels.get("RatioPlot") in ("0", "1") else with_data   # mkhtml's rule
     page = {
         "name": rel, "output": str(output), "formats": formats_of(settings),
-        "title": pick("title", title, title),
-        "title_left": pick("title_left", "", ""),
-        "title_right": pick("title_right", "", ""),
-        "legend_header": pick("legend_header", header, header),
-        "x_label": pick("x_label", x_label, x_label, tables=(override,)),
-        "y_label": pick("y_label", y_label, y_label, tables=(override,)),
+        "title": canonical(pick("title", title, title)),
+        "title_left": canonical(pick("title_left", "", "")),
+        "title_right": canonical(pick("title_right", "", "")),
+        "legend_header": canonical(pick("legend_header", header, header)),
+        "x_label": canonical(pick("x_label", x_label, x_label, tables=(override,))),
+        "y_label": canonical(pick("y_label", y_label, y_label, tables=(override,))),
         "logx": bool(pick("logx", log_x, log_x)),
         "logy": bool(pick("logy", log_y, log_y)),
         "y_gutter": _gutter(pick("y_gutter", ours("y_gutter"), DEFAULT)),
@@ -473,7 +475,25 @@ def _gutter(value):
 def _curve_label(run, plan, curve_groups) -> str:
     if not curve_groups:
         return run.name
-    return ", ".join(label_of(run.quantities[g[0]], plan.point.choice[g[0]]) for g in curve_groups)
+    return ", ".join(canonical(label_of(run.quantities[g[0]], plan.point.choice[g[0]])) for g in curve_groups)
+
+
+def _paint(paint: Path, configs: list[Path], mode: list[str] = ()) -> dict[str, tuple[bool, str]]:
+    """Paint on many pages, PAINT_BATCH per process (V64): each config's (ok, why)."""
+    outcomes: dict[str, tuple[bool, str]] = {}
+    for start in range(0, len(configs), PAINT_BATCH):
+        batch = [str(c) for c in configs[start:start + PAINT_BATCH]]
+        done = subprocess.run([str(paint), *batch, *mode], capture_output=True, text=True)
+        if len(batch) == 1:
+            outcomes[batch[0]] = (done.returncode == 0, _why(done) if done.returncode else "")
+            continue
+        for line in done.stdout.splitlines():
+            if line.startswith("{"):
+                entry = json.loads(line)
+                outcomes[entry["page"]] = (entry["ok"], entry["error"])
+        for config in batch:                                  # a crash leaves the rest without a line
+            outcomes.setdefault(config, (False, _why(done)))
+    return outcomes
 
 
 def _why(done: subprocess.CompletedProcess) -> str:
@@ -503,22 +523,24 @@ def draw(run, configuration, plans, say) -> int:
         say("plot: no complete point has a YODA product to draw")
         return 0
     names = backends(run.plot)
+    others = [n for n in names if n != "root"]
+    # One Paint for many pages (V64): it draws them (root) and writes each page's ranges beside its config
+    # for the other backends (--ranges), or only the ranges (--ranges-only, a yoda-only run).
+    mode = ["--ranges"] if others and "root" in names else ["--ranges-only"] if others else []
     failed = 0
+    outcomes = _paint(paint, [p.config for p in todo], mode)
+    for page in todo:
+        ok, why = outcomes[str(page.config)]
+        if not ok:
+            failed += 1
+            say(f"plot: {page.name} failed: {why}")
+        elif others:
+            page.ranges = json.loads(page.config.with_name(page.config.name + ".ranges.json").read_text())
     if "root" in names:
-        for page in todo:
-            done = subprocess.run([str(paint), str(page.config)], capture_output=True, text=True)
-            if done.returncode != 0:
-                failed += 1
-                say(f"plot: {page.name} failed: {_why(done)}")
         where = todo[0].config.parent if "/" not in todo[0].name else todo[0].config.parent.parent
         say(f"plot: {len(todo) - failed} of {len(todo)} page(s) drawn; configs in {where}")
-    others = [n for n in names if n != "root"]
-    if others:                           # the same pages; Paint computes the ranges and voids for them
-        for page in todo:
-            done = subprocess.run([str(paint), str(page.config), "--dump-ranges"], capture_output=True, text=True)
-            if done.returncode != 0:
-                raise HepError(f"plot: {page.name}: {_why(done)}", where=str(page.config))
-            page.ranges = json.loads(done.stdout)
+    if others and failed:
+        todo = [p for p in todo if p.ranges]                 # a page Paint could not read has no ranges
     for name in others:
         cells: dict[str, list[Page]] = {}
         for page in todo:
@@ -610,7 +632,7 @@ def files(targets: list[str], outdir: Path | None, *, labels: list[str] | None =
         raise HepError("no 1D object to draw" + (f" matches {list(objects)}" if objects else ""))
     settings = {"formats": list(formats), "ratio": ratio, "auto_range": True}
     layer = style_file(style) if style else {}
-    failed = 0
+    failed, written = 0, {}
     for path in pages_of:
         rel = path.strip("/").replace(":", "__")
         page, _ = page_settings(settings, path, rel, outdir / rel, False)
@@ -620,9 +642,10 @@ def files(targets: list[str], outdir: Path | None, *, labels: list[str] | None =
         config = work / f"{rel}.toml"
         config.parent.mkdir(parents=True, exist_ok=True)
         config.write_text(tomli_w.dumps(for_root(document)), encoding="utf-8")
-        done = subprocess.run([str(paint), str(config)], capture_output=True, text=True)
-        if done.returncode != 0:
+        written[str(config)] = rel
+    for config, (ok, why) in _paint(paint, [Path(c) for c in written]).items():
+        if not ok:
             failed += 1
-            say(f"plot: {rel} failed: {_why(done)}")
+            say(f"plot: {written[config]} failed: {why}")
     say(f"plot: {len(pages_of) - failed} of {len(pages_of)} page(s), {len(curves)} curve(s) → {outdir}")
     return failed

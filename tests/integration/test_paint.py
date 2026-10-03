@@ -280,3 +280,19 @@ def test_a_page_style_merges_over_the_base_and_is_checked(inputs):
         config.write_text(tomli_w.dumps(document))
         done = subprocess.run([str(PAINT), str(config)], capture_output=True, text=True, encoding="utf-8")
         assert done.returncode == 1 and message in done.stderr + done.stdout
+
+
+def test_many_pages_in_one_paint_each_with_its_outcome_and_ranges(inputs):
+    """V64: one ROOT for many pages; a bad page does not stop the rest; --ranges writes what --dump-ranges prints."""
+    good = page(inputs, "d01-x01-y01", **LEGACY_PAGE)
+    other = page(inputs, "d02-x01-y01", **LEGACY_PAGE)
+    bad = inputs["dir"] / "broken.toml"
+    bad.write_text('[page]\nname = "x"\noutput = "/nonexistent/dir/x"\n', encoding="utf-8")   # no [[curve]]
+    done = subprocess.run([str(PAINT), str(good), str(bad), str(other), "--ranges"], capture_output=True, text=True,
+                          encoding="utf-8")
+    lines = [json.loads(l) for l in done.stdout.splitlines() if l.startswith("{")]
+    assert done.returncode == 1 and [l["ok"] for l in lines] == [True, False, True]
+    assert "curve" in lines[1]["error"]
+    for config in (good, other):
+        written = json.loads(Path(str(config) + ".ranges.json").read_text())
+        assert written == dump(config)
