@@ -24,8 +24,8 @@ from . import execute, plot, post, record, sweep, tools
 from .errors import HepError
 from .paths import output_root
 from .quantities import load_master
-from .status import Journal
-from .watch import follow, view
+from .events import Bus, Hub, Journal, greeting, connect, hubs
+from .watch import follow_events, follow_file, view
 
 
 def parser() -> argparse.ArgumentParser:
@@ -46,6 +46,10 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--rerun", action="store_true", help="ignore skip-unchanged")
     run.add_argument("--only", choices=["pre", "post", "plot"], help="rerun only the pre tools, the post tools or the plots")
     run.add_argument("--plain", action="store_true", help="plain lines instead of the live view")
+    run.add_argument("--journal", action="store_true",
+                     help="also write every status event to output/…/status.jsonl (for hep watch --file and replay)")
+    run.add_argument("--logs", action="store_true",
+                     help="keep every tool's whole output in logs/<tag>.log (default: only a failed tool's last lines)")
 
     draw = commands.add_parser("plot", help="draw pages: a configuration's, or any YODA/ROOT files")
     draw.add_argument("targets", nargs="+", metavar="TARGET",
@@ -66,6 +70,7 @@ def parser() -> argparse.ArgumentParser:
     watch.add_argument("config", nargs="?", help="the run config whose job to watch (default: the latest job)")
     watch.add_argument("configuration", nargs="?", help="overrides [run].configuration (or the sweep's latest)")
     watch.add_argument("--plain", action="store_true", help="plain lines instead of the live view")
+    watch.add_argument("--file", metavar="STATUS.JSONL", help="follow a --journal run's status file instead")
     return top
 
 
@@ -107,7 +112,7 @@ def build_plans(args, key: str | None) -> Planned:
 
 
 def journal_path(run, configuration) -> Path:
-    """output/<P>/<run>/<cfg>/status.jsonl: a run's journal, which hep watch follows."""
+    """output/<P>/<run>/<cfg>/status.jsonl: a --journal run's events, which hep watch --file follows."""
     return output_root() / tools.run_dir(run, configuration) / "status.jsonl"
 
 
@@ -211,8 +216,22 @@ def cmd_run(args) -> int:
             print(line)
         return 0
     stopper = execute.Stopper()
+    if getattr(args, "why", False) or args.plan or args.only == "plot":
+        bus = None                           # nothing runs: nothing to watch
+    else:                                    # one stream for the whole process, served while it lives (V72)
+        bus = Bus()
+        hub = Hub({"config": str(run.path), "run": run.name, "configurations": keys})
+        bus.subscribe(hub)
+    try:
+        return _runs(args, run, keys, stopper, bus)
+    finally:
+        if bus is not None:
+            hub.close()
+
+
+def _runs(args, run, keys: list[str], stopper: execute.Stopper, bus) -> int:
     if len(keys) == 1:
-        return run_one(args, keys[0], stopper)
+        return run_one(args, keys[0], stopper, bus=bus)
     if args.points:
         raise HepError("--points picks points of one configuration, and this sweep runs several",
                        where=f"{run.path}: [run].sweep_runs", hint=f"name it: hep run {args.config} <configuration> --points …")
@@ -232,7 +251,8 @@ def cmd_run(args) -> int:
     for number, key in enumerate(keys, 1):
         if stopper.requested:
             return 6
-        following = next((journal_path(run, run.configurations[k]) for k in keys[number:] if k not in skipped), None)
+        following = next((journal_path(run, run.configurations[k]) for k in keys[number:] if k not in skipped), None) \
+            if args.journal else None
         if key in skipped:
             print(("\n" if number > 1 else "") + header(number, run.configurations[key]))
             print(skipped[key])
@@ -240,12 +260,12 @@ def cmd_run(args) -> int:
         try:                                 # planned again only if the TOML was edited meanwhile (V38, V54)
             unchanged = run.path.stat().st_mtime_ns == stamp
             code = run_one(args, key, stopper, number=number, following=following,
-                           planned=ahead[key] if unchanged else None)
+                           planned=ahead[key] if unchanged else None, bus=bus)
         except HepError as error:            # the TOML was edited since the check: this run fails alone
             print(("\n" if number > 1 else "") + header(number, run.configurations[key]))
             print(error.render(), file=sys.stderr)
-            not_run(journal_path(run, run.configurations[key]), header(number, run.configurations[key]),
-                    error.message, following)
+            not_run(journal_path(run, run.configurations[key]) if args.journal else None,
+                    header(number, run.configurations[key]), error.message, following, bus)
             code = 2
         if code == 6:
             return 6
@@ -284,21 +304,27 @@ def show_config(run, keys: list[str]) -> list[str]:
     return lines
 
 
-def not_run(path: Path, title: str, message: str, following: Path | None) -> None:
-    """A run that could not be planned at its turn still says so in its journal, so hep watch moves on."""
-    journal = Journal(path)
-    journal.write("", "", {"k": "run", "state": "started", "points": 0, "title": title, "header": title})
-    journal.write("", "", {"k": "run", "state": "finished", "verdict": f"not run: {message}",
-                           **({"next": str(following)} if following else {})})
-    journal.close()
+def not_run(path: Path | None, title: str, message: str, following: Path | None, bus=None) -> None:
+    """A run that could not be planned at its turn still says so: to the watchers, and in its journal
+    (--journal), so hep watch --file moves on."""
+    journal = Journal(path) if path is not None else None
+    for event in ({"k": "run", "state": "started", "points": 0, "title": title, "header": title},
+                  {"k": "run", "state": "finished", "verdict": f"not run: {message}",
+                   **({"next": str(following)} if following else {})}):
+        if bus is not None:
+            bus.emit("", "", event)
+        if journal is not None:
+            journal.event({"v": 1, "point": "", "tool": "", **event})
+    if journal is not None:
+        journal.close()
 
 
 def run_one(args, key: str, stopper: execute.Stopper, *, number: int = 0, following: Path | None = None,
-            planned: Planned | None = None) -> int:
+            planned: Planned | None = None, bus: Bus | None = None) -> int:
     """One run: the pre stage, every point not complete, the combined groups, the post stage and the
-    plots. In a sweep of runs, `number` is its place (a `run NN - <title> -` line first), and
-    `following` is the next run's journal, named in this one's `run finished` record so that hep
-    watch follows on."""
+    plots, said on `bus` (V72). In a sweep of runs, `number` is its place (a `run NN - <title> -` line
+    first), and `following` is the next run's journal (--journal), named in this one's `run finished`
+    event so that hep watch --file follows on."""
     planned = planned or build_plans(args, key)
     run, configuration, every, plans = planned.run, planned.configuration, planned.every, planned.plans
     post_plan, pre_plan, combined = planned.post, planned.pre, planned.combined
@@ -322,23 +348,26 @@ def run_one(args, key: str, stopper: execute.Stopper, *, number: int = 0, follow
     if stopper.requested:                    # Ctrl-C while this run was being planned
         return 6
 
+    bus = bus if bus is not None else Bus()
     shown = view(args.plain)
+    bus.subscribe(shown)
     catch_signals(stopper)
+    logs = bool(getattr(args, "logs", False))
 
     base = plans[0].out.parent if plans else None
-    journal = Journal(base / "status.jsonl") if base else None
+    journal = Journal(base / "status.jsonl") if base and getattr(args, "journal", False) else None
+    if journal:
+        bus.subscribe(journal)
     title = (f"{run.name} · {configuration.key}: {len(plans)} point(s), {configuration.event_count} events, "
              f"{configuration.threads} threads" + parallel_note(configuration, plans))
     if number > 1:
-        shown.say("")
-    shown.begin(len(plans), title, header=title_line)
+        bus.say("")
+    bus.emit("", "", {"k": "run", "state": "started", "points": len(plans), "title": title,
+                      **({"header": title_line} if title_line else {})})
     if crowded(configuration, plans):
-        shown.say(f"   note: {crowded(configuration, plans)}")
+        bus.say(f"   note: {crowded(configuration, plans)}")
     for note in notes_of(plans):
-        shown.say(f"   note: {note}")
-    if journal:
-        journal.write("", "", {"k": "run", "state": "started", "points": len(plans), "title": title,
-                               **({"header": title_line} if title_line else {})})
+        bus.say(f"   note: {note}")
     def manifest() -> None:
         if base:
             record.write_atomic(base / "points.json",
@@ -348,7 +377,7 @@ def run_one(args, key: str, stopper: execute.Stopper, *, number: int = 0, follow
     verdict = "stopped"
     try:
         if args.only in (None, "pre"):
-            if not post.run_pre(pre_plan, run, configuration, sink=shown, journal=journal, stopper=stopper,
+            if not post.run_pre(pre_plan, run, configuration, bus=bus, stopper=stopper, logs=logs,
                                 rerun=args.rerun or args.only == "pre"):
                 verdict = "pre failed: no point ran"
                 return 6 if stopper.requested else 1
@@ -356,22 +385,22 @@ def run_one(args, key: str, stopper: execute.Stopper, *, number: int = 0, follow
                 verdict = "pre done"
                 return 0
         if args.only != "post":
-            done, failed, stopped = execute.run_points(plans, run, configuration, sink=shown, journal=journal,
-                                                       stopper=stopper, rerun=args.rerun)
+            done, failed, stopped = execute.run_points(plans, run, configuration, bus=bus, stopper=stopper,
+                                                       rerun=args.rerun, logs=logs)
             if stopped:
                 return 6
         verdict = f"{done} done, {failed} failed, {len(plans) - done - failed} skipped" if args.only != "post" else ""
         manifest()                           # post tools read it: it must say which points are complete
         if combined and args.only != "post":
-            bad = post.run_combined(combined, every, run, configuration, sink=shown, journal=journal, stopper=stopper,
-                                    rerun=args.rerun, say=shown.say)
+            bad = post.run_combined(combined, every, run, configuration, bus=bus, stopper=stopper, logs=logs,
+                                    rerun=args.rerun, say=bus.say)
             if stopper.requested:
                 return 6
             if bad:
                 failed += bad
                 verdict = f"{verdict}, {bad} combined group(s) failed"
-        if not post.run(post_plan, every, run, configuration, sink=shown, journal=journal, stopper=stopper,
-                        rerun=args.rerun or args.only == "post", say=shown.say):
+        if not post.run(post_plan, every, run, configuration, bus=bus, stopper=stopper, logs=logs,
+                        rerun=args.rerun or args.only == "post", say=bus.say):
             if stopper.requested:
                 return 6
             failed += 1
@@ -379,14 +408,16 @@ def run_one(args, key: str, stopper: execute.Stopper, *, number: int = 0, follow
         elif post_plan is not None and args.only == "post":
             verdict = "post done"
         if args.only != "post":
-            failed += plot.draw(run, configuration, combined or every, shown.say) > 0   # the groups, when combined
-        shown.say(verdict)                   # before end(): the view's thread prints it (V32)
+            failed += plot.draw(run, configuration, combined or every, bus.say) > 0   # the groups, when combined
+        bus.say(verdict)                     # before end(): the view's thread prints it (V32)
     finally:
+        onward = {"next": str(following)} if following and not stopper.requested else {}
+        bus.emit("", "", {"k": "run", "state": "finished", "verdict": verdict, **onward})
+        bus.unsubscribe(shown)
         shown.end()
         manifest()
         if journal:
-            onward = {"next": str(following)} if following and not stopper.requested else {}
-            journal.write("", "", {"k": "run", "state": "finished", "verdict": verdict, **onward})
+            bus.unsubscribe(journal)
             journal.close()
     return 1 if failed else 0
 
@@ -451,21 +482,29 @@ def cmd_check(args) -> int:
 
 
 def cmd_watch(args) -> int:
-    """Follow a job from another terminal: its status.jsonl, or the most recent one under output/."""
-    if args.config:                          # under [run].sweep_runs: the swept run written to last (V38)
-        run = configmod.load(args.config)
-        journals = [journal_path(run, run.configurations[key]) for key in run.runs(args.configuration)]
-        present = [j for j in journals if j.exists()]
-        journal = max(present, key=lambda j: j.stat().st_mtime) if present else journals[0]
-    else:
-        found = sorted(output_root().glob("*/*/*/status.jsonl"), key=lambda p: p.stat().st_mtime)
-        if not found:
-            raise HepError("no job to watch", where=str(output_root()), hint="start one with hep run")
-        journal = found[-1]
-    if not journal.exists():
-        raise HepError("that configuration has no status yet", where=str(journal),
-                       hint="it has not been run, or is about to start")
-    return follow(journal, plain=args.plain)
+    """Follow a job from another terminal (V72): a running `hep run`'s watch socket (the latest one, or
+    the one running CONFIG [CONFIGURATION]), or with --file a --journal run's status.jsonl."""
+    if args.file:
+        path = Path(args.file)
+        if not path.exists():
+            raise HepError("no such status file", where=str(path), hint="a run writes one with hep run … --journal")
+        return follow_file(path, plain=args.plain)
+    wanted = configmod.load(args.config) if args.config else None
+    found = []
+    for name in hubs():
+        hello = greeting(name)
+        if not hello:
+            continue
+        if wanted is not None and hello.get("config") != str(wanted.path):
+            continue
+        if args.configuration and args.configuration not in hello.get("configurations", []):
+            continue
+        found.append((hello.get("started", 0), name))
+    if not found:
+        raise HepError("no running job to watch" + (f" for {wanted.path}" if wanted else ""),
+                       hint="start one with hep run; a finished run's events: hep run … --journal, then hep watch --file "
+                            "output/<P>/<run>/<cfg>/status.jsonl")
+    return follow_events(connect(max(found)[1]), plain=args.plain)
 
 
 def parse(argv: list[str]) -> argparse.Namespace:

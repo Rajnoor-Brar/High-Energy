@@ -520,7 +520,7 @@ swept = false                    # not in the sweep; hep run eic delphes still r
 Each configuration is an ordinary run, with its own title, blocks, verdict and folder, exactly as
 `hep run eic <cfg>` would make it. They are all checked before the first starts, so a typo in the
 last one costs nothing. A failed run lets the next one start, and Ctrl-C stops everything.
-`hep watch` follows from one run to the next. That's what a shell loop can't do: in
+`hep watch` follows from one run to the next (the sweep is one process, and one stream). That's what a shell loop can't do: in
 `for c in …; do hep run eic $c; done`, a Ctrl-C only ends the current run (hep exits 6 and bash
 carries on) and a typo in a later configuration shows up hours in. `hep run eic pdf` still runs
 only `pdf`, and `--set run.sweep_runs=false` turns the sweep off for one call.
@@ -622,7 +622,7 @@ Denser or sparser ratio ticks: `[plot.style] ratio = { divisions = 508 }` (0.2 a
 | only the pages | `--only plot`, or `hep plot CONFIG CFG` |
 | only the post (or pre) tools | `--only post` / `--only pre` |
 | plain lines (logs, CI) | `--plain` (automatic when not a terminal) |
-| to follow a job elsewhere | `hep watch [CONFIG [CFG]]` |
+| to follow a job elsewhere | `hep watch [CONFIG [CFG]]` (a `--journal` run's file: `hep watch --file …`) |
 | a point faster | `shards = K` on the Rivet table (§4.17); more Pythia `threads` alone do not help |
 | many points faster | `parallelism = K` (§4.18): K points at once |
 
@@ -636,15 +636,16 @@ Threads are part of the identity: `--set run.pdf.threads=8` makes every point "t
 
 The run goes on to the next point, and the point's block names the tool to blame. Then:
 
-1. Read `output/…/<point>/logs/<tool>.log` (and `<tool>.prepare.log`, `prelim.log`).
+1. Read `output/…/<point>/logs/<tool>.log` (and `<tool>.prepare.log`, `prelim.log`): a failed tool's
+   last 200 lines. For a tool's whole output, run again with `--logs`.
 2. A product that failed its checks keeps its `.partial` name, and the point has no `.complete`, so
    it runs again next time.
 3. *"rivet analysed N events; the producer wrote M"*: the chain broke mid-stream. Look at the
    generator's log first.
 4. *"… was silent for 300 s"*: a stall. Raise `stall_after` on the tool if it is legitimately quiet.
 5. Fix it, then `hep run … --points <that point>`. Complete points are skipped anyway.
-6. `--plan` shows the exact argv and cards; `output/…/<cfg>/status.jsonl` is the job's full
-   journal; `provenance.json` records every binary and card of a finished point.
+6. `--plan` shows the exact argv and cards; `--journal` writes the job's every event to
+   `output/…/<cfg>/status.jsonl`; `provenance.json` records every binary and card of a finished point.
 
 Ctrl-C stops the job cleanly: the running tools get SIGINT, then SIGTERM, then SIGKILL; the exit is
 6, and the same command resumes. `hep run` exits 0 when everything is done, 1 when a point, the post

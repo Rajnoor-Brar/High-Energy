@@ -95,11 +95,12 @@ half whose layering was not had nine cycles.)
 | 1 | `quantities.py` | the master TOML, static values and selectors, who consumes what (C7), provider checks (C10) |
 | 1 | `sweep.py` | points from `sweeps` (grid and zip), point names, pages, `--points` |
 | 1 | `labels.py` | Rivet `.plot` keys, YODA's text macros, line breaks, LaTeX → TLatex (shared by the plot stage and its backends) |
+| 1 | `events.py` | the event stream (V72): the bus, the watch socket (`Hub`), the `--journal` file |
 | 2 | `tools.py` | the tool folders; per point: interfaces, connections (C6), cards, configs, exports, prepare keys, argv; seeds last |
 | 3 | `execute.py` | `[prelim]`, prepare steps, groups as supervised process groups, the count checks, settling products |
-| 3 | `status.py` | the status pipes, the filter rules, the journal |
+| 3 | `status.py` | the status and output pipes, read on a thread per tool; the filter rules; a failed tool's tail |
 | 3 | `record.py` | identity, seeds, skip, provenance, `points.json` |
-| 4 | `watch.py` | the live and plain views, `hep watch` |
+| 4 | `watch.py` | the reducer of events (`State`), the live and plain views, `hep watch` |
 | 4 | `plot.py` | the plot stage: the merged sweep, page configs, the style layers, Paint and the other backends; `hep plot` on files |
 | 4 | `post.py` | the pre and post stages |
 | 5 | `cli.py` | `argparse`: `run`, `plot`, `watch`; the order of events |
@@ -340,28 +341,37 @@ directory).
 
 ---
 
-## 10. Status, the journal and the watch view
+## 10. Status, the event stream and the watch view
 
 | Source | Channel | Read by |
 |---|---|---|
 | our apps and module programs (`status = "standard"`) | JSON lines on the fd in `$HEP_STATUS_FD` (`Status.hh`) | `status.Reader`, from a pipe per process |
-| every other tool (`status = "filters"`) | its stdout and stderr, which go to its log | the log tail, matched against `filters.toml` rules |
-| a tool with `status = "none"` | its log | the last line only |
+| every other tool (`status = "filters"`) | its stdout and stderr, through a pipe | the same reader, matched line by line against `filters.toml` rules |
+| a tool with `status = "none"` | its stdout and stderr | the last line only |
 
-- **stdout is never the status channel**: it may carry HepMC and always carries chatter. Every
-  process's output goes to `output/…/<point>/logs/<tag>.log`.
+- **stdout is never the status channel**: it may carry HepMC and always carries chatter.
+- **One reader thread per tool** (V72) reads both pipes, so a tool that prints fast never waits on a full
+  pipe. **Runtime state stays off disk** (the user's decision): a tool's output is kept in memory (its
+  last 200 lines) and written to `output/…/<point>/logs/<tag>.log` only when it fails; `--logs` writes
+  every tool's whole output there as it comes.
 - **A filter rule never fails a run.** The exit code does that.
-- **The journal**, `output/…/<cfg>/status.jsonl`, gets every status message tagged with its point,
-  tool and time, plus the runner's `run`, `point` and `exit` records.
+- **The event stream** (`events.py`, V72). The executor, the stages and the CLI emit versioned events onto
+  one bus: `run`, `point` (started, done/failed/stopped, skipped), `tool`, `exit`, a tool's own
+  `phase`/`progress`/`xsec`/`log`, its latest `line`, `note`, `say`. Three listeners: the view; the
+  process's **watch socket**, an abstract Unix socket `@hep-watch-<pid>` that `hep watch` finds in
+  `/proc/net/unix` (a greeting, the current run's events so far, then every event live, for the life of
+  the process: a sweep of runs is one stream); and, only with `--journal`, the **journal**
+  `output/…/<cfg>/status.jsonl` (one file per run, for `hep watch --file` and replay).
 - **The views.** The live view (with `rich`, on a terminal) shows each running point below the
   finished blocks, after a blank line: its heading and time so far (`mm:ss`, `hh:mm:ss` once there
   are hours), then a line per running tool: progress, rate, ETA, σ, the last warning. The plain view (`--plain`, or not a terminal) prints progress every
   few seconds. **A view never blocks the run** (V32): everything it prints goes through one
   background thread, so a terminal that stops reading (a paused tab, Ctrl-S) stops the display, not
-  the supervision. With `parallelism = K` (V36) up to K points run at once, each on a thread of its
-  own through the same executor: the views keep a part per running point (the live view shows each
-  under its own heading), a block is printed whole when its point ends, the journal takes one line at
-  a time, and a prepare cache entry is filled by one point at a time (a lock in the runner, `flock`
+  the supervision. A view is one reducer of events (`watch.State`) and a renderer on its own thread,
+  the same in the run, in `hep watch` and over a journal. With `parallelism = K` (V36) up to K points
+  run at once, each on a thread of its own through the same executor: the reducer keeps each running
+  point under its own heading, a block is printed whole when its point ends, the bus delivers one event
+  at a time, and a prepare cache entry is filled by one point at a time (a lock in the runner, `flock`
   across runners). Both print **one block per finished point**:
 
   ```
@@ -370,8 +380,8 @@ directory).
   ```
 
   A failed point's block names the tool to blame, its exit and the message; a cached prepare step
-  is one line in the block. `hep watch` rebuilds the same blocks from the journal in another
-  terminal, and leaves when the run finishes.
+  is one line in the block. `hep watch` draws the same blocks in another terminal, from the run's
+  socket, and leaves when the run's process ends.
 
 ---
 
@@ -466,7 +476,7 @@ is written by a run.
 
 ```
 output/<P>/<run>/<cfg>/
-  points.json   status.jsonl
+  points.json   [status.jsonl: --journal]
   <point>/      cards/  config/  logs/  FIFOs, [prelim] files  provenance.json  .complete
   pre/, post/   the same, for the stages
   plots/        [<cell>/]<object>.toml (Paint's page configs), merged.sha256; yoda/ (mkhtml's work files)

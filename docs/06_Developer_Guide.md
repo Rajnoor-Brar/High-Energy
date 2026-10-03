@@ -112,7 +112,9 @@ The package and its ranks are [02 §3.1](02_Architecture.md#31-the-runner). The 
 | `Interface` | `tools` | `name`, `path`, `kind` (`fifo`, `file`, `product`, `pre`, `points`), `producer`, `readers`, `group`, for `points` the `paths` and `names` of every point, and `shard` (a shard's product: technical, not the point's) |
 | `Step` | `tools` | one tool of one point: its folder, group, executable, argv, env, cwd, log, status mode, filters, inputs, outputs, products (final, partial), sidecar, count check, card lines and paths, config, prepare entry and argv, `identity_parts` |
 | `PointPlan` | `tools` | one point (or stage): `values`, `out`, `res`, `groups` of steps, `rendered` (every step, export-only ones included), `interfaces`, `consumers`, `identity`, `seed`, `writes` (files to write), `context`, `upstream`, `deal` (a dealt interface → its group) |
-| `ToolState`, `Journal`, `Reader` | `status` | what the views show per tool; `status.jsonl`; one process's pipe or log tail |
+| `ToolState`, `Reader` | `status` | what the views show per tool; one process's status and output pipes, on a thread (V72) |
+| `Bus`, `Hub`, `Journal` | `events` | the event stream; the watch socket; `status.jsonl` with `--journal` (V72) |
+| `State`, `PlainView`, `LiveView` | `watch` | the reducer of events, and the views that render it |
 | `ToolResult`, `PointResult` | `execute` | exits, causes and messages |
 | `Page` | `plot` | one page: its config path, output, cell, object, document, sources, variants, data, overrides, ranges, merged style |
 
@@ -147,11 +149,11 @@ own name), `upstream` = the members' identities, `Point.stage = "combined"` and 
 **Several runs** (`[run].sweep_runs`, V38): `cmd_run` asks `RunConfig.runs(name)` which configurations
 to run (the named one; else the `swept` ones in file order; else `[run].configuration`). With one,
 it is `run_one`. With several, it calls `build_plans` for each first (a `HepError` names the
-configuration and nothing runs), then `run_one(…, number=N, following=<next journal>)` in turn.
-There is one `Stopper` for all of them; a run's `run finished` record carries `"next"` unless a stop
-was asked; a run whose planning fails at its turn gets a `not run` pair of records from `not_run`,
-so `watch.follow` (which moves on through `"next"`, to the first run started after it) never waits
-on it.
+configuration and nothing runs), then `run_one(…, number=N, following=<next journal>, bus=…)` in turn.
+There is one `Stopper`, one event `Bus` and one watch socket (`events.Hub`) for all of them (V72), so
+`hep watch` follows the sweep as one stream; with `--journal`, a run's `run finished` event carries
+`"next"` unless a stop was asked, and a run whose planning fails at its turn gets a `not run` pair of
+events from `not_run`, so `watch.follow_file` never waits on it.
 
 **Seeds** (`record`, V39): `seed_rule(plan)` is what the identity says ("generator", ["manual",
 seed] or "random"); `manual_seed_of` reads a seed quantity's value (the step's `replica` identity

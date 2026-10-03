@@ -64,7 +64,7 @@ def test_herwig_sigma_is_its_own_and_the_run_file_is_shared(scratch):
     value, _ = xsec(scratch / "results" / folder("PhotoProduction/herwig") / "point/photo.yoda")
     digits = len(stated[2].split(".")[1]) if "." in stated[2] else 0
     assert abs(value / 1000 - nb) <= 0.5 * 10 ** (int(stated[4]) - digits) * 1.0001   # to the digits Herwig prints
-    out = hep_run(scratch, "PhotoProduction/herwig", "export")
+    out = hep_run(scratch, "PhotoProduction/herwig", "export", "--logs")    # the probe's log is read (V72)
     assert "herwig:prepare: cached" in out                               # the same card: one read
     probe = (scratch / "output" / folder("PhotoProduction/herwig", "export") / "point/logs/probe.log").read_text(encoding="utf-8", errors="replace")
     assert "point.run" in probe

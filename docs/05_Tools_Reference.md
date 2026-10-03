@@ -652,9 +652,10 @@ chain, because nothing formats or parses HepMC text.
 ## 19. `Status.hh` and the status protocol
 
 A tool with `status = "standard"` writes **JSON lines** to the file descriptor named in
-`$HEP_STATUS_FD`. The runner opens a pipe per process and reads it; unknown kinds are kept in the
-journal and otherwise ignored, so the set can grow. **stdout is never the status channel**: it may
-carry HepMC, and it always carries chatter, which goes to `logs/<tag>.log`.
+`$HEP_STATUS_FD`. The runner opens a pipe per process and reads it; unknown kinds go onto the event
+stream (and the journal, with `--journal`) and are otherwise ignored, so the set can grow. **stdout is
+never the status channel**: it may carry HepMC, and it always carries chatter, which the runner reads
+through a pipe and keeps only when the tool fails (its last 200 lines, `logs/<tag>.log`) or with `--logs`.
 
 | Kind | Fields | Shown as |
 |---|---|---|
@@ -662,7 +663,7 @@ carry HepMC, and it always carries chatter, which goes to `logs/<tag>.log`.
 | `progress` | `done`, `total`, `rate` | the progress bar, rate and ETA |
 | `xsec` | `value_pb`, `err_pb`, `final` | σ |
 | `log` | `level` (`warn`, `error`), `msg` | the last warning or error |
-| `summary` | tool-defined (counts, outputs) | journal only |
+| `summary` | tool-defined (counts, outputs) | the event stream only |
 | `heartbeat` | — | keeps the tool from counting as stalled |
 
 Every line has the envelope `{"t": <unix time>, "k": <kind>, …}`.

@@ -1,7 +1,8 @@
 """`[run].sweep_runs = true` (V38): `hep run` executes every configuration not `swept = false`, in the
 order of the file, each as a run of its own after a `run NN - <title> -` line. All are planned
 before the first starts; a failed run leaves the next to start, a stop starts no more; each run's
-journal names the next, so `hep watch` follows on."""
+journal (--journal) names the next, so `hep watch --file` follows on; the watch socket is the process's,
+so `hep watch` follows on by itself (V72)."""
 
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ import pytest
 
 from runner import cli, record
 from runner.errors import HepError
-from runner.watch import PlainView, follow
+from runner.watch import PlainView, follow_file
 
 from helpers import parse, plan, raw
 
@@ -110,11 +111,12 @@ def sweep_file(scratch, monkeypatch):
 
 def args_for(path: Path, **changes):
     return SimpleNamespace(**{"config": str(path), "configuration": None, "set": [], "points": None, "plan": False,
-                              "only": None, "rerun": False, "plain": True, **changes})
+                              "only": None, "rerun": False, "plain": True, "journal": True, "logs": False,
+                              **changes})
 
 
 def fake_runs(monkeypatch, codes: dict, calls: list, given: list | None = None):
-    def run_one(args, key, stopper, *, number=0, following=None, planned=None):
+    def run_one(args, key, stopper, *, number=0, following=None, planned=None, bus=None):
         calls.append((key, number, following.parent.name if following else None))
         if given is not None:
             given.append(planned)
@@ -200,8 +202,6 @@ def test_watch_follows_one_run_to_the_next(scratch, monkeypatch):
             {"k": "run", "state": "finished", "verdict": "1 done", "next": str(second), "t": 106.0},
         ],
         second: [
-            {"k": "run", "state": "started", "points": 1, "title": "an old run of b", "t": 50.0},
-            {"k": "run", "state": "finished", "verdict": "old", "t": 51.0},
             {"k": "run", "state": "started", "points": 1, "title": "t · b", "header": "run 02 - b -", "t": 107.0},
             {"point": "q", "k": "point", "state": "started", "index": 1, "t": 107.0},
             {"point": "q", "k": "point", "state": "done", "t": 109.5},
@@ -212,10 +212,10 @@ def test_watch_follows_one_run_to_the_next(scratch, monkeypatch):
         path.write_text("".join(json.dumps({"point": "", "tool": "", **m}) + "\n" for m in lines), encoding="utf-8")
     captured = io.StringIO()
     monkeypatch.setattr("runner.watch.view", lambda plain=False: PlainView(stream=captured))
-    assert follow(first, plain=True) == 0
+    assert follow_file(first, plain=True) == 0
     text = captured.getvalue()
     assert text.index("run 01 - a -") < text.index("── point 1/1: p ── ok after 5.0s") < text.index("run 02 - b -")
-    assert "── point 1/1: q ── ok after 2.5s" in text and "old" not in text
+    assert "── point 1/1: q ── ok after 2.5s" in text
 
 
 def test_an_unchanged_toml_is_planned_once(sweep_file, monkeypatch):

@@ -18,8 +18,12 @@ when both exits are seen in the same poll (found by P1's failure injection).
 
 **Points at once** (`parallelism = K`, V36): `run_points` runs up to K points on threads of their
 own, each through the same `run_point`. Nothing of a point is shared with another (its folder holds
-its FIFOs, logs and products), except the journal (locked) and a prepare cache entry, which one
+its FIFOs, logs and products), except the event bus (locked) and a prepare cache entry, which one
 point at a time may fill (`_prepare_lock`: a lock in this process and flock across processes).
+
+**What is said** goes onto the run's event bus (events.py, V72): a point's and a tool's start and end,
+and every status message. A tool's output is read from a pipe (status.Reader); only a failed tool's last
+lines reach logs/<tag>.log, unless `logs` (--logs) keeps every tool's whole log.
 """
 
 from __future__ import annotations
@@ -41,7 +45,7 @@ from . import hepfiles
 from .errors import HepError
 from .paths import repo_root
 from .record import complete_marker, is_complete, now, provenance, write_atomic, write_identity
-from .status import Journal, Reader, ToolState
+from .status import Reader, ToolState
 from .tools import PointPlan, Step, expand
 
 GRACE = 2.0                  # after the first failure, before the rest of the group is asked to stop
@@ -74,30 +78,29 @@ class PointResult:
     tools: dict[str, ToolResult] = field(default_factory=dict)
 
 
-class NullSink:
-    def point_started(self, plan): pass
-    def tool_started(self, state): pass
-    def tick(self, states): pass
-    def tool_finished(self, state, result): pass
-    def point_finished(self, plan, result): pass
-    def skipped(self, plan): pass
+class _Quiet:
+    """A bus no one hears (tests, and a caller that wants no events)."""
+
+    def emit(self, point, tool, message):
+        return message
 
 
-def _sink_for(sink, plan):
-    """One point's view of the sink: a view gives each point its own (V36), anything else is shared."""
-    return sink.for_point(plan) if hasattr(sink, "for_point") else sink
+def _bus(bus):
+    return bus if bus is not None else _Quiet()
 
 
-def run_points(plans: list[PointPlan], run, configuration, *, sink, journal: Journal | None, stopper: Stopper,
-               rerun: bool) -> tuple[int, int, bool]:
+def run_points(plans: list[PointPlan], run, configuration, *, bus=None, stopper: Stopper,
+               rerun: bool, logs: bool = False) -> tuple[int, int, bool]:
     """Every point not already complete, `configuration.parallelism` at a time, in order: (done,
     failed, stopped). A stop (Ctrl-C) starts nothing more and stops the running points through
     their groups' stop ladder. An error of the runner itself is raised once the running points
     have ended."""
+    bus = _bus(bus)
     todo = []
     for plan in plans:
         if not rerun and is_complete(plan):
-            sink.skipped(plan)
+            bus.emit(plan.point.name, "", {"k": "point", "state": "skipped", "index": plan.point.index,
+                                           **({"stage": plan.point.stage} if plan.point.stage else {})})
         else:
             todo.append(plan)
     done = failed = 0
@@ -105,7 +108,7 @@ def run_points(plans: list[PointPlan], run, configuration, *, sink, journal: Jou
     at_once = max(1, configuration.parallelism)
     if at_once == 1:
         for plan in todo:
-            result = run_point(plan, run, configuration, sink=_sink_for(sink, plan), journal=journal, stopper=stopper)
+            result = run_point(plan, run, configuration, bus=bus, stopper=stopper, logs=logs)
             if result.stopped or stopper.requested:
                 return done, failed, True
             failed += not result.ok
@@ -117,8 +120,7 @@ def run_points(plans: list[PointPlan], run, configuration, *, sink, journal: Jou
         while todo or running:
             while todo and len(running) < at_once and not stopper.requested and error is None:
                 plan = todo.pop(0)
-                running.add(pool.submit(run_point, plan, run, configuration, sink=_sink_for(sink, plan),
-                                        journal=journal, stopper=stopper))
+                running.add(pool.submit(run_point, plan, run, configuration, bus=bus, stopper=stopper, logs=logs))
             if not running:
                 break
             finished, running = wait(running, timeout=0.5, return_when=FIRST_COMPLETED)   # SIGINT gets in
@@ -210,7 +212,7 @@ def report_of(product: Path) -> Path:
 
 # ── [prelim] ───────────────────────────────────────────────────────────────────────────────────
 
-def prepare(plan: PointPlan) -> None:
+def prepare(plan: PointPlan, logs: bool = False) -> None:
     for directory in (plan.out, plan.out / "logs", plan.res):
         directory.mkdir(parents=True, exist_ok=True)
     marker = complete_marker(plan)
@@ -237,8 +239,9 @@ def prepare(plan: PointPlan) -> None:
                    "file:": {n: str(i.path) for n, i in plan.interfaces.items()}}
         argv = [x for a in command for x in ([expand(str(a), context, "[prelim].commands")])]
         done = subprocess.run(argv, cwd=plan.out, capture_output=True, text=True)
-        (plan.out / "logs" / "prelim.log").open("a", encoding="utf-8").write(
-            f"$ {' '.join(argv)}\n{done.stdout}{done.stderr}")
+        if done.returncode != 0 or logs:              # its output is on disk when it failed, or with --logs (V72)
+            (plan.out / "logs" / "prelim.log").open("a", encoding="utf-8").write(
+                f"$ {' '.join(argv)}\n{done.stdout}{done.stderr}")
         if done.returncode != 0:
             raise HepError(f"[prelim] command failed ({done.returncode}): {' '.join(argv)}",
                            where=str(plan.out / "logs" / "prelim.log"))
@@ -264,13 +267,14 @@ def _signal(entry: _Running, sig: int) -> None:
         pass
 
 
-def run_group(plan: PointPlan, group: list[Step], *, sink, journal: Journal | None, stopper: Stopper,
-              results: dict[str, ToolResult]) -> tuple[bool, str, str]:
+def run_group(plan: PointPlan, group: list[Step], *, bus, stopper: Stopper,
+              results: dict[str, ToolResult], logs: bool = False) -> tuple[bool, str, str]:
     """Run one group to the end. Returns (ok, blamed tag, message)."""
+    bus = _bus(bus)
     running: list[_Running] = []
     for step in group:
         step.log.parent.mkdir(parents=True, exist_ok=True)
-        log = open(step.log, "ab")
+        out_read, out_write = os.pipe()
         env = dict(os.environ)
         env.update(step.env)
         env.pop("HEP_STATUS_FD", None)
@@ -279,22 +283,25 @@ def run_group(plan: PointPlan, group: list[Step], *, sink, journal: Journal | No
             read_fd, write_fd = os.pipe()
             env["HEP_STATUS_FD"] = str(write_fd)
         try:
-            process = subprocess.Popen(step.argv, cwd=step.cwd or plan.out, env=env, stdin=subprocess.DEVNULL, stdout=log,
-                                       stderr=subprocess.STDOUT, start_new_session=True,
+            process = subprocess.Popen(step.argv, cwd=step.cwd or plan.out, env=env, stdin=subprocess.DEVNULL,
+                                       stdout=out_write, stderr=subprocess.STDOUT, start_new_session=True,
                                        pass_fds=(write_fd,) if write_fd is not None else ())
         except OSError as error:
             for entry in running:
                 _signal(entry, signal.SIGKILL)
+            os.close(out_read)
+            if read_fd is not None:
+                os.close(read_fd)
             raise HepError(f"cannot start {step.tag}: {error}", where=" ".join(step.argv[:2]))
         finally:
-            log.close()
+            os.close(out_write)
             if write_fd is not None:
                 os.close(write_fd)
         state = ToolState(point=plan.point.name, tag=step.tag)
-        entry = _Running(step, process, state, Reader(state, fd=read_fd, log=step.log, rules=step.filters,
-                                                      journal=journal), read_fd, time.monotonic())
+        bus.emit(plan.point.name, step.tag, {"k": "tool", "state": "started"})
+        entry = _Running(step, process, state, Reader(state, fd=read_fd, out=out_read, rules=step.filters, bus=bus,
+                                                      log=step.log, keep=logs), read_fd, time.monotonic())
         running.append(entry)
-        sink.tool_started(state)
 
     failure: tuple[str, str, str] | None = None      # (tag, cause, message)
     failed_at = 0.0
@@ -302,20 +309,15 @@ def run_group(plan: PointPlan, group: list[Step], *, sink, journal: Journal | No
     exits: list[_Running] = []
     while True:
         for entry in running:
-            entry.reader.poll()
-        for entry in running:
             if entry.exited_at is None and entry.process.poll() is not None:
                 entry.exited_at = time.monotonic()
+                entry.reader.join(0.5)                # its last status and lines
                 entry.state.running, entry.state.exit = False, entry.process.returncode
-                entry.reader.poll()
                 exits.append(entry)
                 results[entry.step.tag] = ToolResult(entry.step.tag, entry.process.returncode,
                                                      entry.exited_at - entry.started)
-                if journal is not None:
-                    journal.write(plan.point.name, entry.step.tag, {"k": "exit", "code": entry.process.returncode,
-                                                                    "seconds": round(entry.exited_at - entry.started, 3)})
-                sink.tool_finished(entry.state, results[entry.step.tag])
-        sink.tick([e.state for e in running])
+                bus.emit(plan.point.name, entry.step.tag, {"k": "exit", "code": entry.process.returncode,
+                                                           "seconds": round(entry.exited_at - entry.started, 3)})
         alive = [e for e in running if e.exited_at is None]
         clock = time.monotonic()
 
@@ -361,10 +363,12 @@ def run_group(plan: PointPlan, group: list[Step], *, sink, journal: Journal | No
         time.sleep(POLL)
 
     for entry in running:
-        if entry.fd is not None:
-            os.close(entry.fd)
+        entry.reader.join()
     if failure is None:
         return True, "", ""
+    for entry in running:                         # what a failed tool said last, beside its point (V72)
+        if entry.process.returncode != 0 or entry.step.tag == failure[0]:
+            entry.reader.keep_tail()
     tag, cause, message = failure
     if tag and tag in results:
         results[tag].cause, results[tag].message = cause, message
@@ -384,42 +388,40 @@ def _describe(code: int) -> str:
 
 # ── one point ──────────────────────────────────────────────────────────────────────────────────
 
-def run_point(plan: PointPlan, run, configuration, *, sink=None, journal: Journal | None = None,
-              stopper: Stopper | None = None) -> PointResult:
-    sink = sink or NullSink()
+def run_point(plan: PointPlan, run, configuration, *, bus=None, stopper: Stopper | None = None,
+              logs: bool = False) -> PointResult:
+    bus = _bus(bus)
     stopper = stopper or Stopper()
     started = now()
     results: dict[str, ToolResult] = {}
-    sink.point_started(plan)
-    if journal is not None:
-        journal.write(plan.point.name, "", {"k": "point", "state": "started", "index": plan.point.index,
-                                            **({"stage": plan.point.stage} if plan.point.stage else {})})
+    bus.emit(plan.point.name, "", {"k": "point", "state": "started", "index": plan.point.index,
+                                   **({"stage": plan.point.stage} if plan.point.stage else {})})
     try:
-        prepare(plan)
+        prepare(plan, logs)
     except HepError as error:
         result = PointResult(False, cause="prelim", message=error.render())
-        _finished(plan, result, sink, journal)
+        _finished(plan, result, bus)
         return result
 
-    ok, blamed, message = run_prepares(plan, sink=sink, journal=journal, stopper=stopper, results=results)
+    ok, blamed, message = run_prepares(plan, bus=bus, stopper=stopper, results=results, logs=logs)
     if not ok:
         result = PointResult(False, stopped=stopper.requested, cause=blamed, message=message, tools=results)
         _cleanup(plan)
-        _finished(plan, result, sink, journal)
+        _finished(plan, result, bus)
         return result
 
     for group in plan.groups:
-        ok, blamed, message = run_group(plan, group, sink=sink, journal=journal, stopper=stopper, results=results)
+        ok, blamed, message = run_group(plan, group, bus=bus, stopper=stopper, results=results, logs=logs)
         if not ok:
             result = PointResult(False, stopped=stopper.requested, cause=blamed, message=message, tools=results)
             _cleanup(plan)
-            _finished(plan, result, sink, journal)
+            _finished(plan, result, bus)
             return result
         # a group's products are checked and take their final names before the next group reads them
         failure = _settle(group, results)
         if failure is not None:
             _cleanup(plan)
-            _finished(plan, failure, sink, journal)
+            _finished(plan, failure, bus)
             return failure
 
     _cleanup(plan)
@@ -429,12 +431,12 @@ def run_point(plan: PointPlan, run, configuration, *, sink=None, journal: Journa
     write_identity(plan)                          # what it ran with, for --why (V57)
     write_atomic(complete_marker(plan), plan.identity + "\n")
     result = PointResult(True, tools=results)
-    _finished(plan, result, sink, journal)
+    _finished(plan, result, bus)
     return result
 
 
-def run_prepares(plan: PointPlan, *, sink, journal: Journal | None, stopper: Stopper,
-                 results: dict[str, ToolResult]) -> tuple[bool, str, str]:
+def run_prepares(plan: PointPlan, *, bus=None, stopper: Stopper, results: dict[str, ToolResult],
+                 logs: bool = False) -> tuple[bool, str, str]:
     """[prepare] steps (Herwig's read, Sherpa's integration), each in its cache entry, before the
     groups. An entry with a `.prepared` stamp is a hit and runs nothing; the stamp is written only
     after the step exited 0 and left its marker, so an interrupted integration is redone."""
@@ -445,32 +447,30 @@ def run_prepares(plan: PointPlan, *, sink, journal: Journal | None, stopper: Sto
         stamp = step.prepare_dir / ".prepared"
         if stamp.exists():
             results[tag] = ToolResult(tag, exit=0, message=f"cache hit {step.prepare_dir.name}")
-            if hasattr(sink, "note"):
-                sink.note(f"   {tag}: cached ({step.prepare_dir})")
+            _bus(bus).emit(plan.point.name, "", {"k": "note", "msg": f"   {tag}: cached ({step.prepare_dir})"})
             continue
         with _prepare_lock(step.prepare_dir):            # another point may be filling it (V36)
             if stopper.requested:
                 return False, step.tag, "stopped before its prepare step"
             if stamp.exists():
                 results[tag] = ToolResult(tag, exit=0, message=f"cache hit {step.prepare_dir.name}")
-                if hasattr(sink, "note"):
-                    sink.note(f"   {tag}: cached, made by a point running beside it ({step.prepare_dir})")
+                _bus(bus).emit(plan.point.name, "", {"k": "note", "msg": f"   {tag}: cached, made by a point running "
+                                                                         f"beside it ({step.prepare_dir})"})
                 continue
-            ok, blamed, message = _prepare(plan, step, tag, stamp, sink=sink, journal=journal, stopper=stopper,
-                                           results=results)
+            ok, blamed, message = _prepare(plan, step, tag, stamp, bus=bus, stopper=stopper, results=results, logs=logs)
             if not ok:
                 return False, blamed, message
     return True, "", ""
 
 
-def _prepare(plan: PointPlan, step: Step, tag: str, stamp: Path, *, sink, journal: Journal | None, stopper: Stopper,
-             results: dict[str, ToolResult]) -> tuple[bool, str, str]:
+def _prepare(plan: PointPlan, step: Step, tag: str, stamp: Path, *, bus, stopper: Stopper,
+             results: dict[str, ToolResult], logs: bool = False) -> tuple[bool, str, str]:
     """One prepare step into its (locked) cache entry; the stamp only after it exited 0 with its marker."""
     step.prepare_dir.mkdir(parents=True, exist_ok=True)
     job = replace(step, tag=tag, argv=step.prepare_argv, cwd=step.prepare_dir, inputs=[], outputs=[], products=[],
                   count_check=None, sidecar=None, sidecar_written=None, log=plan.out / "logs" / f"{step.tag}.prepare.log",
                   stall_after=max(step.stall_after, 3600.0))
-    ok, blamed, message = run_group(plan, [job], sink=sink, journal=journal, stopper=stopper, results=results)
+    ok, blamed, message = run_group(plan, [job], bus=bus, stopper=stopper, results=results, logs=logs)
     if not ok:
         return False, step.tag, message
     marker = step.folder.spec["prepare"].get("marker")
@@ -514,12 +514,9 @@ def _settle(group: list[Step], results: dict[str, ToolResult]) -> PointResult | 
     return None
 
 
-def _finished(plan: PointPlan, result: PointResult, sink, journal: Journal | None) -> None:
-    if journal is not None:
-        journal.write(plan.point.name, "", {"k": "point", "state": "done" if result.ok else
-                                            "stopped" if result.stopped else "failed",
-                                            "cause": result.cause, "msg": result.message})
-    sink.point_finished(plan, result)
+def _finished(plan: PointPlan, result: PointResult, bus) -> None:
+    bus.emit(plan.point.name, "", {"k": "point", "state": "done" if result.ok else "stopped" if result.stopped else "failed",
+                                   "cause": result.cause, "msg": result.message, "res": str(plan.res)})
 
 
 def _cleanup(plan: PointPlan) -> None:

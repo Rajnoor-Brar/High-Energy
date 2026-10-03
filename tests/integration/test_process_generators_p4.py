@@ -26,7 +26,7 @@ def hep_run(scratch: Path, *args: str) -> str:
 
 @pytest.mark.skipif(not shutil.which("mg5_aMC"), reason="load_hep: mg5_aMC")
 def test_madgraph_to_pythia_to_rivet(scratch):
-    out = hep_run(scratch, "PhotoProduction/madgraph", "--set", "run.event_count=300")
+    out = hep_run(scratch, "PhotoProduction/madgraph", "--set", "run.event_count=300", "--logs")   # its log is read (V72)
     assert "count ok: 300 events" in (scratch / "output" / folder("PhotoProduction/madgraph") / "point/provenance.json").read_text(encoding="utf-8", errors="replace")
     log = (scratch / "output" / folder("PhotoProduction/madgraph") / "point/logs/madgraph.log").read_text(encoding="utf-8", errors="replace")
     stated = float(re.findall(r"Cross-section :\s+([\d.eE+-]+)", log)[-1])
@@ -38,7 +38,7 @@ def test_madgraph_to_pythia_to_rivet(scratch):
 
 @pytest.mark.skipif(not shutil.which("whizard"), reason="load_hep: whizard")
 def test_whizard_direct_photoproduction_runs(scratch):
-    hep_run(scratch, "PhotoProduction/whizard", "--set", "run.event_count=500")
+    hep_run(scratch, "PhotoProduction/whizard", "--set", "run.event_count=500", "--logs")
     point = scratch / "output" / folder("PhotoProduction/whizard") / "point"
     assert "count ok: 500 events" in (point / "provenance.json").read_text(encoding="utf-8", errors="replace")
     integration = (scratch / "output" / folder("PhotoProduction/whizard") / "point/logs/whizard.prepare.log").read_text(encoding="utf-8", errors="replace")

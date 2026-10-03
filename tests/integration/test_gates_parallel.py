@@ -62,7 +62,7 @@ sys.exit(config.get("quantities", {}).get("fail", 0))       # consumed quantitie
 
 
 def run(config: Path, where: Path, *args: str, wait: bool = True):
-    return hep(where, config, *args, wait=wait)
+    return hep(where, config, "--journal", *args, wait=wait)                # the tests read its events (V72)
 
 
 def checker(scratch: Path, sweep: str, extra: str = "") -> Path:
@@ -139,3 +139,27 @@ def test_ctrl_c_stops_the_running_points_and_starts_no_more(scratch):
     base = scratch / "output" / "PhotoProduction" / "chk" / "one"
     assert not list(base.glob("*/.complete"))
     assert "d" not in started                                 # the fourth never started
+
+
+def test_hep_watch_follows_a_run_over_its_socket_and_nothing_runtime_is_on_disk(scratch):
+    """V72: no --journal, no status.jsonl; `hep watch CONFIG` attaches to the running process's socket,
+    shows the run so far and what follows, and ends with the run. Only the failed tool's last lines
+    are on disk."""
+    config = checker(scratch, "fail", extra="[tools.check.config]\nsleep = 4\n")
+    runner = hep(scratch, config, wait=False)                     # no --journal
+    deadline = time.monotonic() + 30
+    watcher = None
+    while time.monotonic() < deadline:
+        time.sleep(0.5)
+        watcher = hep(scratch, config, command="watch", wait=False)
+        try:
+            watcher.wait(timeout=1.0)                                # no job yet: it says so and exits
+        except Exception:
+            break                                                    # still running: it is attached
+    text, _ = watcher.communicate(timeout=120)
+    runner.communicate(timeout=120)
+    assert watcher.returncode == 0, text
+    assert "FAILED [check]" in text and "3 done, 1 failed" in text
+    base = scratch / "output" / "PhotoProduction" / "chk" / "one"
+    assert not (base / "status.jsonl").exists()
+    assert (base / "b" / "logs" / "check.log").exists() and not (base / "a" / "logs" / "check.log").exists()

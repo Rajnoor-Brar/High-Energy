@@ -1,4 +1,4 @@
-"""Status: the fd protocol, the filter rules, the journal, and `hep watch` following it."""
+"""Status: the fd protocol, the filter rules, the event bus and its listeners, and `hep watch` (V72)."""
 
 from __future__ import annotations
 
@@ -8,8 +8,9 @@ import os
 
 import pytest
 
-from runner.status import Journal, Reader, ToolState
-from runner.watch import PlainView, follow
+from runner.events import Bus, Hub, Journal, connect, greeting, hubs
+from runner.status import Reader, ToolState
+from runner.watch import PlainView, follow_events, follow_file
 
 RIVET_RULES = [
     {"match": r"^Event (?P<done>\d+) \(", "emit": "progress"},
@@ -20,89 +21,142 @@ RIVET_RULES = [
 ]
 
 
-def test_filter_rules_turn_lines_into_status(scratch):
-    log = scratch / "rivet.log"
+def heard(bus: Bus) -> list[dict]:
+    events: list[dict] = []
+    bus.subscribe(events.append)
+    return events
+
+
+def test_filter_rules_turn_lines_into_status():
     state = ToolState("p", "rivet")
-    reader = Reader(state, fd=None, log=log, rules=RIVET_RULES, journal=None)
-    log.write_text("Reading events from 'x'\nRivet: WARN Analysis 'a' is unvalidated\nEvent 100 (0:00:01)\n",
-                   encoding="utf-8")
-    reader.poll()
+    reader = Reader(state, fd=None, out=None, rules=RIVET_RULES, bus=None)
+    for line in ("Reading events from 'x'", "Rivet: WARN Analysis 'a' is unvalidated", "Event 100 (0:00:01)"):
+        reader.output(line)
     assert (state.phase, state.done, state.warning) == ("analysing", 100, "")
-    with open(log, "a", encoding="utf-8") as handle:
-        handle.write("Rivet: WARN something real\nEvent 2")               # an unfinished line waits
-    reader.poll()
+    reader.output("Rivet: WARN something real")
     assert state.warning.endswith("something real") and state.done == 100
-    with open(log, "a", encoding="utf-8") as handle:
-        handle.write("00 (0:00:02)\nBroken x\n")
-    reader.poll()                                                        # a bad rule never raises
-    assert state.done == 200 and state.last_line == "Broken x"
+    reader.output("Broken x")                                           # a bad rule never raises
+    assert state.last_line == "Broken x"
 
 
-def test_the_fd_protocol_keeps_unknown_kinds_and_journals_everything(scratch):
+def test_a_tools_output_pipe_is_read_on_its_own_thread_with_unfinished_lines_waiting(scratch):
     read, write = os.pipe()
+    state = ToolState("p", "rivet")
+    reader = Reader(state, fd=None, out=read, rules=RIVET_RULES, bus=None, log=scratch / "rivet.log")
+    os.write(write, b"Reading events from 'x'\nEvent 100 (0:00:01)\nEvent 2")
+    os.write(write, b"00 (0:00:02)\r")                                 # \r: a progress counter's line
+    os.close(write)
+    reader.join()
+    assert (state.phase, state.done) == ("analysing", 200)
+    assert not (scratch / "rivet.log").exists()                          # nothing on disk unless it fails (V72)
+    reader.keep_tail()
+    assert (scratch / "rivet.log").read_text(encoding="utf-8").splitlines()[-1] == "Event 200 (0:00:02)"
+
+
+def test_logs_keeps_every_line_as_it_comes(scratch):
+    read, write = os.pipe()
+    reader = Reader(ToolState("p", "rivet"), fd=None, out=read, rules=[], bus=None, log=scratch / "rivet.log", keep=True)
+    os.write(write, b"one\ntwo\n")
+    os.close(write)
+    reader.join()
+    assert (scratch / "rivet.log").read_text(encoding="utf-8") == "one\ntwo\n"
+
+
+def test_the_fd_protocol_keeps_unknown_kinds_and_every_message_is_an_event(scratch):
+    read, write = os.pipe()
+    bus = Bus()
+    events = heard(bus)
     journal = Journal(scratch / "status.jsonl")
+    bus.subscribe(journal)
     state = ToolState("p", "pythia")
-    reader = Reader(state, fd=read, log=scratch / "none.log", rules=[], journal=journal)
+    reader = Reader(state, fd=read, out=None, rules=[], bus=bus)
     os.write(write, b'{"t": 1, "k": "phase", "phase": "generating"}\n{"t": 2, "k": "progress", "done": 5, '
                     b'"total": 10, "rate": 2.5}\n{"t": 3, "k": "novel", "x": 1}\nnot json\n{"t": 4, "k": "xs')
-    reader.poll()
-    assert (state.phase, state.done, state.total, state.rate) == ("generating", 5, 10, 2.5)
     os.write(write, b'ec", "value_pb": 7.0, "err_pb": 0.5, "final": true}\n')
-    reader.poll()
+    os.close(write)
+    reader.join()
+    assert (state.phase, state.done, state.total, state.rate) == ("generating", 5, 10, 2.5)
     assert state.xsec == (7.0, 0.5)
     journal.close()
+    assert [e["k"] for e in events] == ["phase", "progress", "novel", "xsec"]
+    assert all(e["v"] == 1 and e["point"] == "p" and e["tool"] == "pythia" for e in events)
     kinds = [json.loads(line)["k"] for line in (scratch / "status.jsonl").read_text(encoding="utf-8").splitlines()]
     assert kinds == ["phase", "progress", "novel", "xsec"]
-    os.close(read)
-    os.close(write)
 
 
-def test_watch_follows_the_latest_run_and_stops_when_it_finishes(scratch, monkeypatch):
-    journal = scratch / "status.jsonl"
-    lines = [
-        {"point": "", "tool": "", "k": "run", "state": "started", "points": 1, "title": "old"},
-        {"point": "", "tool": "", "k": "run", "state": "finished", "verdict": "old verdict"},
-        {"point": "", "tool": "", "k": "run", "state": "started", "points": 1, "title": "new"},
+def run_events():
+    return [
+        {"point": "", "tool": "", "k": "run", "state": "started", "points": 1, "title": "watching new"},
         {"point": "a", "tool": "", "k": "point", "state": "started", "index": 1, "t": 100.0},
+        {"point": "a", "tool": "pythia", "k": "tool", "state": "started"},
         {"point": "a", "tool": "pythia", "k": "progress", "done": 3, "total": 4},
         {"point": "a", "tool": "pythia", "k": "exit", "code": 0, "seconds": 1.5},
-        {"point": "a", "tool": "", "k": "point", "state": "done", "t": 171.8},
+        {"point": "a", "tool": "", "k": "point", "state": "done", "t": 171.8, "res": "results/a"},
+        {"point": "", "tool": "", "k": "say", "msg": "1 done, 0 failed, 0 skipped"},
         {"point": "", "tool": "", "k": "run", "state": "finished", "verdict": "1 done"},
     ]
-    journal.write_text("".join(json.dumps(line) + "\n" for line in lines), encoding="utf-8")
+
+
+def test_watch_follows_a_journal_and_stops_when_the_run_finishes(scratch, monkeypatch):
+    journal = scratch / "status.jsonl"
+    journal.write_text("".join(json.dumps(line) + "\n" for line in run_events()), encoding="utf-8")
     captured = io.StringIO()
     monkeypatch.setattr("runner.watch.view", lambda plain=False: PlainView(stream=captured))
-    assert follow(journal, plain=True) == 0
+    assert follow_file(journal, plain=True) == 0
     text = captured.getvalue()
-    assert "watching new" in text and "old" not in text
-    assert "── point 1/1: a ── ok after 1min 12s" in text and "run finished: 1 done" in text
+    assert "watching new" in text and "── point 1/1: a ── ok after 1min 12s" in text and "1 done, 0 failed" in text
     assert "pythia: ok" not in text                                     # a tool that did its job says nothing
+
+
+def test_the_watch_socket_sends_the_run_so_far_then_every_event_live(monkeypatch):
+    """V72: no file on disk; a watcher that joins late gets the current run (a tool's progress as its
+    latest only), then the rest as it happens, and the stream ends with the process's hub."""
+    import threading
+    bus = Bus()
+    hub = Hub({"config": "c.toml", "configurations": ["one"]}, name=f"hep-watch-test-{os.getpid()}")
+    bus.subscribe(hub)
+    events = run_events()
+    for event in events[:2]:
+        bus.emit(event["point"], event["tool"], {k: v for k, v in event.items() if k not in ("point", "tool")})
+    for done in range(1, 4):
+        bus.emit("a", "pythia", {"k": "progress", "done": done, "total": 4})
+    assert hub.name in hubs() and greeting(hub.name)["config"] == "c.toml"
+    captured = io.StringIO()
+    monkeypatch.setattr("runner.watch.view", lambda plain=False: PlainView(stream=captured))
+    stream = connect(hub.name)
+    hello, first, second, latest = next(stream), next(stream), next(stream), next(stream)
+    assert hello["k"] == "hello" and (first["k"], second["k"]) == ("run", "point") and latest["done"] == 3
+    rest = threading.Thread(target=follow_events, args=(stream,), kwargs={"plain": True})
+    rest.start()
+    for event in events[4:]:
+        bus.emit(event["point"], event["tool"], {k: v for k, v in event.items() if k not in ("point", "tool")})
+    hub.close()
+    rest.join(5)
+    assert not rest.is_alive() and "1 done, 0 failed" in captured.getvalue()
 
 
 def test_a_point_is_one_block_when_it_ends():
     """── point 2/4: NNPDF23lo ── ok after 1min 12s, then where the results are (the user's layout)."""
-    from types import SimpleNamespace
-    from runner.execute import PointResult, ToolResult
-    from runner.status import ToolState
     out = io.StringIO()
-    view = PlainView(stream=out)
-    view.begin(4)
-    view.number = 1
-    from runner.sweep import Point
-    plan = SimpleNamespace(point=Point(index=2, name="NNPDF23lo"), res="results/x/NNPDF23lo")   # a real Point (L26)
-    view.point_started(plan)
-    view.tool_finished(ToolState(point="NNPDF23lo", tag="pythia"), ToolResult("pythia", exit=0, seconds=71.6))
-    view.tool_finished(ToolState(point="NNPDF23lo", tag="sherpa:prepare"), ToolResult("sherpa:prepare", exit=0, seconds=3.0))
-    view.point_finished(plan, PointResult(True))
+    view, bus = PlainView(stream=out), Bus()
+    bus.subscribe(view)
+    bus.emit("", "", {"k": "run", "state": "started", "points": 4})
+    bus.emit("MSTW08lo", "", {"k": "point", "state": "skipped", "index": 1})
+    bus.emit("NNPDF23lo", "", {"k": "point", "state": "started", "index": 2})
+    bus.emit("NNPDF23lo", "pythia", {"k": "exit", "code": 0, "seconds": 71.6})
+    bus.emit("NNPDF23lo", "sherpa:prepare", {"k": "exit", "code": 0, "seconds": 3.0})
+    bus.emit("NNPDF23lo", "", {"k": "point", "state": "done", "res": "results/x/NNPDF23lo"})
     view.flush()                                                       # the view writes on its own thread (V32)
     lines = out.getvalue().splitlines()
-    assert lines[0].startswith("── point 2/4: NNPDF23lo ── ok after ") and lines[0].endswith("s")
-    assert lines[1:] == ["   sherpa:prepare: ok after 3.0s", "   done → results/x/NNPDF23lo"]
-    view.point_started(plan)
-    view.tool_finished(ToolState(point="NNPDF23lo", tag="rivet", error="boom"), ToolResult("rivet", exit=1, seconds=2.0))
-    view.point_finished(plan, PointResult(False, cause="rivet", message="rivet exited 1"))
-    view.flush()
-    tail = out.getvalue().splitlines()[3:]
+    assert lines[0] == "── point 1/4: MSTW08lo: complete, skipped (--rerun to run it again)"
+    assert lines[1].startswith("── point 2/4: NNPDF23lo ── ok after ") and lines[1].endswith("s")
+    assert lines[2:] == ["   sherpa:prepare: ok after 3.0s", "   done → results/x/NNPDF23lo"]
+    bus.emit("NNPDF23lo", "", {"k": "point", "state": "started", "index": 2})
+    bus.emit("NNPDF23lo", "rivet", {"k": "log", "level": "error", "msg": "boom"})
+    bus.emit("NNPDF23lo", "rivet", {"k": "exit", "code": 1, "seconds": 2.0})
+    bus.emit("NNPDF23lo", "", {"k": "point", "state": "failed", "cause": "rivet", "msg": "rivet exited 1"})
+    view.end()
+    tail = out.getvalue().splitlines()[4:]
     assert "── FAILED [rivet] after" in tail[0] and tail[1:] == ["   rivet: exit 1 after 2.0s  (boom)", "   rivet exited 1"]
 
 
@@ -143,23 +197,25 @@ def test_the_live_view_puts_each_running_point_over_its_tools():
     """A blank line after the finished blocks, the point's heading and time so far, then its tools
     under it, their columns lined up across points."""
     pytest.importorskip("rich")
-    from types import SimpleNamespace
+    import time
     from rich.console import Console
-    from runner.sweep import Point
     from runner.watch import LiveView
-    view = LiveView()
+    view, bus = LiveView(), Bus()
+    bus.subscribe(view)
     try:
-        view.begin(4)
-        view.number = 2
+        bus.emit("", "", {"k": "run", "state": "started", "points": 4})
+        for index, name in ((1, "a"), (2, "b")):
+            bus.emit(name, "", {"k": "point", "state": "skipped", "index": index})
         for index, name in ((3, "MSTW08lo"), (4, "PDF4LHC21")):
-            view.point_started(SimpleNamespace(point=Point(index=index, name=name), res=f"results/x/{name}"))
-        view.points["PDF4LHC21"].started -= 35237
-        view.tool_started(ToolState(point="MSTW08lo", tag="pythia", phase="init"))
-        view.tool_started(ToolState(point="PDF4LHC21", tag="pythia", phase="generating", done=1_700_000,
-                                    total=10_000_000, rate=2812))
-        view.tool_started(ToolState(point="PDF4LHC21", tag="rivet.12", phase="analysing", done=1_700_000))
+            bus.emit(name, "", {"k": "point", "state": "started", "index": index})
+        view.state.points["PDF4LHC21"].started = time.time() - 35237
+        bus.emit("MSTW08lo", "pythia", {"k": "phase", "phase": "init"})
+        bus.emit("PDF4LHC21", "pythia", {"k": "phase", "phase": "generating"})
+        bus.emit("PDF4LHC21", "pythia", {"k": "progress", "done": 1_700_000, "total": 10_000_000, "rate": 2812})
+        bus.emit("PDF4LHC21", "rivet.12", {"k": "phase", "phase": "analysing"})
+        bus.emit("PDF4LHC21", "rivet.12", {"k": "progress", "done": 1_700_000})
         out = io.StringIO()
-        Console(file=out, width=120).print(view.render([]))
+        Console(file=out, width=120).print(view.render())
     finally:
         view.end()
     lines = [line.rstrip() for line in out.getvalue().splitlines()]

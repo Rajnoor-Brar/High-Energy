@@ -878,6 +878,8 @@ Options and positionals may come in any order (`hep run eic --plain pdf`, V54).
 | `--only plot` | draw the pages from the complete points; run nothing |
 | `--only pre`, `--only post` | run only that stage, whether or not it is complete |
 | `--plain` | plain lines instead of the live view (also when stdout is not a terminal) |
+| `--journal` | also write the run's events to `output/…/<cfg>/status.jsonl` (V72), for `hep watch --file` and replay; without it nothing of the run's state is on disk |
+| `--logs` | keep every tool's whole output in `logs/<tag>.log`; without it only a failed tool's last 200 lines are written (V72) |
 
 The order: pre stage → every point not complete (in point order) → `points.json` → post stage →
 plot stage. A failed point does not stop the others. **Exit codes:** 0 everything done or skipped;
@@ -915,13 +917,15 @@ and exits 0, or 2 when any failed: for a pre-commit hook, or before a long sweep
 
 ```
 hep watch [CONFIG [CONFIGURATION]] [--plain]
+hep watch --file output/<P>/<run>/<cfg>/status.jsonl [--plain]
 ```
 
-Follows a job from another terminal through its journal, `output/…/<cfg>/status.jsonl`; with no
-config, the most recently written journal; under `[run].sweep_runs` with no configuration, the swept
-configuration's journal written to last. It prints the same blocks as the run, and leaves when the
-run finishes. A run of a sweep names the next run's journal when it finishes, so the watch follows
-on to it, and leaves after the last or on a stop.
+Follows a running job from another terminal (V72) through the watch socket its `hep run` serves while
+it lives: with no config, the latest job started on this machine; with one, the job running that config
+(and that configuration). It prints the run so far and then what follows, the same blocks as the run,
+and leaves when the job's process ends; under `[run].sweep_runs` the job is one process, so the watch
+follows it from run to run. `--file` follows a `--journal` run's status file instead (a finished run's,
+too): it leaves when the run finishes, or follows on to the next run's journal in a sweep.
 
 ### `hep build` and `make`
 
@@ -960,7 +964,7 @@ Herwig's repository), on every core by default. `--tests` adds the C++ tests, `-
 | `cards/<tag>.<ext>` | base + point card in one file (what an export hands out); for render style, the whole card |
 | `cards/<tag>.prepare.<ext>` | the card a prepare step reads, when the tool's `render.py` makes one |
 | `config/<tag>.toml` | a custom or module tool's extracted config |
-| `logs/<tag>.log`, `logs/<tag>.prepare.log`, `logs/prelim.log` | stdout and stderr |
+| `logs/<tag>.log`, `logs/<tag>.prepare.log`, `logs/prelim.log` | a failed tool's last 200 lines of stdout and stderr (a failed `[prelim]` command's output); with `--logs`, every tool's whole output (V72) |
 | `provenance.json` | `point`, `run`, `project`, `configuration`, `config_file`; `values` (each active quantity's index, tag and value); `identity`, `seed`, `threads`, `events`; per tool `tag`, `tool`, `exe`, `exe_sha256`, `version`, `argv`, `ran`, `card`, `card_sha256`, `config`, `result` (exit, seconds, note); `host`, `platform`, `user`, `git` (`revision`, `dirty`), `started`, `finished` |
 | `identity.json` | the parts the identity hashes (each tool's card lines, argv, binaries, options; threads, events, groups, prelim, the seed rule), written when the point completes, for `--why` (V57) |
 | `.complete` | the point's identity, written **last**; its absence means the point is not done |
@@ -970,7 +974,7 @@ Herwig's repository), on every core by default. `--tests` adds the C++ tests, `-
 | File | Holds |
 |---|---|
 | `points.json` | `run`, `project`, `configuration`, `config_file`, `plot_points`, and per point: `name`, `index`, `values` (tag, label, value, swept), `page`, `products` (name → path), `results`, `output`, `identity`, `seed`, `complete`. Every point, even under `--points`. |
-| `status.jsonl` | the journal: every status message as `{"point", "tool", "t", "k", …}`, plus the runner's own `run` (started, finished with a `verdict`), `point` (started, done / failed / stopped with `cause` and `msg`) and `exit` (`code`, `seconds`) records |
+| `status.jsonl` | only with `--journal` (V72): the run's events as `{"v", "point", "tool", "t", "k", …}`: every status message, plus the runner's own `run` (started, finished with a `verdict`), `point` (started, done / failed / stopped with `cause` and `msg`) and `exit` (`code`, `seconds`) records |
 | `plots/[<cell>/]<object>.toml` | each page's Paint config ([05 §17](05_Tools_Reference.md#17-paint)) |
 | `plots/merged.sha256` | what the merged sweep file was built from |
 

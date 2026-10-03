@@ -76,7 +76,7 @@ tags   = ["no", "yes"]
 
 
 def hep(config: Path, where: Path, *args: str) -> subprocess.CompletedProcess:
-    return support.hep(where, config, *args, timeout=600)
+    return support.hep(where, config, "--journal", *args, timeout=600)       # the tests read its events (V72)
 
 
 def base(where: Path) -> Path:
@@ -118,7 +118,7 @@ def test_points_belong_to_one_configuration(scratch):
 
 def test_ctrl_c_starts_no_more_runs(scratch):
     config = sweep_config(scratch, b_nap="yes")                        # b sleeps a minute
-    runner = subprocess.Popen([str(HEP), "run", str(config), "--plain"], cwd=REPO, env=env(scratch),
+    runner = subprocess.Popen([str(HEP), "run", str(config), "--plain", "--journal"], cwd=REPO, env=env(scratch),
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8")
     journal = base(scratch) / "b" / "status.jsonl"
     deadline = time.monotonic() + 60
