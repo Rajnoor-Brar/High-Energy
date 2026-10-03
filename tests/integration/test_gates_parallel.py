@@ -5,17 +5,14 @@ time; a failing point leaves the others to finish; Ctrl-C stops the running poin
 from __future__ import annotations
 
 import json
-import os
 import signal
 import stat
-import subprocess
 import time
 from pathlib import Path
 
 import pytest
 
-REPO = Path(__file__).resolve().parents[2]
-HEP = REPO / "utils" / "Env" / "hep"
+from support import hep
 yoda = pytest.importorskip("yoda")
 
 pytestmark = pytest.mark.slow
@@ -65,13 +62,7 @@ sys.exit(config.get("quantities", {}).get("fail", 0))       # consumed quantitie
 
 
 def run(config: Path, where: Path, *args: str, wait: bool = True):
-    env = dict(os.environ, HEKIT_OUTPUT=str(where / "output"), HEKIT_RESULTS=str(where / "results"))
-    argv = [str(HEP), "run", str(config), "--plain", *args]
-    if not wait:
-        return subprocess.Popen(argv, cwd=REPO, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                text=True, encoding="utf-8")
-    return subprocess.run(argv, cwd=REPO, env=env, capture_output=True, text=True, encoding="utf-8",
-                          errors="replace", timeout=1800)
+    return hep(where, config, *args, wait=wait)
 
 
 def checker(scratch: Path, sweep: str, extra: str = "") -> Path:

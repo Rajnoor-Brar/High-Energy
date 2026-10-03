@@ -25,6 +25,7 @@ MARKERS = ("configs", "modules", "utils/Env")
 ROOT_VAR = "HEKIT_ROOT"
 RESULTS_VAR = "HEKIT_RESULTS"
 OUTPUT_VAR = "HEKIT_OUTPUT"
+CONFIGS_VAR = "HEKIT_CONFIGS"
 
 
 def is_root(path: Path) -> bool:
@@ -58,19 +59,26 @@ def output_root() -> Path:
     return Path(value).resolve() if value else repo_root() / "output"
 
 
+def configs_root() -> Path:
+    """Where run TOMLs and their cards are: $HEKIT_CONFIGS (tests set it, to tests/fixtures/configs) or
+    <repo>/configs."""
+    value = os.environ.get(CONFIGS_VAR)
+    return Path(value).resolve() if value else repo_root() / "configs"
+
+
 def build_root() -> Path:
     return repo_root() / "build"
 
 
 #: The convention root of each path-taking key, as a function of the project (04 §2).
 ROOTS = {
-    "config":     lambda project: repo_root() / "configs",
-    "master":     lambda project: repo_root() / "configs" / project,
-    "baseconfig": lambda project: repo_root() / "configs" / project,
+    "config":     lambda project: configs_root(),
+    "master":     lambda project: configs_root() / project,
+    "baseconfig": lambda project: configs_root() / project,
     "executable": lambda project: build_root() / project,
     "data":       lambda project: repo_root() / "datasets",
-    "filters":    lambda project: repo_root() / "configs" / project,
-    "root_style": lambda project: repo_root() / "configs" / project,
+    "filters":    lambda project: configs_root() / project,
+    "root_style": lambda project: configs_root() / project,
 }
 
 

@@ -1,0 +1,91 @@
+# zeus_validation.toml — HERA validation of the photoproduction card against ZEUS 2012
+# (rework v2 schema, docs/rework_v2/04_Config.md).
+#
+#   hep run PhotoProduction/zeus_validation          PDF comparison at HERA kinematics
+#
+# Translated from the v1 schema-2 file (git show rework/v1-final:configs/PhotoProduction/
+# zeus_validation.toml). v1 fixed the beams in [beams] (ids [2212, 11], energies [920, 27.5]) and
+# pinned the lepton to e+ through [static.use] beams = "ep"; here both are static quantities.
+
+[run]
+name          = "zeus"
+project       = "PhotoProduction"
+configuration = "default"
+event_count   = 1_000_000
+threads       = 20
+
+[run.default]
+description = "Proton-PDF comparison at 27.5x920 GeV e+p against ZEUS 2012 (built-in Rivet analysis)"
+sweeps      = ["pdf"]
+tools       = [["pythia", "rivet"], "yd2rt"]
+
+[run.single]
+description = "One run at the static point"
+sweeps      = []
+tools       = [["pythia", "rivet"], "yd2rt"]
+
+[prelim]
+fifo = ["events.hepmc"]
+
+[static]
+energies = "27x920"
+lepton   = "ep"
+
+[tools.pythia]
+tool        = "pythia"
+baseconfig  = "photo_ep.cmnd"
+output_file = "events.hepmc"
+
+[tools.rivet]
+tool        = "rivet"
+input       = "events.hepmc"
+analyses    = ["ZEUS_2012_I1116258"]
+output_file = "zeus.yoda"
+
+[tools.yd2rt]
+tool        = "yd2rt"
+input       = "zeus.yoda"
+output_file = "zeus.root"
+
+[quantities.energies]
+values = [[41, 5], [100, 10], [275, 18], [920, 27.5]]
+tags   = ["5x41", "10x100", "18x275", "27x920"]
+labels = ["5x41 GeV (#sqrt{s} = 28.6 GeV)", "10x100 GeV (#sqrt{s} = 63.2 GeV)",
+          "18x275 GeV (#sqrt{s} = 140.7 GeV)", "27.5x920 GeV (#sqrt{s} = 318.1 GeV)"]
+
+[quantities.lepton]
+key    = { pythia = "Beams:idB" }
+values = [11, -11]
+tags   = ["em", "ep"]
+labels = ["e^{-}", "e^{+}"]
+
+[quantities.pdf]
+values = ["LHAPDF6:MSTW2008lo68cl", "LHAPDF6:NNPDF23_lo_as_0130_qed", "LHAPDF6:NNPDF23_nlo_as_0119_qed", "LHAPDF6:PDF4LHC21_40"]   # V40: as Pythia reads them
+tags   = ["MSTW08lo", "NNPDF23lo", "NNPDF23nlo", "PDF4LHC21"]
+labels = ["MSTW 2008 LO", "NNPDF 2.3 QCD+QED LO", "NNPDF 2.3 QCD+QED NLO", "PDF4LHC21"]
+
+[plot]
+void_empty  = true
+min_entries = 10
+auto_range  = true
+ratio       = true
+
+# v1 drew Rivet's own reference data (rivet_refs = true): `rivet:` names that file, which every
+# Rivet installation ships (datasets/ is not in git). The map is the identity.
+[plot.data]
+file   = "rivet:ZEUS_2012_I1116258"     # Rivet's own ZEUS 2012 tables (the same numbers as datasets/zeus_eic.yoda)
+legend = "ZEUS 2012"
+
+[plot.data.map]
+"d01-x01-y01" = "/REF/ZEUS_2012_I1116258/d01-x01-y01"
+"d02-x01-y01" = "/REF/ZEUS_2012_I1116258/d02-x01-y01"
+"d03-x01-y01" = "/REF/ZEUS_2012_I1116258/d03-x01-y01"
+"d04-x01-y01" = "/REF/ZEUS_2012_I1116258/d04-x01-y01"
+"d05-x01-y01" = "/REF/ZEUS_2012_I1116258/d05-x01-y01"
+"d06-x01-y01" = "/REF/ZEUS_2012_I1116258/d06-x01-y01"
+"d07-x01-y01" = "/REF/ZEUS_2012_I1116258/d07-x01-y01"
+"d08-x01-y01" = "/REF/ZEUS_2012_I1116258/d08-x01-y01"
+"d09-x01-y01" = "/REF/ZEUS_2012_I1116258/d09-x01-y01"
+"d10-x01-y01" = "/REF/ZEUS_2012_I1116258/d10-x01-y01"
+"d11-x01-y01" = "/REF/ZEUS_2012_I1116258/d11-x01-y01"
+"d12-x01-y01" = "/REF/ZEUS_2012_I1116258/d12-x01-y01"

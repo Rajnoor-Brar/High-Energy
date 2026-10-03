@@ -18,8 +18,7 @@ from pathlib import Path
 
 import pytest
 
-REPO = Path(__file__).resolve().parents[2]
-HEP = REPO / "utils" / "Env" / "hep"
+from support import REPO, hep
 
 pytestmark = [pytest.mark.slow,
               pytest.mark.skipif(not (REPO / "build" / "App_Pythia.exe").exists(), reason="make first")]
@@ -57,9 +56,7 @@ def point_dirs(where: Path) -> tuple[Path, Path]:
 
 
 def start(config: str, where: Path) -> subprocess.Popen:
-    env = dict(os.environ, HEKIT_RESULTS=str(where / "results"), HEKIT_OUTPUT=str(where / "output"))
-    return subprocess.Popen([str(HEP), "run", config], cwd=REPO, env=env, stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT, text=True, encoding="utf-8")
+    return hep(where, config, plain=False, wait=False)
 
 
 def wait_for_progress(out: Path, tool: str, timeout: float = 120) -> None:

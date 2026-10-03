@@ -1,0 +1,59 @@
+# madgraph.toml — MadGraph → LHE → Pythia shower → Rivet (rework v2 schema, 04_Config.md §8.4).
+#
+#   hep run PhotoProduction/madgraph          ep NC DIS at 18x275: a chain check (P4 S3)
+#
+# Every hop that crosses a group is a file: the LHE must be complete before Pythia opens it. The
+# process directory is built once per proc card (.cache/madgraph/); each point is one launch.
+
+[run]
+serial        = 7
+name          = "madgraph"
+project       = "PhotoProduction"
+configuration = "single"
+event_count   = 1_000
+threads       = 1                   # Pythia reads one LHE: one instance (no PythiaParallel split)
+
+[run.single]
+description = "MadGraph ep DIS at 18x275, showered by Pythia, analysed by Rivet"
+sweeps      = []
+tools       = ["madgraph", ["shower", "rivet"], "yd2rt"]
+
+[prelim]
+files = ["unweighted.lhe"]
+fifo  = ["events.hepmc"]
+
+[static]
+energies = "18x275"
+beams    = "pe"
+
+[tools.madgraph]
+tool        = "madgraph"
+baseconfig  = "dis_ep.proc_card.mg5"
+output_file = "unweighted.lhe"
+
+[tools.shower]
+tool        = "pythia"
+baseconfig  = "shower_lhe.cmnd"
+input       = "unweighted.lhe"
+output_file = "events.hepmc"
+
+[tools.rivet]
+tool        = "rivet"
+input       = "events.hepmc"
+analyses    = ["photo_eic"]
+output_file = "photo.yoda"
+
+[tools.yd2rt]
+tool        = "yd2rt"
+input       = "photo.yoda"
+output_file = "photo.root"
+
+[quantities.energies]
+values = [[275, 18]]                # [E_p, E_e]: beam 1 is the proton (the proc card's order)
+tags   = ["18x275"]
+target = "madgraph"                 # the shower's beams are the LHE header's, not a second opinion
+
+[quantities.beams]
+values = [[2212, 11]]
+tags   = ["pe"]
+target = "madgraph"

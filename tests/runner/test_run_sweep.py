@@ -52,7 +52,7 @@ def test_a_sweep_runs_the_swept_configurations_in_the_order_of_the_file(scratch)
     run = parse(several(), scratch)
     assert run.runs(None) == ["a", "b", "d"]
     assert run.runs("c") == ["c"]                                  # named: even one left out of the sweep
-    with pytest.raises(HepError, match="runs every configuration \(sweep_runs\) and names none"):
+    with pytest.raises(HepError, match=r"runs every configuration \(sweep_runs\) and names none"):
         run.configuration(None)
     assert parse(several(run__sweep_runs=False, run__configuration="b"), scratch).runs(None) == ["b"]
 

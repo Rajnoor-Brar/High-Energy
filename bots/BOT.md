@@ -26,11 +26,10 @@ The layout is described in [docs/06_Developer_Guide.md §1](../docs/06_Developer
 | `modules/`   | Project sources: `<Name>.cc` programs, headers, Rivet plugins in `Rivet/` or `Rivet_*.cc`; `_`-prefixed folders are parked (not built) |
 | `output/`    | Technical files per project (cards, logs, FIFOs, status), and `output/tests/` for tests |
 | `results/`   | Products per project (YODA, ROOT, plots, provenance)                         |
-| `tests/`     | `runner/`, `cxx/`, `integration/`, and `reference/` (data the gates compare against) |
+| `tests/`     | `runner/`, `cxx/`, `integration/`, `fixtures/configs/` (frozen configs the tests load) and `reference/` (data the gates compare against) |
 | `utils/`     | `Status.hh`, `Module.hh`, `App_*.cc`, `Apps/<Name>/`, and `Env/` (shell, the Python runner, tool folders) |
 
-- v1 (the `hekit` package, the C++ namespaces, CMake, `legacy/`) was deleted in rework v2 P0.
-  It is at the git tag `rework/v1-final`. Consult it with `git show rework/v1-final:<path>`,
+- v1 is at the git tag `rework/v1-final`: consult it with `git show rework/v1-final:<path>`,
   and never restore it wholesale.
 - `BOT.md` contains directives for bots and agents (BOTs).
 - Additional rules given explicitly by the user may be appended to their dedicated file.

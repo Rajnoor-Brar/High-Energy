@@ -1,0 +1,82 @@
+# photo_ep.sherpa.yaml — Sherpa's reading of `photo_ep.cmnd` (P7-S02, decision D-Q7).
+#
+# The reference is `photo_ep.cmnd`: ep inclusive-jet photoproduction with a quasi-real photon from the
+# lepton, resolved into partons, colliding with a parton from the proton. This card is the closest
+# Sherpa 3.0.5 set-up to it, and every place where "closest" is not "the same" is marked `# DIFFERS`.
+#
+# It is modelled on Sherpa's own `Examples/Photoproduction/HERA/Sherpa.Resolved.yaml`, reduced to
+# leading order — the reference is a leading-order Pythia run, and an NLO comparison would be
+# comparing two things neither of which is the other.
+#
+# `hep` owns the run control: beams, energies, event count and seed are deep-merged into the point
+# card that Sherpa actually reads (04 §1, §4), so they are absent here rather than set to a default
+# that a point would silently inherit.
+
+# ── beams ────────────────────────────────────────────────────────────────────
+# Proton first, so the proton runs along +z as it does in Pythia (`Beams:idA = 2212`). Sherpa's own
+# example puts the lepton first; copying that would mirror every pseudorapidity distribution, which is
+# the sort of difference that looks like physics (00/B26 was the same trap from the other side).
+# `BEAMS` and `BEAM_ENERGIES` are **not** set here: the plan owns them (04 §8), and `hep` writes them
+# into the point card. The 18x275 EIC values are
+#   BEAMS: [2212, 11]
+#   BEAM_ENERGIES: [275.0, 18.0]
+# and uncommenting them makes this file runnable on its own, which is how P7-S02 measured it.
+BEAM_SPECTRA: [Monochromatic, EPA]
+
+# `PDF:lepton2gamma = on` + `Photon:Q2max = 1.0`.
+EPA:
+  Q2Max: 1.0
+
+# ── parton densities ─────────────────────────────────────────────────────────
+# One per beam, in beam order: the proton's from LHAPDF, the photon's from Sherpa's built-in CJK.
+#
+# The photon PDF is the one place the two generators can be matched exactly. Pythia has exactly one
+# photon PDF and no way to change it — `PDF:GammaSet` is `min="1" max="1"`, CJKL — and Sherpa's
+# `CJKSherpa` library provides `CJKLLO`, the same leading-order parameterisation.
+PDF_LIBRARY: [LHAPDFSherpa, CJKSherpa]
+PDF_SET: [NNPDF23_lo_as_0130_qed, CJKLLO]
+
+# The multiple-interaction model reads `MPI_PDF_SET`, **not** `PDF_SET`, and falls back to Sherpa's
+# compiled default (`PDF4LHC21_40_pdfas`) when it is absent — a set this LHAPDF installation does not
+# have, so leaving these out makes every run with a hadron beam die in initialisation with an error
+# that names a set nothing in the card asked for. Measured in P7-S02.
+MPI_PDF_LIBRARY: [LHAPDFSherpa, CJKSherpa]
+MPI_PDF_SET: [NNPDF23_lo_as_0130_qed, CJKLLO]
+
+# ── the hard process ─────────────────────────────────────────────────────────
+# `93` is Sherpa's light-parton container, so `93 93 -> 93 93` is `HardQCD:all` with a resolved photon
+# on one side. Leading order only.
+PROCESSES:
+  - 93 93 -> 93 93:
+      Order: {QCD: 2, EW: 0}
+
+# DIFFERS: `PhaseSpace:pTHatMin = 6.` is a cut on the 2->2 matrix element's pT-hat. Sherpa regulates
+# the same divergence with a jet cut on the matrix-element final state. The two agree on which region
+# is being kept and not on its edge: a clustered jet is not a parton, so the turn-on differs in the
+# first bin or two. There is no pT-hat cut in Sherpa to use instead.
+SELECTORS:
+  - NJetFinder:
+      N: 2
+      PTMin: 6.0
+      R: 1.0
+      Exp: 1
+
+# DIFFERS, twice over.
+#
+# 1. `MultipartonInteractions:pT0Ref = 3.2` is a Pythia tune parameter. Sherpa's MPI is Amisic, a
+#    different model with its own tune, so there is no number to copy across — only "MPI on" would
+#    match, not the tune.
+# 2. **Amisic is off here because it does not work for this process on this machine.** Measured in
+#    P7-S02: with `MI_HANDLER: Amisic` the integration finished in 75 s and then produced *0 events
+#    in 768 s*; with `None` the same card produces 2 000 events in 4 s. So a Sherpa point currently
+#    has **no underlying event**, which is a real difference from the Pythia reference and not a
+#    modelling choice. Turn it back on when someone works out why.
+MI_HANDLER: None
+
+SCALES: METS{H_T2/4}{H_T2/4}{H_T2/4}
+ME_GENERATORS: [Comix]
+
+# Unweighted events, so the sample is what `Analyzer::Rivet` expects from a generator.
+EVENT_GENERATION_MODE: Weighted
+
+# `EVENTS`, `RANDOM_SEED` and `EVENT_OUTPUT` are written by `hep` into the point card.

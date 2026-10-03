@@ -1,0 +1,121 @@
+# zeus_seedSweep.toml — the ZEUS 2012 PDF comparison, each PDF run with several seeds and the seeds
+# merged into one curve (combine, V35).
+#
+#   hep run PhotoProduction/zeus_seedSweep            4 PDFs × 5 seeds: pages with one curve per PDF,
+#                                                    each the 5 seeds merged (5M events)
+#   hep run PhotoProduction/zeus_seedSweep spread     the same 20 points, one page per PDF with a
+#                                                    curve per seed: how far the seeds scatter
+#
+# The physics is zeus_validation.toml's at the paper's MPI setting (pT0Ref = 3.2 GeV, the 2025 study's
+# zeus_pdf cards and Rathi & Palni's Figs. 1, 3–5). A seed is the `replica` quantity: it enters the
+# generator's identity, so each value gets its own seed block and nothing else changes. The runner
+# still gives out the seeds (V22), so the blocks never overlap, and `spread` gets the very same seeds
+# as `default`, so the same events.
+#
+# `combine = ["replica"]`: the points that differ only in the replica are one group; after they
+# finish, rivet-merge -e (seed replicas are one process: statistics add, σ is averaged) writes the
+# group's zeus.yoda to results/…/<configuration>/<pdf>/, beside the replicas' own folders, and the
+# pages are drawn from the groups. Five seeds of 1M are one sample of 5M: the curves' statistical
+# errors shrink by √5 against one seed.
+
+[run]
+serial        = 1
+name          = "zeus_seeds"
+project       = "PhotoProduction"
+configuration = "default"
+event_count   = 1_000_000                 # per seed, as the paper's per PDF
+threads       = 12                        # Pythia's; with rivet's 10 shards it fills the 24 hardware threads
+
+[run.default]
+description = "Proton-PDF comparison at 27.5x920 GeV e+p against ZEUS 2012: 5 seeds per PDF, merged"
+sweeps      = ["pdf", "replica"]
+combine     = ["replica"]
+tools       = [["pythia", "rivet"]]
+
+[run.spread]
+description = "The same points, one page per PDF with a curve per seed"
+sweeps      = ["pdf", "replica"]
+plot_points = ["pdf"]
+tools       = [["pythia", "rivet"]]
+
+[prelim]
+fifo = ["events.hepmc"]
+
+[static]
+energies = "27x920"
+lepton   = "ep"
+pt0ref   = "pt32"                         # the paper's PDF comparison (zeus_pdf/*.cmnd: pT0Ref = 3.2)
+
+# ── tools ──────────────────────────────────────────────────────────────────────────────────────────
+
+[tools.pythia]
+tool        = "pythia"
+baseconfig  = "photo_zs.cmnd"
+output_file = "events.hepmc"
+
+[tools.rivet]
+tool        = "rivet"
+input       = "events.hepmc"
+analyses    = ["ZEUS_2012_I1116258"]
+output_file = "zeus.yoda"
+shards      = 10                          # one Rivet reads ~1,500 ev/s; 12 threads + 10 shards ~9,200 (L27)
+
+# ── quantities ─────────────────────────────────────────────────────────────────────────────────────
+
+[quantities.pdf]
+values = ["LHAPDF6:MSTW2008lo68cl", "LHAPDF6:NNPDF23_lo_as_0130_qed", "LHAPDF6:NNPDF23_nlo_as_0119_qed", "LHAPDF6:PDF4LHC21_40"]
+tags   = ["MSTW08lo", "NNPDF23lo", "NNPDF23nlo", "PDF4LHC21"]
+labels = ["MSTW 2008 LO", "NNPDF 2.3 QCD+QED LO", "NNPDF 2.3 QCD+QED NLO", "PDF4LHC21"]
+
+[quantities.replica]
+target = "pythia/seed"                    # enters the generator's identity, so its seed block; renders nothing
+values = [1, 2, 3, 4, 5]                  # more seeds: more values (each is another 1M events per PDF)
+tags   = ["s1", "s2", "s3", "s4", "s5"]
+labels = ["seed 1", "seed 2", "seed 3", "seed 4", "seed 5"]
+
+[quantities.pt0ref]
+key    = { pythia = "MultipartonInteractions:pT0Ref" }
+values = [2.8, 3.0, 3.2, 3.4]
+tags   = ["pt28", "pt30", "pt32", "pt34"]
+labels = ["p_{T0}^{ref} = 2.8 GeV", "p_{T0}^{ref} = 3.0 GeV", "p_{T0}^{ref} = 3.2 GeV",
+          "p_{T0}^{ref} = 3.4 GeV"]
+
+[quantities.energies]
+values = [[41, 5], [100, 10], [275, 18], [920, 27.5]]
+tags   = ["5x41", "10x100", "18x275", "27x920"]
+labels = ["5x41 GeV (#sqrt{s} = 28.6 GeV)", "10x100 GeV (#sqrt{s} = 63.2 GeV)",
+          "18x275 GeV (#sqrt{s} = 140.7 GeV)", "27.5x920 GeV (#sqrt{s} = 318.1 GeV)"]
+
+[quantities.lepton]
+key    = { pythia = "Beams:idB" }
+values = [11, -11]
+tags   = ["em", "ep"]
+labels = ["e^{-}", "e^{+}"]
+
+# ── plot (as zeus_validation.toml) ─────────────────────────────────────────────────────────────────
+
+[plot]
+backend     = ["root", "yoda"]
+void_empty  = false
+min_entries = 0
+auto_range  = false
+y_gutter    = "default"
+ratio       = true
+
+[plot.data]
+file   = "rivet:ZEUS_2012_I1116258"       # Rivet's own ZEUS 2012 tables
+legend = "ZEUS 2012"
+
+[plot.data.map]
+"d01-x01-y01" = "/REF/ZEUS_2012_I1116258/d01-x01-y01"
+"d02-x01-y01" = "/REF/ZEUS_2012_I1116258/d02-x01-y01"
+"d03-x01-y01" = "/REF/ZEUS_2012_I1116258/d03-x01-y01"
+"d04-x01-y01" = "/REF/ZEUS_2012_I1116258/d04-x01-y01"
+"d05-x01-y01" = "/REF/ZEUS_2012_I1116258/d05-x01-y01"
+"d06-x01-y01" = "/REF/ZEUS_2012_I1116258/d06-x01-y01"
+"d07-x01-y01" = "/REF/ZEUS_2012_I1116258/d07-x01-y01"
+"d08-x01-y01" = "/REF/ZEUS_2012_I1116258/d08-x01-y01"
+"d09-x01-y01" = "/REF/ZEUS_2012_I1116258/d09-x01-y01"
+"d10-x01-y01" = "/REF/ZEUS_2012_I1116258/d10-x01-y01"
+"d11-x01-y01" = "/REF/ZEUS_2012_I1116258/d11-x01-y01"
+"d12-x01-y01" = "/REF/ZEUS_2012_I1116258/d12-x01-y01"

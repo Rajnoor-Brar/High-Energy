@@ -869,6 +869,7 @@ Herwig's repository), on every core by default. `--tests` adds the C++ tests, `-
 |---|---|---|
 | `HEKIT_ROOT` | `~/HEP/setup.sh` | the repository (else found from the runner's own location) |
 | `HEKIT_OUTPUT`, `HEKIT_RESULTS` | you, tests | replace `output/` and `results/` (the tests point them into `output/tests/`) |
+| `HEKIT_CONFIGS` | tests | replaces `configs/` as the root of run TOMLs and their cards (the tests point it at `tests/fixtures/configs/`) |
 | `HEP_STATUS_FD` | the runner, per tool | the status pipe of a `status = "standard"` tool |
 | `RIVET_ANALYSIS_PATH` | the rivet and merge folders, per run | `build/Rivet` (not set in the shell on purpose) |
 | `LHAPDF_DATA_PATH`, `GEANT4_DATA_DIR`, `ONNXRUNTIME_DIR` | `utils/Env/hep_env.sh` | the toolchain's data |

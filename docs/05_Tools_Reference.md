@@ -24,7 +24,7 @@ runner discovers the folders and names none of them.
 | `module` | analysis application | your `Module.hh` program | none | yes | standard | the report's `events` | — | — |
 | `delphes` | detector simulation | `DelphesHepMC3` | `.tcl`, append (`set`) | **no** (L11) | filters | the `Delphes` tree | — | `card`, `tcl` |
 | `herwig` | event generator | `Herwig run` | `.in`, append (`set`) | — (writes) | filters | produces: runner-written sidecar | `Herwig read` | `card`, `in`, `run` |
-| `sherpa` | event generator | `Sherpa` | `.yaml`, render (merge) | — (writes) | filters | produces: runner-written sidecar | integration | `card`, `yaml`, `results` |
+| `sherpa` | event generator | `Sherpa` | `.yaml`, render (merge) | — (writes) | none | produces: runner-written sidecar | integration | `card`, `yaml`, `results` |
 | `whizard` | process generator | `whizard` | `.sin`, render | — (writes) | filters | produces: runner-written sidecar | integration | `card`, `sin` |
 | `madgraph` | process generator | `mg5_aMC` | launch script, render | — (writes a file) | filters | produces: runner-written sidecar | process directory | `card`, `proc`, `process` |
 

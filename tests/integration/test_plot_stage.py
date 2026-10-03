@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from runner import plot, quantities, record, sweep, tools
+from runner import labels, plot, quantities, record, sweep, tools
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tests" / "runner"))
@@ -81,7 +81,9 @@ def test_object_overrides_and_rivet_labels(stage):
     assert pages["em/d02-x01-y01"]["y_gutter"] == 0.5 and pages["em/d02-x01-y01"]["x_gutter"] == "default"
     if (REPO / "build" / "Rivet" / "photo_eic.plot").exists():
         assert pages["em/d01-x01-y01"]["x_label"] == "#it{E}_{#it{T}}^{#it{jet}} [GeV]"
-        assert pages["em/d02-x01-y01"]["logy"] is False
+        # with no [plot.object] override, log y is what the analysis's .plot says (the built copy, which
+        # follows modules/: the user may be editing it)
+        assert pages["em/d02-x01-y01"]["logy"] is (labels.labels_of("/photo_eic/d02-x01-y01").get("LogY") == "1")
 
 
 def test_a_page_carries_only_the_style_it_changes(stage):

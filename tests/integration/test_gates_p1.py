@@ -70,7 +70,7 @@ def test_sigma_at_four_threads_is_the_combination(scratch):
     point.write_text("Main:numberOfEvents = 20000\nParallelism:numThreads = 4\n"
                      "Parallelism:seeds = {1001,1002,1003,1004}\nBeams:eA = 920\nBeams:eB = 27.5\n"
                      "Beams:idB = -11\n", encoding="utf-8")
-    yoda, side = chain(scratch, [REPO / "configs" / "PhotoProduction" / "photo_ep.cmnd", point],
+    yoda, side = chain(scratch, [REPO / "tests" / "fixtures" / "configs" / "PhotoProduction" / "photo_ep.cmnd", point],
                        REPO / "build" / "Rivet", "t4")
     text = yoda.read_text(encoding="utf-8")
     xsec = float(re.search(r"/_XSEC\n.*?# value[^\n]*\n(\S+)", text, re.S).group(1))

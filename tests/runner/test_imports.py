@@ -1,9 +1,9 @@
 """The runner's import rank (docs/02_Architecture.md §3), enforced.
 
 A module may import only from its own rank or a lower one, and the import graph has no cycles.
-A module missing from RANKS fails, so a new module has to be given its place. Tool plugins (utils/Env/<tool>/render.py,
-backend.py) may import only
-errors, paths and quantities, and never another plugin.
+A module missing from RANKS fails, so a new module has to be given its place. Tool plugins
+(utils/Env/<tool>/render.py, backend.py) may import only PLUGINS_MAY_IMPORT, and never another plugin.
+Both tables are runner/__init__.py's.
 """
 
 from __future__ import annotations
@@ -11,19 +11,11 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from runner import PLUGINS_MAY_IMPORT as PLUGIN_MAY_IMPORT, RANKS
+
 REPO = Path(__file__).resolve().parents[2]
 RUNNER = REPO / "utils" / "Env" / "runner"
 ENV = REPO / "utils" / "Env"
-
-RANKS = {
-    "errors": 0, "paths": 0, "status_client": 0,
-    "config": 1, "quantities": 1, "sweep": 1,
-    "tools": 2,
-    "execute": 3, "status": 3, "record": 3,
-    "watch": 4, "plot": 4, "post": 4,
-    "cli": 5,
-}
-PLUGIN_MAY_IMPORT = {"errors", "paths", "quantities"}
 
 
 def runner_imports(path: Path) -> set[str]:

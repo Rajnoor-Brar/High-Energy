@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 from pathlib import Path
 
-from runner import config, quantities, sweep, tools
+from runner import config, quantities, record, sweep, tools
 
 BASE = {
     "run": {"name": "t", "project": "PhotoProduction", "configuration": "one", "event_count": 10, "threads": 1,
@@ -47,3 +47,26 @@ def plan(data: dict, scratch: Path, configuration: str | None = None, point: int
     result = tools.plan_point(run, conf, points[point], master)
     tools.finalise(result, 12345)
     return run, conf, result
+
+
+def plans_of(name: str, configuration: str | None = None, sets=()):
+    """A config by name (it resolves under tests/fixtures/configs): its run, configuration, points and the
+    points' plans, with identities and seeds, before the seeds are written into the cards."""
+    run = config.load(name, sets=list(sets))
+    conf = run.configuration(configuration)
+    master = quantities.load_master(run.project, run.master_toml)
+    points = sweep.points(run, conf)
+    out = [tools.plan_point(run, conf, point, master) for point in points]
+    for p in out:
+        p.identity = record.identity(p)
+    record.assign_seeds(out)
+    return run, conf, points, out
+
+
+def plans(name: str, configuration: str | None = None, sets=()):
+    """The finalised plans of a config's points (seeds written), as `hep run --plan` makes them."""
+    *_, out = plans_of(name, configuration, sets)
+    for p in out:
+        tools.finalise(p, p.seed)
+    return out
+

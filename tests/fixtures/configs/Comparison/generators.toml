@@ -1,0 +1,72 @@
+# generators.toml — Pythia, Herwig and Sherpa through one chain (rework v2 schema, docs/03_User_Guide.md §4.12).
+#
+#   hep run Comparison/generators          pp → QCD 2→2 at 13 TeV: three points, four pages
+#
+# The job of the user's scratch generator_comparison.cc (left untouched at the repository root) as a
+# configuration: the generator is a quantity whose values are tool tags (V19), and one Rivet
+# analysis (modules/Comparison/Rivet/particle_spectra.cc) fills the same spectra for each.
+# `sqrts` reaches all three; `beams` only Pythia and Sherpa, because Herwig's pp snippet fixes its
+# own (an @-chain accepts a value that another alternative consumes, C7).
+
+[run]
+name          = "generators"
+project       = "Comparison"
+configuration = "compare"
+event_count   = 50_000
+threads       = 4                   # Pythia's; Herwig and Sherpa run one process each
+
+[run.compare]
+description = "Pythia 8, Herwig 7 and Sherpa 3 on pp → QCD 2→2 at 13 TeV, jets above 20 GeV"
+sweeps      = ["generator"]
+tools       = [["@generator", "spectra"], "yd2rt"]
+
+[prelim]
+fifo = ["events.hepmc"]
+
+[static]
+sqrts = "13tev"
+beams = "pp"
+
+[tools.pythia]
+tool        = "pythia"
+baseconfig  = "qcd_pp.cmnd"
+output_file = "events.hepmc"
+
+[tools.herwig]
+tool        = "herwig"
+baseconfig  = "qcd_pp.herwig.in"
+output_file = "events.hepmc"
+
+[tools.sherpa]
+tool        = "sherpa"
+baseconfig  = "qcd_pp.sherpa.yaml"
+output_file = "events.hepmc"
+
+[tools.spectra]
+tool        = "rivet"
+input       = "events.hepmc"
+analyses    = ["particle_spectra"]
+output_file = "spectra.yoda"
+
+[tools.yd2rt]
+tool        = "yd2rt"
+input       = "spectra.yoda"
+output_file = "spectra.root"
+
+[quantities.generator]
+values = ["pythia", "herwig", "sherpa"]
+tags   = ["py8", "hw7", "sh3"]
+labels = ["Pythia 8.317", "Herwig 7.3.0", "Sherpa 3"]
+
+[quantities.sqrts]
+values = [13000.0]
+tags   = ["13tev"]
+labels = ["13 TeV"]
+
+[quantities.beams]
+values = [[2212, 2212]]
+tags   = ["pp"]
+
+[plot]
+formats = ["pdf", "png"]
+ratio   = true

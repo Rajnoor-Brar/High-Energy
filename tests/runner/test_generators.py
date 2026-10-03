@@ -10,26 +10,13 @@ import shutil
 
 import pytest
 
-from runner import config, execute, quantities, record, sweep, tools
+from runner import execute, tools
 from runner.errors import HepError
 from runner.quantities import Override
 
+from helpers import plans
+
 NEEDS = {"sherpa": shutil.which("Sherpa"), "herwig": shutil.which("Herwig"), "delphes": shutil.which("DelphesHepMC3")}
-
-
-def plans(name: str, configuration: str | None = None, sets=()):
-    run = config.load(name, sets=list(sets))
-    conf = run.configuration(configuration)
-    master = quantities.load_master(run.project, run.master_toml)
-    out = []
-    for point in sweep.points(run, conf):
-        p = tools.plan_point(run, conf, point, master)
-        p.identity = record.identity(p)
-        out.append(p)
-    record.assign_seeds(out)
-    for p in out:
-        tools.finalise(p, p.seed)
-    return out
 
 
 # ── Delphes (L11) ─────────────────────────────────────────────────────────────────────────────

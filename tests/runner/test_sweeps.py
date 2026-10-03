@@ -7,25 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from runner import config, quantities, record, sweep, tools
+from runner import config, record, sweep, tools
 from runner.errors import HepError
 
-from helpers import plan, raw
+from helpers import plan, plans_of, raw
 
 REPO = Path(__file__).resolve().parents[2]
 COUNTS = tomllib.loads((REPO / "tests" / "reference" / "point_counts.toml").read_text(encoding="utf-8"))
-
-
-def plans_of(name: str, configuration: str):
-    run = config.load(name)
-    conf = run.configuration(configuration)
-    master = quantities.load_master(run.project, run.master_toml)
-    points = sweep.points(run, conf)
-    out = [tools.plan_point(run, conf, point, master) for point in points]
-    for p in out:
-        p.identity = record.identity(p)
-    record.assign_seeds(out)
-    return run, conf, points, out
 
 
 CASES = [(f"PhotoProduction/{'eic' if run == 'eic' else 'zeus_validation'}", cfg, counts)

@@ -314,7 +314,7 @@ The goal: one event stream, runtime state off disk, and the housekeeping a daily
 
 | Phase | Steps | State |
 |---|---|---|
-| P0 | S1 S2 S3 | not started |
+| P0 | S1 S2 S3 | S1 (V52) and S2 (V53, docs, bots) done, fast suite green; the slow suite waits for the user's run. S3 next |
 | P1 | S1 S2 S3 | not started |
 | P2 | S1 S2 S3 | not started |
 | P3 | S1 S2 S3 | not started |

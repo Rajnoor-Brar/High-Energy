@@ -9,13 +9,11 @@ App_Pythia stamped, the one the unsharded Rivet read (L28).
 
 from __future__ import annotations
 
-import os
-import subprocess
 from pathlib import Path
 
 import pytest
 
-REPO = Path(__file__).resolve().parents[2]
+from support import hep_ok
 yoda = pytest.importorskip("yoda")
 
 pytestmark = pytest.mark.slow
@@ -58,11 +56,7 @@ shards      = 4
 
 
 def hep_run(scratch: Path, *args: str) -> str:
-    env = dict(os.environ, HEKIT_OUTPUT=str(scratch / "output"), HEKIT_RESULTS=str(scratch / "results"))
-    done = subprocess.run(["python3", str(REPO / "utils" / "Env" / "run"), "run", *args, "--plain"], env=env,
-                          capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=1800)
-    assert done.returncode == 0, done.stdout[-2000:] + done.stderr[-2000:]
-    return done.stdout
+    return hep_ok(scratch, *args)
 
 
 def test_a_sharded_point_equals_the_same_point_unsharded(scratch):

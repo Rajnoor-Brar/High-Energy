@@ -10,14 +10,12 @@
 from __future__ import annotations
 
 import json
-import os
-import subprocess
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-REPO = Path(__file__).resolve().parents[2]
+from support import REPO, hep_ok
 BUILT = [REPO / "build" / p for p in ("App_Pythia.exe", "Lambda/Lambda.exe", "PhotoProduction/InprocJets.exe")]
 uproot = pytest.importorskip("uproot")
 yoda = pytest.importorskip("yoda")
@@ -26,10 +24,7 @@ pytestmark = [pytest.mark.slow, pytest.mark.skipif(not all(p.exists() for p in B
 
 
 def hep_run(scratch: Path, *args: str) -> tuple[Path, Path]:
-    env = dict(os.environ, HEKIT_OUTPUT=str(scratch / "output"), HEKIT_RESULTS=str(scratch / "results"))
-    done = subprocess.run(["python3", str(REPO / "utils" / "Env" / "run"), "run", *args, "--plain"],
-                          env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=1800)
-    assert done.returncode == 0, done.stdout[-2000:] + done.stderr[-2000:]
+    hep_ok(scratch, *args)
     return scratch / "output", scratch / "results"
 
 

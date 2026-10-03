@@ -14,7 +14,7 @@ hep run PhotoProduction/eic energy_pdf                      utils/Env/hep → ut
   ├─ load     configs/PhotoProduction/eic.toml  (+ utils/Env/master.toml: quantity → tool maps)
   ├─ resolve  [run.energy_pdf]: sweeps, plot_points, tools, static, prelim
   ├─ expand   sweeps = ["energies", "pdf"]  →  16 points   (a grid of axes; entangled groups zip)
-  ├─ plan     per point: cards, config files, argv, connections, identity, seeds; every check (C1–C13)
+  ├─ plan     per point: cards, config files, argv, connections, identity, seeds; every check (C1–C14)
   │
   ├─ pre      tools run once before every point (their products are inputs of every point)
   ├─ for each point ──────────────────────────────────────────────────────────────────────────────┐
@@ -78,17 +78,19 @@ build/                        everything compiled; output/ technical files; resu
 ### 3.1 The runner
 
 **One flat package**, `utils/Env/runner/`, with a declared rank per module. A module imports only
-from its own rank or a lower one, and the import graph has no cycles; `tests/runner/test_imports.py`
-enforces both. (v1's lesson: the half of v1 whose layering was written down and checked held; the
+from its own rank or a lower one, and the import graph has no cycles. The ranks are one table,
+`RANKS` in `runner/__init__.py`: `tests/runner/test_imports.py` enforces it, and `test_docs.py` holds
+the table below to it. (v1's lesson: the half of v1 whose layering was written down and checked held; the
 half whose layering was not had nine cycles.)
 
 | Rank | Module | Owns |
 |---|---|---|
 | 0 | `errors.py` | `HepError(message, where, hint)`, `did_you_mean` |
-| 0 | `paths.py` | the repository root (by markers, or `$HEKIT_ROOT`), `output/` and `results/` roots, the path rules (04 §2) |
+| 0 | `paths.py` | the repository root (by markers, or `$HEKIT_ROOT`), the `configs/`, `output/` and `results/` roots, the path rules (04 §2) |
 | 1 | `config.py` | load the TOML, `--set`, the strict schema check; the typed model (`RunConfig`, `Configuration`, `Tool`, `Quantity`) |
 | 1 | `quantities.py` | the master TOML, static values and selectors, who consumes what (C7), provider checks (C10) |
 | 1 | `sweep.py` | points from `sweeps` (grid and zip), point names, pages, `--points` |
+| 1 | `labels.py` | Rivet `.plot` keys, YODA's text macros, line breaks, LaTeX → TLatex (shared by the plot stage and its backends) |
 | 2 | `tools.py` | the tool folders; per point: interfaces, connections (C6), cards, configs, exports, prepare keys, argv; seeds last |
 | 3 | `execute.py` | `[prelim]`, prepare steps, groups as supervised process groups, the count checks, settling products |
 | 3 | `status.py` | the status pipes, the filter rules, the journal |
@@ -99,7 +101,7 @@ half whose layering was not had nine cycles.)
 | 5 | `cli.py` | `argparse`: `run`, `plot`, `watch`; the order of events |
 
 A **tool plugin** (`utils/Env/<tool>/render.py`, a plot backend's `backend.py`) may import only
-`errors`, `paths` and `quantities`, and never another plugin. The runner is standard library only,
+`PLUGINS_MAY_IMPORT` (`errors`, `paths`, `quantities` and `labels`), and never another plugin. The runner is standard library only,
 plus `tomli_w` for writing TOML and, lazily, `yaml` (Sherpa's plugin) and `uproot` (the Delphes
 count); `rich` for the live view is optional.
 
@@ -157,8 +159,10 @@ planned again at its turn, and a stop starts no more.
    written into the cards (`tools.finalise`). Then the post stage's plan and the plot checks.
 5. With `--plan`: print it all and stop.
 6. **Run**: the pre stage (skipped when complete; its failure stops everything); every point that is
-   not complete, one after another (§5.1); `points.json`; the post stage (only when every point is
-   complete); the plot stage (§13).
+   not complete (§5.1), `parallelism` of them at a time (V36, one after another by default);
+   `points.json`; the combined groups (V35, each once its own points are complete); the post stage
+   (only when every point is complete); the plot stage (§13), which draws the combined groups when
+   there are any.
 
 ### 5.1 One point
 
@@ -243,7 +247,8 @@ running Pythia and Rivet, gets the chain's card and seeds.
 | **post**, once after every point | seed-replica merges, the sweep in one file, fits, any statistics; handed `points.json` and every point's product | `[run.<cfg>].post` |
 | **plot**, once, last | one page per `plot_points` cell and histogram | `[plot]` |
 
-Points run **one after another**, each with the configuration's `threads`. A post stage runs only
+Points run **`parallelism` at a time** (V36; one after another by default), each with the
+configuration's `threads`. A post stage runs only
 when every point is complete, because a merge or a fit over a subset would look like the whole.
 
 ---
