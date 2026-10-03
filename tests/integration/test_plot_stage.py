@@ -115,7 +115,7 @@ def test_draw_writes_every_page(stage):
 def test_the_sweep_is_merged_once_into_the_file_the_pages_read(stage):
     run, configuration, plans = stage
     pages = plot.pages(run, configuration, plans)
-    merged = plans[0].res.parent / "plots" / "root" / f"{configuration.name}.root"
+    merged = plans[0].res.parent / "plots" / "root" / f"{configuration.label}.root"
     assert {c["file"] for p in pages for c in tomllib.loads(p.config.read_text())["curve"]} == {str(merged)}
     before = merged.stat().st_mtime_ns
     plot.pages(run, configuration, plans)

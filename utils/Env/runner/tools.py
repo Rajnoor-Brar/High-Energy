@@ -325,7 +325,7 @@ def run_dir(run, configuration) -> Path:
     """<project>/<name>/<NN_><label> (V45, V46): `name` is [run]'s, or the configuration's own; the
     configuration's folder is its `label` (its table key when empty or unset), after one serial, the
     configuration's if it has one, else [run]'s."""
-    return Path(run.project) / (configuration.run_name or run.name) / location(configuration.serial, configuration.name)
+    return Path(run.project) / (configuration.run_folder or run.name) / location(configuration.serial, configuration.label)
 
 
 def point_dirs(run, configuration, point) -> tuple[Path, Path]:
@@ -411,6 +411,19 @@ def _resolve_chain(run, configuration, point) -> list[list[str]]:
             resolved.append(member)
         groups.append(resolved)
     return groups
+
+
+def _builtin_value(run, name: str, index: int) -> int:
+    """A quantity named events or threads (V56: swept or static) is the point's event count or thread
+    count, in place of the configuration's; it reaches the tools as the built-ins do."""
+    value = run.quantities[name].values[index]
+    least = 1 if name == "events" else 0
+    if isinstance(value, bool) or not isinstance(value, int) or value < least:
+        raise HepError(f"[quantities.{name}] value {value!r} is not an integer ≥ {least}", where=f"[quantities.{name}]")
+    if name == "threads" and value == 0:
+        import os
+        return os.cpu_count() or 1
+    return value
 
 
 def _shard(run, configuration, groups_tags: list[list[str]], out: Path):
@@ -526,12 +539,16 @@ def plan_point(run, configuration, point, master: dict, *, post: dict | None = N
     selectors = [m[1:] for group in configuration.tools for m in group if m.startswith("@")]
     alternatives = [v for name in selectors if name in run.quantities for v in run.quantities[name].values
                     if isinstance(v, str) and v in run.tools]
-    consumers = qmod.consumer_table(run, master, [n for n in values if n not in selectors], rendered_tags, alternatives)
+    builtin = {name: _builtin_value(run, name, values[name]) for name in qmod.BUILTIN if name in values}   # V56
+    consumers = qmod.consumer_table(run, master, [n for n in values if n not in selectors and n not in builtin],
+                                    rendered_tags, alternatives)
     consumers.update({name: [] for name in selectors if name in values})   # it chooses the tool itself
+    consumers.update({name: [] for name in builtin})                        # it is the point's events or threads
 
     plan = PointPlan(point=point, values=values, out=out, res=res, prelim=configuration.prelim,
                      groups=[], rendered={}, interfaces={}, consumers=consumers,
-                     threads=configuration.threads, events=configuration.event_count, deal=deal)
+                     threads=builtin.get("threads", configuration.threads),
+                     events=builtin.get("events", configuration.event_count), deal=deal)
     if post is None:                                   # a point, not a pre, post or combined stage
         plan.seed_type, plan.manual_seed = configuration.seed_type, configuration.manual_seed
 

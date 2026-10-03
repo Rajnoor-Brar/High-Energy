@@ -230,7 +230,7 @@ def test_the_yoda_backend_gives_the_ratio_the_divisions_paint_has(scratch):
     assert script.read_text(encoding="utf-8").count(yoda_backend.MARK) == 1
 
 
-# ── "default": set nothing, the drawing tool decides (V37) ─────────────────────────────────────
+# ── "default": keep it as it is (V55): a child's is its parent's; [plot]'s sets nothing ──────────
 
 DRAWING = ("backend", "formats", "objects", "ratio", "y_gutter", "x_gutter", "logy", "logx", "auto_range",
            "void_empty", "min_entries", "range_pad", "root_style")
@@ -255,10 +255,12 @@ def test_default_is_what_the_tool_does_by_itself():
     assert native["ratio"] and not page({"ratio": "default"}, with_data=False)["ratio"]   # mkhtml's rule
 
 
-def test_an_objects_default_is_the_tools_whatever_plot_says():
-    settings = {"logy": False, "object": {"d01-*": {"logy": "default", "title": "default"}}}
+def test_an_objects_default_keeps_what_plot_says():
+    """V55: "default" in a child is its parent's value; only at the top level does the tool decide."""
+    settings = {"logy": False, "title": "every page", "object": {"d01-*": {"logy": "default", "title": "default"}}}
     shown = page(settings)
-    assert shown["logy"] and shown["title"] == page({})["title"]       # the .plot's, not [plot]'s false
+    assert shown["logy"] is False and shown["title"] == "every page"   # [plot]'s, inherited
+    assert page({"object": {"d01-*": {"logy": "default"}}})["logy"] == page({})["logy"]   # no parent: as if absent
 
 
 def test_a_style_default_falls_through_to_the_layer_below():

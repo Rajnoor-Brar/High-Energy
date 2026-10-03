@@ -17,6 +17,7 @@ usage: hep <command> [options]
   run <config> [<configuration>]   plan and run a configuration          (hep run --help)
   plot <config> | FILE…            draw a configuration's pages, or overlay files (hep plot --help)
   watch [<config>]                 attach the live view to a running job (hep watch --help)
+  check [<config>…]                check run TOMLs: every configuration planned, nothing run
   build [targets…]                 compile module programs, apps and Rivet plugins (make all)
         --tests                    also build the C++ tests
         --clean                    empty build/ first
@@ -30,7 +31,7 @@ EOF
 cmd=${1-}
 [ $# -gt 0 ] && shift
 case "$cmd" in
-    run|watch|plot)
+    run|watch|plot|check)
         exec python3 "$here/run" "$cmd" "$@"
         ;;
     build)

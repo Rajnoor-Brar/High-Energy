@@ -40,6 +40,13 @@ from .tools import DEFAULT_SEED_RANGE, PointPlan, version_of
 
 
 def identity(plan: PointPlan) -> str:
+    text = json.dumps(identity_parts(plan), sort_keys=True, default=str)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def identity_parts(plan: PointPlan) -> dict:
+    """What the identity hashes, as a table: written beside .complete as identity.json (V57), so a later
+    plan can say what changed (`--why`)."""
     parts = {
         "threads": plan.threads,
         "events": plan.events,
@@ -50,8 +57,68 @@ def identity(plan: PointPlan) -> str:
     }
     if plan.upstream:                    # post: it changes when any point does
         parts["upstream"] = plan.upstream
-    text = json.dumps(parts, sort_keys=True, default=str)
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return parts
+
+
+def identity_record(plan: PointPlan) -> Path:
+    return plan.out / "identity.json"
+
+
+def write_identity(plan: PointPlan) -> None:
+    """The parts of a completed point's identity (V57): a record, beside .complete."""
+    normal = json.loads(json.dumps(identity_parts(plan), sort_keys=True, default=str))
+    write_atomic(identity_record(plan), json.dumps(normal, indent=1, sort_keys=True) + "\n")
+
+
+def why(plan: PointPlan, limit: int = 24) -> list[str]:
+    """`--why` (V57): what differs between the identity a point last completed with and this plan's."""
+    if is_complete(plan):
+        return []
+    record = identity_record(plan)
+    if not record.is_file():
+        return ["it has not completed with a recorded identity (never run, or before V57)"
+                if not complete_marker(plan).exists() else "its last identity was not recorded (it ran before V57)"]
+    try:
+        old = json.loads(record.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ["its identity record is unreadable"]
+    new = json.loads(json.dumps(identity_parts(plan), sort_keys=True, default=str))
+    if old == new:
+        return ["nothing changed since it last ran: it did not complete (failed or stopped)"]
+    lines = _diff(_by_tag(old), _by_tag(new), "")
+    return lines[:limit] + ([f"… and {len(lines) - limit} more"] if len(lines) > limit else [])
+
+
+def _by_tag(parts: dict) -> dict:
+    out = dict(parts)
+    if isinstance(out.get("tools"), list):
+        out["tools"] = {t.get("tag", str(i)): t for i, t in enumerate(out["tools"])}
+    return out
+
+
+def _short(value) -> str:
+    text = json.dumps(value, default=str)
+    return text if len(text) <= 70 else text[:67] + "…"
+
+
+def _diff(old, new, at: str) -> list[str]:
+    if isinstance(old, dict) and isinstance(new, dict):
+        out = []
+        for key in sorted(set(old) | set(new), key=str):
+            where = f"{at}.{key}" if at else str(key)
+            if key not in old:
+                out.append(f"{where}: added {_short(new[key])}")
+            elif key not in new:
+                out.append(f"{where}: removed (was {_short(old[key])})")
+            elif old[key] != new[key]:
+                out += _diff(old[key], new[key], where)
+        return out
+    if isinstance(old, list) and isinstance(new, list) and all(isinstance(v, str) for v in old + new):
+        gone, came = [v for v in old if v not in new], [v for v in new if v not in old]
+        if gone or came:
+            return [f"{at}: - {_short(v)}" for v in gone] + [f"{at}: + {_short(v)}" for v in came]
+        return [f"{at}: the same lines, in another order"]
+    return [f"{at}: {_short(old)} → {_short(new)}"]
 
 
 def seed_rule(plan: PointPlan):

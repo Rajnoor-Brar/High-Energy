@@ -103,7 +103,7 @@ The package and its ranks are [02 §3.1](02_Architecture.md#31-the-runner). The 
 | Type | Module | Holds |
 |---|---|---|
 | `RunConfig` | `config` | the parsed run TOML: `path`, `project`, `name`, `serial`, `default_configuration` (None under `sweep_runs`), `configurations`, `prelim`, `static`, `tools`, `quantities`, `plot`, `master_toml`, `raw`, `sweep_runs` |
-| `Configuration` | `config` | one `[run.<cfg>]`: `key` (its table key), `name` (its folder: `label`, else the key), `run_name` (`[run.<cfg>].name`, else `[run].name`), `serial`, `title`, `description`, `event_count`, `threads` (resolved), `parallelism`, `sweeps`, `plot_points`, `combine`, `tools`/`pre`/`post` (lists of groups), `static` (merged), `prelim`, `swept`, `seed_type`, `manual_seed` |
+| `Configuration` | `config` | one `[run.<cfg>]`: `key` (its table key), `label` (its folder: `[run.<cfg>].label`, else the key), `run_folder` (`[run.<cfg>].name`, else `[run].name`), `serial`, `title`, `description`, `event_count`, `threads` (resolved), `parallelism`, `sweeps`, `plot_points`, `combine`, `tools`/`pre`/`post` (lists of groups), `static` (merged), `prelim`, `swept`, `seed_type`, `manual_seed` |
 | `Tool`, `Quantity` | `config` | one table each; a tool's folder-specific keys and export requests are in `Tool.extra` |
 | `Point` | `sweep` | `index` (1-based; −1 pre, 0 post), `name`, `choice` (quantity → value index), `page` |
 | `Mapping` | `quantities` | how one quantity reaches one tool: `tag`, `form` (`key`, `keys`, `flag`, `option`, `config`, `seed`), `key`, `format`, `analysis`, `check` |
@@ -355,7 +355,7 @@ make test-slow      # real generators and plots: the gates (about 6 min)
 
 | Suite | Holds |
 |---|---|
-| `tests/runner/` | the runner, fast: one bad config per rule (`test_config.py`), plans and connections (`test_plan.py`), paths, sweeps and the point-count gate (`test_sweeps.py`), the import ranks (`test_imports.py`), status (`test_status.py`), plot checks and the style layers (`test_plot.py`), each tool folder's cards (`test_module.py`, `test_generators.py`, `test_process_generators.py`), seeds (`test_seeds.py`), shards, `combine`, `parallelism` and `sweep_runs` (`test_shards.py`, `test_combine.py`, `test_parallel.py`, `test_run_sweep.py`), and the manual (`test_docs.py`) |
+| `tests/runner/` | the runner, fast: one bad config per rule (`test_config.py`), plans and connections (`test_plan.py`), paths, sweeps and the point-count gate (`test_sweeps.py`), the import ranks (`test_imports.py`), status (`test_status.py`), plot checks and the style layers (`test_plot.py`), each tool folder's cards (`test_module.py`, `test_generators.py`, `test_process_generators.py`), seeds (`test_seeds.py`), shards, `combine`, `parallelism` and `sweep_runs` (`test_shards.py`, `test_combine.py`, `test_parallel.py`, `test_run_sweep.py`), layers and `include` (`test_layers.py`), `--why` and `hep check` (`test_why.py`), and the manual (`test_docs.py`) |
 | `tests/integration/` | real processes: App_Pythia, App_yd2rt, Paint, the plot stage, `hep plot`, post and pre (`test_post.py`), failure injection (`test_failures.py`); `@pytest.mark.slow` for the physics gates (`test_gates_*.py`, `test_*_p4.py`) |
 | `tests/cxx/` | `Status.hh` and the module kit |
 | `tests/fixtures/configs/` | the run TOMLs and cards the tests load by name (`PhotoProduction/eic`, …), frozen from `configs/` (V52). Change one only with the test that needs it |

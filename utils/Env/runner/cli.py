@@ -14,6 +14,7 @@ import argparse
 import json
 import os
 import signal
+import tomllib
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,6 +36,10 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("config", help="configs/<Project>/<name>[.toml], or ./path from the repo root")
     run.add_argument("configuration", nargs="?", help="overrides [run].configuration; under [run].sweep_runs, runs only it")
     run.add_argument("--plan", action="store_true", help="print the plan; run nothing")
+    run.add_argument("--why", action="store_true",
+                     help="for each point that would run, what changed since it last completed; run nothing")
+    run.add_argument("--show-config", action="store_true",
+                     help="print each configuration's resolved values and where each came from; run nothing")
     run.add_argument("--points", metavar="SEL", help="run a subset: tags, indices or quantity=tag")
     run.add_argument("--set", metavar="KEY=VALUE", action="append", default=[],
                      help="override one value for this invocation (repeatable)")
@@ -52,6 +57,10 @@ def parser() -> argparse.ArgumentParser:
     draw.add_argument("--formats", default="pdf,png", help="files: pdf, png, svg, eps (default pdf,png)")
     draw.add_argument("--ratio", action="store_true", help="files: a ratio panel against the first curve")
     draw.add_argument("--style", metavar="FILE", help="files: a style file over utils/Apps/Paint/base.toml")
+
+    check = commands.add_parser("check", help="check run TOMLs: every configuration loaded, validated and planned")
+    check.add_argument("configs", nargs="*", metavar="CONFIG",
+                       help="configs to check (default: every configs/<Project>/*.toml with a [run])")
 
     watch = commands.add_parser("watch", help="attach the live view to a running job")
     watch.add_argument("config", nargs="?", help="the run config whose job to watch (default: the latest job)")
@@ -157,6 +166,17 @@ def print_plan(run, configuration, plans, post_plan=None, pre_plan=None, combine
               f"{', '.join(plot.formats_of(run.plot))} → {plans[0].res.parent / 'plots'}")
 
 
+def print_why(run, configuration, plans, post_plan=None, pre_plan=None, combined=()) -> None:
+    """--why (V57): each point and stage that would run, and what changed since it last completed."""
+    stages = [*([pre_plan] if pre_plan else []), *plans, *combined, *([post_plan] if post_plan else [])]
+    todo = [p for p in stages if not record.is_complete(p)]
+    print(f"run {run.name} · configuration {configuration.key}: {len(todo)} of {len(stages)} to run")
+    for plan in todo:
+        print(f"{plan.point.name}   identity {plan.identity[:12]}")
+        for line in record.why(plan):
+            print(f"  {line}")
+
+
 def catch_signals(stopper: execute.Stopper) -> None:
     """Ctrl-C (SIGINT) and SIGTERM ask the run to stop; a second one is the default behaviour."""
     def on_signal(signum, frame):
@@ -176,6 +196,10 @@ def cmd_run(args) -> int:
     start; a stop starts no more."""
     run = configmod.load(args.config, sets=args.set)
     keys = run.runs(args.configuration)
+    if getattr(args, "show_config", False):
+        for line in show_config(run, keys):
+            print(line)
+        return 0
     stopper = execute.Stopper()
     if len(keys) == 1:
         return run_one(args, keys[0], stopper)
@@ -219,6 +243,37 @@ def cmd_run(args) -> int:
     return 1 if failed else 0
 
 
+def show_config(run, keys: list[str]) -> list[str]:
+    """--show-config (V56): every resolved value of each configuration with the layer it came from: its
+    own table, one it extends, [run.defaults], [run], or the schema's default; and what [master].include
+    gave the file."""
+    from . import schema
+    order = [k for k in schema.keys("configuration") if k not in ("extends",)]
+    lines = []
+    for key in keys:
+        configuration = run.configurations[key]
+        lines.append(f"run {run.name} ({run.path}) · configuration {key}")
+        fields = {"serial": configuration.serial, "name": configuration.run_folder, "label": configuration.label,
+                  "title": configuration.title, "description": configuration.description,
+                  "event_count": configuration.event_count, "threads": configuration.threads,
+                  "parallelism": configuration.parallelism, "swept": configuration.swept,
+                  "seed_type": configuration.seed_type, "manual_seed": configuration.manual_seed,
+                  "sweeps": configuration.sweeps, "plot_points": configuration.plot_points,
+                  "combine": configuration.combine, "tools": configuration.tools, "pre": configuration.pre,
+                  "post": configuration.post, "static": configuration.static, "prelim": configuration.prelim}
+        width = max(map(len, order))
+        for name in order:
+            value = fields.get(name)
+            if value in (None, [], {}, "") and name not in configuration.origins:
+                continue
+            own = run.raw.get("run", {}).get(key, {})
+            origin = configuration.origins.get(name, f"[run.{key}]" if name in own else "default")
+            lines.append(f"  {name:{width}s} = {json.dumps(value, default=str):40s} {origin}")
+    for entry, source in sorted(run.included.items()):
+        lines.append(f"  included {entry} from {source}")
+    return lines
+
+
 def not_run(path: Path, title: str, message: str, following: Path | None) -> None:
     """A run that could not be planned at its turn still says so in its journal, so hep watch moves on."""
     journal = Journal(path)
@@ -238,6 +293,11 @@ def run_one(args, key: str, stopper: execute.Stopper, *, number: int = 0, follow
     run, configuration, every, plans = planned.run, planned.configuration, planned.every, planned.plans
     post_plan, pre_plan, combined = planned.post, planned.pre, planned.combined
     title_line = header(number, configuration) if number else ""
+    if getattr(args, "why", False):
+        if title_line:
+            print(("\n" if number > 1 else "") + title_line)
+        print_why(run, configuration, plans, post_plan, pre_plan, combined)
+        return 0
     if args.plan or args.only == "plot":
         if title_line:
             print(("\n" if number > 1 else "") + title_line)
@@ -347,6 +407,37 @@ def cmd_plot(args) -> int:
     return 1 if failed else 0
 
 
+def cmd_check(args) -> int:
+    """`hep check [CONFIG…]` (V57): each config loaded, its [plot] validated and every configuration's
+    points planned (the C-rules, paths, consumers, connections, cards), nothing run or written. 0 when
+    all are well, 2 when any is not: for a pre-commit hook, or before a long sweep."""
+    from .paths import configs_root
+    names = list(args.configs)
+    if not names:
+        root = configs_root()
+        for path in sorted(root.glob("*/*.toml")):
+            try:
+                has_run = "run" in tomllib.loads(path.read_text(encoding="utf-8"))
+            except (OSError, tomllib.TOMLDecodeError):
+                has_run = True                                   # a broken file is checked, and fails
+            if has_run:
+                names.append(str(path.relative_to(root).with_suffix("")))
+    failed = 0
+    for name in names:
+        try:
+            run = configmod.load(name)
+            points = 0
+            for key in run.configurations:
+                planned = build_plans(argparse.Namespace(config=name, set=[], points=None, rerun=False, only=None), key)
+                points += len(planned.every)
+            print(f"ok    {name}: {len(run.configurations)} configuration(s), {points} point(s)")
+        except HepError as error:
+            failed += 1
+            print(f"FAIL  {name}")
+            print("      " + error.render().replace("\n", "\n      "))
+    return 2 if failed else 0
+
+
 def cmd_watch(args) -> int:
     """Follow a job from another terminal: its status.jsonl, or the most recent one under output/."""
     if args.config:                          # under [run].sweep_runs: the swept run written to last (V38)
@@ -384,6 +475,8 @@ def main(argv: list[str]) -> int:
             return cmd_run(args)
         if args.command == "plot":
             return cmd_plot(args)
+        if args.command == "check":
+            return cmd_check(args)
         return cmd_watch(args)
     except HepError as error:
         print(error.render(), file=sys.stderr)

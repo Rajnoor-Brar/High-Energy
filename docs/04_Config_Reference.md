@@ -87,11 +87,13 @@ when nothing is swept. Two points with the same name are an error (C11).
 ```toml
 [master]
 master_toml = "master.toml"      # optional: configs/<project>/master.toml overlays the framework's
+include     = ["common.toml"]    # optional: run TOMLs whose tables this one starts from (V56)
 ```
 
 | Key | Type | Default | Notes |
 |---|---|---|---|
 | `master_toml` | string (path) | none | overlays `utils/Env/master.toml` key by key: an entry for a (tool, quantity) pair replaces the framework's. The file must exist. |
+| `include` | string or array (paths) | none | files under `configs/<project>/` (`.toml` optional) whose tables the run starts from, in order; **this file wins** (V56). A quantity, tool table or configuration of the file replaces the included one whole; `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively. An included file has no `[master]` of its own. `--show-config` lists what came from where. |
 
 A master TOML maps a **quantity name** to what it means for one **tool type**:
 
@@ -198,6 +200,10 @@ eic · energies: 4 point(s), 1000000 events, 12 threads
 ## 5. `[run.<configuration>]`
 
 ```toml
+[run.defaults]                               # optional (V56): keys every configuration starts from
+tools       = [["pythia", "rivet"], "yd2rt"]
+threads     = 20
+
 [run.energy_pdf]
 serial      = 3
 label       = "energy_pdf"                   # folder name (after the serial); defaults to the table key
@@ -214,9 +220,27 @@ static      = { energies = "18x275" }        # this configuration's own static v
 prelim      = { fifo = ["events.hepmc"] }    # replaces [prelim] for this configuration
 ```
 
+A configuration's value is **its own, else the one it `extends`'s (in turn), else `[run.defaults]`'s,
+else `[run]`'s, else the default** (V56); `"default"` in a layer is the next layer's value (V55).
+`label`, `title`, `extends` and `swept` are each configuration's own, and `[run.defaults]` refuses
+them; `defaults` is never a configuration. `hep run CONFIG --show-config` prints every value with the
+layer it came from.
+
+```toml
+[run.pdfs]
+sweeps      = ["pdf"]
+event_count = 10_000_000
+
+[run.pdfs_100M]
+extends     = "pdfs"                         # everything of pdfs, then these
+event_count = 100_000_000
+label       = "PDFs_100M"
+```
+
 | Key | Type | Default | Notes |
 |---|---|---|---|
-| `tools` | array | **required** | §5.3 |
+| `extends` | string | none | another configuration this one starts from (chains are followed; a circle is refused) |
+| `tools` | array | **required** (here or in a layer) | §5.3 |
 | `sweeps` | array | `[]` | §5.1; `[]` is one point |
 | `plot_points` | array of strings | `[]` | §5.2 |
 | `combine` | array of strings | `[]` | swept quantities whose points are merged into one curve (§5.5) |
@@ -224,8 +248,8 @@ prelim      = { fifo = ["events.hepmc"] }    # replaces [prelim] for this config
 | `threads` | integer | `[run].threads`, else 1 | `0` = every core |
 | `parallelism` | integer | `[run].parallelism`, else 1 | points at once; `--plan` and the run's title say about how many cores that is, and warn past the machine's |
 | `pre`, `post` | array | `[]` | the form of `tools` (§5.4) |
-| `static` | table | `{}` | merged over `[static]`, key by key (§7) |
-| `prelim` | table | `[prelim]` | **replaces** `[prelim]` whole for this configuration; `{}` means none |
+| `static` | table | `{}` | merged over `[static]` and the layers', key by key (§7); a `"default"` keeps the layer below's |
+| `prelim` | table | `[prelim]` | the nearest layer's **replaces** `[prelim]` whole for this configuration (its chain's interfaces); `{}` means none |
 | `serial` | integer | `[run].serial` | overrides `[run].serial` for this configuration: its points go to `<P>/<run name>/NN_<label>/` (V45) |
 | `name` | string | `[run].name` | the run folder above this configuration's: `<P>/<name>/NN_<label>/` (V46) |
 | `label` | string | the table key | the configuration's folder, after the serial: `NN_<label>`; empty means the table key (V45) |
@@ -433,7 +457,15 @@ seed block. Seeds are never written by hand (02 §8).
 ### 8.3 Built-in quantities
 
 `events` (the configuration's `event_count`) and `threads` are provided by the runner and reach a
-tool only through the master (the table in §3). They need no consumer and are never declared.
+tool only through the master (the table in §3). They need no consumer. Declared as quantities, they
+can be swept or set statically (V56): each point then has that event count or thread count in place
+of the configuration's, and it reaches the tools as the built-in does.
+
+```toml
+[quantities.events]
+values = [10_000_000, 25_000_000, 50_000_000]
+tags   = ["010M", "025M", "050M"]
+```
 
 ---
 
@@ -636,8 +668,8 @@ style.legend.position = "bottom-left"
 | `title_left`, `title_right` | string | `""` | small text just above the frame's top-left and top-right corners (V51), inherited the same way |
 | `legend_header` | string | the `.plot`'s `LegendTitle` | the legend's first line (V51), inherited the same way. Children inherit every key their parent has and a key means the same at both levels |
 | `overlay` | tables | none | `[plot.overlay.<name>] objects = [globs], labels = [...]`: one page per cell, `<cell>/<name>`, whose curves are those objects of each point (label: the overlay's, plus the point's when a page has several points); takes the `[plot.object]` keys too, inheriting from `[plot]`; a ratio divides by the first curve (V51) |
-| `y_gutter` | number ≥ 0 or `"default"` | `0.5` | the top of the y axis at (1 + g) × the largest drawn value (on a log axis, g of the decades shown). `0` or `"default"`: no gutter, the tool's own range (V29) |
-| `x_gutter` | number ≥ 0 or `"default"` | `"default"` | widens x by g of its span, symmetrically (in decades on a log axis). `0` or `"default"`: the range the bins give |
+| `y_gutter` | number ≥ 0 or `"default"` | `0.5` | the top of the y axis at (1 + g) × the largest drawn value (on a log axis, g of the decades shown); `0`: no headroom. `"default"`: no gutter, the tool's own range (V29, V55) |
+| `x_gutter` | number ≥ 0 or `"default"` | `"default"` | widens x by g of its span, symmetrically (in decades on a log axis). `"default"`: the range the bins give |
 | `logx`, `logy` | bool | the `.plot` file's `LogX`/`LogY` | |
 | `auto_range` | bool | true | trim x to the bins with content, in curves and data |
 | `range_pad` | integer | 0 | whole bins kept either side of the filled ones |
@@ -648,9 +680,11 @@ style.legend.position = "bottom-left"
 | `style` | table | `{}` | §12 |
 | `object` | table | `{}` | §11.2 |
 
-**`"default"` is a value of every drawing option** (V37): it sets nothing, and the drawing tool does
-what it does by itself. That is not always the runner's default when a key is left out (a missing
-`y_gutter` is 0.5, a missing `auto_range` is true):
+**`"default"` means "keep it as it is"** (V55, which replaces V37's meaning): in `[plot]` it sets
+nothing, and the drawing tool does what it does by itself; in a child (`[plot.object."<glob>"]`,
+`[plot.overlay.<name>]`) it is `[plot]`'s value, as if the key were left out. A key left out of
+`[plot]` takes the runner's default, from `utils/Env/schema/run.toml` (a missing `y_gutter` is 0.5,
+a missing `auto_range` is true). In `[plot]`:
 
 | Key | `"default"` gives |
 |---|---|
@@ -665,10 +699,11 @@ what it does by itself. That is not always the runner's default when a key is le
 | `backend` | `"root"` |
 | `root_style` | no style file: base.toml |
 
-In `[plot.object."<glob>"]` a `"default"` is the tool's for those objects whatever `[plot]` says
-(`logy = "default"` there takes the `.plot`'s even when `[plot].logy = false`), and `title`,
-`x_label`, `y_label` = `"default"` keep the `.plot`'s labels. In a style layer (§12) a `"default"`
-value sets nothing: the layer below decides, and at the bottom base.toml, Paint's own look.
+In `[plot.object."<glob>"]` a `"default"` keeps `[plot]`'s value (`logy = "default"` there is
+`[plot].logy`, and the `.plot`'s when `[plot]` sets none); `x_label` and `y_label`, which only a child
+sets, keep the `.plot`'s labels. In a style layer (§12) a `"default"` value sets nothing: the layer
+below decides, and at the bottom base.toml, Paint's own look. In `[run.<cfg>]` a `"default"` is
+`[run]`'s value (`threads = "default"`).
 `--set plot.min_entries=default` works for one run.
 
 `[plot].legend` is no longer a key: it moved to the style, `legend.position` (the error says so).
@@ -812,6 +847,8 @@ Options and positionals may come in any order (`hep run eic --plain pdf`, V54).
 |---|---|
 | `CONFIG` | `configs/<CONFIG>[.toml]`, or `./path` from the repository root |
 | `CONFIGURATION` | overrides `[run].configuration`; under `[run].sweep_runs`, runs only this one (§4.1) |
+| `--why` | for each point and stage that would run, what changed since it last completed (from its `identity.json`): `events: 10 → 20`, `tools.pythia.card: + PDF:pSet = …`; run nothing (V57) |
+| `--show-config` | print each configuration's resolved values and the layer each came from (its own, `extends`, `[run.defaults]`, `[run]`, default), and what `[master].include` gave; run nothing (V56) |
 | `--plan` | print everything and run nothing: per point, the values and their consumers, the groups and each tool's argv, what each reads and writes, the prepare steps and whether they are cached, the output and results directories and whether the point is complete; the pre and post stages; the page count |
 | `--points SEL` | run a subset: comma-separated point names, single tags, 1-based indices, or `quantity=tag`. The others keep their state (and `points.json` lists all). Refused under a sweep of several runs: name the configuration. |
 | `--set KEY=VALUE` | override one value of the TOML for this invocation, by dotted key, before anything is checked (repeatable). The value is read as TOML, else as a string: `--set run.event_count=50000`, `--set run.pdf.threads=8`, `--set static.energies=18x275`, `--set 'plot.formats=["png"]'`. |
@@ -840,6 +877,17 @@ configuration's, each under its `run NN - <title> -` line. With files (every tar
 of a merged sweep file (labelled from the `points.json` inside it). `-o` defaults to
 `results/plots/<first file's stem>/`; `--labels` gives one label per file; `--style` is a style
 file over base.toml.
+
+### `hep check`
+
+```
+hep check [CONFIG…]
+```
+
+Loads each config (with none given, every `configs/<Project>/*.toml` that has a `[run]`), validates
+its `[plot]` and plans every configuration's points: every C-rule, path, consumer, connection and
+card, with nothing run or written (V57). It prints one line per config, the error of each that fails,
+and exits 0, or 2 when any failed: for a pre-commit hook, or before a long sweep.
 
 ### `hep watch`
 
@@ -892,6 +940,7 @@ Herwig's repository), on every core by default. `--tests` adds the C++ tests, `-
 | `config/<tag>.toml` | a custom or module tool's extracted config |
 | `logs/<tag>.log`, `logs/<tag>.prepare.log`, `logs/prelim.log` | stdout and stderr |
 | `provenance.json` | `point`, `run`, `project`, `configuration`, `config_file`; `values` (each active quantity's index, tag and value); `identity`, `seed`, `threads`, `events`; per tool `tag`, `tool`, `exe`, `exe_sha256`, `version`, `argv`, `ran`, `card`, `card_sha256`, `config`, `result` (exit, seconds, note); `host`, `platform`, `user`, `git` (`revision`, `dirty`), `started`, `finished` |
+| `identity.json` | the parts the identity hashes (each tool's card lines, argv, binaries, options; threads, events, groups, prelim, the seed rule), written when the point completes, for `--why` (V57) |
 | `.complete` | the point's identity, written **last**; its absence means the point is not done |
 
 **Per configuration** (`output/…/<cfg>/`):
