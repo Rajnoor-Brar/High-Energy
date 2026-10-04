@@ -297,7 +297,7 @@
     "type": "object",
     "properties": {
      "tool": {
-      "description": "a standard tool (a folder of utils/Env/) or custom\n\na standard tool (a folder of `utils/Env/`, [05 §1](05_Tools_Reference.md#1-the-standard-tools-at-a-glance)), `\"custom\"` or `\"module\"`",
+      "description": "a standard tool (a folder of utils/Env/) or custom\n\na standard tool (a folder of `utils/Env/`, 05 §1), `\"custom\"` or `\"module\"`",
       "type": "string"
      },
      "baseconfig": {
@@ -381,7 +381,7 @@
       "minimum": 1
      },
      "shards": {
-      "description": "K processes on a share of the events each\n\nK > 1: K processes of this tool, each on a share of the events, merged into its `output_file` by the folder's merge tool (V31; rivet, [05 §3.1](05_Tools_Reference.md#31-sharded-rivet-shards--k)). The chain is unchanged.",
+      "description": "K processes on a share of the events each\n\nK > 1: K processes of this tool, each on a share of the events, merged into its `output_file` by the folder's merge tool (V31; rivet, 05 §3.1). The chain is unchanged.",
       "type": "integer",
       "minimum": 1,
       "default": 1
@@ -407,7 +407,7 @@
       "type": "array"
      },
      "labels": {
-      "description": "one per value: legend text\n\nlegend text, in **LaTeX** (`$e^-$`, `$\\sqrt{s}$`), the one label language of every text a run TOML gives a page (V65): math in `$…$`, the rest text, where a bare `_` or `^` is the character (`\"PDF4LHC21_40\"`). A label written in ROOT's TLatex (`#sqrt{s}`, `p_{T}`), as configs did before V65, is still read: it is converted faithfully (TLatex's upright letters become `\\mathrm{…}`), until the configs are migrated. `\\_`, `\\^` and `\\#` also give the character, even before a brace; in TOML write them in single quotes, `'PDF4LHC21\\_40'`, since in `\"…\"` a backslash starts a TOML escape",
+      "description": "one per value: legend text\n\nlegend text, in **LaTeX** (`$e^-$`, `$\\sqrt{s}$`), the one label language of every text a run TOML gives a page (V65): math in `$…$`, the rest text, where a bare `_` or `^` is the character (`\"PDF4LHC21_40\"`). A label written in ROOT's TLatex (`#sqrt{s}`, `p_{T}` with no `$`) is refused, with its LaTeX as the hint; `hep migrate` rewrites it (V79). `\\_`, `\\^` and `\\#` also give the character, even before a brace; in TOML write them in single quotes, `'PDF4LHC21\\_40'`, since in `\"…\"` a backslash starts a TOML escape",
       "type": "array"
      },
      "shape": {
@@ -461,7 +461,7 @@
    "type": "object",
    "properties": {
     "backend": {
-     "description": "root (Paint), yoda (rivet-mkhtml), mpl (matplotlib, V71), a list of them, or both (root and yoda)\n\n`\"root\"` (Paint), `\"yoda\"` (rivet-mkhtml, frozen since V71), `\"mpl\"` (matplotlib, mkhtml's pages drawn in-process: V71), `\"both\"` (root and yoda, V28) or an array of them, from the same pages",
+     "description": "root (Paint), yoda (rivet-mkhtml), mpl (matplotlib, V71), a list of them, or both (root and yoda)\n\n`\"root\"` (Paint), `\"yoda\"` (rivet-mkhtml; frozen, V71), `\"mpl\"` (matplotlib, mkhtml's pages drawn in-process: V71), `\"both\"` (root and yoda, V28) or an array of them, from the same pages",
      "anyOf": [
       {
        "type": [
