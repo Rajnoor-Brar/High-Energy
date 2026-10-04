@@ -14,6 +14,8 @@
 #            child it is the parent's value; at the top level nothing is set, and the tool decides.
 #   page     a [plot] key a figure ([plot.figures.<figure>]) may override
 #   doc      one line, for `hep explain` and the editor
+#   notes    what a line cannot say: the reference's text for the key (docs/04_Config_Reference.md is
+#            generated from doc and notes, `make docs`), shown by `hep explain` and the editor too
 #
 # Tables: master, run, configuration ([run.<cfg>]), prelim, quantity ([quantities.<q>]), tool
 # ([tools.<tag>]: the keys every tool table may carry; a folder's [options] add its own), plot,
@@ -27,11 +29,20 @@ order = ["master", "run", "prelim", "static", "tools", "quantities", "plot"]
 [master.master_toml]
 type = "str"
 doc  = "a project master overlaid on the tool folders' quantities.toml (configs/<Project>/…)"
+notes = """\
+  overlays the tool folders' mappings key by key (`[quantities.<tool>.compatible_quantities]`): an \
+  entry for a (tool, quantity) pair replaces the framework's. The file must exist."""
 
 [master.include]
 type  = "str|list"
 items = "str"
 doc   = "run TOMLs whose tables this one starts from (configs/<Project>/…); this file wins"
+notes = """\
+  files under `configs/<project>/` (`.toml` optional) whose tables the run starts from, in order; \
+  **this file wins** (V56). A quantity, tool table or configuration of the file replaces the \
+  included one whole; `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, \
+  tables recursively. An included file has no `[master]` of its own. `--show-config` lists what \
+  came from where."""
 
 # ── [run] ────────────────────────────────────────────────────────────────────────────────────
 
@@ -39,26 +50,40 @@ doc   = "run TOMLs whose tables this one starts from (configs/<Project>/…); th
 type     = "str"
 required = true
 doc      = "the run's folder: <project>/<name>/"
+notes = """\
+  the run's directory name"""
 
 [run.project]
 type     = "str"
 required = true
 doc      = "the project; a config under configs/<X>/ belongs to X"
+notes = """\
+  the subfolder of `configs/`, `modules/`, `output/`, `results/`; must equal the folder the file \
+  is in, when it is under `configs/`"""
 
 [run.configuration]
 type = "str"
 doc  = "the configuration hep run runs (required unless sweep_runs)"
+notes = """\
+  must name a `[run.<cfg>]` table (C2). Under `sweep_runs` it may be left out; `hep run <config>` \
+  then ignores it"""
 
 [run.serial]
 type    = "int"
 inherit = true
 doc     = "the NN_ before each configuration's folder"
+notes = """\
+  the prefix `NN_` of each configuration's folder, `<name>/NN_<label>`: **location, never \
+  identity** (V12). A configuration's `serial` overrides it (V45). Changing it starts a fresh \
+  location."""
 
 [run.event_count]
 type    = "int"
 min     = 1
 inherit = true
 doc     = "events per point"
+notes = """\
+  default for configurations; one of the two must set it"""
 
 [run.threads]
 type    = "int"
@@ -66,6 +91,8 @@ min     = 0
 default = 1
 inherit = true
 doc     = "threads per generator; 0 = every core"
+notes = """\
+  default for configurations. `0` means every core, **resolved to a number at plan time**"""
 
 [run.parallelism]
 type    = "int|str"
@@ -74,6 +101,10 @@ min     = 1
 default = 1
 inherit = true
 doc     = "points run at once; \"auto\": as many as the cores hold, cores ÷ a point's cores (V75)"
+notes = """\
+  default for configurations: how many points run at once (V36); `\"auto\"` (V75): as many as the \
+  cores hold, `os.cpu_count() // the costliest point's cores`. `threads` stays each point's; never \
+  part of an identity or a seed, so changing it reruns nothing"""
 
 [run.description]
 type = "str"
@@ -84,12 +115,18 @@ type    = "bool|list"
 items   = "str"
 default = false
 doc     = "hep run runs every configuration in turn (true), or these, in this order (V79: [\"a\", \"b\"])"
+notes = """\
+  `true`: `hep run <config>` runs every configuration, one after another, in the order of the \
+  file; `[\"a\", \"b\"]` (V79): these, in this order (04 §4.1)"""
 
 [run.notify]
 type    = "str"
 choices = ["none", "desktop"]
 default = "none"
 doc     = "\"desktop\": a notify-send when hep run ends, with its verdict (V76)"
+notes = """\
+  `\"desktop\"` (V76): a desktop notification (`notify-send`) when `hep run` ends, with its \
+  verdict; never fails a run"""
 
 [run.seed_type]
 type    = "str"
@@ -97,12 +134,19 @@ choices = ["identity", "manual", "random"]
 default = "identity"
 inherit = true
 doc     = "how seeds are chosen"
+notes = """\
+  default for configurations: how a point's seeds are chosen, `\"identity\"`, `\"manual\"` or \
+  `\"random\"` (02 §8)"""
 
 [run.manual_seed]
 type    = "int"
 min     = 1
 inherit = true
 doc     = "seed_type = manual: every point's seed"
+notes = """\
+  default for configurations: under `seed_type = \"manual\"`, every point's seed (from 1 to the \
+  point's generators' `[card] seed_range`: 899,999,999 for Pythia, checked when the point is \
+  planned, V54); ignored otherwise (`--plan` says so)"""
 
 # ── [run.<cfg>] ──────────────────────────────────────────────────────────────────────────────
 # A configuration's value is its own, else the one it `extends` (and so on), else [run.defaults]'s (a
@@ -112,23 +156,34 @@ doc     = "seed_type = manual: every point's seed"
 [configuration.extends]
 type = "str"
 doc  = "another configuration this one starts from; its own keys win"
+notes = """\
+  another configuration this one starts from (chains are followed; a circle is refused)"""
 
 [configuration.serial]
 type       = "int"
 default_ok = true
 doc        = "this configuration's NN_ (else [run]'s)"
+notes = """\
+  overrides `[run].serial` for this configuration: its points go to `<P>/<run name>/NN_<label>/` \
+  (V45)"""
 
 [configuration.name]
 type = "str"
 doc  = "this configuration's run folder (else [run].name)"
+notes = """\
+  the run folder above this configuration's: `<P>/<name>/NN_<label>/` (V46)"""
 
 [configuration.label]
 type = "str"
 doc  = "this configuration's folder: NN_<label> (else its table key)"
+notes = """\
+  the configuration's folder, after the serial: `NN_<label>`; empty means the table key (V45)"""
 
 [configuration.title]
 type = "str"
 doc  = "the run NN - <title> - header of a sweep"
+notes = """\
+  the header line of the run under `[run].sweep_runs`: `run 02 - <title> -` (04 §4.1)"""
 
 [configuration.description]
 type = "str"
@@ -139,12 +194,16 @@ type       = "int"
 min        = 1
 default_ok = true
 doc        = "events per point (else [run]'s)"
+notes = """\
+  required here if `[run]` has none"""
 
 [configuration.threads]
 type       = "int"
 min        = 0
 default_ok = true
 doc        = "threads per generator (else [run]'s); 0 = every core"
+notes = """\
+  `0` = every core"""
 
 [configuration.parallelism]
 type       = "int|str"
@@ -152,6 +211,9 @@ choices    = ["auto"]
 min        = 1
 default_ok = true
 doc        = "points run at once (else [run]'s); \"auto\": cores ÷ a point's cores (V75)"
+notes = """\
+  points at once (`\"auto\"`: cores ÷ a point's cores, V75); `--plan` and the run's title say \
+  about how many cores that is, and warn past the machine's"""
 
 [configuration.swept]
 type    = "bool"
@@ -163,47 +225,71 @@ type       = "str"
 choices    = ["identity", "manual", "random"]
 default_ok = true
 doc        = "how seeds are chosen (else [run]'s)"
+notes = """\
+  `\"identity\"`: from the generator's identity; `\"manual\"`: exactly the given seed; \
+  `\"random\"`: drawn when the point runs (02 §8)"""
 
 [configuration.manual_seed]
 type       = "int"
 min        = 1
 default_ok = true
 doc        = "seed_type = manual: every point's seed (else [run]'s)"
+notes = """\
+  the seed of every point under `\"manual\"`; a quantity targeting `<tool>/seed` gives a point its \
+  own"""
 
 [configuration.sweeps]
 type = "list"
 doc  = "swept quantities: a name is an axis, an inner list an entangled group"
+notes = """\
+  04 §5.1; `[]` is one point"""
 
 [configuration.plot_points]
 type  = "list"
 items = "str"
 doc   = "swept quantities whose grid makes the pages"
+notes = """\
+  04 §5.2"""
 
 [configuration.combine]
 type  = "list"
 items = "str"
 doc   = "swept quantities whose points are merged into one (seed replicas)"
+notes = """\
+  swept quantities whose points are merged into one curve (04 §5.5)"""
 
 [configuration.tools]
 type     = "list"
 required = true
 doc      = "the chain: [A, [B, C], D]; an inner list runs together"
+notes = """\
+  04 §5.3"""
 
 [configuration.pre]
 type = "list"
 doc  = "tools run once, before every point"
+notes = """\
+  the form of `tools` (04 §5.4)"""
 
 [configuration.post]
 type = "list"
 doc  = "tools run once, after every point"
+notes = """\
+  the form of `tools` (04 §5.4)"""
 
 [configuration.static]
 type = "table"
 doc  = "quantity = value for this configuration, over [static]"
+notes = """\
+  merged over `[static]` and the layers', key by key (04 §7); a `\"default\"` keeps the layer \
+  below's"""
 
 [configuration.prelim]
 type = "table"
 doc  = "this configuration's [prelim]"
+notes = """\
+  the nearest layer's **replaces** `[prelim]` whole for this configuration (its chain's \
+  interfaces); `{}` means none"""
 
 # ── [prelim] ─────────────────────────────────────────────────────────────────────────────────
 
@@ -211,15 +297,24 @@ doc  = "this configuration's [prelim]"
 type  = "list"
 items = "str"
 doc   = "FIFOs made in the point's folder before the tools start"
+notes = """\
+  named pipes in the point's output directory. A FIFO connects tools **in one group** only, has \
+  **one reader**, and never feeds a tool that is not `streamable` (C6)."""
 
 [prelim.files]
 type  = "list"
 items = "str"
 doc   = "files made (empty) before the tools start"
+notes = """\
+  regular files in the point's output directory, **kept**: the way to keep events for another \
+  configuration"""
 
 [prelim.commands]
 type = "list"
 doc  = "commands run in the point's folder before the tools"
+notes = """\
+  run in the point's output directory; output to `logs/prelim.log`; a nonzero exit fails the \
+  point. Placeholders: `{repo}`, `{out}`, `{res}`, `{file:<name>}`"""
 
 # ── [quantities.<q>] ─────────────────────────────────────────────────────────────────────────
 
@@ -227,35 +322,66 @@ doc  = "commands run in the point's folder before the tools"
 type     = "list"
 required = true
 doc      = "the values"
+notes = """\
+  scalars or arrays (an energy pair)"""
 
 [quantity.tags]
 type  = "list"
 doc   = "one per value: folder and point names"
+notes = """\
+  one per value. The default is the value with anything but `A–Za–z0–9.+-` replaced by `-`. Tags \
+  name point directories: keep them short and unique."""
 
 [quantity.labels]
 type  = "list"
 doc   = "one per value: legend text"
+notes = """\
+  legend text, in **LaTeX** (`$e^-$`, `$\\sqrt{s}$`), the one label language of every text a run \
+  TOML gives a page (V65): math in `$…$`, the rest text, where a bare `_` or `^` is the character \
+  (`\"PDF4LHC21_40\"`). A label written in ROOT's TLatex (`#sqrt{s}`, `p_{T}`), as configs did \
+  before V65, is still read: it is converted faithfully (TLatex's upright letters become \
+  `\\mathrm{…}`), until the configs are migrated. `\\_`, `\\^` and `\\#` also give the character, \
+  even before a brace; in TOML write them in single quotes, `'PDF4LHC21\\_40'`, since in `\"…\"` a \
+  backslash starts a TOML escape"""
 
 [quantity.shape]
 type = "str|list"
 doc  = "a user quantity's value shape, as the vocabulary's: \"pdg\", \"float|int\", [\"float\", \"float\"] (V76)"
+notes = """\
+  the values' shape, in the vocabulary's grammar (V76): `\"pdg\"`, `\"float|int\"`, `[\"float\", \
+  \"float\"]`; checked when the TOML is read. For a quantity of your own (one the vocabulary, \
+  `utils/Env/quantities.toml`, does not name); a vocabulary quantity has its own shape"""
 
 [quantity.styles]
 type  = "list"
 items = "table"
 doc   = "one per value: its curves' look, { colour, line, width } (V67)"
+notes = """\
+  one per value (V67): its curves' look, `{ colour, line, width }`. `colour` is `\"#rrggbb\"`, a \
+  ROOT name (`\"kBlue+1\"`) or number (the yoda backend draws `#rrggbb` only); `line` is `solid`, \
+  `dashed`, `dotted` or `dashdot`; `width` is in points. A key left out, or `\"default\"`, is the \
+  style's; curves with no colour take the palette in turn, as mkhtml's take its cycle. A value \
+  keeps its look on every page, so a PDF is one colour throughout. With two curve axes, the later \
+  one's keys win"""
 
 [quantity.key]
 type = "str|table"
 doc  = "the native key, or { <tool or tag> = key }"
+notes = """\
+  the native key. A string needs a `target`. A table entry for a tool tag wins over one for its \
+  type."""
 
 [quantity.target]
 type = "str|list"
 doc  = "<tag>, <tag>/<analysis> or <tag>/seed"
+notes = """\
+  restricts the consumers (04 §8.1)"""
 
 [quantity.format]
 type = "str"
 doc  = "how the value is written: a Python format, \"{}*GeV\""
+notes = """\
+  a Python format for the value: `\"{}*GeV\"`"""
 
 [quantity.description]
 type = "str"
@@ -264,6 +390,12 @@ doc  = "what the quantity is"
 [quantity.exclude]
 type  = "list"
 doc   = "1-based value places a sweep leaves out"
+notes = """\
+  values a sweep leaves out, by their **1-based** place (as `static = \"#2\"` and `--points 2` \
+  count): `exclude = [2]` sweeps the others. The remaining points keep their names and identities \
+  and are numbered 1… over what is swept. In an entangled group, a value any member excludes \
+  leaves the group. `static` may still pick an excluded value. Refused: a place outside \
+  1…len(values), or none left (V42)"""
 
 # ── [tools.<tag>] ────────────────────────────────────────────────────────────────────────────
 
@@ -271,77 +403,121 @@ doc   = "1-based value places a sweep leaves out"
 type     = "str"
 required = true
 doc      = "a standard tool (a folder of utils/Env/) or custom"
+notes = """\
+  a standard tool (a folder of `utils/Env/`, [05 \
+  §1](05_Tools_Reference.md#1-the-standard-tools-at-a-glance)), `\"custom\"` or `\"module\"`"""
 
 [tool.baseconfig]
 type = "str|list"
 doc  = "base card(s), configs/<Project>/…"
+notes = """\
+  native base card(s), read in order (root `configs/<project>/`). Tools with a card only."""
 
 [tool.input]
 type = "str|list"
 doc  = "what it reads: an interface or a file"
+notes = """\
+  what it reads: `[prelim]` names, another tool's `output_file`, a pre product, (post) a product \
+  of every point, or a path. The first input is `{input}`."""
 
 [tool.output_file]
 type = "str|list"
 doc  = "what it writes: an interface or a product"
+notes = """\
+  what it writes. An array is fan-out: App_Pythia writes the same events to each (V16). Exactly \
+  one writer per output (C6)."""
 
 [tool.timeout]
 type = "float"
 min  = 0
 doc  = "seconds before it is stopped (0: never)"
+notes = """\
+  the tool fails when it runs longer"""
 
 [tool.stall_after]
 type = "float"
 min  = 0
 doc  = "seconds of silence before it counts as stalled (default 300)"
+notes = """\
+  the tool fails when silent this long: no log line, status message or heartbeat (a prepare step \
+  waits at least 3600)"""
 
 [tool.status]
 type    = "str"
 choices = ["standard", "filters", "none"]
 doc     = "how its progress is read: the status protocol, its log's filter rules, or not at all"
+notes = """\
+  `\"standard\"` (`$HEP_STATUS_FD`), `\"filters\"` (the folder's `filters.toml`), `\"none\"`"""
 
 [tool.filters]
 type = "str"
 doc  = "a filters.toml of your own (configs/<Project>/…), in place of its folder's"
+notes = """\
+  your own rules in place of the folder's, root `configs/<P>/`; implies `status = \"filters\"` \
+  (V61)"""
 
 [tool.executable]
 type = "str"
 doc  = "custom/module: build/<project>/<name>, or path:<command>"
+notes = """\
+  custom and module: bare → `build/<project>/<name>` (must be built); `path:<command>` → `PATH`"""
 
 [tool.arguments]
 type = "list"
 doc  = "custom: its arguments"
+notes = """\
+  custom and module: argv after the config; placeholders (04 §10)"""
 
 [tool.consumes]
 type  = "list"
 items = "str"
 doc   = "custom/module: quantities it reads from its config"
+notes = """\
+  custom and module: quantities written into the config"""
 
 [tool.config]
 type = "table"
 doc  = "custom/module: written to config/<tag>.toml"
+notes = """\
+  custom and module: `[tools.<tag>.config]`, extracted to a file (04 §9.2)"""
 
 [tool.streamable]
 type = "bool"
 doc  = "it can read a FIFO"
+notes = """\
+  may it read a FIFO?"""
 
 [tool.consumes_events]
 type = "bool"
 doc  = "its event count is checked against the producer's"
+notes = """\
+  is its event count checked against the producer's sidecar?"""
 
 [tool.settings]
 type = "table"
 doc  = "native card settings, as written: \"HeavyIon:mode\" = 1 (over the base card, under quantities)"
+notes = """\
+  native card settings as written, `\"HeavyIon:mode\" = 1`, with no base card needed: over the \
+  base card, refused when a quantity sets the same key (one source per key, C8); a tool with no \
+  card refuses them (V59)"""
 
 [tool.cores]
 type = "int"
 min  = 1
 doc  = "cores it keeps busy, for --plan's note (default: estimated)"
+notes = """\
+  how many cores it keeps busy, for `--plan`'s note and the crowded warning (V60); an integrated \
+  program is estimated as the generator's threads and one more"""
 
 [tool.shards]
 type    = "int"
 min     = 1
 default = 1
 doc     = "K processes on a share of the events each"
+notes = """\
+  K > 1: K processes of this tool, each on a share of the events, merged into its `output_file` by \
+  the folder's merge tool (V31; rivet, [05 \
+  §3.1](05_Tools_Reference.md#31-sharded-rivet-shards--k)). The chain is unchanged."""
 
 # ── [plot] ───────────────────────────────────────────────────────────────────────────────────
 
@@ -352,6 +528,10 @@ choices    = ["root", "yoda", "mpl", "both"]
 default    = "root"
 default_ok = true
 doc        = "root (Paint), yoda (rivet-mkhtml), mpl (matplotlib, V71), a list of them, or both (root and yoda)"
+notes = """\
+  `\"root\"` (Paint), `\"yoda\"` (rivet-mkhtml, frozen since V71), `\"mpl\"` (matplotlib, mkhtml's \
+  pages drawn in-process: V71), `\"both\"` (root and yoda, V28) or an array of them, from the same \
+  pages"""
 
 [plot.formats]
 type       = "list"
@@ -360,18 +540,32 @@ choices    = ["pdf", "png", "svg", "eps"]
 default    = ["pdf"]
 default_ok = true
 doc        = "the pages' formats"
+notes = """\
+  `pdf`, `png`, `svg`, `eps`. mkhtml writes pdf and png always. The root backend writes \
+  `plots/root/index.html` (V70): a section per `plot_points` cell, each page by its PNG or SVG, \
+  else an embedded PDF, linked to every format; add `png` for thumbnails a browser shows at once"""
 
 [plot.band]
 page       = true
 type  = "list"
 items = "str"
 doc   = "curve-axis quantities drawn as one curve, their first value, with the min–max envelope of all their values (V69)"
+notes = """\
+  curve axes drawn as an envelope (V69): per value of the other curve axes, one curve, the band \
+  quantity's first value, with the min–max of all its values shaded around it in the curve's \
+  colour (the usual PDF or scale band). Its legend entry ends `(<q> envelope)`; its own \
+  statistical errors are not drawn. A name that is not a curve axis of the configuration (swept, \
+  not `plot_points`, not combined) is refused at plan time. The yoda backend draws the same \
+  envelope as mkhtml's error band"""
 
 [plot.objects]
 type       = "list"
 items      = "str"
 default_ok = true
 doc        = "YODA path globs that get pages (default: every 1D object)"
+notes = """\
+  matched against the option-free YODA path (`/photo_eic/d01-x01-y01`) or any variant's path. No \
+  object matching is an error."""
 
 [plot.ratio]
 page       = true
@@ -379,6 +573,8 @@ type       = "bool"
 default    = false
 default_ok = true
 doc        = "a ratio pad"
+notes = """\
+  a ratio pad: each curve over the data, or over the first curve when there are no data"""
 
 [plot.y_gutter]
 page       = true
@@ -387,6 +583,9 @@ min        = 0
 default    = 0.5
 default_ok = true
 doc        = "the top of the y axis at (1 + g) × the largest value"
+notes = """\
+  the top of the y axis at (1 + g) × the largest drawn value (on a log axis, g of the decades \
+  shown); `0`: no headroom. `\"default\"`: no gutter, the tool's own range (V29, V55)"""
 
 [plot.x_gutter]
 page       = true
@@ -394,6 +593,9 @@ type       = "float"
 min        = 0
 default_ok = true
 doc        = "x widened by g of its span"
+notes = """\
+  widens x by g of its span, symmetrically (in decades on a log axis). `\"default\"`: the range \
+  the bins give"""
 
 [plot.logy]
 page       = true
@@ -412,6 +614,8 @@ page       = true
 type       = "bool"
 default_ok = true
 doc        = "a heat map's log z (default: the .plot's LogZ, V87)"
+notes = """\
+  a heat map's colour scale (V87)"""
 
 [plot.auto_range]
 page       = true
@@ -419,6 +623,8 @@ type       = "bool"
 default    = true
 default_ok = true
 doc        = "x clipped to the bins with content"
+notes = """\
+  trim x to the bins with content, in curves and data"""
 
 [plot.normalise]
 page       = true
@@ -427,6 +633,12 @@ choices    = ["area", false]
 default    = false
 default_ok = true
 doc        = "\"area\": every curve and the data scaled to unit area over the bins drawn (V68)"
+notes = """\
+  `\"area\"` (V68): every curve, and the data, scaled to unit area, Σ value × bin width over the \
+  bins drawn (after voiding and the data's alignment), so pages compare shapes. Both backends \
+  scale the same way. The y label stays the `.plot`'s: set `y_label` (e.g. \
+  `\"$1/\\sigma\\,\\mathrm{d}\\sigma/\\mathrm{d}E_T$\"`) on the pages it applies to. A figure (04 \
+  §11.2) may set it for its own"""
 
 [plot.void_empty]
 page       = true
@@ -434,12 +646,17 @@ type       = "bool"
 default    = false
 default_ok = true
 doc        = "blank the bins empty in every curve"
+notes = """\
+  blank a bin that is zero in **every** curve"""
 
 [plot.use_data]
 page       = true
 type       = "bool"
 default    = true
 doc        = "false: [plot.data] stays but is not drawn"
+notes = """\
+  `false`: the `[plot.data]` table stays in the file but is not drawn, and a `ratio` divides each \
+  curve by the page's first curve, the first value of its curve axis (V44)"""
 
 [plot.min_entries]
 page       = true
@@ -448,6 +665,9 @@ min        = 0
 default    = 0
 default_ok = true
 doc        = "blank the bins with fewer raw entries"
+notes = """\
+  blank a bin that fewer raw entries went into, in **any** curve (read from the `/RAW` twin; \
+  objects without one are not voided this way)"""
 
 [plot.range_pad]
 page       = true
@@ -456,47 +676,68 @@ min        = 0
 default    = 0
 default_ok = true
 doc        = "whole bins added around auto_range"
+notes = """\
+  whole bins kept either side of the filled ones"""
 
 [plot.root_style]
 type       = "str"
 default_ok = true
 doc        = "a style file over base.toml (configs/<Project>/…)"
+notes = """\
+  a style file over base.toml (04 §12). Refused by the yoda backend alone."""
 
 [plot.title]
 page       = true
 type       = "str"
 default_ok = true
 doc        = "centred above the frame (default: the .plot's Title)"
+notes = """\
+  the main title, centred above the frame (V51). Every page; a figure (04 §11.2) overrides it for \
+  its own"""
 
 [plot.title_left]
 page       = true
 type       = "str"
 default_ok = true
 doc        = "above the frame's top-left corner"
+notes = """\
+  small text just above the frame's top-left and top-right corners (V51), inherited the same way"""
 
 [plot.title_right]
 page       = true
 type       = "str"
 default_ok = true
 doc        = "above the frame's top-right corner"
+notes = """\
+  small text just above the frame's top-left and top-right corners (V51), inherited the same way"""
 
 [plot.legend_header]
 page       = true
 type       = "str"
 default_ok = true
 doc        = "the legend's first line (default: the .plot's LegendTitle)"
+notes = """\
+  the legend's first line (V51), inherited the same way. Children inherit every key their parent \
+  has and a key means the same at both levels"""
 
 [plot.data]
 type = "table"
 doc  = "reference data: file, legend, map"
+notes = """\
+  04 §11.1"""
 
 [plot.style]
 type = "table"
 doc  = "the style over base.toml"
+notes = """\
+  04 §12"""
 
 [plot.figures]
 type = "table"
 doc  = "[plot.figures.<figure>]: the figures, each a recipe for pages (08_Figures)"
+notes = """\
+  `[plot.figures.<figure>]`: a recipe for pages, with every page key of `[plot]` for its own (04 \
+  §11.2, V80)"""
 
 # ── [plot.figures.<figure>]: a recipe for pages ─────────────────────────────────────────────
 # A figure takes every [plot] key marked `page = true`, meaning the same for its pages ("default":
@@ -507,84 +748,179 @@ type    = "str"
 choices = ["defined", "overlay", "merged", "compare", "derived", "scan", "sheet"]
 default = "defined"
 doc     = "how its pages are built: defined (an analysis object's own), overlay (several objects of each point), merged (the objects' pages with the points merged over `over`), compare (the objects' pages across configurations), derived (a new object from the objects, per point), scan (one number per point against a swept quantity), sheet (drawn pages in a grid)"
+notes = """\
+  how the pages are built. `defined`: an analysis object's own pages, `<cell>/<object>`, its \
+  curves the cell's points (and option variants). `overlay`: several objects of each point on one \
+  page, `<cell>/<name>`; a curve per object and point, labelled by `labels` (plus the point's, \
+  when the page has several); a ratio divides by the first curve. `merged` (V82): the objects' \
+  pages, `<cell>/<name>/<object>`, with the points merged over the `over` axes: per value of the \
+  other axes, their YODAs merged by the combine folder's command (`rivet-merge -e`: statistics \
+  add, σ averaged), once per change of a member's YODA, into `output/…/plots/merged/<name>/`. The \
+  run keeps its points apart; the figure alone merges them (`combine` merges them for the whole \
+  configuration). `sheet` (V89): drawn pages laid out in a grid (`pages`, `columns`; below). \
+  `compare` (V83): the objects' pages across configurations, \
+  `<run>/compare/<name>/<cell>/<object>` beside the configurations' own folders (in `output/` and \
+  `results/`, a folder per backend). A curve per configuration and point (or combined group), \
+  labelled by the configuration (`labels`, else its `label`) and then the point's curve axes. The \
+  configurations must have the same page and curve axes (checked at plan time); the figure is \
+  drawn by the plot stage of each of them once all have complete points, and says what it waits \
+  for otherwise (`hep plot` draws it too). `derived` (V84): a new object per point, \
+  `/FIGURES/<name>` (`/FIGURES:R=0.4/<name>` per analysis-option variant): `op = \"ratio\"`, \
+  `\"difference\"` or `\"sum\"` of its two objects (histograms made estimates first; the same \
+  binning, else an error naming both), or `\"projection-x\"`/`\"projection-y\"` of its one 2D \
+  object (summed over the other axis: a histogram's weights, an estimate's values × widths, as a \
+  Scatter2D whose x ranges are the bins). It is appended to a copy of each point's YODA \
+  (`output/…/plots/derived/`, remade when the product or the figures change, by \
+  `utils/Env/figures/derive.py`: YODA's Python, so `load_hep`), and is then an object like any: \
+  its pages `<cell>/<name>` (labels from its first object's `.plot`; set `y_label`), an overlay or \
+  a merged or compare figure may name it (`\"r15\"`). `scan` (V85): one number per point against a \
+  swept quantity: `x` a curve axis whose values are numbers, `y` = `sigma` (the point's `/_XSEC`), \
+  `entries` (its events, or its object's raw entries), or `integral`, `mean`, `bin:N` of its one \
+  object. A page per cell, `<cell>/<name>`, a curve per value of the other curve axes: a \
+  Scatter2D, a point per x value with an x range halfway to its neighbours centred on it (so every \
+  backend can draw it as a bin; it is drawn as markers, `type = \"Scatter2D\"`). Axis titles: the \
+  quantity's name and the y read, until set. A quantity of names (PDF sets) cannot be an x yet"""
 
 [figure.type]
 type    = "str"
 choices = ["Hist1D", "Scatter2D", "HeatMap"]
 doc     = "what is drawn: Hist1D (steps), Scatter2D (a marker per bin, as data: V86), HeatMap (a 2D object coloured, a page per point: V87); default: from the objects (2D: HeatMap), a scan's Scatter2D"
+notes = """\
+  what is drawn: `Hist1D`, steps per curve; `Scatter2D` (V86), a marker per bin at its centre with \
+  its y error, in the curve's colour (`data.marker`, `data.marker_size` of the style), as Paint \
+  draws data; the legend shows the marker. The page TOML says `markers = true`; mkhtml and mpl \
+  draw the curves as they draw points (`ConnectBins=0`, with their x bars). `HeatMap` (V87): a 2D \
+  object (a YODA `Histo2D` or `Estimate2D`), the default for one: a page per point of the cell, \
+  `<cell>/<object>/<point>`, coloured by value with its scale on the right (labels from the \
+  `.plot`, `ZLabel` and `LogZ` too; no ratio, data or voiding). Paint draws heat maps; mkhtml and \
+  mpl draw the 1D pages only, and the plot stage says so. A 1D object cannot be a HeatMap, a 2D \
+  object neither a Hist1D nor a Scatter2D, nor in an overlay"""
 
 [figure.name]
 type = "str"
 doc  = "its pages' file stem (default: the figure's key; a defined figure's pages keep the object's name)"
+notes = """\
+  an overlay's page file stem, a merged figure's folder. A defined figure takes none: its pages \
+  are the objects' own"""
 
 [figure.objects]
 type  = "list"
 items = "str"
 doc   = "the objects: YODA path globs, matched against the short name (d01-x01-y01) or the full path"
+notes = """\
+  matched against the short name (`d04-x01-y01`), the option-free path or a variant's path. A glob \
+  matching no object of the points is an error, at the plot stage"""
 
 [figure.op]
 type    = "str"
 choices = ["ratio", "difference", "sum", "projection-x", "projection-y"]
 doc     = "a derived figure's: of its two objects (ratio, difference, sum), or of its 2D histogram (projection-x, -y) (V84)"
+notes = """\
+  a derived figure's: `ratio`, `difference`, `sum` (two objects), `projection-x`, `projection-y` \
+  (one)"""
 
 [figure.x]
 type = "str"
 doc  = "a scan figure's x: a swept quantity with numeric values, a curve axis (V85)"
+notes = """\
+  a scan figure's quantity (a numeric curve axis) and number (`sigma`, `entries`, `integral`, \
+  `mean`, `bin:N`); `sigma` and `entries` need no object"""
 
 [figure.y]
 type = "str"
 doc  = "a scan figure's y: sigma, entries, or integral, mean, bin:N of its object (V85)"
+notes = """\
+  a scan figure's quantity (a numeric curve axis) and number (`sigma`, `entries`, `integral`, \
+  `mean`, `bin:N`); `sigma` and `entries` need no object"""
 
 [figure.pages]
 type  = "list"
 items = "str"
 doc   = "a sheet's pages: globs of page names (18x275/d02-x01-y01, */eta_algorithms), in this order (V89)"
+notes = """\
+  a sheet's (V89): the drawn pages whose names (`18x275/d02-x01-y01`, `*/eta_algorithms`) the \
+  globs match, in the globs' order, tiled `columns` wide into `plots/<backend>/sheets/<name>.pdf` \
+  and `.png`, each pad the page as it was drawn alone (pdflatex places the PDFs as vectors; PIL \
+  pastes the PNGs). For Paint's and mpl's pages. A sheet takes no page keys (its pages' figures \
+  set those); a glob naming no page fails the sheet"""
 
 [figure.columns]
 type = "int"
 min  = 1
 doc  = "a sheet's columns (default: up to 3)"
+notes = """\
+  a sheet's (V89): the drawn pages whose names (`18x275/d02-x01-y01`, `*/eta_algorithms`) the \
+  globs match, in the globs' order, tiled `columns` wide into `plots/<backend>/sheets/<name>.pdf` \
+  and `.png`, each pad the page as it was drawn alone (pdflatex places the PDFs as vectors; PIL \
+  pastes the PNGs). For Paint's and mpl's pages. A sheet takes no page keys (its pages' figures \
+  set those); a glob naming no page fails the sheet"""
 
 [figure.over]
 type  = "list"
 items = "str"
 doc   = "a merged figure's: the curve axes whose points it merges, by the combine folder's command (V82)"
+notes = """\
+  a merged figure's: curve axes of the configuration (swept, not `plot_points`, not combined), \
+  checked at plan time; it may not also `band` them"""
 
 [figure.configurations]
 type  = "list"
 items = "str"
 doc   = "a compare figure's configurations (default: the sweep_runs ones), each a curve per point (V83)"
+notes = """\
+  a compare figure's, two or more, in curve order; one at least of this file. \
+  `\"<Project>/<config>:<cfg>\"` (V88) names a configuration of another run TOML: its points (as \
+  its last run left them) are curves beside this run's, labelled `<its run> <its label>` by \
+  default and by its own quantities; its page axes must have this run's tags. The pages are this \
+  run's (`<run>/compare/<name>/`), drawn by this run's plot stage or `hep plot`"""
 
 [figure.labels]
 type  = "list"
 items = "str"
 doc   = "an overlay's legend label per object; a compare figure's per configuration"
+notes = """\
+  an overlay's: one legend label per object; a compare figure's: one per configuration (default: \
+  each configuration's `label`)"""
 
 [figure.x_label]
 type       = "str"
 default_ok = true
 doc        = "the x axis title (default: the .plot's)"
+notes = """\
+  the axis titles (LaTeX)"""
 
 [figure.y_label]
 type       = "str"
 default_ok = true
 doc        = "the y axis title (default: the .plot's)"
+notes = """\
+  the axis titles (LaTeX)"""
 
 [figure.style]
 type = "table"
 doc  = "a style layer for these pages"
+notes = """\
+  a style layer for these pages (04 §12)"""
 
 # ── [plot.data] ──────────────────────────────────────────────────────────────────────────────
 
 [data.file]
 type = "str"
 doc  = "a YODA under datasets/, or rivet:<Analysis>"
+notes = """\
+  `rivet:<Analysis>`: Rivet's own reference file (`build/Rivet/`, then `rivet-config --datadir`, \
+  `.yoda` or `.yoda.gz`); otherwise a path under `datasets/` (not in git)"""
 
 [data.legend]
 type    = "str"
 default = "Data"
 doc     = "the data's legend entry"
+notes = """\
+  the data's legend entry"""
 
 [data.map]
 type = "table"
 doc  = "object = reference path, explicitly"
+notes = """\
+  MC object name (`d01-x01-y01`) → reference path. **Explicit only**, never matched by name (L18). \
+  A file without a map, or a map without a file, is an error."""

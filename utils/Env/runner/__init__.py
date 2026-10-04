@@ -11,7 +11,7 @@ RANKS = {
     "tools": 2,
     "execute": 3, "status": 3, "record": 3, "results": 3,
     "watch": 4, "plot": 4, "post": 4,
-    "cli": 5, "house": 5, "migrate": 5,
+    "cli": 5, "house": 5, "migrate": 5, "docs": 5,
 }
 
 PLUGINS_MAY_IMPORT = {"errors", "paths", "quantities", "labels", "hepfiles"}

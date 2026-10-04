@@ -143,7 +143,7 @@ $(BUILD)/Herwig/HerwigDefaults.rpo: $(HERWIG)
 ALL += $(BUILD)/Herwig/HerwigDefaults.rpo
 endif
 
-.PHONY: all tests test test-slow clean configure list schema
+.PHONY: all tests test test-slow clean configure list schema docs
 all: $(ALL)
 tests: $(TESTS)
 test: all tests
@@ -157,6 +157,8 @@ list:
 	@printf '%s\n' $(ALL) $(TESTS)
 schema:                         # utils/Env/schema/run.schema.json from run.toml (V55)
 	cd utils/Env && python3 -m runner.schema
+docs:                           # the manual's generated blocks, from the schema, base.toml and the CLI (V91)
+	cd utils/Env && python3 -m runner.docs
 clean:
 	rm -rf $(BUILD)
 

@@ -132,7 +132,7 @@ def _json_type(kinds: str) -> list[str]:
 
 
 def _json_key(entry: dict) -> dict:
-    out: dict = {"description": entry.get("doc", "")}
+    out: dict = {"description": "\n\n".join(t for t in (entry.get("doc", ""), entry.get("notes", "")) if t)}
     types = _json_type(entry["type"])
     one = {"type": types if len(types) > 1 else types[0]}
     if "min" in entry:
