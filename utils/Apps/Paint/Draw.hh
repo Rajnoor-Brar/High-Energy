@@ -16,6 +16,7 @@
 #include "TGraphAsymmErrors.h"
 #include "TH1.h"
 #include "TH1D.h"
+#include "TH2.h"
 #include "TLatex.h"
 #include "TMarker.h"
 #include "TLine.h"
@@ -200,8 +201,10 @@ namespace Paint {
         return out;
     }
 
-    // Steps per run of finite bins, with their errors as bars at the centres, a band, or nothing.
-    inline void curve(const Series& s, const Pen& pen, const Look& look, Keep& keep, const std::string& id) {
+    // Steps per run of finite bins, with their errors as bars at the centres, a band, or nothing; or
+    // (markers, V86) a marker per bin at its centre with its error bar, in the curve's colour.
+    inline void curve(const Series& s, const Pen& pen, const Look& look, Keep& keep, const std::string& id,
+                      bool markers = false) {
         const int colourIndex = pen.colour;
         const bool band = !s.bandLo.empty();
         if (band) {                                     // V69: the members' envelope, shaded in the curve's colour
@@ -215,6 +218,13 @@ namespace Paint {
             }
             g->SetFillColorAlpha(colourIndex, 0.3), g->SetLineWidth(0), g->SetMarkerSize(0);
             if (n) g->Draw("2");
+        }
+        if (markers) {
+            auto* g = points(s, keep, false);
+            g->SetLineColor(colourIndex), g->SetLineWidth(pen.width);
+            g->SetMarkerStyle(look.s.marker), g->SetMarkerColor(colourIndex), g->SetMarkerSize(look.marker());
+            g->Draw(look.s.errors == "none" ? "P" : "PZ");
+            return;
         }
         for (TH1D* h : segments(s, keep, id)) {
             h->SetLineColor(colourIndex), h->SetLineWidth(pen.width), h->SetLineStyle(pen.line);
@@ -244,6 +254,7 @@ namespace Paint {
         int colour;
         bool data, drawn;
         int line = 1, width = 0;                      // the curve's pen (0: the style's width)
+        bool marker = false;                          // drawn as markers (V86): a marker beside it, as data's
     };
 
     // mkhtml's legend: no frame, the title as its header, and a "+" beside each entry — on the right
@@ -317,7 +328,7 @@ namespace Paint {
             if (e.drawn) {
                 line(s1, y, s2, y, e.colour, e.line, e.width);   // the curve's line; the bar stays solid
                 line(xc, y - 0.4 * dy, xc, y + 0.4 * dy, e.colour);
-                if (e.data) {
+                if (e.data || e.marker) {
                     auto* m = keep.hold(new TMarker(xc, y, s.marker));
                     m->SetNDC(), m->SetMarkerColor(e.colour), m->SetMarkerSize(look.marker()), m->Draw();
                 }
@@ -392,10 +403,10 @@ namespace Paint {
         }
         const std::vector<Pen> pen = pens(page.curves, look);
         for (size_t c = 0; c < curves.size(); ++c) {
-            curve(curves[c], pen[c], look, keep, "c" + std::to_string(c));
+            curve(curves[c], pen[c], look, keep, "c" + std::to_string(c), page.markers);
             const bool drawn = std::any_of(curves[c].y.begin(), curves[c].y.end(), [](double v) { return std::isfinite(v); });
             entries.push_back({drawn ? curves[c].label : curves[c].label + " (no entries)", pen[c].colour, false, drawn,
-                               pen[c].line, pen[c].width});
+                               pen[c].line, pen[c].width, page.markers});
         }
         std::vector<const Series*> drawn;
         if (data) drawn.push_back(&*data);
@@ -438,7 +449,7 @@ namespace Paint {
             rframe->GetYaxis()->SetNdivisions(st.divisions), rframe->GetYaxis()->SetDecimals(st.decimals);
             if (data) dataPoints(reference, look, keep, &reference);          // the data at 1, with their errors
             for (auto& [c, ratio] : ratios)
-                curve(ratio, pen[c], look, keep, "r" + std::to_string(c));
+                curve(ratio, pen[c], look, keep, "r" + std::to_string(c), page.markers);
             bottom->RedrawAxis();
         }
 
@@ -455,6 +466,60 @@ namespace Paint {
                           page.title, 21, st.pageTitle * look.px);
         }
 
+        const std::string dir = gSystem->GetDirName(page.output.c_str()).Data();
+        gSystem->mkdir(dir.c_str(), kTRUE);
+        for (const auto& format : page.formats) {
+            if (format != "pdf" && format != "png" && format != "svg" && format != "eps")
+                throw std::runtime_error("format must be pdf, png, svg or eps, not '" + format + "'");
+            canvas.SaveAs((page.output + "." + format).c_str());
+        }
+    }
+
+    // V87: a heat map, the page's one 2D object (App_yd2rt's TH2D) coloured by value, its scale on the
+    // right; the frame, titles and text sizes are the 1D pages' (base.toml), the right margin wider.
+    inline void heatmap(const Page& page) {
+        const Style& st = page.style;
+        gROOT->SetBatch(kTRUE);
+        gStyle->SetOptStat(0), gStyle->SetOptTitle(0), gStyle->SetFrameLineWidth(1);
+        gStyle->SetPalette(kBird), gStyle->SetNumberContours(255);
+        gStyle->SetPaperSize(static_cast<float>(st.width * 2.54), static_cast<float>(st.height * 2.54));
+        const Look look(st);
+        Keep keep;
+        std::unique_ptr<TFile> file(TFile::Open(page.curves[0].file.c_str(), "READ"));
+        if (!file || file->IsZombie()) throw std::runtime_error("cannot open " + page.curves[0].file);
+        auto* found = dynamic_cast<TH2*>(file->Get(page.curves[0].object.c_str()));
+        if (!found) throw std::runtime_error(page.curves[0].file + " has no 2D " + page.curves[0].object);
+        auto* h = static_cast<TH2*>(keep.hold(found->Clone("heatmap")));
+        h->SetDirectory(nullptr);
+        const int W = st.pixelsWide(), H = st.pixelsHigh();
+        TCanvas canvas("paint", page.name.c_str(), W, H);
+        canvas.SetCanvasSize(W, H);
+        const bool main = !page.title.empty();
+        const double topMargin = st.top + (main ? 1.6 * st.pageTitle * look.px : 0.0) / H;
+        const double right = st.right + 0.14;                   // the colour scale and its labels
+        canvas.SetMargin(st.left, right, st.bottom, topMargin);
+        canvas.SetLogx(page.logx), canvas.SetLogy(page.logy), canvas.SetLogz(page.logz);
+        canvas.SetTickx(st.allSides), canvas.SetTicky(st.allSides);
+        const Frame f{double(W), double(H), st.left, right, st.bottom, topMargin};
+        TAxis* ax = h->GetXaxis();
+        TAxis* ay = h->GetYaxis();
+        TAxis* az = h->GetZaxis();
+        for (TAxis* a : {ax, ay, az}) {
+            a->SetTitleFont(look.font), a->SetLabelFont(look.font);
+            a->SetTitleSize(look.title), a->SetLabelSize(look.labels);
+            a->CenterTitle(!st.atEnds);
+        }
+        ax->SetTickLength(look.tick / f.fh()), ay->SetTickLength(look.tick / f.fw());
+        ax->SetLabelOffset(st.labelOffset * look.px / f.h), ay->SetLabelOffset(st.labelOffset * look.px / f.w);
+        ax->SetTitleOffset(st.titleOffsetX), ay->SetTitleOffset(st.titleOffsetY), az->SetTitleOffset(st.titleOffsetY);
+        ax->SetTitle(page.xLabel.c_str()), ay->SetTitle(page.yLabel.c_str()), az->SetTitle(page.zLabel.c_str());
+        h->Draw("COLZ");
+        if (main) {
+            auto* l = keep.hold(new TLatex(st.left + 0.5 * (1 - st.left - right), 1 - topMargin + 0.25 * st.cornerTitle * look.px / H,
+                                           page.title.c_str()));
+            l->SetNDC(), l->SetTextFont(look.font), l->SetTextSize(st.pageTitle * look.px), l->SetTextAlign(21), l->Draw();
+        }
+        canvas.RedrawAxis();
         const std::string dir = gSystem->GetDirName(page.output.c_str()).Data();
         gSystem->mkdir(dir.c_str(), kTRUE);
         for (const auto& format : page.formats) {

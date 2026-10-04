@@ -377,7 +377,8 @@ def pages(run, configuration, plans) -> list[Page]:
         root = merge(yodas, res_dir / "scan" / f"{figure.name}.root", out_dir / "scan" / f"{figure.name}.sha256")
         table = {"x_label": figure.x, "y_label": SCAN_LABELS.get(figure.y, figure.y.replace(":", " ")), **figure.table}
         made += _pages(run, members, yodas, root, [replace(figure, kind="defined", objects=(f"/FIGURES/{figure.name}",),
-                                                           table=table)], page_groups, kept, out_dir, res_dir, implicit=False)
+                                                           table=table, type=figure.type or "Scatter2D")],
+                       page_groups, kept, out_dir, res_dir, implicit=False)
     return made
 
 
@@ -388,8 +389,9 @@ SCAN_LABELS = {"sigma": r"$\sigma$ [pb]", "entries": "entries", "integral": "int
 def _scanned(run, figure: Figure, complete: list, sources: dict, groups: list, where: Path) -> tuple[list, dict]:
     """A scan figure's members (V85): per value of the axes other than x, a stand-in plan named by their
     tags, its YODA one Scatter2D /FIGURES/<name>: a point per value of x, at that value, its y the number
-    the figure reads of the point (utils/Env/figures/derive.py), its x range halfway to its neighbours
-    (so every backend draws it as a bin). Remade only when a member's YODA or the figure changed."""
+    the figure reads of the point (utils/Env/figures/derive.py), its x range reaching halfway to its
+    nearer neighbour on both sides, so it is centred on its value and every backend can draw it as a
+    bin (a scan is drawn as markers, V86). Remade only when a member's YODA or the figure changed."""
     module = plugins.load(repo_root() / "utils" / "Env" / "figures" / "derive.py", "derive")
     quantity = run.quantities[figure.x]
     kept = [g for g in groups if figure.x not in g]
@@ -403,14 +405,16 @@ def _scanned(run, figure: Figure, complete: list, sources: dict, groups: list, w
         name = "_".join(tag_of(run.quantities[g[0]], i) for g, i in zip(kept, key)) or "scan"
         plans = sorted(plans, key=lambda p: float(quantity.values[p.values[figure.x]]))
         target, stamp = where / f"{name}.yoda", where / f"{name}.sha256"
-        digest = "\n".join(f"{p.point.name} {_sha(sources[p.point.name])}" for p in plans) + f"\n{figure.y} {glob}"
+        xs = [float(quantity.values[p.values[figure.x]]) for p in plans]
+        gaps = [b - a for a, b in zip(xs, xs[1:])]
+        halves = [min([g for g in (gaps[i - 1] if i else None, gaps[i] if i < len(gaps) else None) if g] or [1.0]) / 2
+                  for i in range(len(xs))]
+        digest = ("\n".join(f"{p.point.name} {_sha(sources[p.point.name])}" for p in plans)
+                  + f"\n{figure.y} {glob} {xs} {halves}")
         if not (target.exists() and stamp.exists() and stamp.read_text(encoding="utf-8") == digest):
-            xs = [float(quantity.values[p.values[figure.x]]) for p in plans]
-            edges = ([xs[0] - (xs[1] - xs[0]) / 2 if len(xs) > 1 else xs[0] - 0.5]
-                     + [(a + b) / 2 for a, b in zip(xs, xs[1:])]
-                     + [xs[-1] + (xs[-1] - xs[-2]) / 2 if len(xs) > 1 else xs[-1] + 0.5])
             points = []
-            for plan, x, lo, hi in zip(plans, xs, edges, edges[1:]):
+            for plan, x, half in zip(plans, xs, halves):
+                lo, hi = x - half, x + half
                 try:
                     value, error = module.scan_value(str(sources[plan.point.name]), figure.y, glob)
                 except ValueError as error:
@@ -529,9 +533,13 @@ def _pages(run, complete: list, yodas: dict, merged: Path, declared: list, page_
     settings = run.plot
     variants: dict[str, dict[str, list[str]]] = {}      # member → base path → its full paths
     raws = {plan.point.name: raws_of(yodas[plan.point.name]) for plan in complete}
+    two_d: set[str] = set()                                # V87: heat maps, a page per member
     for plan in complete:
         for full in objects_of(yodas[plan.point.name]):
             variants.setdefault(plan.point.name, {}).setdefault(base_of(full), []).append(full)
+        for full in hepfiles.objects_2d(yodas[plan.point.name]):
+            variants.setdefault(plan.point.name, {}).setdefault(base_of(full), []).append(full)
+            two_d.add(base_of(full))
     objects = list(dict.fromkeys(b for plan in complete for b in variants.get(plan.point.name, {})))
     every = list(objects)                                  # a figure may name any object, drawn alone or not
 
@@ -589,6 +597,16 @@ def _pages(run, complete: list, yodas: dict, merged: Path, declared: list, page_
     def place(key, stem):
         return "/".join(part for part in (key, folder, stem) if part)
 
+    for figure in declared:                                # what a figure draws is what its objects are
+        mine = [o for o in objects if claimed.get(o) is figure] if figure.kind == "defined" else []
+        flat = [o for o in mine if o not in two_d]
+        if figure.type == "HeatMap" and flat:
+            raise HepError(f"figure '{figure.key}' is a HeatMap, and {flat[0]} is a 1D object", where=f"{figure.where}.type",
+                           hint="a heat map draws a 2D object; leave type out to draw each as it is")
+        if figure.type in ("Hist1D", "Scatter2D") and set(mine) & two_d:
+            raise HepError(f"figure '{figure.key}' is a {figure.type}, and {sorted(set(mine) & two_d)[0]} is a 2D object",
+                           where=f"{figure.where}.type", hint='a 2D object is drawn as a heat map: type = "HeatMap", or leave it out')
+
     made = []
     for key, members in by_page.items():
         for path in objects:
@@ -596,6 +614,11 @@ def _pages(run, complete: list, yodas: dict, merged: Path, declared: list, page_
             rel = place(key, short)
             figure = claimed.get(path)
             override = override_of(figure.table if figure else None)
+            if path in two_d:                                  # V87: a page per member and variant
+                made += [_heatmap(run, plan, full, place(key, f"{short}/{plan.point.name}"), settings, override,
+                                  merged, out_dir, res_dir, run_style(run), key, curve_fill(plan))
+                         for plan in members for full in variants.get(plan.point.name, {}).get(path, [])]
+                continue
             drawn = data if chosen("use_data", True, True, (override, settings)) is not False else {}
             reference = drawn.get("map", {}).get(short) if drawn else None
             if reference and data_file is None:                # converted once, when a page draws it
@@ -609,6 +632,8 @@ def _pages(run, complete: list, yodas: dict, merged: Path, declared: list, page_
             envelope = f" ({', '.join(band)} envelope)" if band else ""
             page, override = page_settings(settings, (labels_from or {}).get(path, path), rel, res_dir / rel,
                                            reference is not None, fill=fill, child=override)
+            if figure is not None and figure.type == "Scatter2D":
+                page["markers"] = True                                       # V86
             several = {plan.point.name for plan, _ in curves if len(variants[plan.point.name][path]) > 1}
             layer = merge_style(style, override.get("style", {}))
             document = {"page": page, "style": layer, "curve": [
@@ -642,6 +667,9 @@ def _pages(run, complete: list, yodas: dict, merged: Path, declared: list, page_
             if not found:
                 raise HepError(f"figure '{figure.key}': '{glob}' matches no object of the points' YODAs",
                                where=f"{figure.where}.objects")
+            if found[0] in two_d:
+                raise HepError(f"figure '{figure.key}': {found[0]} is a 2D object, which a heat map draws alone",
+                               where=f"{figure.where}.objects", hint="an overlay draws 1D objects together")
             paths.append(found[0])
         labels = list(figure.labels) or [p.rsplit("/", 1)[-1] for p in paths]
         for key, members in by_page.items():
@@ -658,6 +686,8 @@ def _pages(run, complete: list, yodas: dict, merged: Path, declared: list, page_
             envelope = f" ({', '.join(band)} envelope)" if band else ""
             page, override = page_settings(settings, paths[0], rel, res_dir / rel, False, child=table,
                                            fill=page_fill([plan for plan, _ in curves] or members))
+            if figure.type == "Scatter2D":
+                page["markers"] = True                                       # V86
             layer = merge_style(style, override.get("style", {}))
             lines = {plan.point.name for plan, _, _ in folded}
             document = {"page": page, "style": layer, "curve": [
@@ -678,6 +708,25 @@ def _pages(run, complete: list, yodas: dict, merged: Path, declared: list, page_
                              overrides={k for k, v in override.items() if v != DEFAULT},
                              style=merge_style(base, layer), plots=res_dir.parent, overlay=name))
     return made
+
+
+def _heatmap(run, plan, full: str, rel: str, settings: dict, override: dict, merged: Path, out_dir: Path,
+             res_dir: Path, style: dict, cell: str, fill) -> Page:
+    """A heat map page (V87): one member's 2D object, its .plot labels (ZLabel, LogZ too), its figure's
+    and [plot]'s titles, coloured by Paint; no ratio, data, voiding or range."""
+    labels = labels_of(full)
+    page, override = page_settings(settings, full, rel, res_dir / rel, False, fill=fill, child=override)
+    page.update({"heatmap": True, "ratio": False, "z_label": canonical(fill(labels.get("ZLabel", ""))),
+                 "logz": bool(chosen("logz", labels.get("LogZ") == "1", labels.get("LogZ") == "1", (override, settings)))})
+    layer = merge_style(style, override.get("style", {}))
+    document = {"page": page, "style": layer, "curve": [{"file": str(merged), "object": f"{plan.point.name}/{root_name(full)}",
+                                                         "label": plan.point.name}]}
+    config = out_dir / f"{rel}.toml"
+    config.parent.mkdir(parents=True, exist_ok=True)
+    config.write_text(tomli_w.dumps(for_root(document)), encoding="utf-8")
+    return Page(rel, config, res_dir / rel, cell=cell, object=base_of(full), document=document, sources=[],
+                variants=[full], overrides={k for k, v in override.items() if v != DEFAULT},
+                style=merge_style(base_style(), layer), plots=res_dir.parent)
 
 
 def texts_of(run, plan, cell: str) -> dict[str, str]:
@@ -1040,6 +1089,10 @@ def _draw(run, paint: Path, todo: list[Page], title: str, say) -> int:
             write_index(todo[0].plots / "root", title, drawn)
     if others and failed:
         todo = [p for p in todo if p.ranges]                 # a page Paint could not read has no ranges
+    maps = [p for p in todo if p.document["page"].get("heatmap")]
+    if others and maps:                                      # V87: Paint's alone, for now
+        say(f"plot: {len(maps)} heat map page(s) drawn by Paint only ({', '.join(others)} draw 1D pages)")
+        todo = [p for p in todo if not p.document["page"].get("heatmap")]
     for name in others:
         cells: dict[str, list[Page]] = {}                    # a page set: one folder of pages (a cell's, or a merged figure's in it)
         for page in todo:

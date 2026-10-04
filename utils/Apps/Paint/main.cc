@@ -62,6 +62,25 @@ namespace {
         } catch (const std::exception& error) {
             return {Kit::Config, error.what()};
         }
+        if (page.heatmap) {                                   // V87: one 2D object; no ranges for another backend
+            if (dump) {
+                std::printf("{\"heatmap\": true}\n");
+                return {};
+            }
+            if (ranges) {
+                std::ofstream out(pagePath + ".ranges.json");
+                out << "{\"heatmap\": true}\n";
+                if (!out) return {Kit::Output, "cannot write " + pagePath + ".ranges.json"};
+            }
+            if (!drawIt) return {};
+            try {
+                Paint::heatmap(page);
+            } catch (const std::exception& error) {
+                return {Kit::Output, error.what()};
+            }
+            status.summary("\"page\": " + Status::quote(page.name) + ", \"formats\": " + std::to_string(page.formats.size()));
+            return {};
+        }
         std::vector<Paint::Series> curves;
         std::vector<std::vector<Paint::Series>> members;      // V69: each curve's band members
         Paint::Series data;

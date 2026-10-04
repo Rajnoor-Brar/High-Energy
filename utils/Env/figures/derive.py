@@ -7,7 +7,9 @@ point's file:
 
 * ratio, difference, sum: of the two objects, each an estimate (a histogram is made one, as finalize
   would), on the same binning; a ratio's errors are YODA's (uncorrelated);
-* projection-x, projection-y: a 2D histogram's marginal on that axis.
+* projection-x, projection-y: a 2D object summed over the other axis (V87: a histogram's sums of
+  weights, an estimate's values × the other axis's widths), a point per bin of that axis, as a
+  Scatter2D whose x ranges are the bins.
 
 `scan_value(source, y, glob)` (V85): one number of a point's YODA, (value, error), for a scan figure:
 sigma (/_XSEC), entries (the object's raw twin's, else /RAW/_EVTCOUNT's), integral (Σ value × width over
@@ -50,7 +52,7 @@ def _options(path: str) -> str:
 
 def _found(objects: dict, glob: str) -> dict[str, object]:
     """The object a glob names, per variant (options → object); one base object, else an error."""
-    named = [p for p in objects if not p.startswith(("/RAW/", "/TMP/", "/_")) and "[" not in p
+    named = [p for p in objects if not p.startswith(("/RAW/", "/TMP/", "/_", "/FIGURES")) and "[" not in p
              and (fnmatch.fnmatch(_short(p), glob) or fnmatch.fnmatch(_base(p), glob) or fnmatch.fnmatch(p, glob))]
     bases = sorted({_base(p) for p in named})
     if len(bases) != 1:
@@ -63,12 +65,26 @@ def _estimate(ao):
     return ao.mkEstimate() if hasattr(ao, "mkEstimate") else ao
 
 
+def _projection(ao, op: str, path: str) -> str:
+    """A 2D object summed over the other axis, as Scatter2D text (YODA's Python has no marginal here)."""
+    if not hasattr(ao, "yEdges"):
+        raise ValueError(f"{op} projects a 2D object, and {ao.path()} is a {type(ao).__name__}")
+    along_x = op.endswith("x")
+    sums: dict[tuple, list] = {}
+    for b in ao.bins():
+        lo, hi = (b.xMin(), b.xMax()) if along_x else (b.yMin(), b.yMax())
+        if hasattr(b, "sumW"):                                   # a histogram: its weights
+            value, square = b.sumW(), b.sumW2()
+        else:                                                    # an estimate: a density over the other axis
+            width = (b.yMax() - b.yMin()) if along_x else (b.xMax() - b.xMin())
+            value, square = b.val() * width, (b.totalErrAvg() * width) ** 2
+        entry = sums.setdefault((lo, hi), [0.0, 0.0])
+        entry[0] += value
+        entry[1] += square
+    return scatter(path, [((lo + hi) / 2, (hi - lo) / 2, (hi - lo) / 2, v, s ** 0.5) for (lo, hi), (v, s) in sorted(sums.items())])
+
+
 def _derived(yoda, op: str, found: list[dict], options: str):
-    if op.startswith("projection-"):
-        ao = found[0][options]
-        if not hasattr(ao, "mkMarginalHisto"):
-            raise ValueError(f"{op} projects a 2D histogram, and {ao.path()} is a {type(ao).__name__}")
-        return ao.mkMarginalHisto(0 if op.endswith("x") else 1)
     if options not in found[1]:
         raise ValueError(f"{found[1][next(iter(found[1]))].path()} has no variant '{options}' to pair with")
     a, b = _estimate(found[0][options]), _estimate(found[1][options])
@@ -82,21 +98,26 @@ def derive(source: str, specs: list[tuple[str, str, list[str]]]) -> str:
     """The derived objects of one point's YODA, as YODA text."""
     yoda = _yoda()
     objects = yoda.read(source)
-    made = []
+    made, texts = [], []
     for name, op, globs in specs:
         if op not in OPS:
             raise ValueError(f"op = '{op}' is not one of {', '.join(OPS)}")
         found = [_found(objects, glob) for glob in globs]
         for options in found[0]:
+            if op.startswith("projection-"):
+                texts.append(_projection(found[0][options], op, f"/FIGURES{':' + options if options else ''}/{name}"))
+                continue
             ao = _derived(yoda, op, found, options)
             ao.setPath(f"/FIGURES{':' + options if options else ''}/{name}")
             made.append(ao)
+    if not made:
+        return "".join(texts)
     handle, path = tempfile.mkstemp(suffix=".yoda")
     os.close(handle)
     try:
         yoda.write(made, path)
         with open(path, encoding="utf-8") as text:
-            return text.read()
+            return text.read() + "".join(texts)
     finally:
         os.unlink(path)
 
