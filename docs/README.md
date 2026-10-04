@@ -34,7 +34,7 @@ logs) are in git: `git show rework/v1-final:docs/…` and `git log --all -- docs
 found in them, not yet built, are in [bots/intent.md](../bots/intent.md).
 
 Audits of the framework, and their plans: [audit_1/](audit_1/README.md) (`utils/`, V52–V89) and
-[audit_2/01_Health.md](audit_2/01_Health.md) (a health check after the figures).
+[audit_2/](audit_2/01_Health.md) (a health check after the figures; the manual's rebuild, [02_Manual](audit_2/02_Manual.md)).
 
 `tests/runner/test_docs.py` holds this manual to the code: its links resolve, its TOML parses, its
 complete examples load, and every key the runner accepts is documented.
