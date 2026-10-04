@@ -15,6 +15,7 @@ from __future__ import annotations
 import functools
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -194,6 +195,48 @@ def sha256_file(path: Path) -> str:
                 digest.update(block)
         _HASHES[key] = digest.hexdigest()
     return _HASHES[key]
+
+
+def combiner() -> tuple[str, tuple[str, ...]]:
+    """The tool folder that merges points (V60: [outputs] combines = ["yoda"], the merge folder), and the
+    product suffixes it merges."""
+    for name, folder in folders().items():
+        if folder.get("outputs", "combines"):
+            return name, tuple("." + s for s in folder.get("outputs", "combines"))
+    raise HepError("no tool folder says [outputs] combines: nothing can merge the points")
+
+
+def merge_files(sources: list[Path], target: Path) -> Path:
+    """`sources` merged into `target` by the combine folder's own command, its options at their defaults,
+    outside any point (V82: a merged figure); written beside the target and moved into place."""
+    name, _ = combiner()
+    folder = folders()[name]
+    partial = target.with_name(target.stem + ".partial" + target.suffix)
+    context: dict[str, Any] = {"repo": str(repo_root()), "inputs": [str(s) for s in sources], "output": str(target),
+                               "partial:": {"output": str(partial)}}
+    context["exe"] = str(executable_of(Tool(tag=name, tool=name), folder, ""))
+    for key, rule in folder.spec.get("options", {}).items():
+        if rule.get("kind") == "flag":
+            context[key] = [rule["flag"]] if rule.get("default", False) else []
+        else:
+            default = rule.get("default", [] if rule.get("kind") == "list" else "")
+            context[key] = [str(v) for v in default] if isinstance(default, list) else str(default)
+    argv: list[str] = []
+    for template in folder.get("command", "argv", ["{exe}"]):
+        piece = expand(template, context, f"{name}/tool.toml [command].argv")
+        if isinstance(piece, list):
+            argv.extend(piece)
+        elif piece != "":
+            argv.append(piece)
+    env = {**os.environ, **{k: expand(v, context, f"{name}/tool.toml [command].env")
+                            for k, v in folder.get("command", "env", {}).items()}}
+    target.parent.mkdir(parents=True, exist_ok=True)
+    done = subprocess.run(argv, capture_output=True, text=True, env=env)
+    if done.returncode != 0 or not partial.exists():
+        raise HepError(f"merging {len(sources)} files failed: {(done.stderr or done.stdout).strip()[-300:]}",
+                       where=str(target), hint=" ".join(argv)[:300])
+    partial.replace(target)
+    return target
 
 
 def executable_of(tool, folder: Folder, project: str) -> Path:
