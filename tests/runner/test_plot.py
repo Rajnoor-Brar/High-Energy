@@ -353,6 +353,11 @@ def test_a_compare_figure_pairs_configurations_of_one_shape(scratch):
     ({"class": "derived", "op": "ratio", "objects": ["d01-*"]}, 'op = "ratio" takes 2 objects, not 1'),
     ({"class": "derived", "op": "projection-x", "objects": ["a", "b"]}, 'takes 1 object, not 2'),
     ({"class": "derived", "op": "quotient", "objects": ["a", "b"]}, "op must be one of ratio"),
+    ({"class": "scan", "x": "pdf"}, "a scan figure needs x, and y one of"),
+    ({"class": "scan", "x": "pdf", "y": "median", "objects": ["d01-*"]}, "not 'median'"),
+    ({"class": "scan", "x": "pdf", "y": "bin:2"}, "a figure needs objects"),
+    ({"class": "scan", "x": "pdf", "y": "sigma", "objects": ["a", "b"]}, 'y = "sigma" reads one object'),
+    ({"objects": ["d01-*"], "x": "pdf"}, "x and y are a scan figure's"),
     ({"class": "compare", "objects": ["d01-*"], "configurations": ["a", "b"], "labels": ["x"]}, "one label per configuration"),
 ])
 def test_a_figure_is_checked_when_the_file_is_read(scratch, figure, message):

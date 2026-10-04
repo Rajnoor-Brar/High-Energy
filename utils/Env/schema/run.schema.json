@@ -937,14 +937,15 @@
         ]
        },
        "class": {
-        "description": "how its pages are built: defined (an analysis object's own), overlay (several objects of each point), merged (the objects' pages with the points merged over `over`), compare (the objects' pages across configurations), derived (a new object from the objects, per point)",
+        "description": "how its pages are built: defined (an analysis object's own), overlay (several objects of each point), merged (the objects' pages with the points merged over `over`), compare (the objects' pages across configurations), derived (a new object from the objects, per point), scan (one number per point against a swept quantity)",
         "type": "string",
         "enum": [
          "defined",
          "overlay",
          "merged",
          "compare",
-         "derived"
+         "derived",
+         "scan"
         ],
         "default": "defined"
        },
@@ -976,6 +977,14 @@
          "projection-x",
          "projection-y"
         ]
+       },
+       "x": {
+        "description": "a scan figure's x: a swept quantity with numeric values, a curve axis (V85)",
+        "type": "string"
+       },
+       "y": {
+        "description": "a scan figure's y: sigma, entries, or integral, mean, bin:N of its object (V85)",
+        "type": "string"
        },
        "over": {
         "description": "a merged figure's: the curve axes whose points it merges, by the combine folder's command (V82)",
@@ -1025,10 +1034,7 @@
         "type": "object"
        }
       },
-      "additionalProperties": false,
-      "required": [
-       "objects"
-      ]
+      "additionalProperties": false
      }
     }
    },

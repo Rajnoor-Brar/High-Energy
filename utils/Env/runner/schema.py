@@ -26,7 +26,7 @@ NAMES = {"int": "an integer", "float": "a number", "str": "a string", "bool": "t
 #: The tables of run.toml that describe keys (the rest, [sections], describe the file).
 TABLES = ("master", "run", "configuration", "prelim", "quantity", "tool", "plot", "figure", "data")
 #: A figure's own keys: the rest are what it sets for its pages.
-FIGURE_OWN = ("class", "type", "name", "objects", "labels", "over", "configurations", "op")
+FIGURE_OWN = ("class", "type", "name", "objects", "labels", "over", "configurations", "op", "x", "y")
 
 
 def path() -> Path:
@@ -160,7 +160,6 @@ def json_schema() -> dict:
     run = _object("run")
     run["additionalProperties"] = configuration                      # [run.<cfg>]
     figure = _object("figure")
-    figure["required"] = ["objects"]
     plot = _object("plot")
     plot["properties"]["figures"] = {"type": "object", "additionalProperties": figure}
     plot["properties"]["data"] = _object("data")

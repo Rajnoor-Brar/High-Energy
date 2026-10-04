@@ -86,7 +86,7 @@ class Page:
 class Figure:
     """A recipe for pages (V80): [plot.figures.<key>]."""
     key: str
-    kind: str                # its class: defined, overlay, merged, compare, derived
+    kind: str                # its class: defined, overlay, merged, compare, derived, scan
     type: str                # what is drawn; "" from the objects
     name: str                # its pages' file stem (an overlay's; a defined figure's pages are the objects')
     objects: tuple           # globs
@@ -96,6 +96,8 @@ class Figure:
     over: tuple = ()         # a merged figure's: the axes it merges (V82)
     configurations: tuple = ()   # a compare figure's (V83); () under sweep_runs: its configurations
     op: str = ""             # a derived figure's (V84)
+    x: str = ""              # a scan figure's quantity … (V85)
+    y: str = ""              # … and the number it reads of each point
 
 
 def figures(run) -> list[Figure]:
@@ -104,9 +106,10 @@ def figures(run) -> list[Figure]:
     out = []
     for key, (table, written) in figure_tables(run.plot or {}).items():
         out.append(Figure(key, table.get("class", "defined"), table.get("type", ""), table.get("name", key),
-                          tuple(table["objects"]), tuple(table.get("labels", ())),
+                          tuple(table.get("objects", ())), tuple(table.get("labels", ())),
                           {k: v for k, v in table.items() if k not in schema.FIGURE_OWN}, f"{run.path}: {written}",
-                          tuple(table.get("over", ())), tuple(table.get("configurations", ())), table.get("op", "")))
+                          tuple(table.get("over", ())), tuple(table.get("configurations", ())), table.get("op", ""),
+                          table.get("x", ""), table.get("y", "")))
     return out
 
 
@@ -368,7 +371,58 @@ def pages(run, configuration, plans) -> list[Page]:
         root = merge(yodas, res_dir / figure.name / f"{configuration.label}.root", out_dir / "merged" / f"{figure.name}.sha256")
         made += _pages(run, members, yodas, root, [replace(figure, kind="defined")], page_groups, kept,
                        out_dir, res_dir, implicit=False, folder=figure.name)
+    for figure in (f for f in declared if f.kind == "scan"):          # V85: a number per point against a quantity
+        members, yodas = _scanned(run, figure, complete, sources, page_groups + curve_groups, out_dir / "scan" / figure.name)
+        kept = [g for g in curve_groups if figure.x not in g]
+        root = merge(yodas, res_dir / "scan" / f"{figure.name}.root", out_dir / "scan" / f"{figure.name}.sha256")
+        table = {"x_label": figure.x, "y_label": SCAN_LABELS.get(figure.y, figure.y.replace(":", " ")), **figure.table}
+        made += _pages(run, members, yodas, root, [replace(figure, kind="defined", objects=(f"/FIGURES/{figure.name}",),
+                                                           table=table)], page_groups, kept, out_dir, res_dir, implicit=False)
     return made
+
+
+#: A scan figure's y axis title when it sets none (V85).
+SCAN_LABELS = {"sigma": r"$\sigma$ [pb]", "entries": "entries", "integral": "integral", "mean": "mean"}
+
+
+def _scanned(run, figure: Figure, complete: list, sources: dict, groups: list, where: Path) -> tuple[list, dict]:
+    """A scan figure's members (V85): per value of the axes other than x, a stand-in plan named by their
+    tags, its YODA one Scatter2D /FIGURES/<name>: a point per value of x, at that value, its y the number
+    the figure reads of the point (utils/Env/figures/derive.py), its x range halfway to its neighbours
+    (so every backend draws it as a bin). Remade only when a member's YODA or the figure changed."""
+    module = plugins.load(repo_root() / "utils" / "Env" / "figures" / "derive.py", "derive")
+    quantity = run.quantities[figure.x]
+    kept = [g for g in groups if figure.x not in g]
+    by: dict[tuple, list] = {}
+    for plan in complete:
+        by.setdefault(tuple(plan.point.choice[g[0]] for g in kept), []).append(plan)
+    where.mkdir(parents=True, exist_ok=True)
+    glob = figure.objects[0] if figure.objects else ""
+    members, yodas = [], {}
+    for key, plans in by.items():
+        name = "_".join(tag_of(run.quantities[g[0]], i) for g, i in zip(kept, key)) or "scan"
+        plans = sorted(plans, key=lambda p: float(quantity.values[p.values[figure.x]]))
+        target, stamp = where / f"{name}.yoda", where / f"{name}.sha256"
+        digest = "\n".join(f"{p.point.name} {_sha(sources[p.point.name])}" for p in plans) + f"\n{figure.y} {glob}"
+        if not (target.exists() and stamp.exists() and stamp.read_text(encoding="utf-8") == digest):
+            xs = [float(quantity.values[p.values[figure.x]]) for p in plans]
+            edges = ([xs[0] - (xs[1] - xs[0]) / 2 if len(xs) > 1 else xs[0] - 0.5]
+                     + [(a + b) / 2 for a, b in zip(xs, xs[1:])]
+                     + [xs[-1] + (xs[-1] - xs[-2]) / 2 if len(xs) > 1 else xs[-1] + 0.5])
+            points = []
+            for plan, x, lo, hi in zip(plans, xs, edges, edges[1:]):
+                try:
+                    value, error = module.scan_value(str(sources[plan.point.name]), figure.y, glob)
+                except ValueError as error:
+                    raise HepError(f"figure '{figure.key}' at {plan.point.name}: {error}", where=figure.where) from None
+                points.append((x, x - lo, hi - x, value, error))
+            target.write_text(module.scatter(f"/FIGURES/{figure.name}", points), encoding="utf-8")
+            stamp.write_text(digest, encoding="utf-8")
+        first = plans[0]
+        members.append(replace(first, point=replace(first.point, name=name),
+                               values={q: i for q, i in first.values.items() if q != figure.x}))
+        yodas[name] = target
+    return members, yodas
 
 
 #: A compare figure's curve axis (V83): the configuration, in its members' choice; not a quantity name.
@@ -665,6 +719,16 @@ def check_figures(run, configuration) -> None:
                            hint="a merged axis is one curve already: band another, or merge less")
     for figure in (f for f in figures(run) if f.kind == "compare"):
         compared(run, figure)
+    for figure in (f for f in figures(run) if f.kind == "scan"):                    # V85
+        at = f"{run.path}: {figure.where.split(': ', 1)[1]}.x"
+        if not any(figure.x in g for g in curve_groups):
+            raise HepError(f"a scan figure's x names {figure.x}, which is not a curve axis of {configuration.key}",
+                           where=at, hint=hint)
+        if any(isinstance(v, bool) or not isinstance(v, (int, float)) for v in run.quantities[figure.x].values):
+            raise HepError(f"a scan figure's x, {figure.x}, has values that are not numbers", where=at,
+                           hint="its values are the x axis: a quantity of numbers (a scan of named values is not drawn yet)")
+        if figure.x in (figure.table.get("band") or []):
+            raise HepError(f"a scan figure's x, {figure.x}, is its axis: it cannot be banded", where=f"{at.removesuffix('.x')}.band")
 
 
 def compared(run, figure: Figure) -> list:

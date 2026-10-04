@@ -189,6 +189,33 @@ def test_a_derived_figure_is_an_object_of_every_point(stage):
         plot.pages(run, configuration, plans)
 
 
+def test_a_scan_figure_draws_one_number_per_point(scratch):
+    """V85: x a numeric curve axis, y the cross section of each point, a Scatter2D per page cell (here
+    per PDF), its points at the x values with ranges halfway to their neighbours; refused for a quantity
+    of names, or a page axis."""
+    data = raw(run__name="plotscan", run__one__sweeps=["lepton", "pdf"], run__one__plot_points=["pdf"],
+               quantities__lepton={"key": {"pythia": "Beams:idB"}, "values": [11, -11, 22], "tags": ["em", "ep", "g"]},
+               plot={"formats": ["png"], "figures": {"xs": {"class": "scan", "x": "lepton", "y": "sigma", "logy": False},
+                                                     "b2": {"class": "scan", "x": "lepton", "y": "bin:2",
+                                                            "objects": ["d01-x01-y01"], "y_label": "second bin"}}})
+    run = parse(data, scratch)
+    configuration = run.configuration(None)
+    plans = completed(run, configuration)
+    by = {p.name: p for p in plot.pages(run, configuration, plans)}
+    page = by[[n for n in by if n.endswith("/xs")][0]].document
+    assert (page["page"]["x_label"], page["page"]["y_label"]) == ("lepton", r"$\sigma$ [pb]") and len(page["curve"]) == 1
+    scans = sorted((plans[0].out.parent / "plots" / "scan" / "xs").glob("*.yoda"))
+    assert len(scans) == 2                                                          # a curve per page cell (PDF)
+    import yoda
+    points = [(p.x(), p.xErrs(), p.y()) for p in yoda.read(str(scans[0]))["/FIGURES/xs"].points()]
+    assert [(x, tuple(e)) for x, e, _ in points] == [(-11.0, (11.0, 11.0)), (11.0, (11.0, 5.5)), (22.0, (5.5, 5.5))]
+    assert by[[n for n in by if n.endswith("/b2")][0]].document["page"]["y_label"] == "second bin"
+    assert plot.draw(run, configuration, plans, lambda line: None) == 0
+    run.plot["figures"]["xs"]["x"] = "pdf"
+    with pytest.raises(plot.HepError, match="not a curve axis"):
+        plot.check_figures(run, configuration)
+
+
 def test_a_compare_figure_draws_configurations_together(stage):
     """V83: the objects' pages across configurations, curves labelled by the configuration first, drawn
     by the plot stage of whichever configuration completes it, into <run>/compare/<name>/."""

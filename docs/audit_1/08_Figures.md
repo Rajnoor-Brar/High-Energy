@@ -139,6 +139,6 @@ configurations = ["default01", "default0", "default1", "default2", "default3", "
 |---|---|---|
 | F0 | S1 S2 | S1 (V80: `[plot.figures]`, defined and overlay, every page key per figure), S2 (V81: the old tables refused, `hep migrate` rewrites them) done: F0 complete |
 | F1 | S1 S2 | S1 (V82: `merged`), S2 (V83: `compare`) done: F1 complete |
-| F2 | S1 S2 | S1 (V84: `derived`) done |
+| F2 | S1 S2 | S1 (V84: `derived`), S2 (V85: `scan`, numeric x; named x waits for a categorical axis) done: F2 complete |
 | F3 | S1 S2 | |
 | F4 | note | |
