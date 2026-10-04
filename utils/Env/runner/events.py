@@ -1,6 +1,6 @@
 """The event stream: what a run says while it runs, and who hears it (rank 1).
 
-docs/02_Architecture.md §10, audit 1 B3 (V72). The executor, the stages and the CLI emit **events** onto
+docs/06_Internals.md §10, audit 1 B3 (V72). The executor, the stages and the CLI emit **events** onto
 one `Bus`; each is a dict with the stream's version `v`, the point and tool it is about (`""` for the run),
 the time `t`, and its kind `k`:
 

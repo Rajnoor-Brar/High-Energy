@@ -1,6 +1,6 @@
 """Status from running tools: the standard protocol and the stdout filter rules (rank 3).
 
-docs/05_Tools_Reference.md §19 and docs/02_Architecture.md §10.
+docs/06_Internals.md §22 and docs/06_Internals.md §10.
 
 * A tool with status = "standard" writes JSON lines to $HEP_STATUS_FD (utils/Status.hh); a tool's
   output is matched against its filters.toml rules (progress, phase, warn, error, ignore). A rule never

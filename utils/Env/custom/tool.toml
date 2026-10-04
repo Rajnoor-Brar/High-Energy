@@ -1,4 +1,4 @@
-# utils/Env/custom/tool.toml — any executable (docs/05_Tools_Reference.md §7). Its table gives executable and
+# utils/Env/custom/tool.toml — any executable (docs/05_Commands_and_Tools.md §9). Its table gives executable and
 # arguments; its [tools.<tag>.config], consumed quantities and standard-configuration requests are
 # written to config/<tag>.toml and passed as the first argument.
 [tool]

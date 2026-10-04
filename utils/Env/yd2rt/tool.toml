@@ -1,4 +1,4 @@
-# utils/Env/yd2rt/tool.toml — YODA → ROOT: build/App_yd2rt.exe (docs/05_Tools_Reference.md §16).
+# utils/Env/yd2rt/tool.toml — YODA → ROOT: build/App_yd2rt.exe (docs/05_Commands_and_Tools.md §17).
 # The ROOT file is a product (results/), non-temporary, as the brief asks (§Plotting).
 [tool]
 category = "visualisation"

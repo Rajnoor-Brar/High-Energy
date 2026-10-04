@@ -1,5 +1,5 @@
 """utils/Env/sherpa/render.py — Sherpa's point card: the base YAML deep-merged with the point's
-values, written whole (docs/06_Developer_Guide.md §4, L12).
+values, written whole (docs/06_Internals.md §16, L12).
 
 Sherpa's card is a tree, so "base plus overrides" is a merge, not v1's append-and-last-wins. A key
 names a path into it, `EPA:Q2Max`, and may index a list, `PDF_SET[0]` (Sherpa's lists are per

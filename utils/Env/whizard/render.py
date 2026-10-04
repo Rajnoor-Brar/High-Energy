@@ -1,4 +1,4 @@
-"""utils/Env/whizard/render.py — Whizard's SINDARIN point card (docs/06_Developer_Guide.md §4, L13).
+"""utils/Env/whizard/render.py — Whizard's SINDARIN point card (docs/06_Internals.md §16, L13).
 
 SINDARIN is a script: an assignment takes effect when it runs, and the base card's `integrate` and
 `simulate` read what is set at that moment. So the point card comes FIRST and includes the base

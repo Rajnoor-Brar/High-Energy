@@ -4,7 +4,7 @@
 //     InprocJets.exe CONFIG.toml --output=photo.yoda
 //
 // The chain App_Pythia → FIFO → rivet as one program, with no HepMC text between the two
-// (docs/05_Tools_Reference.md §18). It asks for two standard configurations (V21, 04 §9.4), so the
+// (docs/06_Internals.md §21). It asks for two standard configurations (V21, 04 §9.4), so the
 // runner still owns the sweeps, seeds and cards, and this program only runs them:
 //
 //     [tools.jets]
@@ -49,7 +49,7 @@ int main(int argc, char** argv) {
         job.fail(Module::Internal, run.error);
     }
     if (const std::string error = rivet.finish(Inproc::lastSigma(stamper), job.output()); !error.empty())
-        job.fail(Module::Output, error);                            // the YODA could not be written (02 §11)
+        job.fail(Module::Output, error);                            // the YODA could not be written (06 §11)
 
     job.setCrossSection(run.sigma.pb, run.sigma.errPb, "generator");   // the report's σ: the run's own
     job.status().xsec(run.sigma.pb, run.sigma.errPb, true);

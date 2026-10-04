@@ -14,7 +14,7 @@ A custom tool is any program; this module gives one written in Python what the a
 
 * `Exit`: the one exit-code table (0 ok, 1 config, 2 usage, 3 init, 4 input, 5 output, 6 stopped,
   70 internal), Kit::Exit's.
-* `Status`: the standard protocol (docs/05_Tools_Reference.md §19): phase, progress (at most 4 a second
+* `Status`: the standard protocol (docs/06_Internals.md §22): phase, progress (at most 4 a second
   unless forced), xsec, log, summary, and a heartbeat every half second, so the runner's stall check
   sees a quiet tool alive. Writes never block: a line that does not fit the pipe is dropped and counted.
 * `stopping()`: SIGINT or SIGTERM was received (after `Status()` installs the handlers): finish what

@@ -1,6 +1,6 @@
 # utils/Env/stack.toml — the software stack, in one place (audit 1 B7, V78).
 #
-# Each entry is one library or program of the stack (~/HEP, docs/06_Developer_Guide.md §2.3):
+# Each entry is one library or program of the stack (~/HEP, docs/06_Internals.md §15.3):
 #   flags    the command that prints its compile and link flags: build/flags.mk's FLAGS_<name>, which a
 #            source asks for by `// requires: <name>` (utils/Env/flags.sh reads this file)
 #   dir      a library with no *-config: its install directory (shell text, expanded) …

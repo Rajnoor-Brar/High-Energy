@@ -1,4 +1,4 @@
-"""The runner's import rank (docs/02_Architecture.md §3), enforced.
+"""The runner's import rank (docs/06_Internals.md §2), enforced.
 
 A module may import only from its own rank or a lower one, and the import graph has no cycles.
 A module missing from RANKS fails, so a new module has to be given its place. Tool plugins

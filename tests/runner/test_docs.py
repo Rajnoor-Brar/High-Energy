@@ -1,4 +1,4 @@
-"""The manual, held to the code (docs/06_Developer_Guide.md §8).
+"""The manual, held to the code (docs/06_Internals.md §25).
 
 * every relative link in docs/ resolves, anchors included;
 * every TOML block parses, and every complete run TOML example loads through the runner's parser;
@@ -138,9 +138,9 @@ def test_every_tool_folder_and_its_options_are_documented():
 
 # ── what the code cites ─────────────────────────────────────────────────────────────────────────
 
-CODE = [p for top in ("utils", "modules", "tests", "configs") for p in (REPO / top).rglob("*")
+CODE = [p for top in ("utils", "modules", "tests") for p in (REPO / top).rglob("*")   # not configs/: the user's
         if p.is_file() and p.suffix in (".py", ".hh", ".cc", ".toml", ".sh", ".in", ".cmnd", ".yaml", ".sin", ".mg5")
-        and "reference/legacy_run" not in str(p) and "/_" not in str(p.relative_to(REPO))]
+        and "reference/legacy_run" not in str(p) and "/_" not in str(p.relative_to(REPO))]   # (V52, V92)
 CODE += [REPO / "Makefile", REPO / "utils" / "Env" / "hep", REPO / "utils" / "Env" / "run"]
 
 
@@ -193,9 +193,9 @@ def test_every_cited_id_is_in_the_record():
 
 
 def test_the_rank_table_in_02_is_the_runners():
-    """02 §3.1's table of modules and ranks is runner/__init__.py's RANKS, row for row."""
+    """06 §2.1's table of modules and ranks is runner/__init__.py's RANKS, row for row."""
     from runner import RANKS
-    section = text(NUMBERED["02"]).split("### 3.1 The runner", 1)[1].split("\n### ", 1)[0]
+    section = text(NUMBERED["06"]).split("### 2.1 The runner", 1)[1].split("\n### ", 1)[0]
     rows = {m: int(r) for r, m in re.findall(r"^\| (\d) \| `(\w+)\.py` \|", section, re.M)}
     assert rows == RANKS
 

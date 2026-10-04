@@ -1,4 +1,4 @@
-# generators.toml — Pythia, Herwig and Sherpa through one chain (rework v2 schema, docs/03_User_Guide.md §4.12).
+# generators.toml — Pythia, Herwig and Sherpa through one chain (rework v2 schema, docs/02_User_Guide.md §5.3).
 #
 #   hep run Comparison/generators          pp → QCD 2→2 at 13 TeV: three points, four pages
 #

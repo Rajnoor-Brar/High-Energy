@@ -1,5 +1,5 @@
 #!/bin/bash
-# utils/Env/hep_env.sh — the HEP shell environment (rework v2; docs/06_Developer_Guide.md §1).
+# utils/Env/hep_env.sh — the HEP shell environment (rework v2; docs/06_Internals.md §1).
 #
 # Sourced by the stub ~/HEP/setup.sh (alias `load_hep`), which sets HEP, HEP_INSTALL and HEKIT_ROOT.
 # It puts the ~/HEP stack and utils/Env (the `hep` command) on PATH, activates the venv, and defines

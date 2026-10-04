@@ -1,13 +1,13 @@
 """Tool folders, point cards, argv, and the connection rules (rank 2).
 
-docs/06_Developer_Guide.md §4 (the tool-folder contract), docs/02_Architecture.md §6 (connections) and
+docs/06_Internals.md §16 (the tool-folder contract), docs/06_Internals.md §6 (connections) and
 docs/04_Config_Reference.md §9 (tool tables, custom tools, standard configurations). Everything the runner knows
 about a tool comes from its folder utils/Env/<tool>/. This module never names one.
 
 `plan_point` turns (run, configuration, point) into groups of Steps: argv, environment, files to
 write, inputs and outputs, and what to check afterwards. Nothing is spawned or written here; that is
 `execute`. Seeds are added last (`finalise`), because they derive from the identity of everything
-else (02 §8).
+else (06 §8).
 """
 
 from __future__ import annotations
@@ -75,7 +75,7 @@ class Folder:
 
     @property
     def plugin(self):
-        """utils/Env/<tool>/render.py, for `[card] style = "render"` (06 §4)."""
+        """utils/Env/<tool>/render.py, for `[card] style = "render"` (06 §16)."""
         path = self.dir / "render.py"
         if not path.is_file():
             raise HepError(f'{self.name} has [card] style = "render" but no render.py', where=str(self.dir))
@@ -730,7 +730,7 @@ def _inputs(plan: PointPlan, step: Step, run) -> None:
 
 
 def _check_connections(plan: PointPlan, run) -> None:
-    """C6 (02 §6): FIFOs inside one group, one reader each, never into a non-streamable tool; files
+    """C6 (06 §6): FIFOs inside one group, one reader each, never into a non-streamable tool; files
     between groups; every input made by someone earlier or already on disk."""
     for interface in plan.interfaces.values():
         where = f"[prelim] / [tools.*]: '{interface.name}'"

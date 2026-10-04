@@ -136,7 +136,7 @@ inherit = true
 doc     = "how seeds are chosen"
 notes = """\
   default for configurations: how a point's seeds are chosen, `\"identity\"`, `\"manual\"` or \
-  `\"random\"` (02 §8)"""
+  `\"random\"` (06 §8)"""
 
 [run.manual_seed]
 type    = "int"
@@ -227,7 +227,7 @@ default_ok = true
 doc        = "how seeds are chosen (else [run]'s)"
 notes = """\
   `\"identity\"`: from the generator's identity; `\"manual\"`: exactly the given seed; \
-  `\"random\"`: drawn when the point runs (02 §8)"""
+  `\"random\"`: drawn when the point runs (06 §8)"""
 
 [configuration.manual_seed]
 type       = "int"
@@ -403,7 +403,7 @@ type     = "str"
 required = true
 doc      = "a standard tool (a folder of utils/Env/) or custom"
 notes = """\
-  a standard tool (a folder of `utils/Env/`, 05 §1), `\"custom\"` or `\"module\"`"""
+  a standard tool (a folder of `utils/Env/`, 05 §3), `\"custom\"` or `\"module\"`"""
 
 [tool.baseconfig]
 type = "str|list"
@@ -514,7 +514,7 @@ default = 1
 doc     = "K processes on a share of the events each"
 notes = """\
   K > 1: K processes of this tool, each on a share of the events, merged into its `output_file` by \
-  the folder's merge tool (V31; rivet, 05 §3.1). The chain is unchanged."""
+  the folder's merge tool (V31; rivet, 05 §5.1). The chain is unchanged."""
 
 # ── [plot] ───────────────────────────────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # utils/Env/flags.sh — probe each library's *-config once and write build/flags.mk
-# (docs/06_Developer_Guide.md §2.3).
+# (docs/06_Internals.md §15.3).
 #
 #   flags.sh [OUT]     probe and write OUT (default build/flags.mk)
 #   flags.sh --key     print what the cache depends on, cheaply: no probe runs

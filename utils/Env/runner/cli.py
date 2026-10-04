@@ -1,7 +1,7 @@
 """`hep run`, `hep plot`, `hep overlay`, `hep watch`, `hep check` and the housekeeping commands (`ls`,
 `explain`, `status`, `clean`: house.py) (rank 5): argument parsing and the order of events.
 
-docs/04_Config_Reference.md §14. `hep build` is handled by the shell dispatcher
+docs/05_Commands_and_Tools.md §1. `hep build` is handled by the shell dispatcher
 (utils/Env/hep), which runs make.
 
 Exit codes: 0 every point done (or skipped), 1 a point failed, 2 a config error before anything ran,

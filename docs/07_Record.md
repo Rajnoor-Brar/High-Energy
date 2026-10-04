@@ -272,6 +272,7 @@ execution and after it, most on the user's instruction.
 | **V89** | **Sheets** (08_Figures F4 S2). `class = "sheet"`, `pages` (globs of page names, in order), `columns`: after a configuration's pages are drawn, `plot.sheet` tiles the ones named, as drawn, by `utils/Env/figures/sheet.py` into `plots/<backend>/sheets/<name>.pdf` (pdflatex and graphicx, vector) and `.png` (PIL), for Paint and mpl. The note's mechanics changed: tiling the drawn pages replaces redrawing them in pads, so no Paint or mpl refactor and a pad is its page exactly; the cost is the note's optional `shared` y title and legend, not offered. A sheet takes no page keys; a glob that names nothing fails it. | 08_Figures F4 | user, 2026-10-04 |
 | **V90** | **A key's notes live in the schema** (audit 2, the manual's rebuild M1 S1). `utils/Env/schema/run.toml` gains `notes` beside `doc`: what a line cannot say about a key, moved row by row from docs/04's tables (100 keys; bare `§N` became `04 §N`). `hep explain KEY` prints them under the doc line, and the editor schema's `description` is doc, then notes. They are the source the rebuilt reference's key tables are generated from (M1 S2). | audit 2 02_Manual | user, 2026-10-04 |
 | **V91** | **The manual's generated blocks** (audit 2, the manual's rebuild M1 S2). `runner/docs.py` (rank 5): a page of `docs/` may hold `<!-- generated: keys <table> -->`, `style` or `commands` blocks, which `make docs` rewrites from the schema (type, choices, bounds, default, inheritance, doc and notes), `utils/Apps/Paint/base.toml` (each key's default and comment, else its table's) and `cli.parser()` (each subcommand's help and arguments). `test_the_generated_sections_are_current` fails while a block differs, so the reference's key, style and command tables cannot drift from the code. The audits' pages are history and are never rewritten. | audit 2 02_Manual | user, 2026-10-04 |
+| **V92** | **The manual, rebuilt** (audit 2, the manual's rebuild M2–M3; the user: rebuild from scratch). Seven pages, by reader: `01_Overview` (the model, vocabulary, principles), `02_User_Guide` (recipes, housekeeping, results from Python), `03_Plots` (the plot stage and a section per figure class), `04_Config_Reference` (every key, generated), `05_Commands_and_Tools` (every command, generated; every tool folder; the apps' command lines), `06_Internals` (design and craft: the former 02 and 06, and 05's Paint inside, `Module.hh`, `Status.hh`, `filters.toml`), and this record. Written fresh against the code, so the drift is gone (labels as LaTeX, the figures, the mpl backend, hepkit, `hep check`/`migrate`/`reproduce`). The code's citations were remapped by the inventory in `docs/audit_2/02_Manual.md`; old 04 §1–13 and old 02 §4–14 kept their numbers (as 04 and 06). `test_docs` no longer scans the user's `configs/` for citations (V52: tests never read them); the fixtures stand for them. | audit 2 02_Manual | user, 2026-10-04 |
 
 **v1 decisions these overturn:**
 
@@ -352,7 +353,7 @@ were resolved by deleting v1; each is kept for its lesson.
 | **F7** | The module build is guarded on `HEKIT_WITH_RIVET`, which is always true. | `CMakeLists.txt:243-275` | deletion |
 | **F8** | `Transport` is instantiated and never used in production. | `run/supervisor.py:154` | deletion |
 | **F9** | `HEKIT_WITH_DELPHES` is read by nothing, and there is no `FindROOT`, although ROOT is the target's primary graphics. | `CMakeLists.txt` | deletion; `requires: root` |
-| **F10** | `status_client.py` is in the runner's rank table (`runner/__init__.py`, `tests/runner/test_imports.py`) and was documented as the Python client of the status protocol, but it was never written. | `ls utils/Env/runner/` | **closed by V53**: removed from the rank table (`RANKS`, now in `runner/__init__.py` alone); [05 §19](05_Tools_Reference.md#19-statushh-and-the-status-protocol) shows the protocol inline |
+| **F10** | `status_client.py` is in the runner's rank table (`runner/__init__.py`, `tests/runner/test_imports.py`) and was documented as the Python client of the status protocol, but it was never written. | `ls utils/Env/runner/` | **closed by V53**: removed from the rank table (`RANKS`, now in `runner/__init__.py` alone); [05 §19](06_Internals.md#22-statushh-and-the-status-protocol) shows the protocol inline |
 | **F11** | The master mapping form `render = "fn"` is described in `master.toml`'s header, but the runner refuses it ("render mappings arrive with their tool"). Tools with a `render.py` take plain `key` mappings and apply them themselves. | `tools._render`, `apply` | **closed by V58** (master.toml is gone; the folders' files have no `render` form) |
 | **F12** | Card style `"prepend"` passes the folder check but raises when a folder uses it; Whizard's point-card-first dialect is a `render.py`. | `tools.CARD_STYLES`, `_render` | **closed by V54** (removed) |
 | **F13** | `filters.toml`'s `[defaults] last_line = true` is never read: the last log line is always shown. | `status.Reader` | **closed by V54** (removed from the folders) |
@@ -494,6 +495,10 @@ took on the report, the sidecar reader, the standard configurations and `RootOut
 | **run** | one TOML under `configs/<Project>/`, with `[run]` |
 | **configuration** | a named recipe in a run, `[run.<name>]`: sweeps, tools, events, threads |
 | **point** | one combination of swept values: one chain of processes, one output and one results directory |
+| **object** | data: one histogram, estimate or scatter in a point's YODA (`/ZEUS_2012_I1116258/d01-x01-y01`), one copy per point (V80) |
+| **figure** | a recipe for pages, `[plot.figures.<f>]`: which objects, built how (its *class*), drawn as what (its *type*); `[plot].objects` is the implicit one (V80) |
+| **class** | how a figure builds its pages: defined, overlay, merged, compare, derived, scan, sheet (V80–V89) |
+| **type** | what a figure draws: Hist1D, Scatter2D (markers, V86), HeatMap (a 2D object, V87) |
 | **quantity** | a named value that can be swept or held static, `[quantities.<q>]` |
 | **swept / static / active / inactive** | varied across points / held at one value / either of those, so rendered into cards / neither, so the base card's value stands |
 | **entangled** | quantities in an inner list of `sweeps`: they move together, value i with value i |
@@ -513,13 +518,13 @@ took on the report, the sidecar reader, the standard configurations and `RootOut
 | **count check** | a consumer's event count read back from its product, compared with the producer's sidecar |
 | **prelim** | the per-point preparations: FIFOs, agreed files, commands |
 | **pre / post / plot stage** | tools run once before every point / once after them / the pages, drawn last |
-| **page, cell, curve** | one plot of one histogram / one cell of the `plot_points` grid (a page folder) / one point on a page |
+| **page, cell, curve** | one drawn file, made by a figure / one cell of the `plot_points` grid (a page folder) / one point (or group, or variant) on a page |
 | **variant** | one analysis-option combination of an object (`/photo_eic:R=0.4/d01-x01-y01`), drawn as a curve |
 | **identity** | the sha256 of everything that decides a point's result; `.complete` holds it |
 | **seed basis, seed block** | what the seeds follow (the generators' identity, V22) / a point's seeds, base … base + threads − 1 |
 | **prepare step, cache entry** | a tool's slow once-per-card step (integration, `Herwig read`) / where it lives, `output/<P>/.cache/<tool>/<key>/` |
 | **export, standard configuration** | a standard tool's rendered card or values, requested by a custom or module tool (`pythia_cmnd = true`) |
 | **provenance, points manifest, journal** | `provenance.json` per point / `points.json` per configuration / `status.jsonl`, every status message |
-| **backend** | what draws the pages: `root` (Paint) or `yoda` (rivet-mkhtml) |
-| **style layer** | base.toml, the `root_style` file, `[plot.style]`, an object's style: each over the one before |
+| **backend** | what draws the pages: `root` (Paint), `mpl` (matplotlib) or `yoda` (rivet-mkhtml) |
+| **style layer** | base.toml, the `root_style` file, `[plot.style]`, a figure's style: each over the one before |
 | **gutter, void, auto-range, alignment** | headroom past the data (V29) / a bin blanked across the page / x trimmed to the filled bins / the reference data cut to bins whose edges are MC edges |

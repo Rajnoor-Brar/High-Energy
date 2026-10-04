@@ -1,6 +1,6 @@
 """Running a point: [prelim], the tool groups, supervision, the checks (rank 3).
 
-docs/02_Architecture.md §11. A FIFO chain fails in two ways a single process does not,
+docs/06_Internals.md §11. A FIFO chain fails in two ways a single process does not,
 and both are handled here by construction:
 
 * **Deadlock at open (L8).** A FIFO blocks until both ends are open. If the writer dies before
