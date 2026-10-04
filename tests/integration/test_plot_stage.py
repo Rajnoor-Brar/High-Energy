@@ -280,6 +280,37 @@ def test_a_compare_figure_draws_configurations_together(stage):
         plot.check_figures(run, configuration)
 
 
+def test_a_compare_figure_reaches_another_run_toml(stage, scratch):
+    """V88: "<config>:<cfg>" names a configuration of another run TOML; its points are curves beside this
+    run's, labelled by that run, drawn into this run's compare/; its page axes must have this run's tags."""
+    import tomli_w
+    from runner import config
+    run, configuration, plans = stage
+    other = raw(run__name="plotstage_other", run__one__sweeps=["lepton", "pdf"], run__one__plot_points=["lepton"],
+                quantities__lepton={"key": {"pythia": "Beams:idB"}, "values": [11, -11], "tags": ["em", "ep"]},
+                quantities__pdf__labels=["MSTW", "NNPDF"])
+    path = scratch / "other.toml"
+    path.write_text(tomli_w.dumps(other), encoding="utf-8")
+    theirs = config.load(str(path))
+    their_plans = completed(theirs, theirs.configuration(None))
+    run.plot["figures"]["chains"] = {"class": "compare", "objects": ["d01-*"], "configurations": ["one", f"{path}:one"]}
+    plot.check_figures(run, configuration)
+    asked = []
+    said = []
+    assert plot.draw(run, configuration, plans, said.append, others=lambda ref: asked.append(ref) or their_plans) == 0, said
+    assert asked == [f"{path}:one"]
+    page = tomllib.loads((plans[0].out.parent.parent / "compare" / "chains" / "em" / "d01-x01-y01.toml").read_text())
+    assert [c["label"] for c in page["curve"]] == ["one, MSTW 2008 LO", "one, NNPDF 2.3 LO",
+                                                   "plotstage_other one, MSTW", "plotstage_other one, NNPDF"]
+    other["quantities"]["lepton"]["tags"] = ["e-", "e+"]
+    path.write_text(tomli_w.dumps(other), encoding="utf-8")
+    with pytest.raises(plot.HepError, match="has other values of lepton, a page axis"):
+        plot.check_figures(run, configuration)
+    run.plot["figures"]["chains"]["configurations"] = [f"{path}:one", f"{path}:one2"]
+    with pytest.raises(plot.HepError, match="names '.*:one2', which is not a configuration"):
+        plot.check_figures(run, configuration)
+
+
 @pytest.mark.skipif(not shutil.which("rivet-merge"), reason="load_hep: rivet-merge")
 def test_a_merged_figure_merges_the_points_for_itself(stage):
     """V82: per plot_points cell, the pdf points merged (rivet-merge -e) into one curve, on the objects'

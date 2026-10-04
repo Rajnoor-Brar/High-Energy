@@ -147,9 +147,12 @@ def build_plans(args, key: str | None) -> Planned:
 
 
 def others_of(args):
-    """Another configuration's plans, for a compare figure (V83): its points, or its combined groups."""
-    def plans_of(key: str) -> list:
-        planned = build_plans(argparse.Namespace(**{**vars(args), "points": None, "rerun": False}), key)
+    """Another configuration's plans, for a compare figure (V83), of this run or of another run TOML
+    (V88): its points, or its combined groups."""
+    def plans_of(ref: str) -> list:                 # "cfg", or "<Project>/<config>:<cfg>" (V88)
+        config, _, key = ref.rpartition(":")
+        changed = {"config": config, "set": []} if config else {}
+        planned = build_plans(argparse.Namespace(**{**vars(args), "points": None, "rerun": False, **changed}), key)
         return planned.combined or planned.every
     return plans_of
 

@@ -334,7 +334,7 @@ def test_a_compare_figure_pairs_configurations_of_one_shape(scratch):
     from helpers import parse
     run = parse(raw(run__sweep_runs=True, run__configuration=None, run__one__sweeps=["pdf"],
                     run__two={"tools": ["pythia"], "sweeps": ["pdf"]}, plot={"figures": {"c": figure}}), scratch)
-    assert [c.key for c in plot.compared(run, plot.figures(run)[0])] == ["one", "two"]
+    assert [c.ref for c in plot.compared(run, plot.figures(run)[0])] == ["one", "two"]
 
 
 @pytest.mark.parametrize("figure, message", [
