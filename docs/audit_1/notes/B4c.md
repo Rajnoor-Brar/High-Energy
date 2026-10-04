@@ -1,5 +1,7 @@
 # B4c: replace rivet-mkhtml with a matplotlib renderer of the page document
 
+> The manual was rebuilt at V92 (`docs/audit_2/02_Manual.md`): links here to its old pages (`01_Philosophy` … `06_Developer_Guide`) are history; `git show a029c21:docs/<page>` has them.
+
 A design note for the user's decision (audit 1, P4 S3; [04 B4](../04_Bold_Proposals.md#b4--the-plot-stack-one-page-document-two-honest-renderers-no-patched-scripts)).
 It gives the mechanics, the evidence collected on 2026-10-03, the options, and a recommendation. Nothing
 here is built.

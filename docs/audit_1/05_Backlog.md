@@ -1,5 +1,7 @@
 # 05 — Backlog: scored, ranked, phased
 
+> The manual was rebuilt at V92 (`docs/audit_2/02_Manual.md`): links here to its old pages (`01_Philosophy` … `06_Developer_Guide`) are history; `git show a029c21:docs/<page>` has them.
+
 **Scoring.** Priority = (Impact + Risk) × (6 − Effort).
 - **Impact:** how much the item slows work today, 1–5.
 - **Risk:** what happens if it is *not* fixed (wrong physics, silent failures, drift), 1–5.

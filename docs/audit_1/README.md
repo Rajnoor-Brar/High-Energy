@@ -1,5 +1,7 @@
 # Audit 1 — `utils/`
 
+> The manual was rebuilt at V92 (`docs/audit_2/02_Manual.md`): links here to its old pages (`01_Philosophy` … `06_Developer_Guide`) are history; `git show a029c21:docs/<page>` has them.
+
 An audit of everything under `utils/`, done on 2026-10-03 at `6f2bfaa` (branch `rework`).
 
 **Read:**

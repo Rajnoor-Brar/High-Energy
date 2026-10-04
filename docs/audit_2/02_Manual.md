@@ -1,5 +1,8 @@
 # Audit 2 — the manual, rebuilt
 
+
+**Status (2026-10-04): done.** M0 a029c21, M1 V90–V91, M2 (docs/next/), M3 V92: the new pages in place, 130 of 130 inventory rows map to a section that exists. 01–06 are 4,659 lines (the target was about 3,000: the figures, the generated tables and the bulleted structure added more than the de-duplication removed).
+
 ## Context
 
 The user asked to "update/rebuild the docs/manual/reference" and chose **rebuild from scratch**: a new layout chosen for today's framework, keeping the knowledge of the old text but not its wording. Two further decisions:
