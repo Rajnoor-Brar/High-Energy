@@ -33,5 +33,8 @@ The documents this manual replaced (v1's design set and retrospective, the rewor
 logs) are in git: `git show rework/v1-final:docs/…` and `git log --all -- docs/rework_v2`. Ideas
 found in them, not yet built, are in [bots/intent.md](../bots/intent.md).
 
+Audits of the framework, and their plans: [audit_1/](audit_1/README.md) (`utils/`, V52–V89) and
+[audit_2/01_Health.md](audit_2/01_Health.md) (a health check after the figures).
+
 `tests/runner/test_docs.py` holds this manual to the code: its links resolve, its TOML parses, its
 complete examples load, and every key the runner accepts is documented.
