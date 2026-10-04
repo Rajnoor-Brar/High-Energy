@@ -165,6 +165,57 @@ def test_an_overlay_figure_folds_a_band(stage):
     assert plot.draw(run, configuration, plans, lambda line: None) == 0
 
 
+def test_a_derived_figure_is_an_object_of_every_point(stage):
+    """V84: /FIGURES/<name> per point, the ratio of two objects, appended to a copy of each point's YODA
+    (made again only when the product changes); drawn as an object, its labels its first object's, and
+    another figure may overlay it."""
+    run, configuration, plans = stage
+    run.plot["figures"].update({"r15": {"class": "derived", "op": "ratio", "objects": ["d01-x01-y01", "d05-x01-y01"],
+                                        "y_label": "d01 / d05", "ratio": False},
+                                "both": {"class": "overlay", "objects": ["r15", "d01-x01-y01"]}})
+    by = {p.name: p for p in plot.pages(run, configuration, plans)}
+    page = tomllib.loads(by["em/r15"].config.read_text())
+    assert page["page"]["y_label"] == "d01 / d05" and page["page"]["x_label"] == tomllib.loads(
+        by["em/d01-x01-y01"].config.read_text())["page"]["x_label"]
+    assert [c["object"] for c in page["curve"]][0].endswith("/FIGURES/r15")
+    assert by["em/both"].variants == ["/FIGURES/r15", "/photo_eic/d01-x01-y01"] * 2
+    copy = plans[0].out.parent / "plots" / "derived" / f"{plans[0].point.name}.yoda"
+    assert "BEGIN YODA_ESTIMATE1D_V3 /FIGURES/r15" in copy.read_text()
+    when = copy.stat().st_mtime_ns
+    assert plot.draw(run, configuration, plans, lambda line: None) == 0
+    assert copy.stat().st_mtime_ns == when
+    run.plot["figures"]["bad"] = {"class": "derived", "op": "ratio", "objects": ["d01-x01-y01", "d02-x01-y01"]}
+    with pytest.raises(plot.HepError, match="figure 'bad' at .*: ratio of /photo_eic/d01-x01-y01 and /photo_eic/d02-x01-y01"):
+        plot.pages(run, configuration, plans)
+
+
+def test_a_scan_figure_draws_one_number_per_point(scratch):
+    """V85: x a numeric curve axis, y the cross section of each point, a Scatter2D per page cell (here
+    per PDF), its points at the x values with ranges halfway to their neighbours; refused for a quantity
+    of names, or a page axis."""
+    data = raw(run__name="plotscan", run__one__sweeps=["lepton", "pdf"], run__one__plot_points=["pdf"],
+               quantities__lepton={"key": {"pythia": "Beams:idB"}, "values": [11, -11, 22], "tags": ["em", "ep", "g"]},
+               plot={"formats": ["png"], "figures": {"xs": {"class": "scan", "x": "lepton", "y": "sigma", "logy": False},
+                                                     "b2": {"class": "scan", "x": "lepton", "y": "bin:2",
+                                                            "objects": ["d01-x01-y01"], "y_label": "second bin"}}})
+    run = parse(data, scratch)
+    configuration = run.configuration(None)
+    plans = completed(run, configuration)
+    by = {p.name: p for p in plot.pages(run, configuration, plans)}
+    page = by[[n for n in by if n.endswith("/xs")][0]].document
+    assert (page["page"]["x_label"], page["page"]["y_label"]) == ("lepton", r"$\sigma$ [pb]") and len(page["curve"]) == 1
+    scans = sorted((plans[0].out.parent / "plots" / "scan" / "xs").glob("*.yoda"))
+    assert len(scans) == 2                                                          # a curve per page cell (PDF)
+    import yoda
+    points = [(p.x(), p.xErrs(), p.y()) for p in yoda.read(str(scans[0]))["/FIGURES/xs"].points()]
+    assert [(x, tuple(e)) for x, e, _ in points] == [(-11.0, (11.0, 11.0)), (11.0, (11.0, 5.5)), (22.0, (5.5, 5.5))]
+    assert by[[n for n in by if n.endswith("/b2")][0]].document["page"]["y_label"] == "second bin"
+    assert plot.draw(run, configuration, plans, lambda line: None) == 0
+    run.plot["figures"]["xs"]["x"] = "pdf"
+    with pytest.raises(plot.HepError, match="not a curve axis"):
+        plot.check_figures(run, configuration)
+
+
 def test_a_compare_figure_draws_configurations_together(stage):
     """V83: the objects' pages across configurations, curves labelled by the configuration first, drawn
     by the plot stage of whichever configuration completes it, into <run>/compare/<name>/."""

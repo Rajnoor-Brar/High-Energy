@@ -10,6 +10,7 @@ Every error names the file and the key (`where`) and says what to do (`hint`).
 from __future__ import annotations
 
 import os
+import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -631,9 +632,25 @@ def check_plot(plot: dict, where: str, strict: bool = True) -> None:
             raise HepError("a figure is a table", where=at)
         schema.check(table, "figure", at)
         kind, objects, labels = table.get("class", "defined"), table.get("objects"), table.get("labels")
-        if not objects:
+        y = table.get("y", "")
+        if (kind == "scan") != ("x" in table or "y" in table):
+            raise HepError("x and y are a scan figure's" if kind != "scan" else "a scan figure needs x and y",
+                           where=at, hint='class = "scan", x = "<swept quantity>", y = "sigma"')
+        if kind == "scan":
+            if "x" not in table or not re.fullmatch(r"sigma|entries|integral|mean|bin:[1-9][0-9]*", y):
+                raise HepError(f"a scan figure needs x, and y one of sigma, entries, integral, mean, bin:N (not {y!r})",
+                               where=f"{at}.y", hint='y = "sigma"; y = "bin:3", objects = ["d01-x01-y01"]')
+        counted = kind == "scan" and table.get("y") in ("sigma", "entries")
+        if not objects and not counted:
             raise HepError("a figure needs objects = [\"d02-x01-y01\", …]: the objects its pages are made of",
                            where=f"{at}.objects")
+        objects = objects or []
+        if kind == "scan":
+            if len(objects) > 1 or (not counted and y != "entries" and len(objects) != 1):
+                raise HepError(f"y = \"{y}\" reads one object, and the figure names {len(objects)}", where=f"{at}.objects")
+            if "labels" in table:
+                raise HepError("a scan figure takes no labels", where=f"{at}.labels",
+                               hint="its curves are the other curve axes' values, labelled by them")
         if kind == "defined":
             for own in ("labels", "name"):
                 if own in table:
@@ -647,6 +664,18 @@ def check_plot(plot: dict, where: str, strict: bool = True) -> None:
             count = len(table.get("configurations", [])) or None
             if count is not None and len(labels) != count:
                 raise HepError(f"a compare figure's labels give one label per configuration ({count})", where=f"{at}.labels")
+        if (kind == "derived") != ("op" in table):
+            raise HepError("op = \"ratio\" | … is a derived figure's, and it needs one" if kind == "derived"
+                           else f"a {kind} figure derives nothing: op is a derived figure's", where=f"{at}.op",
+                           hint='class = "derived", op = "ratio", objects = ["d11-x01-y01", "d12-x01-y01"]')
+        if kind == "derived":
+            wanted = 1 if table["op"].startswith("projection") else 2
+            if len(objects) != wanted:
+                raise HepError(f"op = \"{table['op']}\" takes {wanted} object{'s' if wanted > 1 else ''}, not {len(objects)}",
+                               where=f"{at}.objects")
+            if "labels" in table:
+                raise HepError("a derived figure takes no labels", where=f"{at}.labels",
+                               hint="its object is drawn as any object: its curves are the points")
         if kind == "merged" and "labels" in table:
             raise HepError("a merged figure takes no labels", where=f"{at}.labels",
                            hint="its pages are the objects' own, their curves the merged groups")
