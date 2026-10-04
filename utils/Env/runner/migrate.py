@@ -10,7 +10,11 @@ and layout stay:
   (`sweep_runs = ["a", "b"]`), in the order it ran them;
 * a custom tool's bare `executable` that is not built but is a command on PATH → `"path:<name>"`;
 * a base card's lines for keys the runner sets (its folder's `[card] owned`), which the plan already
-  said were not used.
+  said were not used;
+* (V81) `[plot.overlay.<name>]` → `[plot.figures.<name>]` with `class = "overlay"`, and
+  `[plot.object."<glob>"]` → `[plot.figures.<glob, as a name>]` with `objects = ["<glob>"]`, their
+  subtables too; in a figure, a style key written bare (`ratio.range = […]`, which beside `ratio = true`
+  is not even TOML) → `style.ratio.range`. This runs on the text first, so a file it makes TOML reads.
 """
 
 from __future__ import annotations
@@ -26,11 +30,63 @@ from . import config as configmod
 from . import tools
 from .errors import HepError
 from .labels import is_tlatex, natural
-from .paths import resolve
+from .paths import config_file, resolve
 
 LABEL_KEYS = {"labels", "title", "title_left", "title_right", "legend_header", "x_label", "y_label", "legend"}
 _KEY = re.compile(r"^(\s*)([A-Za-z0-9_\-]+|\"[^\"]+\")(\s*=\s*)(.*)$")
 _TABLE = re.compile(r"^\s*\[\[?([^\]]+)\]\]?\s*(#.*)?$")
+_OLD_FIGURE = re.compile(r'^(\s*)\[\s*plot\.(overlay|object)\.("[^"]+"|[A-Za-z0-9_\-]+)((?:\.[A-Za-z0-9_\-]+)*)\s*\](\s*(?:#.*)?)$')
+_DOTTED = re.compile(r"^(\s*)([A-Za-z_]+)(\.[A-Za-z0-9_.\-]+\s*=.*)$")
+#: base.toml's tables: a key under one of them, in a figure, is a style key.
+STYLE_TABLES = ("page", "text", "curves", "data", "axes", "legend", "ratio")
+
+
+def _slug(glob: str, taken: set) -> str:
+    """A figure's name for an object glob: d04-* → d04."""
+    base = re.sub(r"[^A-Za-z0-9_]+", "_", glob.rsplit("/", 1)[-1]).strip("_") or "objects"
+    name, n = base, 1
+    while name in taken:
+        n += 1
+        name = f"{base}_{n}"
+    taken.add(name)
+    return name
+
+
+def figure_text(text: str) -> str:
+    """The old figure tables of a run TOML as [plot.figures] (V81), by line; see the module's doc."""
+    taken = set(re.findall(r"^\s*\[\s*plot\.figures\.([A-Za-z0-9_\-]+)", text, re.M))
+    names: dict[tuple[str, str], str] = {}
+    out, in_figure = [], False
+    for line in text.splitlines(keepends=True):
+        old = _OLD_FIGURE.match(line.rstrip("\n"))
+        if old:
+            indent, kind, key, sub, tail = old.groups()
+            plain = key.strip('"')
+            if (kind, plain) not in names:
+                names[(kind, plain)] = _slug(plain, taken) if kind == "object" else plain
+                taken.add(names[(kind, plain)])
+                first = True
+            else:
+                first = False
+            own = f'{indent}class = "overlay"\n' if kind == "overlay" else f"{indent}objects = [{_literal(plain)}]\n"
+            if first and sub:                              # its subtable first: the figure's own table before it
+                out += [f"{indent}[plot.figures.{names[(kind, plain)]}]\n", own]
+            out.append(f"{indent}[plot.figures.{names[(kind, plain)]}{sub}]{tail}\n")
+            if first and not sub:
+                out.append(own)
+            in_figure = not sub
+            continue
+        header = _TABLE.match(line)
+        if header:
+            in_figure = header[1].strip().startswith("plot.figures.") and header[1].strip().count(".") == 2
+            out.append(line)
+            continue
+        dotted = _DOTTED.match(line.rstrip("\n"))
+        if in_figure and dotted and dotted[2] in STYLE_TABLES:
+            out.append(f"{dotted[1]}style.{dotted[2]}{dotted[3]}\n")
+            continue
+        out.append(line)
+    return "".join(out)
 
 
 def _split_comment(text: str) -> tuple[str, str]:
@@ -179,9 +235,10 @@ def plan(names: list[str]) -> dict[Path, tuple[str, str]]:
     """Every file the configs touch: path → (its text, its migrated text), only those that change."""
     changes: dict[Path, tuple[str, str]] = {}
     for name in names:
-        run = configmod.load(name, strict=False)
-        text = run.path.read_text(encoding="utf-8")
-        new = toml_text(text, run, run.project)
+        text = config_file(name).read_text(encoding="utf-8")
+        first = figure_text(text)
+        run = configmod.load(name, strict=False, text=first)
+        new = toml_text(first, run, run.project)
         if new != text:
             changes[run.path] = (text, new)
         cards: dict[Path, object] = {}

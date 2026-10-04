@@ -32,7 +32,7 @@ YAML merge for Sherpa, …; see [05](05_Tools_Reference.md)).
 utils/Env/<tool>/quantities.toml  <  [master].master_toml  <  [quantities.<q>].key / target  <  --set
 [static]  <  [run.<cfg>].static  <  --set static.<q>=…  <  the value a sweep gives the point
 [run].event_count, threads  <  [run.<cfg>].event_count, threads  <  --set
-base.toml  <  [plot].root_style file  <  [plot.style]  <  [plot.object."<glob>"].style
+base.toml  <  [plot].root_style file  <  [plot.style]  <  [plot.figures.<figure>].style
 ```
 
 A run TOML has exactly these top-level sections; any other is an error (C1):
@@ -679,7 +679,8 @@ legend = "ZEUS 2012"
 page.dpi        = 300
 legend.position = "top-left"
 
-[plot.object."d04-*"]
+[plot.figures.tails]
+objects  = ["d04-*"]
 logy     = true
 y_gutter = 2.0
 style.legend.position = "bottom-left"
@@ -692,11 +693,10 @@ style.legend.position = "bottom-left"
 | `objects` | array of globs | every 1D object | matched against the option-free YODA path (`/photo_eic/d01-x01-y01`) or any variant's path. No object matching is an error. |
 | `ratio` | bool | false | a ratio pad: each curve over the data, or over the first curve when there are no data |
 | `use_data` | bool | true | `false`: the `[plot.data]` table stays in the file but is not drawn, and a `ratio` divides each curve by the page's first curve, the first value of its curve axis (V44) |
-| `title` | string | the `.plot`'s `Title` | the main title, centred above the frame (V51). Every page; `[plot.object."<glob>"]` and `[plot.overlay.<name>]` override it for theirs |
+| `title` | string | the `.plot`'s `Title` | the main title, centred above the frame (V51). Every page; a figure (§11.2) overrides it for its own |
 | `title_left`, `title_right` | string | `""` | small text just above the frame's top-left and top-right corners (V51), inherited the same way |
 | `legend_header` | string | the `.plot`'s `LegendTitle` | the legend's first line (V51), inherited the same way. Children inherit every key their parent has and a key means the same at both levels |
 | *placeholders* | in any text | | every page text (the titles, `legend_header`, the labels, `[plot.data].legend`, an overlay's `labels`, the `.plot`'s own) may cite the points (V66): `{cell}` (the page's `plot_points` values), `{q:<quantity>}` (the label of its value, swept or static), and what a tool's folder gives: Rivet's `{opt:NAME}` / `{opt:<analysis>:NAME}`, the option at the point (the `.info`'s `(default X)` when not set). A page text's value must be the same at all the page's curves (a curve label's is its own point's); an unknown name is an error |
-| `overlay` | tables | none | `[plot.overlay.<name>]`, until migrated: read as an overlay figure (§11.2) |
 | `y_gutter` | number ≥ 0 or `"default"` | `0.5` | the top of the y axis at (1 + g) × the largest drawn value (on a log axis, g of the decades shown); `0`: no headroom. `"default"`: no gutter, the tool's own range (V29, V55) |
 | `x_gutter` | number ≥ 0 or `"default"` | `"default"` | widens x by g of its span, symmetrically (in decades on a log axis). `"default"`: the range the bins give |
 | `logx`, `logy` | bool | the `.plot` file's `LogX`/`LogY` | |
@@ -710,11 +710,10 @@ style.legend.position = "bottom-left"
 | `data` | table | none | §11.1 |
 | `style` | table | `{}` | §12 |
 | `figures` | tables | `{}` | `[plot.figures.<figure>]`: a recipe for pages, with every page key of `[plot]` for its own (§11.2, V80) |
-| `object` | table | `{}` | `[plot.object."<glob>"]`, until migrated: keys for the defined pages of the objects it matches (§11.2) |
 
 **`"default"` means "keep it as it is"** (V55, which replaces V37's meaning): in `[plot]` it sets
-nothing, and the drawing tool does what it does by itself; in a child (`[plot.object."<glob>"]`,
-`[plot.overlay.<name>]`) it is `[plot]`'s value, as if the key were left out. A key left out of
+nothing, and the drawing tool does what it does by itself; in a figure (`[plot.figures.<figure>]`) it
+is `[plot]`'s value, as if the key were left out. A key left out of
 `[plot]` takes the runner's default, from `utils/Env/schema/run.toml` (a missing `y_gutter` is 0.5,
 a missing `auto_range` is true). In `[plot]`:
 
@@ -732,9 +731,8 @@ a missing `auto_range` is true). In `[plot]`:
 | `backend` | `"root"` |
 | `root_style` | no style file: base.toml |
 
-In `[plot.object."<glob>"]` a `"default"` keeps `[plot]`'s value (`logy = "default"` there is
-`[plot].logy`, and the `.plot`'s when `[plot]` sets none); `x_label` and `y_label`, which only a child
-sets, keep the `.plot`'s labels. In a style layer (§12) a `"default"` value sets nothing: the layer
+In a figure a `"default"` keeps `[plot]`'s value (`logy = "default"` there is `[plot].logy`, and
+the `.plot`'s when `[plot]` sets none); `x_label` and `y_label`, which only a figure sets, keep the `.plot`'s labels. In a style layer (§12) a `"default"` value sets nothing: the layer
 below decides, and at the bottom base.toml, Paint's own look. In `[run.<cfg>]` a `"default"` is
 `[run]`'s value (`threads = "default"`).
 `--set plot.min_entries=default` works for one run.
@@ -813,9 +811,12 @@ leaves out; two declared defined figures matching the same object are an error (
 narrow a glob, and put what every page shares in `[plot]`). A `band` a figure names must be a curve axis
 of the configuration, as `[plot].band`'s (§11).
 
-Until a file is migrated, `[plot.overlay.<name>]` is read as an overlay figure named `<name>`, and
-`[plot.object."<glob>"]` as keys for the defined pages of the objects it matches (every matching table,
-in file order, under the matching figure's).
+`[plot.overlay.<name>]` and `[plot.object."<glob>"]` are figures now (V81), and are refused with the
+figure to write; `hep migrate` (§14) rewrites them: an overlay as `[plot.figures.<name>]` with
+`class = "overlay"`, an object table as `[plot.figures.<glob, as a name>]` with `objects = ["<glob>"]`,
+and in a figure a style key written bare (`ratio.range = …`) as `style.ratio.range`. Object tables
+that matched the same object (they were applied in file order) become figures that overlap, which the
+plot stage refuses: merge them by hand.
 
 ---
 
@@ -827,7 +828,7 @@ default (rivet-mkhtml's look); edit it to change every page. Over it, key by key
 1. `[plot].root_style` — a style file (a bare name under `configs/<project>/`, `.toml` optional);
    `hep overlay FILE… --style FILE` for files;
 2. `[plot.style]`;
-3. a figure's `style` (`[plot.figures.<figure>]`, §11.2), for its pages (`[plot.object."<glob>"].style` until migrated).
+3. a figure's `style` (`[plot.figures.<figure>]`, §11.2), for its pages.
 
 Each layer names **only what it changes**, in base.toml's tables. A key base.toml does not have is
 an error with the nearest spelling; so is a value of another kind (a number for a number, a pair of
@@ -900,7 +901,7 @@ anything runs.
 | **C14** | `combine` names quantities swept here as axes of their own, none of them in `plot_points`. | `combine names 'pdf', which is not swept here as an axis of its own` · `'replica' is both combined and a page axis (plot_points)` |
 
 The plot checks follow the same shape: an unknown backend, format, gutter value, `[plot.data]` key,
-`[plot.object]` key or style key; a data file without a map; a style key a backend cannot honour.
+figure key or style key; a data file without a map; a style key a backend cannot honour.
 
 ---
 
@@ -1017,6 +1018,9 @@ comments and layout stay:
 - a base card's lines for keys the runner sets (its folder's `[card] owned`: events, threads, seeds),
   which the plan already said were not used. That changes the card, so the points' identities: they
   rerun.
+- `[plot.overlay.<name>]` and `[plot.object."<glob>"]` → `[plot.figures.…]` (V81, §11.2), and in a
+  figure a style key written bare (`ratio.range`) → `style.ratio.range`. This runs first, on the text,
+  so a file that was not TOML only for that reads once migrated.
 
 It reads each config leniently (the old forms included) before writing anything, and strictly after.
 

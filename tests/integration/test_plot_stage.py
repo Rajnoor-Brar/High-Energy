@@ -34,8 +34,8 @@ def stage(scratch, request):
                      "data": {"file": "./tests/reference/legacy_run/ydmrg/photo_eic_data.yoda", "legend": "legacy",
                               "map": {"d01-x01-y01": "/REF/photo_eic/d01-x01-y01"}},
                      "style": {"page": {"dpi": 100}},
-                     "object": {"d04-*": {"logy": True, "y_gutter": 3.0, "title": "override",
-                                          "style": {"legend": {"position": "top-left"}}}}})
+                     "figures": {"d04": {"objects": ["d04-*"], "logy": True, "y_gutter": 3.0, "title": "override",
+                                         "style": {"legend": {"position": "top-left"}}}}})
     run = parse(data, scratch)
     configuration = run.configuration(None)
     master = quantities.load_master(run.project, run.master_toml)
@@ -81,7 +81,7 @@ def test_object_overrides_and_rivet_labels(stage):
     assert pages["em/d02-x01-y01"]["y_gutter"] == 0.5 and pages["em/d02-x01-y01"]["x_gutter"] == "default"
     if (REPO / "build" / "Rivet" / "photo_eic.plot").exists():
         assert pages["em/d01-x01-y01"]["x_label"] == "#it{E}_{#it{T}}^{#it{jet}} [GeV]"
-        # with no [plot.object] override, log y is what the analysis's .plot says (the built copy, which
+        # with no figure of its own, log y is what the analysis's .plot says (the built copy, which
         # follows modules/: the user may be editing it)
         assert pages["em/d02-x01-y01"]["logy"] is (labels.labels_of("/photo_eic/d02-x01-y01").get("LogY") == "1")
 
@@ -128,16 +128,15 @@ def test_the_sweep_is_merged_once_into_the_file_the_pages_read(stage):
 
 def test_figures_are_recipes_for_pages(stage):
     """V80: a defined figure takes over its objects' pages (also those [plot].objects leaves out) with its
-    own page keys; [plot.figures] class = "overlay" writes what [plot.overlay] wrote; one recipe per page."""
+    own page keys, and leaves the other pages as they were; one recipe per page."""
     run, configuration, plans = stage
-    cuts = {"objects": ["d02-x01-y01", "d03-x01-y01"], "labels": ["$E_T > 5$", "$E_T > 10$"], "ratio": False}
-    run.plot.update({"objects": ["/photo_eic/d01*"], "overlay": {"cuts": cuts}})
+    cuts = {"class": "overlay", "objects": ["d02-x01-y01", "d03-x01-y01"], "labels": ["$E_T > 5$", "$E_T > 10$"], "ratio": False}
+    run.plot.update({"objects": ["/photo_eic/d01*"]})
+    run.plot["figures"] = {"cuts": cuts}
     before = {p.name: p.config.read_text() for p in plot.pages(run, configuration, plans)}
-    del run.plot["overlay"]
-    run.plot["figures"] = {"cuts": {"class": "overlay", **cuts},
-                           "tails": {"objects": ["d05-*"], "min_entries": 0, "auto_range": False, "style": {"page": {"dpi": 50}}}}
+    run.plot["figures"]["tails"] = {"objects": ["d05-*"], "min_entries": 0, "auto_range": False, "style": {"page": {"dpi": 50}}}
     after = {p.name: p for p in plot.pages(run, configuration, plans)}
-    assert set(after) == set(before) | {"em/d05-x01-y01", "ep/d05-x01-y01"}
+    assert set(after) == set(before) | {"em/d05-x01-y01", "ep/d05-x01-y01"} and "em/d04-x01-y01" not in after
     assert all(after[name].config.read_text() == text for name, text in before.items())   # the same page TOMLs
     d05 = tomllib.loads(after["em/d05-x01-y01"].config.read_text())
     assert (d05["page"]["min_entries"], d05["page"]["auto_range"], d05["style"]["page"]["dpi"]) == (0, False, 50)
@@ -262,9 +261,9 @@ def test_titles_and_overlays(stage):
     point on one page, labelled by the overlay (and the point, when a page has several)."""
     run, configuration, plans = stage
     run.plot.update({"title": "All pages", "title_right": "Pythia 8", "legend_header": "header for all",
-                     "overlay": {"cuts": {"objects": ["d02-x01-y01", "d03-x01-y01"], "labels": ["E_{T} > 5", "E_{T} > 10"],
+                     "figures": {**run.plot["figures"], "cuts": {"class": "overlay", "objects": ["d02-x01-y01", "d03-x01-y01"], "labels": ["E_{T} > 5", "E_{T} > 10"],
                                           "title": "#eta by cut", "title_left": "k_{T}"}}})
-    run.plot["object"]["d04-*"]["legend_header"] = "d04's own"
+    run.plot["figures"]["d04"]["legend_header"] = "d04's own"
     by = {p.name: p for p in plot.pages(run, configuration, plans)}
     d01, d04, cuts = (tomllib.loads(by[n].config.read_text())["page"] for n in ("em/d01-x01-y01", "em/d04-x01-y01", "em/cuts"))
     assert (d01["title"], d01["title_right"], d01["legend_header"]) == ("All pages", "Pythia 8", "header for all")
@@ -291,8 +290,9 @@ def test_the_mpl_backend_draws_mkhtml_s_pages_pixel_for_pixel(stage):
     np = pytest.importorskip("numpy")
     run, configuration, plans = stage
     run.plot.update({"backend": ["yoda", "mpl"], "title": "All pages", "title_right": "Pythia 8",
-                     "overlay": {"cuts": {"objects": ["d02-x01-y01", "d03-x01-y01"], "labels": ["$E_T > 5$", "$E_T > 10$"]}}})
-    run.plot["object"]["d05-*"] = {"style": {"legend": {"position": "best"}}}
+                     "figures": {**run.plot["figures"], "cuts": {"class": "overlay", "objects": ["d02-x01-y01", "d03-x01-y01"],
+                                                                 "labels": ["$E_T > 5$", "$E_T > 10$"]}}})
+    run.plot["figures"]["d05"] = {"objects": ["d05-*"], "style": {"legend": {"position": "best"}}}
     said = []
     assert plot.draw(run, configuration, plans, said.append) == 0, said
     plots = plans[0].res.parent / "plots"

@@ -574,9 +574,15 @@ void_empty  = true                # blank bins empty in every curve
 min_entries = 10                  # blank bins fewer raw entries went into, in any curve
 root_style  = "talk"              # configs/<P>/talk.toml, over the base style
 
-[plot.object."d04-*"]             # per object: labels, log axes, gutters, ratio, style
+[plot.figures.tails]              # a figure: these objects' pages, with any [plot] page key of their own
+objects = ["d04-*"]
 logy = true
 style.legend.position = "bottom-left"
+
+[plot.figures.algorithms]         # several objects of each point on one page
+class   = "overlay"
+objects = ["d02-x01-y01", "d11-x01-y01", "d12-x01-y01"]
+labels  = ['$k_{T}$', 'anti-$k_{T}$', "SISCone"]
 ```
 
 **The style.** Every ROOT page starts from `utils/Apps/Paint/base.toml`, which gives it
@@ -597,7 +603,7 @@ position = "top-left"     # or [x, y]: its top-right corner, in fractions of the
 errors = "band"
 ```
 
-`[plot.style]` goes over the file, and `[plot.object."<glob>"].style` over both. A misspelt key is an
+`[plot.style]` goes over the file, and a figure's `style` over both, for its pages. A misspelt key is an
 error at plan time with the nearest spelling. `build/Paint.exe <page>.toml --dump-style` prints a
 page's whole style; the page configs are in `output/…/plots/`. Every key is in
 [04 §12](04_Config_Reference.md#12-the-style).

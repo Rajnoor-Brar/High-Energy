@@ -137,7 +137,7 @@ configurations = ["default01", "default0", "default1", "default2", "default3", "
 
 | Phase | Steps | State |
 |---|---|---|
-| F0 | S1 S2 | S1 (V80: `[plot.figures]`, defined and overlay, every page key per figure) done |
+| F0 | S1 S2 | S1 (V80: `[plot.figures]`, defined and overlay, every page key per figure), S2 (V81: the old tables refused, `hep migrate` rewrites them) done: F0 complete |
 | F1 | S1 S2 | |
 | F2 | S1 S2 | |
 | F3 | S1 S2 | |

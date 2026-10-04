@@ -21,7 +21,7 @@ from .record import is_complete, complete_marker
 
 TABLES = {"run": "run", "master": "master", "prelim": "prelim", "plot": "plot", "data": "data",
           "configuration": "configuration", "quantity": "quantity", "quantities": "quantity", "tool": "tool",
-          "tools": "tool", "figure": "figure", "figures": "figure", "object": "figure", "overlay": "figure"}
+          "tools": "tool", "figure": "figure", "figures": "figure"}
 
 
 # ── hep ls ─────────────────────────────────────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ def ls(project: str | None = None) -> list[str]:
 def explain(key: str) -> list[str]:
     """A key's type, default, choices, bounds, inheritance and doc, from utils/Env/schema/run.toml.
     `plot.y_gutter`, `[plot].y_gutter`, `run.event_count`, `quantities.<q>.styles`, `tools.<tag>.shards`,
-    `plot.object.<glob>.logy`; a bare key is looked up in every table."""
+    `plot.figures.<figure>.logy`; a bare key is looked up in every table."""
     parts = [p for p in key.replace("[", "").replace("]", ".").split(".") if p]
     if not parts:
         raise HepError("explain which key?", hint="e.g. hep explain plot.y_gutter")

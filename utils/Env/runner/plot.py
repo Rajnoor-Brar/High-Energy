@@ -8,15 +8,15 @@ docs/04_Config_Reference.md §11, docs/05_Tools_Reference.md §17. After the poi
   per point, raw entries included (so Paint can void by min_entries) and points.json inside. It is
   rebuilt only when a point's YODA changes, and it is what the pages read;
 * titles and axis labels come from the analysis's Rivet .plot file (one label source, v1's D9), under
-  [plot.object."<glob>"] overrides; every text is LaTeX (V65), and may cite the points (V66):
+  a figure's own ([plot.figures.<figure>], V80); every text is LaTeX (V65), and may cite the points (V66):
   {cell}, {q:<quantity>} (a value's label), and what the tools' folders give ({opt:ETMIN}: Rivet's);
 * reference data are drawn only through the explicit [plot.data].map (L18);
 * one Paint config per page, output/…/plots/[<page>/]<object>.toml, drawn to
   results/…/plots/root/[<page>/]<object>.<fmt>; the yoda backend writes results/…/plots/yoda/, and
   backend = ["root", "yoda"] (or "both") writes both from the same pages;
 * the style is utils/Apps/Paint/base.toml, which Paint reads itself; a page's [style] holds only
-  what the run changes: the [plot].root_style file, then [plot.style], then the matching
-  [plot.object."<glob>"].style, each checked against base.toml's keys and types.
+  what the run changes: the [plot].root_style file, then [plot.style], then its figure's style, each
+  checked against base.toml's keys and types.
 """
 
 from __future__ import annotations
@@ -45,8 +45,8 @@ BACKENDS = tuple(b for b in schema.keys("plot")["backend"]["choices"] if b != "b
 FORMATS = tuple(schema.keys("plot")["formats"]["choices"])
 LEGENDS = ("top-right", "top-left", "bottom-right", "bottom-left", "best")
 #: Above the frame: the main title and the corners; the legend's first line (V51). [plot] sets them for
-#: every page, [plot.object."<glob>"] and [plot.overlay.<name>] for theirs: a child inherits its parent's
-#: value and may override it, and a key means the same at both levels.
+#: every page, a figure ([plot.figures.<figure>]) for its own: it inherits [plot]'s value and may
+#: override it, and a key means the same at both levels.
 TITLE_KEYS = ("title", "title_left", "title_right", "legend_header")
 DEFAULT = schema.DEFAULT  # "keep it as it is" (V55): a child's is its parent's; [plot]'s sets nothing
 PLACEHOLDER = re.compile(r"\{(cell|[a-z]+:[A-Za-z0-9_.:+-]+)\}")    # V66; a LaTeX group never has the colon
@@ -74,17 +74,17 @@ class Page:
     sources: list = field(default_factory=list)     # each curve's YODA …
     variants: list = field(default_factory=list)    # … and its object there (options included)
     data: tuple | None = None                       # (reference YODA, its object path)
-    overrides: set = field(default_factory=set)     # [plot.object] keys that applied
+    overrides: set = field(default_factory=set)     # the keys its figure set
     ranges: dict = field(default_factory=dict)      # Paint --dump-ranges, for other backends
     style: dict = field(default_factory=dict)       # base.toml with the page's [style] over it
     plots: Path | None = None                        # results/…/plots: a backend draws into plots/<its name>/
-    overlay: str = ""                                # [plot.overlay.<name>]: curves are several objects (V51)
+    overlay: str = ""                                # an overlay figure's name: curves are several objects (V51)
     bands: list = field(default_factory=list)        # per curve: its band members' (YODA, object), V69
 
 
 @dataclass(frozen=True)
 class Figure:
-    """A recipe for pages (V80): [plot.figures.<key>], or [plot.overlay.<key>] until migrated."""
+    """A recipe for pages (V80): [plot.figures.<key>]."""
     key: str
     kind: str                # its class: defined, overlay
     type: str                # what is drawn; "" from the objects
@@ -139,8 +139,6 @@ def validate(run) -> None:
     if not names:
         raise HepError("[plot].backend names no backend", where=f"{where}.backend", hint='"root", "yoda" or "both"')
     run_style(run)
-    for glob, table in settings.get("object", {}).items():
-        check_style(table.get("style", {}), f'{where}.object."{glob}".style')
     for figure in figures(run):
         check_style(figure.table.get("style", {}), f"{figure.where}.style")
     for name in names[1:] if names[0] == "root" else names:
@@ -423,7 +421,7 @@ def pages(run, configuration, plans) -> list[Page]:
             short = path.rsplit("/", 1)[-1]
             rel = f"{key}/{short}" if key else short
             figure = claimed.get(path)
-            override = override_of(settings, path) | (figure.table if figure else {})
+            override = override_of(figure.table if figure else None)
             drawn = data if chosen("use_data", True, True, (override, settings)) is not False else {}
             reference = drawn.get("map", {}).get(short) if drawn else None
             if reference and data_file is None:                # converted once, when a page draws it
@@ -435,8 +433,7 @@ def pages(run, configuration, plans) -> list[Page]:
             fill = page_fill([plan for plan, _ in curves] or members)
             folded = _banded(curves, curve_groups, band, lambda p, f: variants[p.point.name][path].index(f))
             envelope = f" ({', '.join(band)} envelope)" if band else ""
-            page, override = page_settings(settings, path, rel, res_dir / rel, reference is not None, fill=fill,
-                                           child=override if figure else None)
+            page, override = page_settings(settings, path, rel, res_dir / rel, reference is not None, fill=fill, child=override)
             several = {plan.point.name for plan, _ in curves if len(variants[plan.point.name][path]) > 1}
             layer = merge_style(style, override.get("style", {}))
             document = {"page": page, "style": layer, "curve": [
@@ -532,8 +529,7 @@ def check_band(run, configuration) -> None:
     """V69: [plot].band, and a figure's, names curve axes of the configuration (checked at plan time too)."""
     curve_groups = axes_of(configuration)[1]
     settings = run.plot or {}
-    tables = ([("[plot]", settings)] + [(f'[plot.object."{name}"]', table) for name, table in settings.get("object", {}).items()]
-              + [(f.where.split(": ", 1)[1], f.table) for f in figures(run)])
+    tables = [("[plot]", settings)] + [(f.where.split(": ", 1)[1], f.table) for f in figures(run)]
     for at, table in tables:
         band = table.get("band", [])
         for name in band if isinstance(band, list) else ():
@@ -592,11 +588,10 @@ def filler(known: list[dict[str, str]], where: str):
 
 def page_settings(settings: dict, path: str, rel: str, output: Path, with_data: bool,
                   child: dict | None = None, fill=lambda text: text) -> tuple[dict, dict]:
-    """A page's [page] table: labels from the analysis's .plot (TLatex), [plot.object] overrides (or
-    an overlay's own table, `child`), and the [plot] values, their placeholders filled (`fill`, V66).
-    Returns it and the overrides that applied."""
+    """A page's [page] table: labels from the analysis's .plot, its figure's own values (`child`), and the
+    [plot] values, their placeholders filled (`fill`, V66). Returns it and the figure's values."""
     labels = labels_of(path)
-    override = override_of(settings, path, child)
+    override = override_of(child)
 
     def pick(name, ours, native, tables=(override, settings)):
         return chosen(name, ours, native, tables)
@@ -631,16 +626,10 @@ def page_settings(settings: dict, path: str, rel: str, output: Path, with_data: 
     return page, override
 
 
-def override_of(settings: dict, path: str, child: dict | None = None) -> dict:
-    """What a figure's own table sets (`child`), or else every [plot.object."<glob>"] matching the object,
-    in file order (until migrated). Any [plot] key marked `page` in the schema, and x_label, y_label, style."""
-    if child is not None:
-        return {k: v for k, v in child.items() if k not in schema.FIGURE_OWN}
-    short, override = path.rsplit("/", 1)[-1], {}
-    for glob, table in settings.get("object", {}).items():
-        if fnmatch.fnmatch(short, glob) or fnmatch.fnmatch(path, glob):
-            override.update(table)
-    return override
+def override_of(child: dict | None) -> dict:
+    """What a figure's own table sets for its pages: any [plot] key marked `page` in the schema, and
+    x_label, y_label, style. The implicit figure sets nothing of its own."""
+    return {k: v for k, v in (child or {}).items() if k not in schema.FIGURE_OWN}
 
 
 def chosen(name: str, ours, native, tables: tuple):

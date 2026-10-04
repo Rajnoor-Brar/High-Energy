@@ -12,12 +12,12 @@
 #   inherit  true: a configuration ([run.<cfg>]) inherits it from [run]
 #   default_ok  true: the value "default" is accepted. "default" means "keep it as it is" (V55): in a
 #            child it is the parent's value; at the top level nothing is set, and the tool decides.
-#   page     a [plot] key a figure ([plot.object."<glob>"], [plot.overlay.<name>]) may override
+#   page     a [plot] key a figure ([plot.figures.<figure>]) may override
 #   doc      one line, for `hep explain` and the editor
 #
 # Tables: master, run, configuration ([run.<cfg>]), prelim, quantity ([quantities.<q>]), tool
 # ([tools.<tag>]: the keys every tool table may carry; a folder's [options] add its own), plot,
-# figure ([plot.figures.<figure>]; [plot.object."<glob>"] and [plot.overlay.<name>] until migrated), data.
+# figure ([plot.figures.<figure>]), data.
 
 [sections]
 order = ["master", "run", "prelim", "static", "tools", "quantities", "plot"]
@@ -491,14 +491,6 @@ doc  = "the style over base.toml"
 [plot.figures]
 type = "table"
 doc  = "[plot.figures.<figure>]: the figures, each a recipe for pages (08_Figures)"
-
-[plot.object]
-type = "table"
-doc  = "[plot.object.\"<glob>\"]: keys for the objects the glob matches (until migrated: a defined figure)"
-
-[plot.overlay]
-type = "table"
-doc  = "[plot.overlay.<name>]: several objects on one page (until migrated: an overlay figure)"
 
 # ── [plot.figures.<figure>]: a recipe for pages ─────────────────────────────────────────────
 # A figure takes every [plot] key marked `page = true`, meaning the same for its pages ("default":

@@ -3,7 +3,7 @@
 * every relative link in docs/ resolves, anchors included;
 * every TOML block parses, and every complete run TOML example loads through the runner's parser;
 * every key the runner accepts is in the reference: config.py's tables, [plot.data] and
-  [plot.object] keys, base.toml's style keys, and every tool folder's options;
+  figure keys, base.toml's style keys, and every tool folder's options;
 * every tool folder has its section in 05;
 * every section the code cites (`docs/04_Config_Reference.md §9.4`, `04 §9.4`) exists, and every id
   it cites (V22, L18, C7, F10, R1, 00/B5) is in the record.

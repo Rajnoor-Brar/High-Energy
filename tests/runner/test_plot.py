@@ -25,7 +25,7 @@ def test_a_valid_plot_table_passes(scratch):
     validated(scratch, backend="root", formats=["pdf", "png", "svg"], y_gutter=1.5, range_pad=1,
               data={"file": "zeus_eic.yoda", "legend": "ZEUS", "map": {"d01-x01-y01": "/REF/X/d01-x01-y01"}},
               style={"page": {"dpi": 300}, "legend": {"position": "top-left"}},
-              object={"d04-*": {"logy": True, "style": {"legend": {"position": [0.5, 0.9]}}}})
+              figures={"f": {"objects": ["d04-*"], "logy": True, "style": {"legend": {"position": [0.5, 0.9]}}}})
 
 
 @pytest.mark.parametrize("table, message", [
@@ -40,11 +40,11 @@ def test_a_valid_plot_table_passes(scratch):
     ({"style": {"ratio": {"range": [0.5]}}}, "range"),
     ({"style": {"text": 10}}, "table"),
     ({"root_style": "/nowhere/talk.toml"}, "no style file"),
-    ({"object": {"d01*": {"LegendXPos": 0.5}}}, "LegendXPos"),         # v1 parsed it and dropped it
-    ({"object": {"d01*": {"legend": "centre"}}}, "legend"),
+    ({"figures": {"f": {"objects": ["d01*"], "LegendXPos": 0.5}}}, "LegendXPos"),         # v1 parsed it and dropped it
+    ({"figures": {"f": {"objects": ["d01*"], "legend": "centre"}}}, "legend"),
     ({"y_gutter": -1}, "gutter"),
     ({"x_gutter": "auto"}, "gutter"),
-    ({"object": {"d01*": {"y_gutter": -0.5}}}, "gutter"),
+    ({"figures": {"f": {"objects": ["d01*"], "y_gutter": -0.5}}}, "gutter"),
     ({"data": {"file": "zeus_eic.yoda"}}, "no map"),                     # L18: explicit only
     ({"data": {"map": {"d01-x01-y01": "/REF/X/d01"}}}, "no file"),
 ])
@@ -174,7 +174,7 @@ def test_the_yoda_backend_refuses_what_mkhtml_cannot_do(scratch):
 
 
 def test_no_gutter_leaves_mkhtml_its_own_range(yoda_backend, scratch):
-    validated(scratch, y_gutter="default", x_gutter=0, object={"d04*": {"y_gutter": "default"}})
+    validated(scratch, y_gutter="default", x_gutter=0, figures={"f": {"objects": ["d04*"], "y_gutter": "default"}})
     page = plot.Page("d01", scratch / "d01.toml", scratch / "d01", object="/A/d01",
                      document={"page": {"logx": False, "logy": False, "ratio": False}},
                      style=plot.base_style(), ranges={"x": [0, 1], "y": [0, 2], "x_tool": False, "y_tool": True})
@@ -261,8 +261,8 @@ def test_every_drawing_option_takes_default(scratch):
     assert plot.run_style(run) == {}                                   # no root_style file
 
 
-def page(settings, path="/photo_eic/d01-x01-y01", with_data=True):
-    return plot.page_settings(settings, path, "d01", Path("/tmp/x"), with_data)[0]
+def page(settings, path="/photo_eic/d01-x01-y01", with_data=True, child=None):
+    return plot.page_settings(settings, path, "d01", Path("/tmp/x"), with_data, child=child)[0]
 
 
 def test_default_is_what_the_tool_does_by_itself():
@@ -276,10 +276,10 @@ def test_default_is_what_the_tool_does_by_itself():
 
 def test_an_objects_default_keeps_what_plot_says():
     """V55: "default" in a child is its parent's value; only at the top level does the tool decide."""
-    settings = {"logy": False, "title": "every page", "object": {"d01-*": {"logy": "default", "title": "default"}}}
-    shown = page(settings)
+    settings = {"logy": False, "title": "every page"}
+    shown = page(settings, child={"objects": ["d01-*"], "logy": "default", "title": "default"})
     assert shown["logy"] is False and shown["title"] == "every page"   # [plot]'s, inherited
-    assert page({"object": {"d01-*": {"logy": "default"}}})["logy"] == page({})["logy"]   # no parent: as if absent
+    assert page({}, child={"logy": "default"})["logy"] == page({})["logy"]   # no parent: as if absent
 
 
 def test_a_figure_overrides_every_page_key_of_plot(scratch):
@@ -289,23 +289,16 @@ def test_a_figure_overrides_every_page_key_of_plot(scratch):
     assert {"auto_range", "void_empty", "min_entries", "range_pad", "use_data", "band", "ratio"} <= page_keys
     assert page_keys | {"x_label", "y_label", "style"} | set(schema.FIGURE_OWN) == set(schema.keys("figure"))
     assert not {"backend", "formats", "data", "root_style"} & set(schema.keys("figure"))
-    settings = {"auto_range": True, "min_entries": 5, "object": {"d01-*": {"auto_range": False, "min_entries": "default",
-                                                                          "range_pad": 2, "void_empty": True}}}
-    shown = page(settings)
+    settings = {"auto_range": True, "min_entries": 5}
+    shown = page(settings, child={"auto_range": False, "min_entries": "default", "range_pad": 2, "void_empty": True})
     assert (shown["auto_range"], shown["min_entries"], shown["range_pad"], shown["void_empty"]) == (False, 5, 2, True)
     overlay = {"objects": ["d01-*"], "ratio": True, "style": {"ratio": {"range": [0.8, 1.1]}}, "use_data": False}
-    validated(scratch, ratio=False, overlay={"o": overlay}, object={"d02-*": {"use_data": False, "band": []}},
-              figures={"f": {**overlay, "class": "overlay"}, "g": {"objects": ["d03-*"], "min_entries": 3}})
-    with pytest.raises(HepError, match="unknown key 'formats'"):
-        validated(scratch, object={"d01-*": {"formats": ["png"]}})
+    validated(scratch, ratio=False, figures={"f": {**overlay, "class": "overlay"}, "g": {"objects": ["d03-*"], "min_entries": 3},
+                                             "h": {"objects": ["d02-*"], "use_data": False, "band": []}})
 
 
 def test_a_figure_band_must_be_a_curve_axis_too(scratch):
     from helpers import plan
-    run, conf, _ = plan(raw(run__one__sweeps=["pdf"], run__one__plot_points=["pdf"],
-                            plot={"overlay": {"o": {"objects": ["d01-*"], "band": ["pdf"]}}}), scratch)
-    with pytest.raises(HepError, match=r"\[plot.overlay.o\].band names pdf"):
-        plot.check_band(run, conf)
     run, conf, _ = plan(raw(run__one__sweeps=["pdf"], run__one__plot_points=["pdf"],
                             plot={"figures": {"f": {"objects": ["d01-*"], "band": ["pdf"]}}}), scratch)
     with pytest.raises(HepError, match=r"\[plot.figures.f\].band names pdf"):
@@ -325,19 +318,20 @@ def test_a_figure_is_checked_when_the_file_is_read(scratch, figure, message):
         validated(scratch, figures={"f": figure})
 
 
-def test_a_figure_and_an_overlay_may_not_share_a_name(scratch):
-    with pytest.raises(HepError, match="both a figure and an overlay"):
-        validated(scratch, figures={"o": {"objects": ["d01-*"]}}, overlay={"o": {"objects": ["d01-*"]}})
+@pytest.mark.parametrize("old", ["overlay", "object"])
+def test_the_tables_figures_replaced_are_refused_with_the_figure_to_write(scratch, old):
+    """V81, break and migrate: hep migrate rewrites them."""
+    with pytest.raises(HepError, match=rf"\[plot.{old}\] is a figure now") as error:
+        validated(scratch, **{old: {"d01-*": {"objects": ["d01-*"]}}})
+    assert error.value.hint == "hep migrate rewrites it"
 
 
 def test_the_figures_of_a_run_in_file_order(scratch):
     run = validated(scratch, figures={"tails": {"objects": ["d04-*"], "logy": True},
-                                      "eta": {"class": "overlay", "objects": ["d02-*", "d03-*"], "name": "algorithms"}},
-                    overlay={"old": {"objects": ["d01-*"], "labels": ["x"]}})
+                                      "eta": {"class": "overlay", "objects": ["d02-*", "d03-*"], "name": "algorithms"}})
     shown = [(f.key, f.kind, f.name, f.objects, f.table) for f in plot.figures(run)]
     assert shown == [("tails", "defined", "tails", ("d04-*",), {"logy": True}),
-                     ("eta", "overlay", "algorithms", ("d02-*", "d03-*"), {}),
-                     ("old", "overlay", "old", ("d01-*",), {})]
+                     ("eta", "overlay", "algorithms", ("d02-*", "d03-*"), {})]
 
 
 def test_a_style_default_falls_through_to_the_layer_below():
@@ -349,8 +343,8 @@ def test_a_style_default_falls_through_to_the_layer_below():
 
 def test_an_object_value_of_the_wrong_kind_is_refused(scratch):
     with pytest.raises(HepError, match="must be true or false"):
-        validated(scratch, object={"d01-*": {"logy": "yes"}})
-    validated(scratch, object={"d01-*": {"logy": "default", "ratio": True}})
+        validated(scratch, figures={"f": {"objects": ["d01-*"], "logy": "yes"}})
+    validated(scratch, figures={"f": {"objects": ["d01-*"], "logy": "default", "ratio": True}})
 
 
 def test_the_yoda_backend_has_nothing_to_honour_in_a_default(scratch):
@@ -441,7 +435,7 @@ def test_normalise_is_a_page_key_a_child_may_set(scratch):
     """V68: false unless asked; an object's table overrides [plot]'s; "area" or false only."""
     assert page({})["normalise"] is False
     assert page({"normalise": "area"})["normalise"] == "area"
-    assert page({"normalise": "area", "object": {"d01-*": {"normalise": False}}})["normalise"] is False
+    assert page({"normalise": "area"}, child={"normalise": False})["normalise"] is False
     with pytest.raises(HepError, match="must be one of area, false"):
         validated(scratch, normalise="peak")
 
@@ -457,7 +451,7 @@ def test_the_yoda_backend_normalises_as_paint(yoda_backend):
 def test_a_cited_placeholder_is_checked_before_any_point_runs(scratch):
     """V66: a typo is refused at plan time, with what the points have."""
     from helpers import plan
-    run, _, p = plan(raw(static={"pdf": "MSTW08lo"}, plot={"title": "{opt:ETMIN} {q:pdf}", "overlay": {"o": {"objects": ["d01-*"], "labels": ["{cell}"]}}}), scratch)
+    run, _, p = plan(raw(static={"pdf": "MSTW08lo"}, plot={"title": "{opt:ETMIN} {q:pdf}", "figures": {"o": {"class": "overlay", "objects": ["d01-*"], "labels": ["{cell}"]}}}), scratch)
     plot.check_texts(run, [p])
     run, _, p = plan(raw(plot={"legend_header": "{opt:ETMN}"}), scratch)
     with pytest.raises(HepError, match=r"cites \{opt:ETMN\}") as error:
@@ -537,5 +531,5 @@ def test_a_tlatex_label_in_a_run_toml_is_refused_with_its_latex(scratch):
         parse(raw(quantities__pdf__labels=["E_{T} > 4", "b"]), scratch)
     assert "$E_{T}$ > 4" in error.value.hint and "hep migrate" in error.value.hint
     with pytest.raises(HepError, match="is TLatex"):
-        validated(scratch, overlay={"o": {"objects": ["d01-*"], "labels": ["k_{T}"]}})
+        validated(scratch, figures={"o": {"class": "overlay", "objects": ["d01-*"], "labels": ["k_{T}"]}})
     validated(scratch, title="$E_T$ jets", data={"file": "zeus_eic.yoda", "legend": "ZEUS", "map": {"d01-x01-y01": "/REF/X/d01"}})

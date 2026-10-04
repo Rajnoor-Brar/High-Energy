@@ -79,3 +79,52 @@ def test_the_command_diffs_then_applies(scratch, capsys):
     config.load(str(path))
     assert cli.cmd_migrate(argparse.Namespace(configs=[str(path)], apply=False)) == 0
     assert "nothing to migrate" in capsys.readouterr().out
+
+
+FIGURES = """\
+[run]
+name    = "fig"
+configuration = "a"
+event_count = 1
+project = "PhotoProduction"
+
+[run.a]
+tools  = ["jets"]
+sweeps = []
+
+[tools.jets]
+tool       = "custom"
+executable = "path:python3"
+
+[plot]
+ratio = true
+
+[plot.object."d04-*"]              # the tails
+logy = true
+
+[plot.object."/photo_eic/d0[5-6]*".style]
+legend.position = "top-left"
+
+[plot.overlay.eta]
+objects = ["d02-x01-y01", "d11-x01-y01"]
+ratio   = true
+ratio.range  = [0.8, 1.1]
+ratio.limits = [0.8, 1.1]
+"""
+
+
+def test_the_old_figure_tables_become_figures(scratch, capsys):
+    """V81: overlays and object tables as [plot.figures]; a bare style key (not TOML beside ratio = true)
+    under style. The text is migrated first, so the file reads once migrated."""
+    new = migrate.figure_text(FIGURES)
+    assert '[plot.figures.d04]              # the tails\nobjects = ["d04-*"]\nlogy = true\n' in new
+    assert '[plot.figures.d0_5_6]\nobjects = ["/photo_eic/d0[5-6]*"]\n[plot.figures.d0_5_6.style]\nlegend.position' in new
+    assert '[plot.figures.eta]\nclass = "overlay"\nobjects' in new
+    assert "ratio   = true\nstyle.ratio.range  = [0.8, 1.1]\nstyle.ratio.limits = [0.8, 1.1]\n" in new
+    assert "legend.position" in new and "style.legend.position" not in new           # a style table already
+    path = scratch / "fig.toml"
+    path.write_text(FIGURES, encoding="utf-8")
+    assert cli.cmd_migrate(argparse.Namespace(configs=[str(path)], apply=True)) == 0
+    run = config.load(str(path))
+    assert run.plot["figures"]["eta"]["style"] == {"ratio": {"range": [0.8, 1.1], "limits": [0.8, 1.1]}}
+    assert run.plot["figures"]["d04"] == {"objects": ["d04-*"], "logy": True}

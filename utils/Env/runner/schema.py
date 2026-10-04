@@ -25,7 +25,7 @@ NAMES = {"int": "an integer", "float": "a number", "str": "a string", "bool": "t
          "table": "a table"}
 #: The tables of run.toml that describe keys (the rest, [sections], describe the file).
 TABLES = ("master", "run", "configuration", "prelim", "quantity", "tool", "plot", "figure", "data")
-#: A figure's own keys, which a [plot.object."<glob>"] table (until migrated) does not take.
+#: A figure's own keys: the rest are what it sets for its pages.
 FIGURE_OWN = ("class", "type", "name", "objects", "labels")
 
 
@@ -161,13 +161,8 @@ def json_schema() -> dict:
     run["additionalProperties"] = configuration                      # [run.<cfg>]
     figure = _object("figure")
     figure["required"] = ["objects"]
-    legacy = {**figure, "properties": {k: v for k, v in figure["properties"].items() if k not in FIGURE_OWN}}
-    legacy.pop("required")
     plot = _object("plot")
     plot["properties"]["figures"] = {"type": "object", "additionalProperties": figure}
-    plot["properties"]["object"] = {"type": "object", "additionalProperties": legacy}
-    plot["properties"]["overlay"] = {"type": "object", "additionalProperties": {
-        **figure, "properties": {k: v for k, v in figure["properties"].items() if k not in ("class", "type", "name")}}}
     plot["properties"]["data"] = _object("data")
     plot["properties"]["data"]["properties"]["map"] = {"type": "object", "additionalProperties": {"type": "string"}}
     return {

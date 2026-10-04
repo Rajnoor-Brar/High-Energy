@@ -461,7 +461,7 @@ complete points only:
    only when a point's YODA changed. The pages read it. The reference data, if any, are converted
    once into `output/<P>/.cache/datasets/`.
 3. **Page configs**: one TOML per `plot_points` cell and object in `output/…/plots/`, with the labels
-   from the analysis's `.plot` file (TLatex), the `[plot]` values and `[plot.object]` overrides, the
+   from the analysis's `.plot` file (TLatex), the `[plot]` values and its figure's own (`[plot.figures]`, V80), the
    style layers' changes, the curves and the mapped data.
 4. **Draw**: `build/Paint.exe` on each page (the root backend), and/or the yoda backend on the same
    pages with Paint's ranges and voids (`--dump-ranges`). A failed page is counted, and the run exits

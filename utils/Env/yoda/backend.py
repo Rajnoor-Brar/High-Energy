@@ -11,14 +11,14 @@ plot_points cell this writes
 * the curves' YODAs with the voided bins blanked (value NaN, no errors), as v1 did;
 * reference.yoda: the mapped reference objects, renamed /REF/<analysis>/<object> so that mkhtml
   pairs them with the MC (its own reference lookup is off: explicit only, L18);
-* pages.plot: per object the ranges, log axes, legend corner (style legend.position), and the [plot.object] label
+* pages.plot: per object the ranges, log axes, legend corner (style legend.position), and a figure's label
   overrides in LaTeX; the rest of the labels mkhtml reads from the analysis's own .plot;
 
 and runs rivet-mkhtml into results/…/plots/<cell>/. mkhtml always writes PDF and PNG; svg and eps
 are added. Of the style (utils/Apps/Paint/base.toml) mkhtml can honour a legend corner and the ratio
 pad's y ticks (ratio.divisions: YODA's generator puts them at a fifth of the range, so each page's
 script is redone with ROOT's rule and run again); any other [plot.style] or
-[plot.object."<glob>"].style key, and [plot].root_style, are refused. Beside
+[plot.figures.<figure>].style key, and [plot].root_style, are refused. Beside
 the root backend (backend = ["root", "yoda"]) they are Paint's to honour and are allowed, except a
 legend placed at [x, y]: the two page sets would then disagree about where the legend is, not
 only about its look.
@@ -58,8 +58,7 @@ def validate(settings: dict, beside_root: bool = False, curve_styles: list[dict]
     if "root_style" in settings and not beside_root:
         raise HepError('[plot].root_style cannot be honoured by backend = "yoda"', where="[plot].root_style", hint=hint)
     layers = [("[plot.style]", settings.get("style", {}))] + [
-        (f'[plot.{kind}."{key}"].style', table.get("style", {})) for kind in ("object", "overlay", "figures")
-        for key, table in settings.get(kind, {}).items()]
+        (f'[plot.figures.{key}].style', table.get("style", {})) for key, table in settings.get("figures", {}).items()]
     for where, layer in layers:
         for table, keys in layer.items():
             for key, value in keys.items() if isinstance(keys, dict) else [(None, keys)]:
