@@ -200,8 +200,10 @@ namespace Paint {
         return out;
     }
 
-    // Steps per run of finite bins, with their errors as bars at the centres, a band, or nothing.
-    inline void curve(const Series& s, const Pen& pen, const Look& look, Keep& keep, const std::string& id) {
+    // Steps per run of finite bins, with their errors as bars at the centres, a band, or nothing; or
+    // (markers, V86) a marker per bin at its centre with its error bar, in the curve's colour.
+    inline void curve(const Series& s, const Pen& pen, const Look& look, Keep& keep, const std::string& id,
+                      bool markers = false) {
         const int colourIndex = pen.colour;
         const bool band = !s.bandLo.empty();
         if (band) {                                     // V69: the members' envelope, shaded in the curve's colour
@@ -215,6 +217,13 @@ namespace Paint {
             }
             g->SetFillColorAlpha(colourIndex, 0.3), g->SetLineWidth(0), g->SetMarkerSize(0);
             if (n) g->Draw("2");
+        }
+        if (markers) {
+            auto* g = points(s, keep, false);
+            g->SetLineColor(colourIndex), g->SetLineWidth(pen.width);
+            g->SetMarkerStyle(look.s.marker), g->SetMarkerColor(colourIndex), g->SetMarkerSize(look.marker());
+            g->Draw(look.s.errors == "none" ? "P" : "PZ");
+            return;
         }
         for (TH1D* h : segments(s, keep, id)) {
             h->SetLineColor(colourIndex), h->SetLineWidth(pen.width), h->SetLineStyle(pen.line);
@@ -244,6 +253,7 @@ namespace Paint {
         int colour;
         bool data, drawn;
         int line = 1, width = 0;                      // the curve's pen (0: the style's width)
+        bool marker = false;                          // drawn as markers (V86): a marker beside it, as data's
     };
 
     // mkhtml's legend: no frame, the title as its header, and a "+" beside each entry — on the right
@@ -317,7 +327,7 @@ namespace Paint {
             if (e.drawn) {
                 line(s1, y, s2, y, e.colour, e.line, e.width);   // the curve's line; the bar stays solid
                 line(xc, y - 0.4 * dy, xc, y + 0.4 * dy, e.colour);
-                if (e.data) {
+                if (e.data || e.marker) {
                     auto* m = keep.hold(new TMarker(xc, y, s.marker));
                     m->SetNDC(), m->SetMarkerColor(e.colour), m->SetMarkerSize(look.marker()), m->Draw();
                 }
@@ -392,10 +402,10 @@ namespace Paint {
         }
         const std::vector<Pen> pen = pens(page.curves, look);
         for (size_t c = 0; c < curves.size(); ++c) {
-            curve(curves[c], pen[c], look, keep, "c" + std::to_string(c));
+            curve(curves[c], pen[c], look, keep, "c" + std::to_string(c), page.markers);
             const bool drawn = std::any_of(curves[c].y.begin(), curves[c].y.end(), [](double v) { return std::isfinite(v); });
             entries.push_back({drawn ? curves[c].label : curves[c].label + " (no entries)", pen[c].colour, false, drawn,
-                               pen[c].line, pen[c].width});
+                               pen[c].line, pen[c].width, page.markers});
         }
         std::vector<const Series*> drawn;
         if (data) drawn.push_back(&*data);
@@ -438,7 +448,7 @@ namespace Paint {
             rframe->GetYaxis()->SetNdivisions(st.divisions), rframe->GetYaxis()->SetDecimals(st.decimals);
             if (data) dataPoints(reference, look, keep, &reference);          // the data at 1, with their errors
             for (auto& [c, ratio] : ratios)
-                curve(ratio, pen[c], look, keep, "r" + std::to_string(c));
+                curve(ratio, pen[c], look, keep, "r" + std::to_string(c), page.markers);
             bottom->RedrawAxis();
         }
 

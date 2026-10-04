@@ -377,7 +377,8 @@ def pages(run, configuration, plans) -> list[Page]:
         root = merge(yodas, res_dir / "scan" / f"{figure.name}.root", out_dir / "scan" / f"{figure.name}.sha256")
         table = {"x_label": figure.x, "y_label": SCAN_LABELS.get(figure.y, figure.y.replace(":", " ")), **figure.table}
         made += _pages(run, members, yodas, root, [replace(figure, kind="defined", objects=(f"/FIGURES/{figure.name}",),
-                                                           table=table)], page_groups, kept, out_dir, res_dir, implicit=False)
+                                                           table=table, type=figure.type or "Scatter2D")],
+                       page_groups, kept, out_dir, res_dir, implicit=False)
     return made
 
 
@@ -388,8 +389,9 @@ SCAN_LABELS = {"sigma": r"$\sigma$ [pb]", "entries": "entries", "integral": "int
 def _scanned(run, figure: Figure, complete: list, sources: dict, groups: list, where: Path) -> tuple[list, dict]:
     """A scan figure's members (V85): per value of the axes other than x, a stand-in plan named by their
     tags, its YODA one Scatter2D /FIGURES/<name>: a point per value of x, at that value, its y the number
-    the figure reads of the point (utils/Env/figures/derive.py), its x range halfway to its neighbours
-    (so every backend draws it as a bin). Remade only when a member's YODA or the figure changed."""
+    the figure reads of the point (utils/Env/figures/derive.py), its x range reaching halfway to its
+    nearer neighbour on both sides, so it is centred on its value and every backend can draw it as a
+    bin (a scan is drawn as markers, V86). Remade only when a member's YODA or the figure changed."""
     module = plugins.load(repo_root() / "utils" / "Env" / "figures" / "derive.py", "derive")
     quantity = run.quantities[figure.x]
     kept = [g for g in groups if figure.x not in g]
@@ -403,14 +405,16 @@ def _scanned(run, figure: Figure, complete: list, sources: dict, groups: list, w
         name = "_".join(tag_of(run.quantities[g[0]], i) for g, i in zip(kept, key)) or "scan"
         plans = sorted(plans, key=lambda p: float(quantity.values[p.values[figure.x]]))
         target, stamp = where / f"{name}.yoda", where / f"{name}.sha256"
-        digest = "\n".join(f"{p.point.name} {_sha(sources[p.point.name])}" for p in plans) + f"\n{figure.y} {glob}"
+        xs = [float(quantity.values[p.values[figure.x]]) for p in plans]
+        gaps = [b - a for a, b in zip(xs, xs[1:])]
+        halves = [min([g for g in (gaps[i - 1] if i else None, gaps[i] if i < len(gaps) else None) if g] or [1.0]) / 2
+                  for i in range(len(xs))]
+        digest = ("\n".join(f"{p.point.name} {_sha(sources[p.point.name])}" for p in plans)
+                  + f"\n{figure.y} {glob} {xs} {halves}")
         if not (target.exists() and stamp.exists() and stamp.read_text(encoding="utf-8") == digest):
-            xs = [float(quantity.values[p.values[figure.x]]) for p in plans]
-            edges = ([xs[0] - (xs[1] - xs[0]) / 2 if len(xs) > 1 else xs[0] - 0.5]
-                     + [(a + b) / 2 for a, b in zip(xs, xs[1:])]
-                     + [xs[-1] + (xs[-1] - xs[-2]) / 2 if len(xs) > 1 else xs[-1] + 0.5])
             points = []
-            for plan, x, lo, hi in zip(plans, xs, edges, edges[1:]):
+            for plan, x, half in zip(plans, xs, halves):
+                lo, hi = x - half, x + half
                 try:
                     value, error = module.scan_value(str(sources[plan.point.name]), figure.y, glob)
                 except ValueError as error:
@@ -609,6 +613,8 @@ def _pages(run, complete: list, yodas: dict, merged: Path, declared: list, page_
             envelope = f" ({', '.join(band)} envelope)" if band else ""
             page, override = page_settings(settings, (labels_from or {}).get(path, path), rel, res_dir / rel,
                                            reference is not None, fill=fill, child=override)
+            if figure is not None and figure.type == "Scatter2D":
+                page["markers"] = True                                       # V86
             several = {plan.point.name for plan, _ in curves if len(variants[plan.point.name][path]) > 1}
             layer = merge_style(style, override.get("style", {}))
             document = {"page": page, "style": layer, "curve": [
@@ -658,6 +664,8 @@ def _pages(run, complete: list, yodas: dict, merged: Path, declared: list, page_
             envelope = f" ({', '.join(band)} envelope)" if band else ""
             page, override = page_settings(settings, paths[0], rel, res_dir / rel, False, child=table,
                                            fill=page_fill([plan for plan, _ in curves] or members))
+            if figure.type == "Scatter2D":
+                page["markers"] = True                                       # V86
             layer = merge_style(style, override.get("style", {}))
             lines = {plan.point.name for plan, _, _ in folded}
             document = {"page": page, "style": layer, "curve": [

@@ -208,12 +208,23 @@ def test_a_scan_figure_draws_one_number_per_point(scratch):
     assert len(scans) == 2                                                          # a curve per page cell (PDF)
     import yoda
     points = [(p.x(), p.xErrs(), p.y()) for p in yoda.read(str(scans[0]))["/FIGURES/xs"].points()]
-    assert [(x, tuple(e)) for x, e, _ in points] == [(-11.0, (11.0, 11.0)), (11.0, (11.0, 5.5)), (22.0, (5.5, 5.5))]
+    assert [(x, tuple(e)) for x, e, _ in points] == [(-11.0, (11.0, 11.0)), (11.0, (5.5, 5.5)), (22.0, (5.5, 5.5))]
+    assert page["page"]["markers"] is True                                           # a scan is markers (V86)
     assert by[[n for n in by if n.endswith("/b2")][0]].document["page"]["y_label"] == "second bin"
     assert plot.draw(run, configuration, plans, lambda line: None) == 0
     run.plot["figures"]["xs"]["x"] = "pdf"
     with pytest.raises(plot.HepError, match="not a curve axis"):
         plot.check_figures(run, configuration)
+
+
+def test_a_scatter2d_figure_is_drawn_as_markers(stage):
+    """V86: type = "Scatter2D" marks the page; Paint draws its curves as markers, the other pages as before."""
+    run, configuration, plans = stage
+    run.plot["figures"]["pts"] = {"objects": ["d05-*"], "type": "Scatter2D"}
+    by = {p.name: p for p in plot.pages(run, configuration, plans)}
+    assert by["em/d05-x01-y01"].document["page"]["markers"] is True
+    assert "markers" not in by["em/d01-x01-y01"].document["page"]
+    assert plot.draw(run, configuration, plans, lambda line: None) == 0
 
 
 def test_a_compare_figure_draws_configurations_together(stage):

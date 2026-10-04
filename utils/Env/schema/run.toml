@@ -504,8 +504,8 @@ doc     = "how its pages are built: defined (an analysis object's own), overlay 
 
 [figure.type]
 type    = "str"
-choices = ["Hist1D"]
-doc     = "what is drawn (default: from the objects)"
+choices = ["Hist1D", "Scatter2D"]
+doc     = "what is drawn: Hist1D (steps), Scatter2D (a marker per bin, as data: V86); default: a scan's Scatter2D, else Hist1D"
 
 [figure.name]
 type = "str"

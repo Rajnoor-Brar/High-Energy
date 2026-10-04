@@ -345,7 +345,8 @@ def _overlay(yoda, page, work: Path, outdir: Path, settings: dict, say) -> bool:
     formats = settings.get("formats", ["pdf"])
     argv += [x for f in (["pdf"] if formats == "default" else formats) if FORMATS[f] for x in ("-f", FORMATS[f])]
     argv += [] if page.document["page"]["ratio"] else ["--no-ratio"]
-    argv += [f"{f}:Title={mathtext(label)}" for f, label in zip(files, labels)]
+    marks = ":ConnectBins=0" if page.document["page"].get("markers") else ""              # V86
+    argv += [f"{f}:Title={mathtext(label)}{marks}" for f, label in zip(files, labels)]
     if not _mkhtml(argv, work, own, [page], _plot_block(page, window), work / f"overlay_{page.overlay}.plot", say):
         return False
     (outdir / "overlay").mkdir(parents=True, exist_ok=True)
@@ -385,6 +386,7 @@ def _cell(yoda, pages: list, work: Path, outdir: Path, settings: dict, say) -> i
     label_of = {s: c["label"].split(" [")[0] for page in pages for s, c in zip(page.sources, page.document["curve"])}
     look_of = {s: c.get("style", {}) for page in pages for s, c in zip(page.sources, page.document["curve"])}
     banded = {s for page in pages for s, c in zip(page.sources, page.document["curve"]) if c.get("band")}
+    marked = {s for page in pages if page.document["page"].get("markers") for s in page.sources}   # V86
     labels = [label_of[s] for s in sources]
     curves = [_voided(yoda, source, pages, work / f"{i:02d}_{source.parent.name}.yoda")
               for i, source in enumerate(sources)]
@@ -393,7 +395,7 @@ def _cell(yoda, pages: list, work: Path, outdir: Path, settings: dict, say) -> i
     argv += [x for f in (["pdf"] if formats == "default" else formats) if FORMATS[f] for x in ("-f", FORMATS[f])]
     argv += [] if any(p.document["page"]["ratio"] for p in pages) else ["--no-ratio"]
     argv += [f"{path}:Title={mathtext(label)}" + _pen(look_of[source])
-             + (":ErrorBand=1:ErrorBars=0" if source in banded else "")
+             + (":ErrorBand=1:ErrorBars=0" if source in banded else "") + (":ConnectBins=0" if source in marked else "")
              for path, label, source in zip(curves, labels, sources)]
 
     references = [_reference(yoda, page) for page in pages if page.data and page.ranges.get("data_bins", 0) > 0]

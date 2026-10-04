@@ -33,6 +33,7 @@ namespace Paint {
         // The runner writes every key it sets (its defaults are utils/Env/schema/run.toml's), so Paint keeps none.
         bool logx = false, logy = false, ratio = false, voidEmpty = false, autoRange = false;
         bool normalise = false;                                 // "area": unit area over the bins drawn (V68)
+        bool markers = false;                                   // the curves as markers, as data (type Scatter2D, V86)
         std::optional<double> yGutter, xGutter;                 // none: ROOT's own range ("default")
         int minEntries = 0, rangePad = 0;
         Style style;
@@ -82,6 +83,7 @@ namespace Paint {
         page.ratio = p["ratio"].value_or(false);
         page.voidEmpty = p["void_empty"].value_or(false);
         page.autoRange = p["auto_range"].value_or(false);
+        page.markers = p["markers"].value_or(false);
         if (const auto node = p["normalise"]; node) {
             if (node.value<std::string>() == std::optional<std::string>("area")) page.normalise = true;
             else if (node.value<bool>() != std::optional<bool>(false))

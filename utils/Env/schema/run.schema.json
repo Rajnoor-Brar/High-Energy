@@ -950,10 +950,11 @@
         "default": "defined"
        },
        "type": {
-        "description": "what is drawn (default: from the objects)",
+        "description": "what is drawn: Hist1D (steps), Scatter2D (a marker per bin, as data: V86); default: a scan's Scatter2D, else Hist1D",
         "type": "string",
         "enum": [
-         "Hist1D"
+         "Hist1D",
+         "Scatter2D"
         ]
        },
        "name": {

@@ -147,7 +147,7 @@ def _inputs(yb, yoda, page):
             copy.setPath(page.object)
             if area:
                 yb._normalise(copy)
-            curves.append((mathtext(curve["label"]), copy, {}))
+            curves.append((mathtext(curve["label"]), copy, {"ConnectBins": 0} if doc.get("markers") else {}))
     else:
         order = list(dict.fromkeys(page.sources))   # one file per point, as the yoda backend's argv
         for source in order:
@@ -173,6 +173,8 @@ def _inputs(yb, yoda, page):
                                           "LineWidth": curve.get("style", {}).get("width")}.items() if v is not None}
                 if members:
                     look.update(ErrorBand=1, ErrorBars=0)
+                if doc.get("markers"):                         # V86: points, as mkhtml draws data
+                    look["ConnectBins"] = 0
                 title = mathtext(curve["label"].split(" [")[0]) + rivet.extractOptionString(variant)
                 curves.append((title, copy, look))
 
@@ -284,7 +286,7 @@ def _figure(plt, hists: dict, features: dict, page, yb, window):
             colours.append(defaults[nxt % len(defaults)])
             nxt += 1
     for (label, h), f in zip(data.items(), feats):            # command-line tags become annotations
-        for tag in ("Title", "LineStyle", "LineWidth", "ErrorBars", "ErrorBand"):
+        for tag in ("Title", "LineStyle", "LineWidth", "ErrorBars", "ErrorBand", "ConnectBins"):
             if tag in f:
                 h.setAnnotation(tag, f[tag])
         if f.get("IsRef"):
