@@ -256,6 +256,26 @@ def test_a_2d_object_is_a_heat_map_per_point(stage):
         plot.pages(run, configuration, plans)
 
 
+@pytest.mark.skipif(not shutil.which("pdflatex"), reason="pdflatex tiles a sheet's PDF")
+def test_a_sheet_tiles_drawn_pages(stage):
+    """V89: the pages its globs name, in order, tiled as drawn: a PDF by pdflatex, a PNG by PIL."""
+    from PIL import Image
+    run, configuration, plans = stage
+    run.plot["formats"] = ["pdf", "png"]
+    run.plot["figures"]["grid"] = {"class": "sheet", "pages": ["*/d01-x01-y01", "em/d04-x01-y01"], "columns": 2}
+    said = []
+    assert plot.draw(run, configuration, plans, said.append) == 0, said
+    assert "plot: sheet grid, 3 page(s) in 2 column(s) (root: pdf, png)" in said
+    sheets = plans[0].res.parent / "plots" / "root" / "sheets"
+    page = Image.open(plans[0].res.parent / "plots" / "root" / "em" / "d01-x01-y01.png")
+    assert Image.open(sheets / "grid.png").size == (2 * page.width, 2 * page.height)
+    assert (sheets / "grid.pdf").read_bytes().startswith(b"%PDF")
+    run.plot["figures"]["grid"]["pages"] = ["nowhere/*"]
+    said.clear()
+    assert plot.draw(run, configuration, plans, said.append) == 1
+    assert "plot: sheet grid: 'nowhere/*' names no page drawn here" in said
+
+
 def test_a_compare_figure_draws_configurations_together(stage):
     """V83: the objects' pages across configurations, curves labelled by the configuration first, drawn
     by the plot stage of whichever configuration completes it, into <run>/compare/<name>/."""

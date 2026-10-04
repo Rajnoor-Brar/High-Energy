@@ -86,7 +86,7 @@ class Page:
 class Figure:
     """A recipe for pages (V80): [plot.figures.<key>]."""
     key: str
-    kind: str                # its class: defined, overlay, merged, compare, derived, scan
+    kind: str                # its class: defined, overlay, merged, compare, derived, scan, sheet
     type: str                # what is drawn; "" from the objects
     name: str                # its pages' file stem (an overlay's; a defined figure's pages are the objects')
     objects: tuple           # globs
@@ -98,6 +98,8 @@ class Figure:
     op: str = ""             # a derived figure's (V84)
     x: str = ""              # a scan figure's quantity … (V85)
     y: str = ""              # … and the number it reads of each point
+    table_pages: tuple = ()  # a sheet's page globs … (V89)
+    columns: int = 0         # … and its columns
 
 
 def figures(run) -> list[Figure]:
@@ -109,7 +111,7 @@ def figures(run) -> list[Figure]:
                           tuple(table.get("objects", ())), tuple(table.get("labels", ())),
                           {k: v for k, v in table.items() if k not in schema.FIGURE_OWN}, f"{run.path}: {written}",
                           tuple(table.get("over", ())), tuple(table.get("configurations", ())), table.get("op", ""),
-                          table.get("x", ""), table.get("y", "")))
+                          table.get("x", ""), table.get("y", ""), tuple(table.get("pages", ())), table.get("columns", 0)))
     return out
 
 
@@ -1083,6 +1085,8 @@ def draw(run, configuration, plans, say, others=None) -> int:
     failed = _draw(run, paint, todo, f"{run.name} · {configuration.label}", say) if todo else 0
     if not todo:
         say("plot: no complete point has a YODA product to draw")
+    for figure in (f for f in figures(run) if f.kind == "sheet") if todo else ():
+        failed += sheet(run, figure, todo, say)
     for figure in (f for f in figures(run) if f.kind == "compare"):
         named = compared(run, figure)
         if configuration.key not in {c.ref for c in named if c.own}:
@@ -1102,6 +1106,34 @@ def draw(run, configuration, plans, say, others=None) -> int:
         say(f"plot: compare {figure.name}, {len(named)} configurations")
         failed += _draw(run, paint, made, f"{run.name} · {figure.name}", say)
     return failed
+
+
+def sheet(run, figure: Figure, todo: list[Page], say) -> int:
+    """A sheet figure (V89): the drawn pages its globs name, in their order, tiled `columns` wide by
+    utils/Env/figures/sheet.py into plots/<backend>/sheets/<name>.pdf and .png, for Paint's pages and
+    mpl's (mkhtml lays its files out its own way). 1 when it could not be made."""
+    module = plugins.load(repo_root() / "utils" / "Env" / "figures" / "sheet.py", "sheet")
+    chosen_pages: list[Page] = []
+    for glob in figure.table_pages:
+        found = [p for p in todo if fnmatch.fnmatch(p.name, glob) and p not in chosen_pages]
+        if not found:
+            say(f"plot: sheet {figure.name}: '{glob}' names no page drawn here")
+            return 1
+        chosen_pages += found
+    columns = figure.columns or min(3, len(chosen_pages))
+    made = []
+    for name in (n for n in backends(run.plot) if n in ("root", "mpl")):
+        drawn = [p if name == "root" else for_backend(p, name) for p in chosen_pages]
+        files = {fmt: [Path(f"{p.output}.{fmt}") for p in drawn] for fmt in formats_of(run.plot)}
+        try:
+            formats = module.tile(files, todo[0].plots / name / "sheets" / figure.name, columns)
+        except ValueError as error:
+            say(f"plot: sheet {figure.name} ({name}): {error}")
+            return 1
+        made += [f"{name}: {', '.join(formats)}"] if formats else []
+    say(f"plot: sheet {figure.name}, {len(chosen_pages)} page(s) in {columns} column(s)"
+        + (f" ({'; '.join(made)})" if made else ": no pdf or png to tile"))
+    return 0
 
 
 def _draw(run, paint: Path, todo: list[Page], title: str, say) -> int:

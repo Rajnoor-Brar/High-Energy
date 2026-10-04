@@ -633,6 +633,17 @@ def check_plot(plot: dict, where: str, strict: bool = True) -> None:
         schema.check(table, "figure", at)
         kind, objects, labels = table.get("class", "defined"), table.get("objects"), table.get("labels")
         y = table.get("y", "")
+        if kind == "sheet":                                # V89: pages laid out, as drawn
+            if not table.get("pages"):
+                raise HepError("a sheet needs pages = [\"<cell>/<page>\", …]: globs of the pages it lays out",
+                               where=f"{at}.pages", hint='pages = ["*/d02-x01-y01"]: that object in every cell')
+            extra = sorted(set(table) - {"class", "name", "pages", "columns"})
+            if extra:
+                raise HepError(f"a sheet takes no {extra[0]}: it lays out pages as their figures drew them", where=f"{at}.{extra[0]}",
+                               hint="set it on the figure whose pages the sheet shows")
+            continue
+        if "pages" in table or "columns" in table:
+            raise HepError(f"a {kind} figure draws pages: pages and columns are a sheet's", where=at, hint='class = "sheet"')
         if (kind == "scan") != ("x" in table or "y" in table):
             raise HepError("x and y are a scan figure's" if kind != "scan" else "a scan figure needs x and y",
                            where=at, hint='class = "scan", x = "<swept quantity>", y = "sigma"')

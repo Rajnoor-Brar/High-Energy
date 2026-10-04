@@ -141,4 +141,4 @@ configurations = ["default01", "default0", "default1", "default2", "default3", "
 | F1 | S1 S2 | S1 (V82: `merged`), S2 (V83: `compare`) done: F1 complete |
 | F2 | S1 S2 | S1 (V84: `derived`), S2 (V85: `scan`, numeric x; named x waits for a categorical axis) done: F2 complete |
 | F3 | S1 S2 | S1 (V86: `Scatter2D`, markers), S2 (V87: `HeatMap`, Paint's; mpl and mkhtml draw 1D pages only) done: F3 complete |
-| F4 | S1 S2 | the note: [notes/F4.md](notes/F4.md); the user: build both. S1 (V88: compare across run TOMLs) done; S2 sheets |
+| F4 | S1 S2 | the note: [notes/F4.md](notes/F4.md); the user: build both. S1 (V88: compare across run TOMLs), S2 (V89: sheets, tiled as drawn) done: F4 complete |
