@@ -34,8 +34,9 @@ The documents this manual replaced (v1's design set and retrospective, the rewor
 logs) are in git: `git show rework/v1-final:docs/…` and `git log --all -- docs/rework_v2`. Ideas
 found in them, not yet built, are in [bots/intent.md](../bots/intent.md).
 
-Audits of the framework, and their plans: [audit_1/](audit_1/README.md) (`utils/`, V52–V89) and
-[audit_2/](audit_2/01_Health.md) (a health check after the figures; the manual's rebuild, [02_Manual](audit_2/02_Manual.md)).
+What is open is the health check [audit_2/01_Health.md](audit_2/01_Health.md) (H1–H16). The finished audit 1
+(V52–V89) and the manual's rebuild plan (V90–V92) are in git: `git show c5cbaa3:docs/audit_1/README.md`,
+`git show c5cbaa3:docs/audit_2/02_Manual.md`.
 
 `tests/runner/test_docs.py` holds this manual to the code: its links resolve, its TOML parses, its
 complete examples load, its generated blocks are current, and every key the runner accepts is documented.

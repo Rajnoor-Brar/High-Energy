@@ -5,10 +5,10 @@ A health check of the whole framework after the figures work (V80–V89), done o
 inefficient or needlessly convoluted, and which design and structural changes are worth making.
 
 **Read:** `utils/Env/runner/` (plot, config, cli, tools), `utils/Env/figures/`, the yoda and mpl
-backends, `tests/`, docs 03, 04 and [08_Figures](../audit_1/08_Figures.md), and the working tree.
+backends, `tests/`, docs 03, 04 and 08_Figures (in git: `git show c5cbaa3:docs/audit_1/08_Figures.md`), and the working tree.
 **State:** 534 tests pass; `hep check` passes on every config.
 
-Each item is scored as in [audit 1](../audit_1/README.md): Priority = (Impact + Risk) × (6 − Effort),
+Each item is scored as in audit 1: Priority = (Impact + Risk) × (6 − Effort),
 each 1–5. Ids are `H<n>`; a step that fixes one cites it and gets a V-row in
 [07_Record](../07_Record.md). Nothing here is built without the user's order.
 

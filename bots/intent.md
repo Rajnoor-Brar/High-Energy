@@ -1,7 +1,7 @@
 # Intent — ideas worth building, and loose ends
 
-> Since 2026-10-03 the order of work is [docs/audit_1/06_Plan.md](../docs/audit_1/06_Plan.md); several ideas here are
-> scheduled there (U3/U7/U8/U9, CF2, CF3 as audit F5, F7, F4, F10, F2, B9). The ids here are this file's own:
+> Audit 1 (V52–V89, its pages in git: `git show c5cbaa3:docs/audit_1/06_Plan.md`) built several ideas here
+> or scheduled them (U3/U7/U8/U9, CF2, CF3 as audit F5, F7, F4, F10, F2, B9). The ids here are this file's own:
 > T (throughput), U (commands), CF (configuration), P (provenance), and F10–F14, which are the record's findings.
 
 Collected on 2026-09-27 while reading every document before the doc set was replaced: v1's design

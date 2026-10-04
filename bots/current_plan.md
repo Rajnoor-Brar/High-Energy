@@ -1,7 +1,7 @@
 # Current plan
 
-**The order of work is [docs/audit_1/06_Plan.md](../docs/audit_1/06_Plan.md)** (P0–P5): its Progress table
-is the state. Finished plans and task logs are in [archive.md](archive.md); decisions in docs/07_Record.md.
+**Audit 1 is finished (V52–V89), and its pages are in git** (`git show c5cbaa3:docs/audit_1/06_Plan.md`). What is open
+is [docs/audit_2/01_Health.md](../docs/audit_2/01_Health.md) (H1–H16, phases R0–R3, on the user's order). Finished plans and task logs are in [archive.md](archive.md); decisions in docs/07_Record.md.
 
 ## Now
 
