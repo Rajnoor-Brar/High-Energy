@@ -14,7 +14,6 @@ import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 from . import schema
 from .errors import HepError, did_you_mean

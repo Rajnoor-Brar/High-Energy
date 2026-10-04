@@ -24,7 +24,6 @@ from __future__ import annotations
 import importlib.util
 import math
 import os
-import re
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 

@@ -31,7 +31,7 @@ from . import quantities as qmod
 from .config import Tool
 from .errors import HepError, did_you_mean
 from .paths import output_root, repo_root, resolve, results_root
-from .sweep import label_of, tag_of
+from .sweep import tag_of
 
 ENV = Path(__file__).resolve().parents[1]                 # utils/Env
 

@@ -619,8 +619,8 @@ def _pages(run, complete: list, yodas: dict, merged: Path, declared: list, page_
             figure = claimed.get(path)
             override = override_of(figure.table if figure else None)
             if path in two_d:                                  # V87: a page per member and variant
-                made += [_heatmap(run, plan, full, place(key, f"{short}/{plan.point.name}"), settings, override,
-                                  merged, out_dir, res_dir, run_style(run), key, curve_fill(plan))
+                made += [_heatmap(plan, full, place(key, f"{short}/{plan.point.name}"), settings, override,
+                                  merged, out_dir, res_dir, (style, base), key, curve_fill(plan))
                          for plan in members for full in variants.get(plan.point.name, {}).get(path, [])]
                 continue
             drawn = data if chosen("use_data", True, True, (override, settings)) is not False else {}
@@ -714,10 +714,12 @@ def _pages(run, complete: list, yodas: dict, merged: Path, declared: list, page_
     return made
 
 
-def _heatmap(run, plan, full: str, rel: str, settings: dict, override: dict, merged: Path, out_dir: Path,
-             res_dir: Path, style: dict, cell: str, fill) -> Page:
+def _heatmap(plan, full: str, rel: str, settings: dict, override: dict, merged: Path, out_dir: Path,
+             res_dir: Path, styles: tuple[dict, dict], cell: str, fill) -> Page:
     """A heat map page (V87): one member's 2D object, its .plot labels (ZLabel, LogZ too), its figure's
-    and [plot]'s titles, coloured by Paint; no ratio, data, voiding or range."""
+    and [plot]'s titles, coloured by Paint; no ratio, data, voiding or range. `styles`: the run's style
+    layers and base.toml."""
+    style, base = styles
     labels = labels_of(full)
     page, override = page_settings(settings, full, rel, res_dir / rel, False, fill=fill, child=override)
     page.update({"heatmap": True, "ratio": False, "z_label": canonical(fill(labels.get("ZLabel", ""))),
@@ -730,7 +732,7 @@ def _heatmap(run, plan, full: str, rel: str, settings: dict, override: dict, mer
     config.write_text(tomli_w.dumps(for_root(document)), encoding="utf-8")
     return Page(rel, config, res_dir / rel, cell=cell, object=base_of(full), document=document, sources=[],
                 variants=[full], overrides={k for k, v in override.items() if v != DEFAULT},
-                style=merge_style(base_style(), layer), plots=res_dir.parent)
+                style=merge_style(base, layer), plots=res_dir.parent)
 
 
 def texts_of(run, plan, cell: str) -> dict[str, str]:
