@@ -348,6 +348,11 @@ def test_a_compare_figure_pairs_configurations_of_one_shape(scratch):
     ({"class": "merged", "objects": ["d01-*"], "over": ["pdf"], "labels": ["a"]}, "a merged figure takes no labels"),
     ({"class": "overlay", "objects": ["d01-*"], "over": ["pdf"]}, "a overlay figure merges nothing"),
     ({"objects": ["d01-*"], "configurations": ["a", "b"]}, "configurations is a compare figure's"),
+    ({"class": "derived", "objects": ["d01-*", "d05-*"]}, "is a derived figure's, and it needs one"),
+    ({"objects": ["d01-*"], "op": "ratio"}, "a defined figure derives nothing"),
+    ({"class": "derived", "op": "ratio", "objects": ["d01-*"]}, 'op = "ratio" takes 2 objects, not 1'),
+    ({"class": "derived", "op": "projection-x", "objects": ["a", "b"]}, 'takes 1 object, not 2'),
+    ({"class": "derived", "op": "quotient", "objects": ["a", "b"]}, "op must be one of ratio"),
     ({"class": "compare", "objects": ["d01-*"], "configurations": ["a", "b"], "labels": ["x"]}, "one label per configuration"),
 ])
 def test_a_figure_is_checked_when_the_file_is_read(scratch, figure, message):

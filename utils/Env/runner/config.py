@@ -647,6 +647,18 @@ def check_plot(plot: dict, where: str, strict: bool = True) -> None:
             count = len(table.get("configurations", [])) or None
             if count is not None and len(labels) != count:
                 raise HepError(f"a compare figure's labels give one label per configuration ({count})", where=f"{at}.labels")
+        if (kind == "derived") != ("op" in table):
+            raise HepError("op = \"ratio\" | … is a derived figure's, and it needs one" if kind == "derived"
+                           else f"a {kind} figure derives nothing: op is a derived figure's", where=f"{at}.op",
+                           hint='class = "derived", op = "ratio", objects = ["d11-x01-y01", "d12-x01-y01"]')
+        if kind == "derived":
+            wanted = 1 if table["op"].startswith("projection") else 2
+            if len(objects) != wanted:
+                raise HepError(f"op = \"{table['op']}\" takes {wanted} object{'s' if wanted > 1 else ''}, not {len(objects)}",
+                               where=f"{at}.objects")
+            if "labels" in table:
+                raise HepError("a derived figure takes no labels", where=f"{at}.labels",
+                               hint="its object is drawn as any object: its curves are the points")
         if kind == "merged" and "labels" in table:
             raise HepError("a merged figure takes no labels", where=f"{at}.labels",
                            hint="its pages are the objects' own, their curves the merged groups")

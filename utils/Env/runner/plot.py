@@ -86,7 +86,7 @@ class Page:
 class Figure:
     """A recipe for pages (V80): [plot.figures.<key>]."""
     key: str
-    kind: str                # its class: defined, overlay, merged, compare
+    kind: str                # its class: defined, overlay, merged, compare, derived
     type: str                # what is drawn; "" from the objects
     name: str                # its pages' file stem (an overlay's; a defined figure's pages are the objects')
     objects: tuple           # globs
@@ -95,6 +95,7 @@ class Figure:
     where: str
     over: tuple = ()         # a merged figure's: the axes it merges (V82)
     configurations: tuple = ()   # a compare figure's (V83); () under sweep_runs: its configurations
+    op: str = ""             # a derived figure's (V84)
 
 
 def figures(run) -> list[Figure]:
@@ -105,7 +106,7 @@ def figures(run) -> list[Figure]:
         out.append(Figure(key, table.get("class", "defined"), table.get("type", ""), table.get("name", key),
                           tuple(table["objects"]), tuple(table.get("labels", ())),
                           {k: v for k, v in table.items() if k not in schema.FIGURE_OWN}, f"{run.path}: {written}",
-                          tuple(table.get("over", ())), tuple(table.get("configurations", ()))))
+                          tuple(table.get("over", ())), tuple(table.get("configurations", ())), table.get("op", "")))
     return out
 
 
@@ -355,13 +356,14 @@ def pages(run, configuration, plans) -> list[Page]:
     out_dir = complete[0].out.parent / "plots"
     res_dir = complete[0].res.parent / "plots" / "root"          # Paint's; another backend's: for_backend
     page_groups, curve_groups = axes_of(configuration)
-    root = merge({p.point.name: yoda_of(p) for p in complete}, res_dir / f"{configuration.label}.root",
-                 out_dir / "merged.sha256", complete[0].out.parent / "points.json")
-    made = _pages(run, complete, {p.point.name: yoda_of(p) for p in complete}, root,
-                  [f for f in declared if f.kind in ("defined", "overlay")], page_groups, curve_groups,
-                  out_dir, res_dir, implicit=True)
+    sources = point_yodas(run, complete)
+    root = merge(sources, res_dir / f"{configuration.label}.root", out_dir / "merged.sha256",
+                 complete[0].out.parent / "points.json")
+    drawn = [f for f in declared if f.kind in ("defined", "overlay")] + derived_figures(declared)
+    made = _pages(run, complete, sources, root, drawn, page_groups, curve_groups, out_dir, res_dir, implicit=True,
+                  labels_from=_labels_from(declared, sources))
     for figure in (f for f in declared if f.kind == "merged"):        # V82: points merged over an axis, for it alone
-        members, yodas = _merged(run, figure, complete, page_groups + curve_groups, out_dir / "merged" / figure.name)
+        members, yodas = _merged(run, figure, complete, sources, page_groups + curve_groups, out_dir / "merged" / figure.name)
         kept = [g for g in curve_groups if not set(g) & set(figure.over)]
         root = merge(yodas, res_dir / figure.name / f"{configuration.label}.root", out_dir / "merged" / f"{figure.name}.sha256")
         made += _pages(run, members, yodas, root, [replace(figure, kind="defined")], page_groups, kept,
@@ -381,11 +383,12 @@ def compare_pages(run, figure: Figure, sets: list[tuple]) -> list[Page]:
     members, yodas = [], {}
     for number, (configuration, plans) in enumerate(sets):
         label = figure.labels[number] if figure.labels else configuration.label
+        sources = point_yodas(run, plans)
         for plan in plans:
             name = f"{configuration.key}_{plan.point.name}"
             members.append(replace(plan, point=replace(plan.point, name=name, choice={**plan.point.choice, CONFIGURATION: number}),
                                    context={**plan.context, "curve_label": label}))
-            yodas[name] = yoda_of(plan)
+            yodas[name] = sources[plan.point.name]
     first = sets[0][1][0]
     out_dir = first.out.parent.parent / "compare" / figure.name
     res_dir = first.res.parent.parent / "compare" / figure.name / "root"
@@ -395,7 +398,52 @@ def compare_pages(run, figure: Figure, sets: list[tuple]) -> list[Page]:
                   [[CONFIGURATION]] + curve_groups, out_dir, res_dir, implicit=False)
 
 
-def _merged(run, figure: Figure, complete: list, groups: list, where: Path) -> tuple[list, dict]:
+def derived_figures(declared: list) -> list[Figure]:
+    """A derived figure draws its object as a defined figure does (V84): /FIGURES/<name>, its pages."""
+    return [replace(f, kind="defined", objects=(f"/FIGURES/{f.name}",)) for f in declared if f.kind == "derived"]
+
+
+def _labels_from(declared: list, sources: dict) -> dict[str, str]:
+    """A derived object's labels are its first object's (.plot): /FIGURES/<name> → that object's path."""
+    out = {}
+    every = list(dict.fromkeys(base_of(o) for path in sources.values() for o in objects_of(path)))
+    for figure in (f for f in declared if f.kind == "derived"):
+        first = next((o for o in every if not o.startswith("/FIGURES") and _matches(o, figure.objects[0])), None)
+        if first:
+            out[f"/FIGURES/{figure.name}"] = first
+    return out
+
+
+def point_yodas(run, complete: list) -> dict[str, Path]:
+    """Each complete point's YODA, as the pages read it: its product, or with a derived figure (V84) a
+    copy with the derived objects after its own (output/…/plots/derived/<point>.yoda), made by
+    utils/Env/figures/derive.py and remade only when the product or the figures changed."""
+    plain = {p.point.name: yoda_of(p) for p in complete}
+    derived = [f for f in figures(run) if f.kind == "derived"]
+    if not derived:
+        return plain
+    module = plugins.load(repo_root() / "utils" / "Env" / "figures" / "derive.py", "derive")
+    where = complete[0].out.parent / "plots" / "derived"
+    where.mkdir(parents=True, exist_ok=True)
+    specs = [(f.name, f.op, list(f.objects)) for f in derived]
+    out = {}
+    for name, source in plain.items():
+        target, stamp = where / f"{name}.yoda", where / f"{name}.sha256"
+        digest = f"{_sha(source)} {json.dumps(specs)}"
+        if not (target.exists() and stamp.exists() and stamp.read_text(encoding="utf-8") == digest):
+            text = [hepfiles.yoda_text(source).rstrip("\n") + "\n\n"]
+            for figure, spec in zip(derived, specs):
+                try:
+                    text.append(module.derive(str(source), [spec]))
+                except ValueError as error:
+                    raise HepError(f"figure '{figure.key}' at {name}: {error}", where=figure.where) from None
+            target.write_text("".join(text), encoding="utf-8")
+            stamp.write_text(digest, encoding="utf-8")
+        out[name] = target
+    return out
+
+
+def _merged(run, figure: Figure, complete: list, sources: dict, groups: list, where: Path) -> tuple[list, dict]:
     """A merged figure's members: per value of the axes it does not merge, one stand-in plan named by
     their tags, its YODA the members' merged by the combine folder's command; rebuilt only when a
     member's YODA changed (a stamp of their sha256, as merge's)."""
@@ -408,9 +456,9 @@ def _merged(run, figure: Figure, complete: list, groups: list, where: Path) -> t
         name = "_".join(tag_of(run.quantities[g[0]], i) for g, i in zip(kept, key)) or "merged"
         target = where / f"{name}.yoda"
         stamp = where / f"{name}.sha256"
-        digest = "\n".join(f"{p.point.name} {_sha(yoda_of(p))}" for p in plans)
+        digest = "\n".join(f"{p.point.name} {_sha(sources[p.point.name])}" for p in plans)
         if not (target.exists() and stamp.exists() and stamp.read_text(encoding="utf-8") == digest):
-            merge_files([yoda_of(p) for p in plans], target)
+            merge_files([sources[p.point.name] for p in plans], target)
             stamp.write_text(digest, encoding="utf-8")
         first = plans[0]
         members.append(replace(first, point=replace(first.point, name=name),
@@ -420,7 +468,7 @@ def _merged(run, figure: Figure, complete: list, groups: list, where: Path) -> t
 
 
 def _pages(run, complete: list, yodas: dict, merged: Path, declared: list, page_groups: list, curve_groups: list,
-           out_dir: Path, res_dir: Path, *, implicit: bool, folder: str = "") -> list[Page]:
+           out_dir: Path, res_dir: Path, *, implicit: bool, folder: str = "", labels_from: dict | None = None) -> list[Page]:
     """The pages of these figures from these members (a point, or a merged figure's stand-in: its name
     is its directory in `merged`, the ROOT file of their YODAs `yodas`). `implicit`: [plot].objects's
     pages too. `folder`: the figure's own, between the cell and the object."""
@@ -505,7 +553,8 @@ def _pages(run, complete: list, yodas: dict, merged: Path, declared: list, page_
             fill = page_fill([plan for plan, _ in curves] or members)
             folded = _banded(curves, curve_groups, band, lambda p, f: variants[p.point.name][path].index(f))
             envelope = f" ({', '.join(band)} envelope)" if band else ""
-            page, override = page_settings(settings, path, rel, res_dir / rel, reference is not None, fill=fill, child=override)
+            page, override = page_settings(settings, (labels_from or {}).get(path, path), rel, res_dir / rel,
+                                           reference is not None, fill=fill, child=override)
             several = {plan.point.name for plan, _ in curves if len(variants[plan.point.name][path]) > 1}
             layer = merge_style(style, override.get("style", {}))
             document = {"page": page, "style": layer, "curve": [

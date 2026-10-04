@@ -937,13 +937,14 @@
         ]
        },
        "class": {
-        "description": "how its pages are built: defined (an analysis object's own), overlay (several objects of each point), merged (the objects' pages with the points merged over `over`), compare (the objects' pages across configurations)",
+        "description": "how its pages are built: defined (an analysis object's own), overlay (several objects of each point), merged (the objects' pages with the points merged over `over`), compare (the objects' pages across configurations), derived (a new object from the objects, per point)",
         "type": "string",
         "enum": [
          "defined",
          "overlay",
          "merged",
-         "compare"
+         "compare",
+         "derived"
         ],
         "default": "defined"
        },
@@ -964,6 +965,17 @@
         "items": {
          "type": "string"
         }
+       },
+       "op": {
+        "description": "a derived figure's: of its two objects (ratio, difference, sum), or of its 2D histogram (projection-x, -y) (V84)",
+        "type": "string",
+        "enum": [
+         "ratio",
+         "difference",
+         "sum",
+         "projection-x",
+         "projection-y"
+        ]
        },
        "over": {
         "description": "a merged figure's: the curve axes whose points it merges, by the combine folder's command (V82)",

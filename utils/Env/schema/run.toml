@@ -498,9 +498,9 @@ doc  = "[plot.figures.<figure>]: the figures, each a recipe for pages (08_Figure
 
 [figure.class]
 type    = "str"
-choices = ["defined", "overlay", "merged", "compare"]
+choices = ["defined", "overlay", "merged", "compare", "derived"]
 default = "defined"
-doc     = "how its pages are built: defined (an analysis object's own), overlay (several objects of each point), merged (the objects' pages with the points merged over `over`), compare (the objects' pages across configurations)"
+doc     = "how its pages are built: defined (an analysis object's own), overlay (several objects of each point), merged (the objects' pages with the points merged over `over`), compare (the objects' pages across configurations), derived (a new object from the objects, per point)"
 
 [figure.type]
 type    = "str"
@@ -515,6 +515,11 @@ doc  = "its pages' file stem (default: the figure's key; a defined figure's page
 type  = "list"
 items = "str"
 doc   = "the objects: YODA path globs, matched against the short name (d01-x01-y01) or the full path"
+
+[figure.op]
+type    = "str"
+choices = ["ratio", "difference", "sum", "projection-x", "projection-y"]
+doc     = "a derived figure's: of its two objects (ratio, difference, sum), or of its 2D histogram (projection-x, -y) (V84)"
 
 [figure.over]
 type  = "list"
