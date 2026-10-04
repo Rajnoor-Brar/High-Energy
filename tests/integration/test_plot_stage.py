@@ -159,6 +159,24 @@ def test_an_overlay_figure_folds_a_band(stage):
     assert plot.draw(run, configuration, plans, lambda line: None) == 0
 
 
+@pytest.mark.skipif(not shutil.which("rivet-merge"), reason="load_hep: rivet-merge")
+def test_a_merged_figure_merges_the_points_for_itself(stage):
+    """V82: per plot_points cell, the pdf points merged (rivet-merge -e) into one curve, on the objects'
+    pages under the figure's folder; the other pages keep the points apart; a second draw merges nothing."""
+    run, configuration, plans = stage
+    run.plot["figures"]["avg"] = {"class": "merged", "objects": ["d01-*", "d05-*"], "over": ["pdf"], "title": "both PDFs"}
+    by = {p.name: p for p in plot.pages(run, configuration, plans)}
+    assert {n for n in by if "/avg/" in n} == {"em/avg/d01-x01-y01", "em/avg/d05-x01-y01", "ep/avg/d01-x01-y01", "ep/avg/d05-x01-y01"}
+    page = tomllib.loads(by["em/avg/d01-x01-y01"].config.read_text())
+    assert [c["object"].split("/")[0] for c in page["curve"]] == ["em"] and page["page"]["title"] == "both PDFs"
+    assert "data" in page and len(tomllib.loads(by["em/d01-x01-y01"].config.read_text())["curve"]) == 2
+    merged = plans[0].out.parent / "plots" / "merged" / "avg" / "em.yoda"
+    stamp = merged.stat().st_mtime_ns
+    assert plot.draw(run, configuration, plans, lambda line: None) == 0
+    assert merged.stat().st_mtime_ns == stamp                                        # nothing changed: not merged again
+    assert (plans[0].res.parent / "plots" / "root" / "em" / "avg" / "d01-x01-y01.png").is_file()
+
+
 @pytest.mark.slow
 @pytest.mark.skipif(not shutil.which("rivet-mkhtml"), reason="load_hep: rivet-mkhtml")
 @pytest.mark.parametrize("stage", ["yoda"], indirect=True)

@@ -937,11 +937,12 @@
         ]
        },
        "class": {
-        "description": "how its pages are built: defined (an analysis object's own), overlay (several objects of each point)",
+        "description": "how its pages are built: defined (an analysis object's own), overlay (several objects of each point), merged (the objects' pages with the points merged over `over`)",
         "type": "string",
         "enum": [
          "defined",
-         "overlay"
+         "overlay",
+         "merged"
         ],
         "default": "defined"
        },
@@ -958,6 +959,13 @@
        },
        "objects": {
         "description": "the objects: YODA path globs, matched against the short name (d01-x01-y01) or the full path",
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       },
+       "over": {
+        "description": "a merged figure's: the curve axes whose points it merges, by the combine folder's command (V82)",
         "type": "array",
         "items": {
          "type": "string"

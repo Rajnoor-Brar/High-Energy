@@ -26,7 +26,7 @@ NAMES = {"int": "an integer", "float": "a number", "str": "a string", "bool": "t
 #: The tables of run.toml that describe keys (the rest, [sections], describe the file).
 TABLES = ("master", "run", "configuration", "prelim", "quantity", "tool", "plot", "figure", "data")
 #: A figure's own keys: the rest are what it sets for its pages.
-FIGURE_OWN = ("class", "type", "name", "objects", "labels")
+FIGURE_OWN = ("class", "type", "name", "objects", "labels", "over")
 
 
 def path() -> Path:

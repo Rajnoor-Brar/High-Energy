@@ -797,11 +797,12 @@ y_gutter = 2.0
 
 | Key | Type | Default | Notes |
 |---|---|---|---|
-| `class` | string | `"defined"` | how the pages are built. `defined`: an analysis object's own pages, `<cell>/<object>`, its curves the cell's points (and option variants). `overlay`: several objects of each point on one page, `<cell>/<name>`; a curve per object and point, labelled by `labels` (plus the point's, when the page has several); a ratio divides by the first curve |
+| `class` | string | `"defined"` | how the pages are built. `defined`: an analysis object's own pages, `<cell>/<object>`, its curves the cell's points (and option variants). `overlay`: several objects of each point on one page, `<cell>/<name>`; a curve per object and point, labelled by `labels` (plus the point's, when the page has several); a ratio divides by the first curve. `merged` (V82): the objects' pages, `<cell>/<name>/<object>`, with the points merged over the `over` axes: per value of the other axes, their YODAs merged by the combine folder's command (`rivet-merge -e`: statistics add, σ averaged), once per change of a member's YODA, into `output/…/plots/merged/<name>/`. The run keeps its points apart; the figure alone merges them (`combine` merges them for the whole configuration) |
 | `type` | string | from the objects | what is drawn: `Hist1D` |
-| `name` | string | the figure's key | an overlay's page file stem. A defined figure takes none: its pages are the objects' own |
+| `name` | string | the figure's key | an overlay's page file stem, a merged figure's folder. A defined figure takes none: its pages are the objects' own |
 | `objects` | array of globs | **required** | matched against the short name (`d04-x01-y01`), the option-free path or a variant's path. A glob matching no object of the points is an error, at the plot stage |
 | `labels` | array of strings | the objects' names | an overlay's: one legend label per object |
+| `over` | array of quantity names | **required for `merged`** | a merged figure's: curve axes of the configuration (swept, not `plot_points`, not combined), checked at plan time; it may not also `band` them |
 | `x_label`, `y_label` | string | the `.plot`'s | the axis titles (LaTeX) |
 | `style` | table | `{}` | a style layer for these pages (§12) |
 | *every page key of `[plot]`* | | `[plot]`'s | as above |

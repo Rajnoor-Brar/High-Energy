@@ -302,7 +302,22 @@ def test_a_figure_band_must_be_a_curve_axis_too(scratch):
     run, conf, _ = plan(raw(run__one__sweeps=["pdf"], run__one__plot_points=["pdf"],
                             plot={"figures": {"f": {"objects": ["d01-*"], "band": ["pdf"]}}}), scratch)
     with pytest.raises(HepError, match=r"\[plot.figures.f\].band names pdf"):
-        plot.check_band(run, conf)
+        plot.check_figures(run, conf)
+
+
+def test_a_merged_figure_merges_curve_axes_it_does_not_band(scratch):
+    """V82: over names curve axes, checked at plan time, and is not banded too."""
+    from helpers import plan
+    run, conf, _ = plan(raw(run__one__sweeps=["pdf"], run__one__plot_points=["pdf"],
+                            plot={"figures": {"m": {"class": "merged", "objects": ["d01-*"], "over": ["pdf"]}}}), scratch)
+    with pytest.raises(HepError, match=r"\[plot.figures.m\].over names pdf, which is not a curve axis"):
+        plot.check_figures(run, conf)
+    run, conf, _ = plan(raw(run__one__sweeps=["pdf"],
+                            plot={"figures": {"m": {"class": "merged", "objects": ["d01-*"], "over": ["pdf"], "band": ["pdf"]}}}), scratch)
+    with pytest.raises(HepError, match="both merges and bands pdf"):
+        plot.check_figures(run, conf)
+    run.plot["figures"]["m"].pop("band")
+    plot.check_figures(run, conf)
 
 
 @pytest.mark.parametrize("figure, message", [
@@ -312,6 +327,9 @@ def test_a_figure_band_must_be_a_curve_axis_too(scratch):
     ({"class": "overlay", "objects": ["d01-*", "d02-*"], "labels": ["a"]}, "one label per object"),
     ({"class": "stacked", "objects": ["d01-*"]}, "class must be one of defined, overlay"),
     ({"objects": ["d01-*"], "formats": ["png"]}, "unknown key 'formats'"),
+    ({"class": "merged", "objects": ["d01-*"]}, "is a merged figure's, and it needs one"),
+    ({"class": "merged", "objects": ["d01-*"], "over": ["pdf"], "labels": ["a"]}, "a merged figure takes no labels"),
+    ({"class": "overlay", "objects": ["d01-*"], "over": ["pdf"]}, "a overlay figure merges nothing"),
 ])
 def test_a_figure_is_checked_when_the_file_is_read(scratch, figure, message):
     with pytest.raises(HepError, match=message):
@@ -474,9 +492,9 @@ def test_a_band_must_be_a_curve_axis(scratch):
     from helpers import plan
     run, conf, _ = plan(raw(run__one__sweeps=["pdf"], run__one__plot_points=["pdf"], plot={"band": ["pdf"]}), scratch)
     with pytest.raises(HepError, match="not a curve axis"):
-        plot.check_band(run, conf)
+        plot.check_figures(run, conf)
     run, conf, _ = plan(raw(run__one__sweeps=["pdf"], plot={"band": ["pdf"]}), scratch)
-    plot.check_band(run, conf)
+    plot.check_figures(run, conf)
 
 
 def test_the_yoda_backend_draws_the_envelope_as_the_errors(yoda_backend):

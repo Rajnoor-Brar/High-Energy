@@ -140,7 +140,7 @@ def build_plans(args, key: str | None) -> Planned:
     if configuration.parallelism_auto:           # "auto" (V75): from the plans' cores
         configuration.parallelism = execute.auto_parallelism(plans)
     plot.check_texts(run, plans)                 # a placeholder typo costs no point run (V66) …
-    plot.check_band(run, configuration)          # … nor a band's (V69)
+    plot.check_figures(run, configuration)       # … nor a band's (V69), nor what a figure merges (V82)
     return Planned(run, configuration, plans, [p for p in plans if p.point.index in chosen],
                    post.plan(run, configuration, master, plans), pre_plan,
                    post.plan_combined(run, configuration, master, plans))

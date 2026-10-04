@@ -640,6 +640,13 @@ def check_plot(plot: dict, where: str, strict: bool = True) -> None:
                     raise HepError(f"a defined figure takes no {own}", where=f"{at}.{own}",
                                    hint="its pages are the objects' own, named and labelled as the analysis has them; "
                                         "class = \"overlay\" draws several objects on one page")
+        if kind == "merged" and "labels" in table:
+            raise HepError("a merged figure takes no labels", where=f"{at}.labels",
+                           hint="its pages are the objects' own, their curves the merged groups")
+        if (kind == "merged") != bool(table.get("over")):
+            raise HepError("over = [\"<quantity>\", …] is a merged figure's, and it needs one" if kind == "merged"
+                           else f"a {kind} figure merges nothing: over is a merged figure's",
+                           where=f"{at}.over", hint='class = "merged", over = ["replica"]: the points merged over replica')
         if labels is not None and len(labels) != len(objects):
             raise HepError(f"labels must give one label per object ({len(objects)})", where=f"{at}.labels")
 
