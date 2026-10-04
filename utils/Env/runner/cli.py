@@ -146,6 +146,14 @@ def build_plans(args, key: str | None) -> Planned:
                    post.plan_combined(run, configuration, master, plans))
 
 
+def others_of(args):
+    """Another configuration's plans, for a compare figure (V83): its points, or its combined groups."""
+    def plans_of(key: str) -> list:
+        planned = build_plans(argparse.Namespace(**{**vars(args), "points": None, "rerun": False}), key)
+        return planned.combined or planned.every
+    return plans_of
+
+
 def journal_path(run, configuration) -> Path:
     """output/<P>/<run>/<cfg>/status.jsonl: a --journal run's events, which hep watch --file follows."""
     return output_root() / tools.run_dir(run, configuration) / "status.jsonl"
@@ -458,7 +466,7 @@ def run_one(args, key: str, stopper: execute.Stopper, *, number: int = 0, follow
         if args.plan:
             print_plan(run, configuration, plans, post_plan, pre_plan, combined)
             return 0
-        return 1 if plot.draw(run, configuration, combined or every, print) else 0
+        return 1 if plot.draw(run, configuration, combined or every, print, others=others_of(args)) else 0
     if args.only == "post" and post_plan is None:
         raise HepError(f"configuration '{configuration.key}' has no post tools", where=f"{run.path}: [run.{configuration.key}].post")
     if args.only == "pre" and pre_plan is None:
@@ -531,7 +539,7 @@ def run_one(args, key: str, stopper: execute.Stopper, *, number: int = 0, follow
         elif post_plan is not None and args.only == "post":
             verdict = "post done"
         if args.only != "post":
-            failed += plot.draw(run, configuration, combined or every, bus.say) > 0   # the groups, when combined
+            failed += plot.draw(run, configuration, combined or every, bus.say, others=others_of(args)) > 0   # the groups, when combined
         bus.say(verdict)                     # before end(): the view's thread prints it (V32)
     finally:
         onward = {"next": str(following)} if following and not stopper.requested else {}
@@ -577,7 +585,8 @@ def cmd_plot(args) -> int:
         planned = build_plans(args, key)
         if len(keys) > 1:
             print(("\n" if number > 1 else "") + header(number, planned.configuration))
-        failed = plot.draw(planned.run, planned.configuration, planned.combined or planned.every, print) or failed
+        failed = plot.draw(planned.run, planned.configuration, planned.combined or planned.every, print,
+                           others=others_of(args)) or failed
     return 1 if failed else 0
 
 

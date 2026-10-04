@@ -86,7 +86,7 @@ class Page:
 class Figure:
     """A recipe for pages (V80): [plot.figures.<key>]."""
     key: str
-    kind: str                # its class: defined, overlay, merged
+    kind: str                # its class: defined, overlay, merged, compare
     type: str                # what is drawn; "" from the objects
     name: str                # its pages' file stem (an overlay's; a defined figure's pages are the objects')
     objects: tuple           # globs
@@ -94,6 +94,7 @@ class Figure:
     table: dict              # what it sets for its pages: [plot]'s page keys, x_label, y_label, style
     where: str
     over: tuple = ()         # a merged figure's: the axes it merges (V82)
+    configurations: tuple = ()   # a compare figure's (V83); () under sweep_runs: its configurations
 
 
 def figures(run) -> list[Figure]:
@@ -104,7 +105,7 @@ def figures(run) -> list[Figure]:
         out.append(Figure(key, table.get("class", "defined"), table.get("type", ""), table.get("name", key),
                           tuple(table["objects"]), tuple(table.get("labels", ())),
                           {k: v for k, v in table.items() if k not in schema.FIGURE_OWN}, f"{run.path}: {written}",
-                          tuple(table.get("over", ()))))
+                          tuple(table.get("over", ())), tuple(table.get("configurations", ()))))
     return out
 
 
@@ -368,6 +369,32 @@ def pages(run, configuration, plans) -> list[Page]:
     return made
 
 
+#: A compare figure's curve axis (V83): the configuration, in its members' choice; not a quantity name.
+CONFIGURATION = "@configuration"
+
+
+def compare_pages(run, figure: Figure, sets: list[tuple]) -> list[Page]:
+    """A compare figure's pages (V83): its objects' pages, one per page cell of the configurations, whose
+    curves are every configuration's points (or combined groups), labelled by the configuration first.
+    `sets`: (configuration, its complete plans) in the figure's order. Into
+    output/…/<run>/compare/<name>/ and results/…/<run>/compare/<name>/<backend>/."""
+    members, yodas = [], {}
+    for number, (configuration, plans) in enumerate(sets):
+        label = figure.labels[number] if figure.labels else configuration.label
+        for plan in plans:
+            name = f"{configuration.key}_{plan.point.name}"
+            members.append(replace(plan, point=replace(plan.point, name=name, choice={**plan.point.choice, CONFIGURATION: number}),
+                                   context={**plan.context, "curve_label": label}))
+            yodas[name] = yoda_of(plan)
+    first = sets[0][1][0]
+    out_dir = first.out.parent.parent / "compare" / figure.name
+    res_dir = first.res.parent.parent / "compare" / figure.name / "root"
+    page_groups, curve_groups = axes_of(sets[0][0])
+    root = merge(yodas, res_dir / f"{figure.name}.root", out_dir / "merged.sha256")
+    return _pages(run, members, yodas, root, [replace(figure, kind="defined")], page_groups,
+                  [[CONFIGURATION]] + curve_groups, out_dir, res_dir, implicit=False)
+
+
 def _merged(run, figure: Figure, complete: list, groups: list, where: Path) -> tuple[list, dict]:
     """A merged figure's members: per value of the axes it does not merge, one stand-in plan named by
     their tags, its YODA the members' merged by the combine folder's command; rebuilt only when a
@@ -587,6 +614,41 @@ def check_figures(run, configuration) -> None:
         if set(band if isinstance(band, list) else []) & set(over):
             raise HepError(f"{at} both merges and bands {sorted(set(band) & set(over))[0]}", where=f"{run.path}: {at}.band",
                            hint="a merged axis is one curve already: band another, or merge less")
+    for figure in (f for f in figures(run) if f.kind == "compare"):
+        compared(run, figure)
+
+
+def compared(run, figure: Figure) -> list:
+    """A compare figure's configurations (V83): those it names, else the sweep_runs ones; two at least,
+    every one with the same page and curve axes, so that their pages pair up."""
+    at = f"{figure.where}.configurations"
+    keys = list(figure.configurations) or (run.runs(None) if run.sweep_runs else [])
+    if len(keys) < 2:
+        raise HepError("a compare figure needs two configurations or more", where=at,
+                       hint='configurations = ["a", "b"], or [run].sweep_runs: its configurations')
+    if len(set(keys)) != len(keys):
+        raise HepError("a compare figure names a configuration twice", where=at)
+    out = []
+    for key in keys:
+        if key not in run.configurations:
+            raise HepError(f"a compare figure names '{key}', which is not a configuration", where=at,
+                           hint=did_you_mean(key, list(run.configurations)) or f"configurations: {', '.join(run.configurations)}")
+        out.append(run.configurations[key])
+    shapes = {c.key: axes_of(c) for c in out}
+    first = out[0]
+    for c in out[1:]:
+        if shapes[c.key] != shapes[first.key]:
+            raise HepError(f"a compare figure's configurations differ in their axes: {first.key} {_shape(shapes[first.key])}, "
+                           f"{c.key} {_shape(shapes[c.key])}", where=at,
+                           hint="compared configurations sweep the same quantities, with the same plot_points and combine")
+    if figure.labels and len(figure.labels) != len(out):
+        raise HepError(f"a compare figure's labels give one label per configuration ({len(out)})", where=f"{figure.where}.labels")
+    return out
+
+
+def _shape(shape) -> str:
+    pages_, curves = shape
+    return f"(pages: {', '.join(g[0] for g in pages_) or 'none'}; curves: {', '.join(g[0] for g in curves) or 'none'})"
 
 
 def check_texts(run, plans) -> None:
@@ -722,15 +784,18 @@ def _curve_look(run, plan, curve_groups) -> dict:
     look: dict = {}
     for group in curve_groups:
         for name in group:
-            if run.quantities[name].styles:
+            if name in run.quantities and run.quantities[name].styles:
                 look.update(run.quantities[name].styles[plan.point.choice[name]])
     return look
 
 
 def _curve_label(run, plan, curve_groups, fill=lambda text: text) -> str:
-    if not curve_groups:
-        return run.name
-    return ", ".join(canonical(fill(label_of(run.quantities[g[0]], plan.point.choice[g[0]]))) for g in curve_groups)
+    """The curve axes' labels at its point, after its own (a compared configuration's, V83); the run's
+    name when it has neither."""
+    own = [canonical(fill(plan.context["curve_label"]))] if plan.context.get("curve_label") else []
+    labels = [canonical(fill(label_of(run.quantities[g[0]], plan.point.choice[g[0]]))) for g in curve_groups
+              if g[0] in run.quantities]
+    return ", ".join(own + labels) or run.name
 
 
 def _paint(paint: Path, configs: list[Path], mode: list[str] = ()) -> dict[str, tuple[bool, str]]:
@@ -803,18 +868,43 @@ def for_backend(page: Page, name: str) -> Page:
     return replace(page, output=page.plots / name / page.name) if page.plots else page
 
 
-def draw(run, configuration, plans, say) -> int:
+def draw(run, configuration, plans, say, others=None) -> int:
     """The plot stage: Paint on every page, then any other backend on the same pages. Returns the
-    number of pages that failed, summed over the backends."""
+    number of pages that failed, summed over the backends. Then each compare figure that names this
+    configuration (V83), once all of its configurations have complete points: `others(key)` gives
+    another configuration's plans."""
     if not run.plot:
         return 0
     paint = build_root() / "Paint.exe"
     if not paint.exists():
         raise HepError("build/Paint.exe is not built", hint="hep build")
     todo = pages(run, configuration, plans)
+    failed = _draw(run, paint, todo, f"{run.name} · {configuration.label}", say) if todo else 0
     if not todo:
         say("plot: no complete point has a YODA product to draw")
-        return 0
+    for figure in (f for f in figures(run) if f.kind == "compare"):
+        named = compared(run, figure)
+        if configuration.key not in {c.key for c in named}:
+            continue
+        sets, waiting = [], []
+        for c in named:
+            mine = plans if c.key == configuration.key else (others(c.key) if others else [])
+            complete = [p for p in mine if is_complete(p) and yoda_of(p)]
+            if complete:
+                sets.append((c, complete))
+            else:
+                waiting.append(c.key)
+        if waiting:
+            say(f"plot: compare {figure.name} waits for {', '.join(waiting)}: no complete point yet")
+            continue
+        made = compare_pages(run, figure, sets)
+        say(f"plot: compare {figure.name}, {len(named)} configurations")
+        failed += _draw(run, paint, made, f"{run.name} · {figure.name}", say)
+    return failed
+
+
+def _draw(run, paint: Path, todo: list[Page], title: str, say) -> int:
+    """Paint on these pages, then the other backends on the same pages, an index each."""
     names = backends(run.plot)
     others = [n for n in names if n != "root"]
     # One Paint for many pages (V64): it draws them (root) and writes each page's ranges beside its config
@@ -834,7 +924,7 @@ def draw(run, configuration, plans, say) -> int:
         say(f"plot: {len(todo) - failed} of {len(todo)} page(s) drawn; configs in {where}")
         drawn = [(p.cell, p.name, p.output) for p in todo if outcomes[str(p.config)][0]]
         if drawn:                                            # V70: the ROOT pages' own index
-            write_index(todo[0].plots / "root", f"{run.name} · {configuration.label}", drawn)
+            write_index(todo[0].plots / "root", title, drawn)
     if others and failed:
         todo = [p for p in todo if p.ranges]                 # a page Paint could not read has no ranges
     for name in others:
@@ -847,8 +937,7 @@ def draw(run, configuration, plans, say) -> int:
             drawn = [p for every in cells.values() for p in every
                      if any(p.output.with_name(f"{p.output.name}.{f}").is_file() for f in FORMATS)]
             if drawn:
-                write_index(todo[0].plots / name, f"{run.name} · {configuration.label}",
-                            [(p.cell, p.name, p.output) for p in drawn])
+                write_index(todo[0].plots / name, title, [(p.cell, p.name, p.output) for p in drawn])
     return failed
 
 

@@ -320,6 +320,23 @@ def test_a_merged_figure_merges_curve_axes_it_does_not_band(scratch):
     plot.check_figures(run, conf)
 
 
+def test_a_compare_figure_pairs_configurations_of_one_shape(scratch):
+    """V83: two configurations or more, the sweep_runs ones by default, each with the same axes."""
+    from helpers import plan
+    figure = {"class": "compare", "objects": ["d01-*"]}
+    run, conf, _ = plan(raw(run__one__sweeps=["pdf"], plot={"figures": {"c": figure}}), scratch)
+    with pytest.raises(HepError, match="needs two configurations or more"):
+        plot.check_figures(run, conf)
+    run, conf, _ = plan(raw(run__one__sweeps=["pdf"], run__two={"tools": ["pythia"], "sweeps": []},
+                            plot={"figures": {"c": {**figure, "configurations": ["one", "two"]}}}), scratch)
+    with pytest.raises(HepError, match=r"differ in their axes: one \(pages: none; curves: pdf\), two \(pages: none; curves: none\)"):
+        plot.check_figures(run, conf)
+    from helpers import parse
+    run = parse(raw(run__sweep_runs=True, run__configuration=None, run__one__sweeps=["pdf"],
+                    run__two={"tools": ["pythia"], "sweeps": ["pdf"]}, plot={"figures": {"c": figure}}), scratch)
+    assert [c.key for c in plot.compared(run, plot.figures(run)[0])] == ["one", "two"]
+
+
 @pytest.mark.parametrize("figure, message", [
     ({"class": "overlay"}, "a figure needs objects"),
     ({"objects": ["d01-*"], "labels": ["a"]}, "a defined figure takes no labels"),
@@ -330,6 +347,8 @@ def test_a_merged_figure_merges_curve_axes_it_does_not_band(scratch):
     ({"class": "merged", "objects": ["d01-*"]}, "is a merged figure's, and it needs one"),
     ({"class": "merged", "objects": ["d01-*"], "over": ["pdf"], "labels": ["a"]}, "a merged figure takes no labels"),
     ({"class": "overlay", "objects": ["d01-*"], "over": ["pdf"]}, "a overlay figure merges nothing"),
+    ({"objects": ["d01-*"], "configurations": ["a", "b"]}, "configurations is a compare figure's"),
+    ({"class": "compare", "objects": ["d01-*"], "configurations": ["a", "b"], "labels": ["x"]}, "one label per configuration"),
 ])
 def test_a_figure_is_checked_when_the_file_is_read(scratch, figure, message):
     with pytest.raises(HepError, match=message):

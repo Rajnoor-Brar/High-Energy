@@ -937,12 +937,13 @@
         ]
        },
        "class": {
-        "description": "how its pages are built: defined (an analysis object's own), overlay (several objects of each point), merged (the objects' pages with the points merged over `over`)",
+        "description": "how its pages are built: defined (an analysis object's own), overlay (several objects of each point), merged (the objects' pages with the points merged over `over`), compare (the objects' pages across configurations)",
         "type": "string",
         "enum": [
          "defined",
          "overlay",
-         "merged"
+         "merged",
+         "compare"
         ],
         "default": "defined"
        },
@@ -971,8 +972,15 @@
          "type": "string"
         }
        },
+       "configurations": {
+        "description": "a compare figure's configurations (default: the sweep_runs ones), each a curve per point (V83)",
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       },
        "labels": {
-        "description": "an overlay's legend label per object",
+        "description": "an overlay's legend label per object; a compare figure's per configuration",
         "type": "array",
         "items": {
          "type": "string"

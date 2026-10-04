@@ -498,9 +498,9 @@ doc  = "[plot.figures.<figure>]: the figures, each a recipe for pages (08_Figure
 
 [figure.class]
 type    = "str"
-choices = ["defined", "overlay", "merged"]
+choices = ["defined", "overlay", "merged", "compare"]
 default = "defined"
-doc     = "how its pages are built: defined (an analysis object's own), overlay (several objects of each point), merged (the objects' pages with the points merged over `over`)"
+doc     = "how its pages are built: defined (an analysis object's own), overlay (several objects of each point), merged (the objects' pages with the points merged over `over`), compare (the objects' pages across configurations)"
 
 [figure.type]
 type    = "str"
@@ -521,10 +521,15 @@ type  = "list"
 items = "str"
 doc   = "a merged figure's: the curve axes whose points it merges, by the combine folder's command (V82)"
 
+[figure.configurations]
+type  = "list"
+items = "str"
+doc   = "a compare figure's configurations (default: the sweep_runs ones), each a curve per point (V83)"
+
 [figure.labels]
 type  = "list"
 items = "str"
-doc   = "an overlay's legend label per object"
+doc   = "an overlay's legend label per object; a compare figure's per configuration"
 
 [figure.x_label]
 type       = "str"

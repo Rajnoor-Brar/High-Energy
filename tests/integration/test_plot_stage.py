@@ -9,6 +9,7 @@ from __future__ import annotations
 import shutil
 import sys
 import tomllib
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -38,6 +39,11 @@ def stage(scratch, request):
                                          "style": {"legend": {"position": "top-left"}}}}})
     run = parse(data, scratch)
     configuration = run.configuration(None)
+    return run, configuration, completed(run, configuration)
+
+
+def completed(run, configuration) -> list:
+    """The configuration's points planned, each with a legacy mini YODA as its product, complete."""
     master = quantities.load_master(run.project, run.master_toml)
     plans = []
     for point in sweep.points(run, configuration):
@@ -54,7 +60,7 @@ def stage(scratch, request):
         record.complete_marker(plan).parent.mkdir(parents=True, exist_ok=True)
         record.complete_marker(plan).write_text(plan.identity + "\n")
     shutil.rmtree(plans[0].res.parent / "plots", ignore_errors=True)
-    return run, configuration, plans
+    return plans
 
 
 def test_pages_are_plot_points_by_objects(stage):
@@ -157,6 +163,30 @@ def test_an_overlay_figure_folds_a_band(stage):
     assert [c["label"] for c in curves] == ["d02-x01-y01 (pdf envelope)", "d03-x01-y01 (pdf envelope)"]
     assert [len(c["band"]) for c in curves] == [1, 1] and [len(b) for b in page.bands] == [1, 1]
     assert plot.draw(run, configuration, plans, lambda line: None) == 0
+
+
+def test_a_compare_figure_draws_configurations_together(stage):
+    """V83: the objects' pages across configurations, curves labelled by the configuration first, drawn
+    by the plot stage of whichever configuration completes it, into <run>/compare/<name>/."""
+    run, configuration, plans = stage
+    two = replace(configuration, key="two", label="Second")
+    run.configurations["two"] = two
+    run.plot["figures"]["stats"] = {"class": "compare", "objects": ["d01-*"], "configurations": ["one", "two"],
+                                    "labels": ["1M", "10M"]}
+    said = []
+    assert plot.draw(run, configuration, plans, said.append, others=lambda key: []) == 0
+    assert "plot: compare stats waits for two: no complete point yet" in said
+    others = completed(run, two)
+    said.clear()
+    assert plot.draw(run, two, others, said.append, others=lambda key: plans) == 0, said
+    compare = plans[0].res.parent.parent / "compare" / "stats"
+    assert (compare / "root" / "em" / "d01-x01-y01.png").is_file() and (compare / "root" / "index.html").is_file()
+    page = tomllib.loads((plans[0].out.parent.parent / "compare" / "stats" / "em" / "d01-x01-y01.toml").read_text())
+    assert [c["label"] for c in page["curve"]] == ["1M, MSTW 2008 LO", "1M, NNPDF 2.3 LO", "10M, MSTW 2008 LO", "10M, NNPDF 2.3 LO"]
+    assert "data" in page
+    run.plot["figures"]["stats"]["configurations"] = ["one", "nope"]
+    with pytest.raises(plot.HepError, match="names 'nope', which is not a configuration"):
+        plot.check_figures(run, configuration)
 
 
 @pytest.mark.skipif(not shutil.which("rivet-merge"), reason="load_hep: rivet-merge")
