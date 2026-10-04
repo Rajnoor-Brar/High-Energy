@@ -1,4 +1,4 @@
-# utils/Env/delphes/tool.toml — DelphesHepMC3, a detector simulation (docs/05_Tools_Reference.md §9).
+# utils/Env/delphes/tool.toml — DelphesHepMC3, a detector simulation (docs/05_Commands_and_Tools.md §11).
 #
 # L11: Delphes sizes its input before reading it and skips a zero-length one, so a FIFO reads as
 # empty: it takes a file from an earlier group (streamable = false, refused at plan time otherwise).

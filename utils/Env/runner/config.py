@@ -20,7 +20,7 @@ from .errors import HepError, did_you_mean
 from .paths import config_file, configs_root, resolve
 from .quantities import check_shapes
 
-#: How a point's seeds are chosen (V39, 02 §8); the schema's [run.seed_type].choices.
+#: How a point's seeds are chosen (V39, 06 §8); the schema's [run.seed_type].choices.
 SEED_TYPES = tuple(schema.keys("run")["seed_type"]["choices"])
 DEFAULT = schema.DEFAULT
 CURVE_LINES = ("solid", "dashed", "dotted", "dashdot")

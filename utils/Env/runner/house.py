@@ -1,6 +1,6 @@
 """Housekeeping: `hep ls`, `hep explain`, `hep status`, `hep clean` (rank 5, V74).
 
-docs/04_Config_Reference.md §14, audit 1 F5. Nothing here runs a tool; `clean` is the only command
+docs/05_Commands_and_Tools.md §1, audit 1 F5. Nothing here runs a tool; `clean` is the only command
 that deletes, and only what the runner made and no plan uses (it never deletes from results/ but a
 product's `.partial` leftover, and it refuses while a job is running).
 """

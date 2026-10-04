@@ -265,7 +265,7 @@ def check_shapes(quantity, where: str) -> None:
                            where=where, hint=entry.get("doc", ""))
 
 
-# ── providers: things a value needs installed (02 §4, category 1) ─────────────────────────────
+# ── providers: things a value needs installed (06 §4, category 1) ─────────────────────────────
 
 def _provider(name: str):
     """utils/Env/<name>/provider.py (V60): a provider's checks, loaded by name."""

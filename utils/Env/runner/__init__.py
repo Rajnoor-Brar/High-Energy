@@ -1,8 +1,8 @@
-"""The v2 runner (docs/02_Architecture.md §3).
+"""The v2 runner (docs/06_Internals.md §2).
 
 One flat package. A module imports only from its own rank or a lower one, with no cycles. `RANKS` is
 the one table of ranks: tests/runner/test_imports.py enforces it, and tests/runner/test_docs.py holds
-02 §3.1 to it. A tool folder's plugin (render.py, backend.py) may import only `PLUGINS_MAY_IMPORT`.
+06 §2.1 to it. A tool folder's plugin (render.py, backend.py) may import only `PLUGINS_MAY_IMPORT`.
 """
 
 RANKS = {

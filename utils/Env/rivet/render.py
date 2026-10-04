@@ -1,4 +1,4 @@
-"""utils/Env/rivet/render.py — Rivet's analyses and their options (docs/05_Tools_Reference.md §3, V60).
+"""utils/Env/rivet/render.py — Rivet's analyses and their options (docs/05_Commands_and_Tools.md §5, V60).
 
 The runner core knows no tool (BOT.md); what is Rivet's lives here, as the folder's `options` hook:
 

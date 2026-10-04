@@ -1,4 +1,4 @@
-"""utils/Env/madgraph/render.py — MadGraph's launch script and proc card (docs/06_Developer_Guide.md §4, L14).
+"""utils/Env/madgraph/render.py — MadGraph's launch script and proc card (docs/06_Internals.md §16, L14).
 
 MadGraph hands over a matrix element, as an LHE file, and a `pythia` tool showers it. Two cards:
 

@@ -1,4 +1,4 @@
-// utils/Apps/Paint/main.cc — the ROOT plotting app (docs/05_Tools_Reference.md §17).
+// utils/Apps/Paint/main.cc — the ROOT plotting app (docs/05_Commands_and_Tools.md §18).
 // requires: root toml
 //
 //     Paint.exe PAGE.toml [PAGE.toml …] [--ranges | --ranges-only]

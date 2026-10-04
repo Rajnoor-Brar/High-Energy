@@ -1,4 +1,4 @@
-// utils/App_yd2rt.cc — YODA → ROOT, and a sweep's YODAs into one file (docs/05_Tools_Reference.md §16).
+// utils/App_yd2rt.cc — YODA → ROOT, and a sweep's YODAs into one file (docs/05_Commands_and_Tools.md §17).
 // requires: yoda root
 //
 //     App_yd2rt.exe IN.yoda OUT.root [GLOB …] [--keep-raw]                    (GLOB: YODA paths to convert)
@@ -201,7 +201,7 @@ namespace {
             if (auto* h = dynamic_cast<TH1*>(made)) h->SetDirectory(target);
             made->Write(nullptr, TObject::kOverwrite);
             // A raw fill histogram also gets its per-bin entry counts, which a TH1D cannot carry: Paint's
-            // min_entries voiding reads them (docs/05_Tools_Reference.md §17).
+            // min_entries voiding reads them (docs/05_Commands_and_Tools.md §18).
             if (auto* raw = dynamic_cast<YODA::Histo1D*>(ao); raw && path.rfind("/RAW/", 0) == 0) {
                 TH1D* entries = fromHisto1D(*raw, name + "__entries");
                 for (size_t i = 0; i < raw->edges<0>().size() + 1; ++i) {

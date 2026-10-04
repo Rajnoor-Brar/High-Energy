@@ -1,4 +1,4 @@
-# utils/Env/whizard/filters.toml — Whizard only prints (docs/05_Tools_Reference.md §20). A rule never fails a run.
+# utils/Env/whizard/filters.toml — Whizard only prints (docs/06_Internals.md §23). A rule never fails a run.
 [[rule]]
 match = '^\| Starting integration'
 emit  = "phase"

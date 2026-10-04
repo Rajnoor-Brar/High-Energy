@@ -1,4 +1,4 @@
-// utils/App_Pythia.cc — the standard Pythia tool (docs/05_Tools_Reference.md §15).
+// utils/App_Pythia.cc — the standard Pythia tool (docs/05_Commands_and_Tools.md §16).
 // requires: pythia8 hepmc3 zstd zlib
 //
 //     App_Pythia.exe [--threads N] [--events N] [--seeds S1,S2,…] [--sidecar FILE]

@@ -1,4 +1,4 @@
-# utils/Env/module/tool.toml — a module program built with utils/Module.hh (docs/05_Tools_Reference.md §18).
+# utils/Env/module/tool.toml — a module program built with utils/Module.hh (docs/06_Internals.md §21).
 # The table names it: executable = "Lambda.exe" → build/<project>/Lambda.exe. It always gets its
 # extracted config as the first argument; an empty --input means an integrated program.
 [tool]

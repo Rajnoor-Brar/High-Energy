@@ -1,5 +1,5 @@
 # lambda.toml — Λ → p π⁻ from Pythia (Angantyr Ne-20 on Ne-20, lambda.cmnd), through two
-# analysis paths on the same events (rework v2 schema, docs/03_User_Guide.md §4.13).
+# analysis paths on the same events (rework v2 schema, docs/02_User_Guide.md §6.1).
 #
 #   hep run Lambda/lambda                   one run at 7 TeV, both paths
 #   hep run Lambda/lambda masswindow        the mass window swept through both paths at once

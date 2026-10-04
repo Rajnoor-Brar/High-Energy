@@ -1,5 +1,5 @@
 #pragma once
-// utils/Module.hh — the module kit (docs/05_Tools_Reference.md §18).
+// utils/Module.hh — the module kit (docs/06_Internals.md §21).
 //
 // A module is a plain program. This header removes the boilerplate and nothing else:
 //
@@ -19,7 +19,7 @@
 // once, after the loop. RootOut::scale refuses a second call. A histogram drawn beside Rivet's is
 // a density: scale with "width" as well (L21).
 //
-// Exit codes (02 §11): utils/Kit.hh's one table (V73): 0 ok, 1 config, 2 usage, 3 init, 4 input,
+// Exit codes (06 §11): utils/Kit.hh's one table (V73): 0 ok, 1 config, 2 usage, 3 init, 4 input,
 // 5 output, 6 stopped, 70 internal. A module runs single-threaded.
 
 #include "Status.hh"

@@ -1,4 +1,4 @@
-# utils/Env/herwig/tool.toml — Herwig 7, an event generator (docs/05_Tools_Reference.md §10, L15).
+# utils/Env/herwig/tool.toml — Herwig 7, an event generator (docs/05_Commands_and_Tools.md §12, L15).
 #
 # `Herwig read` turns the card into a run file: a [prepare] step, cached by the card (events and
 # seed are flags, so every point and replica with the same physics shares it). It needs the

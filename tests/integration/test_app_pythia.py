@@ -1,4 +1,4 @@
-"""App_Pythia as a process (docs/05_Tools_Reference.md §15): what it refuses, the sidecar, codecs.
+"""App_Pythia as a process (docs/05_Commands_and_Tools.md §16): what it refuses, the sidecar, codecs.
 
 These run the real program on a small hard-QCD card: about a second each.
 """

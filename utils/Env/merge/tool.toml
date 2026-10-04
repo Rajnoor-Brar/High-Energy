@@ -1,5 +1,5 @@
 # utils/Env/merge/tool.toml — rivet-merge, in `post`: one YODA product of every point, merged
-# (docs/05_Tools_Reference.md §5). `input` names the points' product; {inputs} is that product of every point.
+# (docs/05_Commands_and_Tools.md §7). `input` names the points' product; {inputs} is that product of every point.
 [tool]
 category   = "analysis-application"
 executable = "rivet-merge"

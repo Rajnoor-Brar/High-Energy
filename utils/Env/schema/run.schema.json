@@ -90,7 +90,7 @@
      "default": "none"
     },
     "seed_type": {
-     "description": "how seeds are chosen\n\ndefault for configurations: how a point's seeds are chosen, `\"identity\"`, `\"manual\"` or `\"random\"` (02 §8)",
+     "description": "how seeds are chosen\n\ndefault for configurations: how a point's seeds are chosen, `\"identity\"`, `\"manual\"` or `\"random\"` (06 §8)",
      "type": "string",
      "enum": [
       "identity",
@@ -191,7 +191,7 @@
       "default": true
      },
      "seed_type": {
-      "description": "how seeds are chosen (else [run]'s)\n\n`\"identity\"`: from the generator's identity; `\"manual\"`: exactly the given seed; `\"random\"`: drawn when the point runs (02 §8)",
+      "description": "how seeds are chosen (else [run]'s)\n\n`\"identity\"`: from the generator's identity; `\"manual\"`: exactly the given seed; `\"random\"`: drawn when the point runs (06 §8)",
       "anyOf": [
        {
         "type": "string",
@@ -297,7 +297,7 @@
     "type": "object",
     "properties": {
      "tool": {
-      "description": "a standard tool (a folder of utils/Env/) or custom\n\na standard tool (a folder of `utils/Env/`, 05 §1), `\"custom\"` or `\"module\"`",
+      "description": "a standard tool (a folder of utils/Env/) or custom\n\na standard tool (a folder of `utils/Env/`, 05 §3), `\"custom\"` or `\"module\"`",
       "type": "string"
      },
      "baseconfig": {
@@ -381,7 +381,7 @@
       "minimum": 1
      },
      "shards": {
-      "description": "K processes on a share of the events each\n\nK > 1: K processes of this tool, each on a share of the events, merged into its `output_file` by the folder's merge tool (V31; rivet, 05 §3.1). The chain is unchanged.",
+      "description": "K processes on a share of the events each\n\nK > 1: K processes of this tool, each on a share of the events, merged into its `output_file` by the folder's merge tool (V31; rivet, 05 §5.1). The chain is unchanged.",
       "type": "integer",
       "minimum": 1,
       "default": 1

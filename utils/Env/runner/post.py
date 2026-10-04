@@ -1,6 +1,6 @@
 """The pre and post stages: tools run once, before every point or after them (rank 4).
 
-docs/02_Architecture.md §7, docs/04_Config_Reference.md §5.4 (V15). `[run.<cfg>].post` has the form of
+docs/06_Internals.md §7, docs/04_Config_Reference.md §5.4 (V15). `[run.<cfg>].post` has the form of
 `tools`. It is planned as one more point, named "post", in the configuration's directory:
 
 * it takes no quantities;

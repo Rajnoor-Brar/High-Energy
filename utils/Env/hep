@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# utils/Env/hep — the `hep` command (docs/04_Config_Reference.md §14).
+# utils/Env/hep — the `hep` command (docs/05_Commands_and_Tools.md §1).
 #
 #   hep run <config> [<configuration>] [options]   the runner (utils/Env/run)
 #   hep plot <config> [<configuration>]            a configuration's pages
 #   hep overlay FILE…                              any YODA/ROOT files overlaid
 #   hep watch [<config>]                           attach the live view
-#   hep ls | explain | status | clean              housekeeping (docs/04_Config_Reference.md §14)
+#   hep ls | explain | status | clean              housekeeping (docs/05_Commands_and_Tools.md §1)
 #   hep build [targets…] [--tests] [--clean] [--configure] [-j N]    make, from the repo root
 set -euo pipefail
 
@@ -33,7 +33,7 @@ usage: hep <command> [options]
         --configure                probe the toolchain again (rewrite build/flags.mk)
         -j N                       parallel jobs (default: all cores)
 
-  make <path>/<X>.exe | <path>/<x>.so   compile one source (docs/06_Developer_Guide.md §2)
+  make <path>/<X>.exe | <path>/<x>.so   compile one source (docs/06_Internals.md §15)
 EOF
 }
 

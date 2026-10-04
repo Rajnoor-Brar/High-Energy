@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""modules/PhotoProduction/delphes_jets.py — a custom tool over Delphes's output (03 §4.10).
+"""modules/PhotoProduction/delphes_jets.py — a custom tool over Delphes's output (02 §5.1).
 
     python3 delphes_jets.py DELPHES.root OUTPUT.json
 

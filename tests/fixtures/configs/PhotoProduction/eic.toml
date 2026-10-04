@@ -99,7 +99,7 @@ prelim      = {}              # no FIFO: the events never leave the process
 
 [run.delphes]
 serial      = 12
-description = "Detector level: the events to a file, Delphes (ATLAS card), then a jet count (03 §4.10)"
+description = "Detector level: the events to a file, Delphes (ATLAS card), then a jet count (02 §5.1)"
 sweeps      = []
 tools       = ["pythia_file", "delphes", "jets_reco"]
 prelim      = { files = ["showered.hepmc"] }       # a file: Delphes cannot read a FIFO (L11)
@@ -131,7 +131,7 @@ tool        = "rivet"
 input       = "events.hepmc"
 analyses    = ["photo_eic"]
 output_file = "photo.yoda"
-shards      = 10              # 10 Rivet processes, merged into photo.yoda (03 §4.17): one Rivet
+shards      = 10              # 10 Rivet processes, merged into photo.yoda (02 §7.1): one Rivet
                               # reads ~1,500 ev/s; 12 threads + 10 shards run ~9,200 ev/s (L27)
 
 [tools.yd2rt]

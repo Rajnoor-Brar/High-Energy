@@ -3,7 +3,7 @@
 One reader for what plot.py, labels.py and execute.py each read for themselves before: a YODA file's
 objects (gzip read transparently), its /RAW twins, a counter's entries, and the Rivet data directories
 (build/Rivet first, then `rivet-config --datadir`, asked once per process). The runner stays standard
-library (02 §3.1): YODA's text is read with regular expressions, which is all these questions need.
+library (06 §2.1): YODA's text is read with regular expressions, which is all these questions need.
 """
 
 from __future__ import annotations

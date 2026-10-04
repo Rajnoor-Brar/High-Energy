@@ -1,4 +1,4 @@
-# utils/Env/madgraph/tool.toml — MadGraph5_aMC@NLO, a process generator (docs/05_Tools_Reference.md §13, L14).
+# utils/Env/madgraph/tool.toml — MadGraph5_aMC@NLO, a process generator (docs/05_Commands_and_Tools.md §15, L14).
 #
 # The process directory is a [prepare] step keyed on the proc card only (key = "base"). Each point
 # launches a run named r<seed> in it and unpacks the LHE to its output (a file from an earlier

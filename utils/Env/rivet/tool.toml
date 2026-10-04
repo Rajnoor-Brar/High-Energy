@@ -1,4 +1,4 @@
-# utils/Env/rivet/tool.toml — Rivet as a process, reading HepMC (docs/05_Tools_Reference.md §3).
+# utils/Env/rivet/tool.toml — Rivet as a process, reading HepMC (docs/05_Commands_and_Tools.md §5).
 [tool]
 category        = "analysis-application"
 executable      = "rivet"
