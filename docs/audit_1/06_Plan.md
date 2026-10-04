@@ -295,6 +295,7 @@ The goal: one event stream, runtime state off disk, and the housekeeping a daily
   conventions themselves may change, and replicas may not be needed.
 - **F9:** a Slurm/HTCondor executor, after P5 S1. Jobs run with `--journal` on a shared filesystem.
 - **K15:** a `HEKIT_*` rename, if wanted.
+- **Figures (the user, 2026-10-04):** `[plot.figures.<figure>]` with `class` and `type`, in phases F0–F4: [08_Figures.md](08_Figures.md).
 
 ---
 

@@ -711,9 +711,7 @@ def cmd_migrate(args) -> int:
     the files rewritten. Configs are read as they are (the forms the runner now refuses included)."""
     from . import migrate
     names = list(args.configs) or house.config_names()
-    for name in names:                       # every one must read, leniently, before anything is written
-        configmod.load(name, strict=False)
-    changes = migrate.plan(names)
+    changes = migrate.plan(names)            # every one must read, leniently, before anything is written
     for path, (old, new) in changes.items():
         sys.stdout.write(migrate.diff(path, old, new))
     if not changes:

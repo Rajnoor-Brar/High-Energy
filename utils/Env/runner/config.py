@@ -359,10 +359,18 @@ def _with_includes(raw: dict, path: Path) -> tuple[dict, dict]:
     return _over(merged, raw), included
 
 
-def load(name: str, *, sets: list[str] = (), strict: bool = True) -> RunConfig:
-    """A run TOML, checked. `strict=False` (hep migrate only, V79) still reads the forms it rewrites."""
+def load(name: str, *, sets: list[str] = (), strict: bool = True, text: str | None = None) -> RunConfig:
+    """A run TOML, checked. `strict=False` (hep migrate only, V79) still reads the forms it rewrites;
+    `text` (hep migrate's, V81) is read in place of the file's."""
     path = config_file(name)
-    raw, included = _with_includes(_read(path), path)
+    if text is None:
+        first = _read(path)
+    else:
+        try:
+            first = tomllib.loads(text)
+        except tomllib.TOMLDecodeError as error:
+            raise HepError(f"not valid TOML, even migrated: {error}", where=str(path)) from None
+    raw, included = _with_includes(first, path)
     apply_sets(raw, list(sets))
     run = parse(raw, path, strict=strict)
     run.included = included
@@ -589,37 +597,49 @@ def _plot_texts(table: dict, where: str) -> None:
     for key in TEXT_KEYS:
         if key in table:
             no_tlatex(table[key], f"{where}.{key}")
-    for child in ("object", "overlay"):
-        for name, sub in table.get(child, {}).items() if isinstance(table.get(child), dict) else ():
-            if isinstance(sub, dict):
-                _plot_texts(sub, f'{where}.{child}."{name}"')
+    for name, sub in table.get("figures", {}).items() if isinstance(table.get("figures"), dict) else ():
+        if isinstance(sub, dict):
+            _plot_texts(sub, f"{where}.figures.{name}")
     if isinstance(table.get("data"), dict):
         _plot_texts(table["data"], f"{where}.data")
 
 
+#: What [plot.figures] replaced (V81): the table, and what a file says instead.
+FIGURE_TABLES = {"overlay": '[plot.figures.<name>] class = "overlay"', "object": '[plot.figures.<name>] objects = ["<glob>"]'}
+
+
+def figure_tables(plot: dict) -> dict[str, tuple[dict, str]]:
+    """The declared figures, key → (its table, where it was written)."""
+    return {key: (table, f"[plot.figures.{key}]") for key, table in plot.get("figures", {}).items()}
+
+
 def check_plot(plot: dict, where: str, strict: bool = True) -> None:
-    """[plot] and its children against the schema, when the file is read (C11, V55): every key, type and
-    bound of [plot], [plot.data], [plot.object."<glob>"] and [plot.overlay.<name>]. What needs the style
-    (base.toml) or a backend is plot.validate's."""
+    """[plot] and its figures against the schema, when the file is read (C11, V55): every key, type and
+    bound of [plot], [plot.data] and [plot.figures.<figure>]. What needs the style (base.toml), the
+    objects or a backend is plot.validate's and plot.pages'."""
+    for old, new in FIGURE_TABLES.items():                 # break and migrate (V81)
+        if old in plot:
+            raise HepError(f"[plot.{old}] is a figure now: {new} (V81)", where=f"{where}.{old}",
+                           hint="hep migrate rewrites it")
     if strict:
         _plot_texts(plot, where)
     schema.check(plot, "plot", where)
     schema.check(plot.get("data", {}), "data", f"{where}.data")
-    for glob, table in plot.get("object", {}).items():
+    for key, (table, written) in figure_tables(plot).items():
+        at = f"{where.removesuffix(': [plot]')}: {written}"
         if not isinstance(table, dict):
-            raise HepError("an object's table holds keys", where=f'{where}.object."{glob}"')
-        schema.check(table, "plot_child", f'{where}.object."{glob}"')
-    for name, table in plot.get("overlay", {}).items():
-        at = f"{where}.overlay.{name}"
-        if not isinstance(table, dict):
-            raise HepError("an overlay is a table", where=at)
-        own = {k: v for k, v in table.items() if k in schema.keys("overlay")}
-        schema.check({k: v for k, v in table.items() if k not in own}, "plot_child", at)
-        schema.check(own, "overlay", at)
-        objects, labels = table.get("objects"), table.get("labels")
+            raise HepError("a figure is a table", where=at)
+        schema.check(table, "figure", at)
+        kind, objects, labels = table.get("class", "defined"), table.get("objects"), table.get("labels")
         if not objects:
-            raise HepError("an overlay needs objects = [\"d02-x01-y01\", …]: the histograms drawn together",
+            raise HepError("a figure needs objects = [\"d02-x01-y01\", …]: the objects its pages are made of",
                            where=f"{at}.objects")
+        if kind == "defined":
+            for own in ("labels", "name"):
+                if own in table:
+                    raise HepError(f"a defined figure takes no {own}", where=f"{at}.{own}",
+                                   hint="its pages are the objects' own, named and labelled as the analysis has them; "
+                                        "class = \"overlay\" draws several objects on one page")
         if labels is not None and len(labels) != len(objects):
             raise HepError(f"labels must give one label per object ({len(objects)})", where=f"{at}.labels")
 

@@ -3,7 +3,7 @@
 # Every ROOT page starts from this file; edit it to change them all. Over it, key by key, go:
 #   1. [plot].root_style = "file.toml"   a style file of the run (configs/<Project>/…, ./… from the repo root)
 #   2. [plot.style]                       inline in the run TOML
-#   3. [plot.object."<glob>".style]       for the objects the glob matches
+#   3. [plot.figures.<figure>.style]      for a figure's pages
 # Each layer names only the keys it changes, in the same tables as here. A key that is not in this
 # file is an error. `Paint.exe PAGE.toml --dump-style` prints a page's style after the merge.
 # Sizes are points (1/72 in) of the page unless said otherwise.
