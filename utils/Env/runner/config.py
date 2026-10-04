@@ -589,7 +589,7 @@ def _plot_texts(table: dict, where: str) -> None:
     for key in TEXT_KEYS:
         if key in table:
             no_tlatex(table[key], f"{where}.{key}")
-    for child in ("object", "overlay"):
+    for child in ("figures", "object", "overlay"):
         for name, sub in table.get(child, {}).items() if isinstance(table.get(child), dict) else ():
             if isinstance(sub, dict):
                 _plot_texts(sub, f'{where}.{child}."{name}"')
@@ -597,10 +597,23 @@ def _plot_texts(table: dict, where: str) -> None:
         _plot_texts(table["data"], f"{where}.data")
 
 
+def figure_tables(plot: dict) -> dict[str, tuple[dict, str]]:
+    """The declared figures, key → (its table, where it was written): [plot.figures.<figure>], and each
+    [plot.overlay.<name>] as an overlay figure until it is migrated (V80)."""
+    out = {key: (table, f"[plot.figures.{key}]") for key, table in plot.get("figures", {}).items()}
+    for name, table in plot.get("overlay", {}).items():
+        if name in out:
+            raise HepError(f"'{name}' is both a figure and an overlay", where=f"[plot.overlay.{name}]",
+                           hint="an overlay is a figure: keep one ([plot.figures.<name>] class = \"overlay\")")
+        out[name] = ({"class": "overlay", **table} if isinstance(table, dict) else table, f"[plot.overlay.{name}]")
+    return out
+
+
 def check_plot(plot: dict, where: str, strict: bool = True) -> None:
-    """[plot] and its children against the schema, when the file is read (C11, V55): every key, type and
-    bound of [plot], [plot.data], [plot.object."<glob>"] and [plot.overlay.<name>]. What needs the style
-    (base.toml) or a backend is plot.validate's."""
+    """[plot] and its figures against the schema, when the file is read (C11, V55): every key, type and
+    bound of [plot], [plot.data] and [plot.figures.<figure>] (and [plot.object."<glob>"],
+    [plot.overlay.<name>] until migrated). What needs the style (base.toml), the objects or a backend is
+    plot.validate's and plot.pages'."""
     if strict:
         _plot_texts(plot, where)
     schema.check(plot, "plot", where)
@@ -608,18 +621,23 @@ def check_plot(plot: dict, where: str, strict: bool = True) -> None:
     for glob, table in plot.get("object", {}).items():
         if not isinstance(table, dict):
             raise HepError("an object's table holds keys", where=f'{where}.object."{glob}"')
-        schema.check(table, "plot_child", f'{where}.object."{glob}"')
-    for name, table in plot.get("overlay", {}).items():
-        at = f"{where}.overlay.{name}"
+        schema.check(table, "figure", f'{where}.object."{glob}"',
+                     only=tuple(k for k in schema.keys("figure") if k not in schema.FIGURE_OWN))
+    for key, (table, written) in figure_tables(plot).items():
+        at = f"{where.removesuffix(': [plot]')}: {written}"
         if not isinstance(table, dict):
-            raise HepError("an overlay is a table", where=at)
-        own = {k: v for k, v in table.items() if k in schema.keys("overlay")}
-        schema.check({k: v for k, v in table.items() if k not in own}, "plot_child", at)
-        schema.check(own, "overlay", at)
-        objects, labels = table.get("objects"), table.get("labels")
+            raise HepError("a figure is a table", where=at)
+        schema.check(table, "figure", at)
+        kind, objects, labels = table.get("class", "defined"), table.get("objects"), table.get("labels")
         if not objects:
-            raise HepError("an overlay needs objects = [\"d02-x01-y01\", …]: the histograms drawn together",
+            raise HepError("a figure needs objects = [\"d02-x01-y01\", …]: the objects its pages are made of",
                            where=f"{at}.objects")
+        if kind == "defined":
+            for own in ("labels", "name"):
+                if own in table:
+                    raise HepError(f"a defined figure takes no {own}", where=f"{at}.{own}",
+                                   hint="its pages are the objects' own, named and labelled as the analysis has them; "
+                                        "class = \"overlay\" draws several objects on one page")
         if labels is not None and len(labels) != len(objects):
             raise HepError(f"labels must give one label per object ({len(objects)})", where=f"{at}.labels")
 

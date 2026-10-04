@@ -21,7 +21,7 @@ from .record import is_complete, complete_marker
 
 TABLES = {"run": "run", "master": "master", "prelim": "prelim", "plot": "plot", "data": "data",
           "configuration": "configuration", "quantity": "quantity", "quantities": "quantity", "tool": "tool",
-          "tools": "tool", "object": "plot_child", "overlay": "plot_child"}
+          "tools": "tool", "figure": "figure", "figures": "figure", "object": "figure", "overlay": "figure"}
 
 
 # ── hep ls ─────────────────────────────────────────────────────────────────────────────────────

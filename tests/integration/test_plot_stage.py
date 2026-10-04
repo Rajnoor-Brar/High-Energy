@@ -126,6 +126,40 @@ def test_the_sweep_is_merged_once_into_the_file_the_pages_read(stage):
         assert "points.json" in {k.split(";")[0] for k in f.keys()} or not (plans[0].out.parent / "points.json").exists()
 
 
+def test_figures_are_recipes_for_pages(stage):
+    """V80: a defined figure takes over its objects' pages (also those [plot].objects leaves out) with its
+    own page keys; [plot.figures] class = "overlay" writes what [plot.overlay] wrote; one recipe per page."""
+    run, configuration, plans = stage
+    cuts = {"objects": ["d02-x01-y01", "d03-x01-y01"], "labels": ["$E_T > 5$", "$E_T > 10$"], "ratio": False}
+    run.plot.update({"objects": ["/photo_eic/d01*"], "overlay": {"cuts": cuts}})
+    before = {p.name: p.config.read_text() for p in plot.pages(run, configuration, plans)}
+    del run.plot["overlay"]
+    run.plot["figures"] = {"cuts": {"class": "overlay", **cuts},
+                           "tails": {"objects": ["d05-*"], "min_entries": 0, "auto_range": False, "style": {"page": {"dpi": 50}}}}
+    after = {p.name: p for p in plot.pages(run, configuration, plans)}
+    assert set(after) == set(before) | {"em/d05-x01-y01", "ep/d05-x01-y01"}
+    assert all(after[name].config.read_text() == text for name, text in before.items())   # the same page TOMLs
+    d05 = tomllib.loads(after["em/d05-x01-y01"].config.read_text())
+    assert (d05["page"]["min_entries"], d05["page"]["auto_range"], d05["style"]["page"]["dpi"]) == (0, False, 50)
+    run.plot["figures"]["more"] = {"objects": ["d0[5-6]-*"]}
+    with pytest.raises(plot.HepError, match="'tails' and 'more' both make the pages of /photo_eic/d05-x01-y01"):
+        plot.pages(run, configuration, plans)
+    run.plot["figures"] = {"none": {"objects": ["d99-*"]}}
+    with pytest.raises(plot.HepError, match="match no object"):
+        plot.pages(run, configuration, plans)
+
+
+def test_an_overlay_figure_folds_a_band(stage):
+    """V80: a figure's band, here an overlay's: one curve per object, the band axis's other values its members."""
+    run, configuration, plans = stage
+    run.plot["figures"] = {"cuts": {"class": "overlay", "objects": ["d02-x01-y01", "d03-x01-y01"], "band": ["pdf"]}}
+    page = next(p for p in plot.pages(run, configuration, plans) if p.name == "em/cuts")
+    curves = tomllib.loads(page.config.read_text())["curve"]
+    assert [c["label"] for c in curves] == ["d02-x01-y01 (pdf envelope)", "d03-x01-y01 (pdf envelope)"]
+    assert [len(c["band"]) for c in curves] == [1, 1] and [len(b) for b in page.bands] == [1, 1]
+    assert plot.draw(run, configuration, plans, lambda line: None) == 0
+
+
 @pytest.mark.slow
 @pytest.mark.skipif(not shutil.which("rivet-mkhtml"), reason="load_hep: rivet-mkhtml")
 @pytest.mark.parametrize("stage", ["yoda"], indirect=True)

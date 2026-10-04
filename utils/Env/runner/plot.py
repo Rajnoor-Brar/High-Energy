@@ -82,6 +82,36 @@ class Page:
     bands: list = field(default_factory=list)        # per curve: its band members' (YODA, object), V69
 
 
+@dataclass(frozen=True)
+class Figure:
+    """A recipe for pages (V80): [plot.figures.<key>], or [plot.overlay.<key>] until migrated."""
+    key: str
+    kind: str                # its class: defined, overlay
+    type: str                # what is drawn; "" from the objects
+    name: str                # its pages' file stem (an overlay's; a defined figure's pages are the objects')
+    objects: tuple           # globs
+    labels: tuple            # an overlay's, one per object
+    table: dict              # what it sets for its pages: [plot]'s page keys, x_label, y_label, style
+    where: str
+
+
+def figures(run) -> list[Figure]:
+    """The declared figures, in file order. The implicit one, [plot].objects as defined pages, is pages()'."""
+    from .config import figure_tables
+    out = []
+    for key, (table, written) in figure_tables(run.plot or {}).items():
+        out.append(Figure(key, table.get("class", "defined"), table.get("type", ""), table.get("name", key),
+                          tuple(table["objects"]), tuple(table.get("labels", ())),
+                          {k: v for k, v in table.items() if k not in schema.FIGURE_OWN}, f"{run.path}: {written}"))
+    return out
+
+
+def _matches(path: str, glob: str, fulls=()) -> bool:
+    """An object glob against the short name (d01-x01-y01), the option-free path, or any variant's path."""
+    return (fnmatch.fnmatch(path.rsplit("/", 1)[-1], glob) or fnmatch.fnmatch(path, glob)
+            or any(fnmatch.fnmatch(f, glob) for f in fulls))
+
+
 def backend(name: str):
     """A backend other than Paint: utils/Env/<name>/backend.py, with validate(settings) and
     draw(cells, settings, say) -> failed pages."""
@@ -111,8 +141,8 @@ def validate(run) -> None:
     run_style(run)
     for glob, table in settings.get("object", {}).items():
         check_style(table.get("style", {}), f'{where}.object."{glob}".style')
-    for name, table in settings.get("overlay", {}).items():
-        check_style(table.get("style", {}), f"{where}.overlay.{name}.style")
+    for figure in figures(run):
+        check_style(figure.table.get("style", {}), f"{figure.where}.style")
     for name in names[1:] if names[0] == "root" else names:
         backend(name).validate(settings, beside_root=names[0] == "root",
                                curve_styles=[s for q in run.quantities.values() for s in q.styles])
@@ -328,15 +358,33 @@ def pages(run, configuration, plans) -> list[Page]:
         for full in objects_of(yoda_of(plan)):
             variants.setdefault(plan.point.name, {}).setdefault(base_of(full), []).append(full)
     objects = list(dict.fromkeys(b for plan in complete for b in variants.get(plan.point.name, {})))
-    every = list(objects)                                  # an overlay may name any object, drawn alone or not
-    wanted = settings.get("objects", [])
+    every = list(objects)                                  # a figure may name any object, drawn alone or not
+
+    def fulls(o):
+        return [f for v in variants.values() for f in v.get(o, [])]
+
+    wanted = settings.get("objects", [])                   # the implicit figure: defined pages of these
     wanted = [] if wanted == DEFAULT else wanted
     if wanted:
-        objects = [o for o in objects if any(fnmatch.fnmatch(o, g) or any(fnmatch.fnmatch(f, g)
-                   for v in variants.values() for f in v.get(o, [])) for g in wanted)]
+        objects = [o for o in objects if any(fnmatch.fnmatch(o, g) or any(fnmatch.fnmatch(f, g) for f in fulls(o))
+                                             for g in wanted)]
         if not objects:
             raise HepError(f"[plot].objects {wanted} match no object of the points' YODAs",
                            where=f"{run.path}: [plot].objects")
+    declared = figures(run)
+    claimed: dict[str, Figure] = {}                        # a declared defined figure takes its objects' pages
+    for figure in (f for f in declared if f.kind == "defined"):
+        found = [o for o in every if any(_matches(o, g, fulls(o)) for g in figure.objects)]
+        if not found:
+            raise HepError(f"figure '{figure.key}': {list(figure.objects)} match no object of the points' YODAs",
+                           where=f"{figure.where}.objects")
+        for o in found:
+            if o in claimed:
+                raise HepError(f"figures '{claimed[o].key}' and '{figure.key}' both make the pages of {o}",
+                               where=f"{figure.where}.objects",
+                               hint="one recipe per page: narrow a glob; what every page shares goes in [plot]")
+            claimed[o] = figure
+    objects = [o for o in every if o in objects or o in claimed]
 
     out_dir = complete[0].out.parent / "plots"
     res_dir = complete[0].res.parent / "plots" / "root"          # Paint's; another backend's: for_backend
@@ -345,16 +393,13 @@ def pages(run, configuration, plans) -> list[Page]:
                    complete[0].out.parent / "points.json")
 
     # use_data = false (V44): the [plot.data] table stays but is not drawn; a ratio then divides by
-    # each page's first curve, the first value of its curve axis
-    data = settings.get("data", {}) if settings.get("use_data", True) is not False else {}
+    # each page's first curve, the first value of its curve axis. A figure may set it, and band, for its own
+    data = settings.get("data", {})
     data_file = source = None
-    if data:
-        source = data_source(data["file"], run)
-        data_file = convert(source, output_root() / run.project / ".cache" / "datasets" / f"{source.stem}.root")
-
-    band = settings.get("band", [])
     check_band(run, configuration)
-    line_groups = [g for g in curve_groups if not set(g) & set(band)]     # what tells a band curve from another
+
+    def band_of(override) -> list:
+        return list(chosen("band", [], [], (override, settings)) or [])
 
     by_page: dict[str, list] = {}
     for plan in complete:
@@ -377,12 +422,21 @@ def pages(run, configuration, plans) -> list[Page]:
         for path in objects:
             short = path.rsplit("/", 1)[-1]
             rel = f"{key}/{short}" if key else short
-            reference = data.get("map", {}).get(short) if data else None
+            figure = claimed.get(path)
+            override = override_of(settings, path) | (figure.table if figure else {})
+            drawn = data if chosen("use_data", True, True, (override, settings)) is not False else {}
+            reference = drawn.get("map", {}).get(short) if drawn else None
+            if reference and data_file is None:                # converted once, when a page draws it
+                source = data_source(data["file"], run)
+                data_file = convert(source, output_root() / run.project / ".cache" / "datasets" / f"{source.stem}.root")
+            band = band_of(override)
+            line_groups = [g for g in curve_groups if not set(g) & set(band)]     # what tells a band curve from another
             curves = [(plan, full) for plan in members for full in variants.get(plan.point.name, {}).get(path, [])]
             fill = page_fill([plan for plan, _ in curves] or members)
             folded = _banded(curves, curve_groups, band, lambda p, f: variants[p.point.name][path].index(f))
             envelope = f" ({', '.join(band)} envelope)" if band else ""
-            page, override = page_settings(settings, path, rel, res_dir / rel, reference is not None, fill=fill)
+            page, override = page_settings(settings, path, rel, res_dir / rel, reference is not None, fill=fill,
+                                           child=override if figure else None)
             several = {plan.point.name for plan, _ in curves if len(variants[plan.point.name][path]) > 1}
             layer = merge_style(style, override.get("style", {}))
             document = {"page": page, "style": layer, "curve": [
@@ -408,32 +462,47 @@ def pages(run, configuration, plans) -> list[Page]:
                              overrides={k for k, v in override.items() if v != DEFAULT},
                              style=merge_style(base, layer), plots=res_dir.parent))
 
-    for name, table in settings.get("overlay", {}).items():     # V51: several objects of a point on one page
+    for figure in (f for f in declared if f.kind == "overlay"):     # V51: several objects of a point on one page
+        name, table = figure.name, figure.table
         paths = []
-        for glob in table["objects"]:
-            found = [o for o in every if fnmatch.fnmatch(o.rsplit("/", 1)[-1], glob) or fnmatch.fnmatch(o, glob)]
+        for glob in figure.objects:
+            found = [o for o in every if _matches(o, glob)]
             if not found:
-                raise HepError(f"overlay '{name}': '{glob}' matches no object of the points' YODAs",
-                               where=f"{run.path}: [plot.overlay.{name}].objects")
+                raise HepError(f"figure '{figure.key}': '{glob}' matches no object of the points' YODAs",
+                               where=f"{figure.where}.objects")
             paths.append(found[0])
-        labels = table.get("labels") or [p.rsplit("/", 1)[-1] for p in paths]
+        labels = list(figure.labels) or [p.rsplit("/", 1)[-1] for p in paths]
         for key, members in by_page.items():
             rel = f"{key}/{name}" if key else name
-            curves = [(plan, variants[plan.point.name][path][0], canonical(curve_fill(plan)(label))) for plan in members
-                      for path, label in zip(paths, labels) if path in variants.get(plan.point.name, {})]
+            named = {}
+            for plan in members:
+                for path, label in zip(paths, labels):
+                    if path in variants.get(plan.point.name, {}):
+                        named[(plan.point.name, variants[plan.point.name][path][0])] = canonical(curve_fill(plan)(label))
+            curves = [(plan, full) for plan in members for (point, full) in named if point == plan.point.name]
+            band = band_of(table)
+            line_groups = [g for g in curve_groups if not set(g) & set(band)]
+            folded = _banded(curves, curve_groups, band, lambda p, f: f)          # V69, an overlay's own band
+            envelope = f" ({', '.join(band)} envelope)" if band else ""
             page, override = page_settings(settings, paths[0], rel, res_dir / rel, False, child=table,
-                                           fill=page_fill([plan for plan, _, _ in curves] or members))
+                                           fill=page_fill([plan for plan, _ in curves] or members))
             layer = merge_style(style, override.get("style", {}))
+            lines = {plan.point.name for plan, _, _ in folded}
             document = {"page": page, "style": layer, "curve": [
                 {"file": str(merged), "object": f"{plan.point.name}/{root_name(full)}",
                  **({"raw": f"{plan.point.name}/RAW/{root_name(full)}"} if "/RAW" + full in raws[plan.point.name] else {}),
-                 "label": label + (f", {_curve_label(run, plan, curve_groups, curve_fill(plan))}" if len(members) > 1 else "")}
-                for plan, full, label in curves]}
+                 "label": named[(plan.point.name, full)]
+                          + (f", {_curve_label(run, plan, line_groups, curve_fill(plan))}" if len(lines) > 1 else "")
+                          + (envelope if folded_members else ""),
+                 **({"band": [{"file": str(merged), "object": f"{m.point.name}/{root_name(f)}"} for m, f in folded_members]}
+                    if folded_members else {})}
+                for plan, full, folded_members in folded]}
             config = out_dir / f"{rel}.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(tomli_w.dumps(for_root(document)), encoding="utf-8")
             made.append(Page(rel, config, res_dir / rel, cell=key, object=f"/overlay/{name}", document=document,
-                             sources=[yoda_of(plan) for plan, _, _ in curves], variants=[full for _, full, _ in curves],
+                             sources=[yoda_of(plan) for plan, _, _ in folded], variants=[full for _, full, _ in folded],
+                             bands=[[(yoda_of(m), f) for m, f in ms] for _, _, ms in folded],
                              overrides={k for k, v in override.items() if v != DEFAULT},
                              style=merge_style(base, layer), plots=res_dir.parent, overlay=name))
     return made
@@ -460,13 +529,18 @@ def axes_of(configuration) -> tuple[list, list]:
 
 
 def check_band(run, configuration) -> None:
-    """V69: [plot].band names curve axes of the configuration (checked at plan time too)."""
+    """V69: [plot].band, and a figure's, names curve axes of the configuration (checked at plan time too)."""
     curve_groups = axes_of(configuration)[1]
-    for name in run.plot.get("band", []) if run.plot else ():
-        if not any(name in g for g in curve_groups):
-            raise HepError(f"[plot].band names {name}, which is not a curve axis of {configuration.key}",
-                           where=f"{run.path}: [plot].band",
-                           hint=f"curve axes: {', '.join(g[0] for g in curve_groups) or 'none'} (swept, not plot_points or combined)")
+    settings = run.plot or {}
+    tables = ([("[plot]", settings)] + [(f'[plot.object."{name}"]', table) for name, table in settings.get("object", {}).items()]
+              + [(f.where.split(": ", 1)[1], f.table) for f in figures(run)])
+    for at, table in tables:
+        band = table.get("band", [])
+        for name in band if isinstance(band, list) else ():
+            if not any(name in g for g in curve_groups):
+                raise HepError(f"{at}.band names {name}, which is not a curve axis of {configuration.key}",
+                               where=f"{run.path}: {at}.band",
+                               hint=f"curve axes: {', '.join(g[0] for g in curve_groups) or 'none'} (swept, not plot_points or combined)")
 
 
 def check_texts(run, plans) -> None:
@@ -521,28 +595,11 @@ def page_settings(settings: dict, path: str, rel: str, output: Path, with_data: 
     """A page's [page] table: labels from the analysis's .plot (TLatex), [plot.object] overrides (or
     an overlay's own table, `child`), and the [plot] values, their placeholders filled (`fill`, V66).
     Returns it and the overrides that applied."""
-    short = path.rsplit("/", 1)[-1]
     labels = labels_of(path)
-    override: dict = {}
-    if child is not None:
-        override = {k: v for k, v in child.items() if k not in ("objects", "labels")}
-    else:
-        for glob, table in settings.get("object", {}).items():
-            if fnmatch.fnmatch(short, glob) or fnmatch.fnmatch(path, glob):
-                override.update(table)
+    override = override_of(settings, path, child)
 
     def pick(name, ours, native, tables=(override, settings)):
-        """V55: the most specific table that sets a value wins. "default" keeps it as it is: in a child
-        (an object's or an overlay's table) it is the parent's value, as if the key were absent; in the
-        last table (the top level) it is `native`, set nothing: what the drawing tool does by itself.
-        Nothing set anywhere is `ours`, the runner's default (the schema's)."""
-        for table in tables:
-            if name in table and table[name] != DEFAULT:
-                return table[name]
-        return native if tables[-1].get(name) == DEFAULT else ours
-
-    def plot_only(name, ours, native):
-        return pick(name, ours, native, tables=(settings,))
+        return chosen(name, ours, native, tables)
 
     def ours(name):
         return schema.default("plot", name)
@@ -566,12 +623,35 @@ def page_settings(settings: dict, path: str, rel: str, output: Path, with_data: 
         "ratio": bool(pick("ratio", ours("ratio"), ratio)),
         "ratio_label": "MC/Data" if with_data else "Ratio",
         "normalise": pick("normalise", ours("normalise"), False),                 # V68: "area" or false
-        "void_empty": bool(plot_only("void_empty", ours("void_empty"), False)),     # neither tool voids by itself
-        "min_entries": int(plot_only("min_entries", ours("min_entries"), 0)),
-        "auto_range": bool(plot_only("auto_range", ours("auto_range"), False)),    # the tool's own range
-        "range_pad": int(plot_only("range_pad", ours("range_pad"), 0)),
+        "void_empty": bool(pick("void_empty", ours("void_empty"), False)),     # neither tool voids by itself
+        "min_entries": int(pick("min_entries", ours("min_entries"), 0)),
+        "auto_range": bool(pick("auto_range", ours("auto_range"), False)),    # the tool's own range
+        "range_pad": int(pick("range_pad", ours("range_pad"), 0)),
     }
     return page, override
+
+
+def override_of(settings: dict, path: str, child: dict | None = None) -> dict:
+    """What a figure's own table sets (`child`), or else every [plot.object."<glob>"] matching the object,
+    in file order (until migrated). Any [plot] key marked `page` in the schema, and x_label, y_label, style."""
+    if child is not None:
+        return {k: v for k, v in child.items() if k not in schema.FIGURE_OWN}
+    short, override = path.rsplit("/", 1)[-1], {}
+    for glob, table in settings.get("object", {}).items():
+        if fnmatch.fnmatch(short, glob) or fnmatch.fnmatch(path, glob):
+            override.update(table)
+    return override
+
+
+def chosen(name: str, ours, native, tables: tuple):
+    """V55: the most specific table that sets a value wins. "default" keeps it as it is: in a child
+    (an object's or an overlay's table) it is the parent's value, as if the key were absent; in the
+    last table (the top level) it is `native`, set nothing: what the drawing tool does by itself.
+    Nothing set anywhere is `ours`, the runner's default (the schema's)."""
+    for table in tables:
+        if name in table and table[name] != DEFAULT:
+            return table[name]
+    return native if tables[-1].get(name) == DEFAULT else ours
 
 
 def _gutter(value):

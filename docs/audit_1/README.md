@@ -28,6 +28,7 @@ The brief asked for four things, each with bold proposals welcome:
 | [05_Backlog.md](05_Backlog.md) | Every item scored (impact, risk, effort) and ranked, with its phase in 06 |
 | [06_Plan.md](06_Plan.md) | **The plan:** phases P0–P5, 2–3 steps each, the user's decisions of 2026-10-03, and the open questions |
 | [07_Consistency.md](07_Consistency.md) | The framework beyond `utils/`: `modules/`, `configs/`, the Makefile, `docs/`, `tests/` and `bots/` (K1–K15) |
+| [08_Figures.md](08_Figures.md) | **Figures** (after the plan): objects, pages and figures; `[plot.figures]` with six classes and three types, phases F0–F4 |
 | [notes/B4c.md](notes/B4c.md) | B4c's design note: replacing rivet-mkhtml with a matplotlib renderer of the page document (P4 S3; for the user's decision) |
 | [notes/B8.md](notes/B8.md) | B8's design note: one scheduler for the whole run, with a simulated schedule on the zeus plans (P5 S3; for the user's decision) |
 

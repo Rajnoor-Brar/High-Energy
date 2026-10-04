@@ -12,11 +12,12 @@
 #   inherit  true: a configuration ([run.<cfg>]) inherits it from [run]
 #   default_ok  true: the value "default" is accepted. "default" means "keep it as it is" (V55): in a
 #            child it is the parent's value; at the top level nothing is set, and the tool decides.
+#   page     a [plot] key a figure ([plot.object."<glob>"], [plot.overlay.<name>]) may override
 #   doc      one line, for `hep explain` and the editor
 #
 # Tables: master, run, configuration ([run.<cfg>]), prelim, quantity ([quantities.<q>]), tool
 # ([tools.<tag>]: the keys every tool table may carry; a folder's [options] add its own), plot,
-# plot_child ([plot.object."<glob>"] and [plot.overlay.<name>]), overlay (an overlay's own), data.
+# figure ([plot.figures.<figure>]; [plot.object."<glob>"] and [plot.overlay.<name>] until migrated), data.
 
 [sections]
 order = ["master", "run", "prelim", "static", "tools", "quantities", "plot"]
@@ -361,6 +362,7 @@ default_ok = true
 doc        = "the pages' formats"
 
 [plot.band]
+page       = true
 type  = "list"
 items = "str"
 doc   = "curve-axis quantities drawn as one curve, their first value, with the min–max envelope of all their values (V69)"
@@ -372,12 +374,14 @@ default_ok = true
 doc        = "YODA path globs that get pages (default: every 1D object)"
 
 [plot.ratio]
+page       = true
 type       = "bool"
 default    = false
 default_ok = true
 doc        = "a ratio pad"
 
 [plot.y_gutter]
+page       = true
 type       = "float"
 min        = 0
 default    = 0.5
@@ -385,28 +389,33 @@ default_ok = true
 doc        = "the top of the y axis at (1 + g) × the largest value"
 
 [plot.x_gutter]
+page       = true
 type       = "float"
 min        = 0
 default_ok = true
 doc        = "x widened by g of its span"
 
 [plot.logy]
+page       = true
 type       = "bool"
 default_ok = true
 doc        = "log y (default: the .plot's)"
 
 [plot.logx]
+page       = true
 type       = "bool"
 default_ok = true
 doc        = "log x (default: the .plot's)"
 
 [plot.auto_range]
+page       = true
 type       = "bool"
 default    = true
 default_ok = true
 doc        = "x clipped to the bins with content"
 
 [plot.normalise]
+page       = true
 type       = "str|bool"
 choices    = ["area", false]
 default    = false
@@ -414,17 +423,20 @@ default_ok = true
 doc        = "\"area\": every curve and the data scaled to unit area over the bins drawn (V68)"
 
 [plot.void_empty]
+page       = true
 type       = "bool"
 default    = false
 default_ok = true
 doc        = "blank the bins empty in every curve"
 
 [plot.use_data]
+page       = true
 type       = "bool"
 default    = true
 doc        = "false: [plot.data] stays but is not drawn"
 
 [plot.min_entries]
+page       = true
 type       = "int"
 min        = 0
 default    = 0
@@ -432,6 +444,7 @@ default_ok = true
 doc        = "blank the bins with fewer raw entries"
 
 [plot.range_pad]
+page       = true
 type       = "int"
 min        = 0
 default    = 0
@@ -444,21 +457,25 @@ default_ok = true
 doc        = "a style file over base.toml (configs/<Project>/…)"
 
 [plot.title]
+page       = true
 type       = "str"
 default_ok = true
 doc        = "centred above the frame (default: the .plot's Title)"
 
 [plot.title_left]
+page       = true
 type       = "str"
 default_ok = true
 doc        = "above the frame's top-left corner"
 
 [plot.title_right]
+page       = true
 type       = "str"
 default_ok = true
 doc        = "above the frame's top-right corner"
 
 [plot.legend_header]
+page       = true
 type       = "str"
 default_ok = true
 doc        = "the legend's first line (default: the .plot's LegendTitle)"
@@ -471,93 +488,60 @@ doc  = "reference data: file, legend, map"
 type = "table"
 doc  = "the style over base.toml"
 
+[plot.figures]
+type = "table"
+doc  = "[plot.figures.<figure>]: the figures, each a recipe for pages (08_Figures)"
+
 [plot.object]
 type = "table"
-doc  = "[plot.object.\"<glob>\"]: keys for the objects the glob matches"
+doc  = "[plot.object.\"<glob>\"]: keys for the objects the glob matches (until migrated: a defined figure)"
 
 [plot.overlay]
 type = "table"
-doc  = "[plot.overlay.<name>]: several objects on one page"
+doc  = "[plot.overlay.<name>]: several objects on one page (until migrated: an overlay figure)"
 
-# ── [plot.object."<glob>"] and [plot.overlay.<name>]: a child of [plot] ──────────────────────
+# ── [plot.figures.<figure>]: a recipe for pages ─────────────────────────────────────────────
+# A figure takes every [plot] key marked `page = true`, meaning the same for its pages ("default":
+# [plot]'s value), and these, which only a figure sets (schema.keys("figure") joins the two).
 
-[plot_child.title]
-type       = "str"
-default_ok = true
-doc        = "as [plot].title, for these pages"
+[figure.class]
+type    = "str"
+choices = ["defined", "overlay"]
+default = "defined"
+doc     = "how its pages are built: defined (an analysis object's own), overlay (several objects of each point)"
 
-[plot_child.title_left]
-type       = "str"
-default_ok = true
-doc        = "as [plot].title_left, for these pages"
+[figure.type]
+type    = "str"
+choices = ["Hist1D"]
+doc     = "what is drawn (default: from the objects)"
 
-[plot_child.title_right]
-type       = "str"
-default_ok = true
-doc        = "as [plot].title_right, for these pages"
+[figure.name]
+type = "str"
+doc  = "its pages' file stem (default: the figure's key; a defined figure's pages keep the object's name)"
 
-[plot_child.legend_header]
-type       = "str"
-default_ok = true
-doc        = "as [plot].legend_header, for these pages"
+[figure.objects]
+type  = "list"
+items = "str"
+doc   = "the objects: YODA path globs, matched against the short name (d01-x01-y01) or the full path"
 
-[plot_child.x_label]
+[figure.labels]
+type  = "list"
+items = "str"
+doc   = "an overlay's legend label per object"
+
+[figure.x_label]
 type       = "str"
 default_ok = true
 doc        = "the x axis title (default: the .plot's)"
 
-[plot_child.y_label]
+[figure.y_label]
 type       = "str"
 default_ok = true
 doc        = "the y axis title (default: the .plot's)"
 
-[plot_child.logx]
-type       = "bool"
-default_ok = true
-doc        = "as [plot].logx, for these pages"
-
-[plot_child.logy]
-type       = "bool"
-default_ok = true
-doc        = "as [plot].logy, for these pages"
-
-[plot_child.y_gutter]
-type       = "float"
-min        = 0
-default_ok = true
-doc        = "as [plot].y_gutter, for these pages"
-
-[plot_child.x_gutter]
-type       = "float"
-min        = 0
-default_ok = true
-doc        = "as [plot].x_gutter, for these pages"
-
-[plot_child.ratio]
-type       = "bool"
-default_ok = true
-doc        = "as [plot].ratio, for these pages"
-
-[plot_child.normalise]
-type       = "str|bool"
-choices    = ["area", false]
-default_ok = true
-doc        = "as [plot].normalise, for these pages"
-
-[plot_child.style]
+[figure.style]
 type = "table"
 doc  = "a style layer for these pages"
-
-[overlay.objects]
-type     = "list"
-items    = "str"
-required = true
-doc      = "the objects drawn together (names or globs)"
-
-[overlay.labels]
-type  = "list"
-items = "str"
-doc   = "one legend label per object"
 
 # ── [plot.data] ──────────────────────────────────────────────────────────────────────────────
 

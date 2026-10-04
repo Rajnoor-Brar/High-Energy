@@ -58,7 +58,8 @@ def validate(settings: dict, beside_root: bool = False, curve_styles: list[dict]
     if "root_style" in settings and not beside_root:
         raise HepError('[plot].root_style cannot be honoured by backend = "yoda"', where="[plot].root_style", hint=hint)
     layers = [("[plot.style]", settings.get("style", {}))] + [
-        (f'[plot.object."{glob}"].style', table.get("style", {})) for glob, table in settings.get("object", {}).items()]
+        (f'[plot.{kind}."{key}"].style', table.get("style", {})) for kind in ("object", "overlay", "figures")
+        for key, table in settings.get(kind, {}).items()]
     for where, layer in layers:
         for table, keys in layer.items():
             for key, value in keys.items() if isinstance(keys, dict) else [(None, keys)]:

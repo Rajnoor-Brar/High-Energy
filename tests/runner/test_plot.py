@@ -282,6 +282,64 @@ def test_an_objects_default_keeps_what_plot_says():
     assert page({"object": {"d01-*": {"logy": "default"}}})["logy"] == page({})["logy"]   # no parent: as if absent
 
 
+def test_a_figure_overrides_every_page_key_of_plot(scratch):
+    """Every [plot] key marked `page` in the schema is a figure's too, meaning the same for its pages."""
+    from runner import schema
+    page_keys = {k for k, e in schema.keys("plot").items() if e.get("page")}
+    assert {"auto_range", "void_empty", "min_entries", "range_pad", "use_data", "band", "ratio"} <= page_keys
+    assert page_keys | {"x_label", "y_label", "style"} | set(schema.FIGURE_OWN) == set(schema.keys("figure"))
+    assert not {"backend", "formats", "data", "root_style"} & set(schema.keys("figure"))
+    settings = {"auto_range": True, "min_entries": 5, "object": {"d01-*": {"auto_range": False, "min_entries": "default",
+                                                                          "range_pad": 2, "void_empty": True}}}
+    shown = page(settings)
+    assert (shown["auto_range"], shown["min_entries"], shown["range_pad"], shown["void_empty"]) == (False, 5, 2, True)
+    overlay = {"objects": ["d01-*"], "ratio": True, "style": {"ratio": {"range": [0.8, 1.1]}}, "use_data": False}
+    validated(scratch, ratio=False, overlay={"o": overlay}, object={"d02-*": {"use_data": False, "band": []}},
+              figures={"f": {**overlay, "class": "overlay"}, "g": {"objects": ["d03-*"], "min_entries": 3}})
+    with pytest.raises(HepError, match="unknown key 'formats'"):
+        validated(scratch, object={"d01-*": {"formats": ["png"]}})
+
+
+def test_a_figure_band_must_be_a_curve_axis_too(scratch):
+    from helpers import plan
+    run, conf, _ = plan(raw(run__one__sweeps=["pdf"], run__one__plot_points=["pdf"],
+                            plot={"overlay": {"o": {"objects": ["d01-*"], "band": ["pdf"]}}}), scratch)
+    with pytest.raises(HepError, match=r"\[plot.overlay.o\].band names pdf"):
+        plot.check_band(run, conf)
+    run, conf, _ = plan(raw(run__one__sweeps=["pdf"], run__one__plot_points=["pdf"],
+                            plot={"figures": {"f": {"objects": ["d01-*"], "band": ["pdf"]}}}), scratch)
+    with pytest.raises(HepError, match=r"\[plot.figures.f\].band names pdf"):
+        plot.check_band(run, conf)
+
+
+@pytest.mark.parametrize("figure, message", [
+    ({"class": "overlay"}, "a figure needs objects"),
+    ({"objects": ["d01-*"], "labels": ["a"]}, "a defined figure takes no labels"),
+    ({"objects": ["d01-*"], "name": "x"}, "a defined figure takes no name"),
+    ({"class": "overlay", "objects": ["d01-*", "d02-*"], "labels": ["a"]}, "one label per object"),
+    ({"class": "stacked", "objects": ["d01-*"]}, "class must be one of defined, overlay"),
+    ({"objects": ["d01-*"], "formats": ["png"]}, "unknown key 'formats'"),
+])
+def test_a_figure_is_checked_when_the_file_is_read(scratch, figure, message):
+    with pytest.raises(HepError, match=message):
+        validated(scratch, figures={"f": figure})
+
+
+def test_a_figure_and_an_overlay_may_not_share_a_name(scratch):
+    with pytest.raises(HepError, match="both a figure and an overlay"):
+        validated(scratch, figures={"o": {"objects": ["d01-*"]}}, overlay={"o": {"objects": ["d01-*"]}})
+
+
+def test_the_figures_of_a_run_in_file_order(scratch):
+    run = validated(scratch, figures={"tails": {"objects": ["d04-*"], "logy": True},
+                                      "eta": {"class": "overlay", "objects": ["d02-*", "d03-*"], "name": "algorithms"}},
+                    overlay={"old": {"objects": ["d01-*"], "labels": ["x"]}})
+    shown = [(f.key, f.kind, f.name, f.objects, f.table) for f in plot.figures(run)]
+    assert shown == [("tails", "defined", "tails", ("d04-*",), {"logy": True}),
+                     ("eta", "overlay", "algorithms", ("d02-*", "d03-*"), {}),
+                     ("old", "overlay", "old", ("d01-*",), {})]
+
+
 def test_a_style_default_falls_through_to_the_layer_below():
     plot.check_style({"legend": {"position": "default"}, "ratio": {"divisions": "default"}}, "here")
     merged = plot.merge_style({"legend": {"position": "top-left"}}, {"legend": {"position": "default"}})

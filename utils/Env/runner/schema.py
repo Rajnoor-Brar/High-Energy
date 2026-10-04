@@ -24,7 +24,9 @@ TYPES = {"int": int, "float": (int, float), "str": str, "bool": bool, "list": li
 NAMES = {"int": "an integer", "float": "a number", "str": "a string", "bool": "true or false", "list": "a list",
          "table": "a table"}
 #: The tables of run.toml that describe keys (the rest, [sections], describe the file).
-TABLES = ("master", "run", "configuration", "prelim", "quantity", "tool", "plot", "plot_child", "overlay", "data")
+TABLES = ("master", "run", "configuration", "prelim", "quantity", "tool", "plot", "figure", "data")
+#: A figure's own keys, which a [plot.object."<glob>"] table (until migrated) does not take.
+FIGURE_OWN = ("class", "type", "name", "objects", "labels")
 
 
 def path() -> Path:
@@ -40,7 +42,13 @@ def spec() -> dict:
 
 
 def keys(table: str) -> dict[str, dict]:
-    """The keys of one schema table: name → its entry."""
+    """The keys of one schema table: name → its entry. A figure's are every [plot] key marked `page`, as
+    a child has them ("default" is [plot]'s value; no default of its own), then its own."""
+    if table == "figure":
+        inherited = {k: {f: v for f, v in e.items() if f not in ("default", "page")} | {"default_ok": True,
+                         "doc": f"as [plot].{k}, for these pages"}
+                     for k, e in spec().get("plot", {}).items() if e.get("page")}
+        return inherited | spec().get(table, {})
     return spec().get(table, {})
 
 
@@ -151,11 +159,15 @@ def json_schema() -> dict:
     configuration = _object("configuration")
     run = _object("run")
     run["additionalProperties"] = configuration                      # [run.<cfg>]
-    child = _object("plot_child")
-    overlay = {**child, "properties": {**child["properties"], **_object("overlay")["properties"]}, "required": ["objects"]}
+    figure = _object("figure")
+    figure["required"] = ["objects"]
+    legacy = {**figure, "properties": {k: v for k, v in figure["properties"].items() if k not in FIGURE_OWN}}
+    legacy.pop("required")
     plot = _object("plot")
-    plot["properties"]["object"] = {"type": "object", "additionalProperties": child}
-    plot["properties"]["overlay"] = {"type": "object", "additionalProperties": overlay}
+    plot["properties"]["figures"] = {"type": "object", "additionalProperties": figure}
+    plot["properties"]["object"] = {"type": "object", "additionalProperties": legacy}
+    plot["properties"]["overlay"] = {"type": "object", "additionalProperties": {
+        **figure, "properties": {k: v for k, v in figure["properties"].items() if k not in ("class", "type", "name")}}}
     plot["properties"]["data"] = _object("data")
     plot["properties"]["data"]["properties"]["map"] = {"type": "object", "additionalProperties": {"type": "string"}}
     return {
