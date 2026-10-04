@@ -107,6 +107,7 @@ half whose layering was not had nine cycles.)
 | 5 | `cli.py` | `argparse`: `run`, `plot`, `overlay`, `watch`, `check`, …; the order of events |
 | 5 | `house.py` | `ls`, `explain`, `status`, `clean` (V74) |
 | 5 | `migrate.py` | `hep migrate`: run TOMLs and cards rewritten in today's forms (V79) |
+| 5 | `docs.py` | `make docs`: the manual's generated blocks (keys, style, commands) from the schema, base.toml and the CLI (V91) |
 
 A **tool plugin** (`utils/Env/<tool>/render.py`, a plot backend's `backend.py`) may import only
 `PLUGINS_MAY_IMPORT` (`errors`, `paths`, `quantities`, `labels` and `hepfiles`), and never another plugin. The runner is standard library only,

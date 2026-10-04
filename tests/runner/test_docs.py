@@ -96,6 +96,22 @@ def test_the_editor_schema_is_current():
     assert written == json.loads(json.dumps(schema.json_schema())), "run `make schema`"
 
 
+def test_the_generated_sections_are_current():
+    """V91: a page's `<!-- generated: … -->` blocks are what runner/docs.py renders now (`make docs`)."""
+    from runner import docs
+    assert not docs.stale(), f"run `make docs`: {', '.join(docs.stale())}"
+
+
+def test_a_generated_block_is_rendered_from_the_code():
+    from runner import docs
+    page = "<!-- generated: keys run -->\nold\n<!-- /generated -->\n"
+    assert "| `name` | a string | **required** |" in docs.updated(page)
+    assert "| `page.margins.left` | `0.16` | fractions of the page" in docs.style()
+    assert "| `--only pre\\|post\\|plot` |" in docs.commands()          # a table's pipes escaped
+    with pytest.raises(ValueError, match="no generated block"):
+        docs.render("keys nowhere")
+
+
 def test_every_style_key_is_documented():
     ref = text(NUMBERED["04"])
 
