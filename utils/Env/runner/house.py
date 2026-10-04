@@ -8,6 +8,7 @@ product's `.partial` leftover, and it refuses while a job is running).
 from __future__ import annotations
 
 import shutil
+import textwrap
 import time
 import tomllib
 from pathlib import Path
@@ -104,6 +105,8 @@ def explain(key: str) -> list[str]:
             lines.append('  "default": in a child, the parent\'s value; at the top level, set nothing (the tool decides)')
         if entry.get("doc"):
             lines.append(f"  {entry['doc']}")
+        if entry.get("notes"):
+            lines += [""] + [f"  {line}" for line in textwrap.wrap(entry["notes"], 96)]
     return lines
 
 
