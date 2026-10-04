@@ -959,7 +959,7 @@
         ]
        },
        "class": {
-        "description": "how its pages are built: defined (an analysis object's own), overlay (several objects of each point), merged (the objects' pages with the points merged over `over`), compare (the objects' pages across configurations), derived (a new object from the objects, per point), scan (one number per point against a swept quantity)",
+        "description": "how its pages are built: defined (an analysis object's own), overlay (several objects of each point), merged (the objects' pages with the points merged over `over`), compare (the objects' pages across configurations), derived (a new object from the objects, per point), scan (one number per point against a swept quantity), sheet (drawn pages in a grid)",
         "type": "string",
         "enum": [
          "defined",
@@ -967,7 +967,8 @@
          "merged",
          "compare",
          "derived",
-         "scan"
+         "scan",
+         "sheet"
         ],
         "default": "defined"
        },
@@ -1009,6 +1010,18 @@
        "y": {
         "description": "a scan figure's y: sigma, entries, or integral, mean, bin:N of its object (V85)",
         "type": "string"
+       },
+       "pages": {
+        "description": "a sheet's pages: globs of page names (18x275/d02-x01-y01, */eta_algorithms), in this order (V89)",
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       },
+       "columns": {
+        "description": "a sheet's columns (default: up to 3)",
+        "type": "integer",
+        "minimum": 1
        },
        "over": {
         "description": "a merged figure's: the curve axes whose points it merges, by the combine folder's command (V82)",

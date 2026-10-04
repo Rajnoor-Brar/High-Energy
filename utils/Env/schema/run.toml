@@ -504,9 +504,9 @@ doc  = "[plot.figures.<figure>]: the figures, each a recipe for pages (08_Figure
 
 [figure.class]
 type    = "str"
-choices = ["defined", "overlay", "merged", "compare", "derived", "scan"]
+choices = ["defined", "overlay", "merged", "compare", "derived", "scan", "sheet"]
 default = "defined"
-doc     = "how its pages are built: defined (an analysis object's own), overlay (several objects of each point), merged (the objects' pages with the points merged over `over`), compare (the objects' pages across configurations), derived (a new object from the objects, per point), scan (one number per point against a swept quantity)"
+doc     = "how its pages are built: defined (an analysis object's own), overlay (several objects of each point), merged (the objects' pages with the points merged over `over`), compare (the objects' pages across configurations), derived (a new object from the objects, per point), scan (one number per point against a swept quantity), sheet (drawn pages in a grid)"
 
 [figure.type]
 type    = "str"
@@ -534,6 +534,16 @@ doc  = "a scan figure's x: a swept quantity with numeric values, a curve axis (V
 [figure.y]
 type = "str"
 doc  = "a scan figure's y: sigma, entries, or integral, mean, bin:N of its object (V85)"
+
+[figure.pages]
+type  = "list"
+items = "str"
+doc   = "a sheet's pages: globs of page names (18x275/d02-x01-y01, */eta_algorithms), in this order (V89)"
+
+[figure.columns]
+type = "int"
+min  = 1
+doc  = "a sheet's columns (default: up to 3)"
 
 [figure.over]
 type  = "list"

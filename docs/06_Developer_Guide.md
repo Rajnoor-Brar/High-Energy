@@ -346,13 +346,19 @@ def validate(settings: dict, beside_root: bool = False) -> None:
     beside_root: the root backend draws too, so Paint honours the style."""
 
 def draw(cells: dict[str, list], settings: dict, say) -> int:
-    """cells: plot_points cell → its Pages (plot.Page: config, output under plots/<name>/, object,
-    document, sources, variants, data, overrides, style, and ranges from Paint --dump-ranges).
-    Draw them, report with say(), return the number of pages that failed."""
+    """cells: a page set, one folder of pages (a plot_points cell's, or a figure's folder in it, V82)
+    → its Pages (plot.Page: config, output under plots/<name>/, object, document, sources, variants,
+    data, overrides, style, overlay, bands, and ranges from Paint --dump-ranges). Heat maps are
+    Paint's and never reach a backend (V87). Draw them, report with say(), return the number of
+    pages that failed."""
 ```
 
 Add the name to `plot.BACKENDS`. **A key the backend cannot honour is an error**, never ignored (v1's
 `LegendXPos`). The yoda backend is the example (`utils/Env/yoda/backend.py`).
+
+The figures' own Python is in `utils/Env/figures/`, plugins too (YODA's Python and PIL stay out of
+the standard-library runner): `derive.py` (a derived figure's objects, a scan's numbers, V84, V85)
+and `sheet.py` (a sheet's tiling, V89), each loaded by `plugins.load`.
 
 ---
 

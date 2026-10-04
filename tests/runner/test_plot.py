@@ -334,7 +334,7 @@ def test_a_compare_figure_pairs_configurations_of_one_shape(scratch):
     from helpers import parse
     run = parse(raw(run__sweep_runs=True, run__configuration=None, run__one__sweeps=["pdf"],
                     run__two={"tools": ["pythia"], "sweeps": ["pdf"]}, plot={"figures": {"c": figure}}), scratch)
-    assert [c.key for c in plot.compared(run, plot.figures(run)[0])] == ["one", "two"]
+    assert [c.ref for c in plot.compared(run, plot.figures(run)[0])] == ["one", "two"]
 
 
 @pytest.mark.parametrize("figure, message", [
@@ -358,6 +358,9 @@ def test_a_compare_figure_pairs_configurations_of_one_shape(scratch):
     ({"class": "scan", "x": "pdf", "y": "bin:2"}, "a figure needs objects"),
     ({"class": "scan", "x": "pdf", "y": "sigma", "objects": ["a", "b"]}, 'y = "sigma" reads one object'),
     ({"objects": ["d01-*"], "x": "pdf"}, "x and y are a scan figure's"),
+    ({"class": "sheet"}, "a sheet needs pages"),
+    ({"class": "sheet", "pages": ["*/d01*"], "logy": True}, "a sheet takes no logy"),
+    ({"objects": ["d01-*"], "columns": 2}, "pages and columns are a sheet's"),
     ({"class": "compare", "objects": ["d01-*"], "configurations": ["a", "b"], "labels": ["x"]}, "one label per configuration"),
 ])
 def test_a_figure_is_checked_when_the_file_is_read(scratch, figure, message):

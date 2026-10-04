@@ -256,6 +256,26 @@ def test_a_2d_object_is_a_heat_map_per_point(stage):
         plot.pages(run, configuration, plans)
 
 
+@pytest.mark.skipif(not shutil.which("pdflatex"), reason="pdflatex tiles a sheet's PDF")
+def test_a_sheet_tiles_drawn_pages(stage):
+    """V89: the pages its globs name, in order, tiled as drawn: a PDF by pdflatex, a PNG by PIL."""
+    from PIL import Image
+    run, configuration, plans = stage
+    run.plot["formats"] = ["pdf", "png"]
+    run.plot["figures"]["grid"] = {"class": "sheet", "pages": ["*/d01-x01-y01", "em/d04-x01-y01"], "columns": 2}
+    said = []
+    assert plot.draw(run, configuration, plans, said.append) == 0, said
+    assert "plot: sheet grid, 3 page(s) in 2 column(s) (root: pdf, png)" in said
+    sheets = plans[0].res.parent / "plots" / "root" / "sheets"
+    page = Image.open(plans[0].res.parent / "plots" / "root" / "em" / "d01-x01-y01.png")
+    assert Image.open(sheets / "grid.png").size == (2 * page.width, 2 * page.height)
+    assert (sheets / "grid.pdf").read_bytes().startswith(b"%PDF")
+    run.plot["figures"]["grid"]["pages"] = ["nowhere/*"]
+    said.clear()
+    assert plot.draw(run, configuration, plans, said.append) == 1
+    assert "plot: sheet grid: 'nowhere/*' names no page drawn here" in said
+
+
 def test_a_compare_figure_draws_configurations_together(stage):
     """V83: the objects' pages across configurations, curves labelled by the configuration first, drawn
     by the plot stage of whichever configuration completes it, into <run>/compare/<name>/."""
@@ -277,6 +297,37 @@ def test_a_compare_figure_draws_configurations_together(stage):
     assert "data" in page
     run.plot["figures"]["stats"]["configurations"] = ["one", "nope"]
     with pytest.raises(plot.HepError, match="names 'nope', which is not a configuration"):
+        plot.check_figures(run, configuration)
+
+
+def test_a_compare_figure_reaches_another_run_toml(stage, scratch):
+    """V88: "<config>:<cfg>" names a configuration of another run TOML; its points are curves beside this
+    run's, labelled by that run, drawn into this run's compare/; its page axes must have this run's tags."""
+    import tomli_w
+    from runner import config
+    run, configuration, plans = stage
+    other = raw(run__name="plotstage_other", run__one__sweeps=["lepton", "pdf"], run__one__plot_points=["lepton"],
+                quantities__lepton={"key": {"pythia": "Beams:idB"}, "values": [11, -11], "tags": ["em", "ep"]},
+                quantities__pdf__labels=["MSTW", "NNPDF"])
+    path = scratch / "other.toml"
+    path.write_text(tomli_w.dumps(other), encoding="utf-8")
+    theirs = config.load(str(path))
+    their_plans = completed(theirs, theirs.configuration(None))
+    run.plot["figures"]["chains"] = {"class": "compare", "objects": ["d01-*"], "configurations": ["one", f"{path}:one"]}
+    plot.check_figures(run, configuration)
+    asked = []
+    said = []
+    assert plot.draw(run, configuration, plans, said.append, others=lambda ref: asked.append(ref) or their_plans) == 0, said
+    assert asked == [f"{path}:one"]
+    page = tomllib.loads((plans[0].out.parent.parent / "compare" / "chains" / "em" / "d01-x01-y01.toml").read_text())
+    assert [c["label"] for c in page["curve"]] == ["one, MSTW 2008 LO", "one, NNPDF 2.3 LO",
+                                                   "plotstage_other one, MSTW", "plotstage_other one, NNPDF"]
+    other["quantities"]["lepton"]["tags"] = ["e-", "e+"]
+    path.write_text(tomli_w.dumps(other), encoding="utf-8")
+    with pytest.raises(plot.HepError, match="has other values of lepton, a page axis"):
+        plot.check_figures(run, configuration)
+    run.plot["figures"]["chains"]["configurations"] = [f"{path}:one", f"{path}:one2"]
+    with pytest.raises(plot.HepError, match="names '.*:one2', which is not a configuration"):
         plot.check_figures(run, configuration)
 
 

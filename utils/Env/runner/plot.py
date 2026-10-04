@@ -86,7 +86,7 @@ class Page:
 class Figure:
     """A recipe for pages (V80): [plot.figures.<key>]."""
     key: str
-    kind: str                # its class: defined, overlay, merged, compare, derived, scan
+    kind: str                # its class: defined, overlay, merged, compare, derived, scan, sheet
     type: str                # what is drawn; "" from the objects
     name: str                # its pages' file stem (an overlay's; a defined figure's pages are the objects')
     objects: tuple           # globs
@@ -98,6 +98,8 @@ class Figure:
     op: str = ""             # a derived figure's (V84)
     x: str = ""              # a scan figure's quantity … (V85)
     y: str = ""              # … and the number it reads of each point
+    table_pages: tuple = ()  # a sheet's page globs … (V89)
+    columns: int = 0         # … and its columns
 
 
 def figures(run) -> list[Figure]:
@@ -109,7 +111,7 @@ def figures(run) -> list[Figure]:
                           tuple(table.get("objects", ())), tuple(table.get("labels", ())),
                           {k: v for k, v in table.items() if k not in schema.FIGURE_OWN}, f"{run.path}: {written}",
                           tuple(table.get("over", ())), tuple(table.get("configurations", ())), table.get("op", ""),
-                          table.get("x", ""), table.get("y", "")))
+                          table.get("x", ""), table.get("y", ""), tuple(table.get("pages", ())), table.get("columns", 0)))
     return out
 
 
@@ -439,18 +441,19 @@ def compare_pages(run, figure: Figure, sets: list[tuple]) -> list[Page]:
     `sets`: (configuration, its complete plans) in the figure's order. Into
     output/…/<run>/compare/<name>/ and results/…/<run>/compare/<name>/<backend>/."""
     members, yodas = [], {}
-    for number, (configuration, plans) in enumerate(sets):
-        label = figure.labels[number] if figure.labels else configuration.label
-        sources = point_yodas(run, plans)
+    for number, (c, plans) in enumerate(sets):
+        label = figure.labels[number] if figure.labels else c.configuration.label if c.own \
+            else f"{c.run.name} {c.configuration.label}"
+        sources = point_yodas(c.run, plans)
         for plan in plans:
-            name = f"{configuration.key}_{plan.point.name}"
+            name = f"{re.sub(r'[^A-Za-z0-9_.-]+', '_', c.ref)}_{plan.point.name}"
             members.append(replace(plan, point=replace(plan.point, name=name, choice={**plan.point.choice, CONFIGURATION: number}),
-                                   context={**plan.context, "curve_label": label}))
+                                   context={**plan.context, "curve_label": label, **({} if c.own else {"run": c.run})}))
             yodas[name] = sources[plan.point.name]
-    first = sets[0][1][0]
+    first = next(plans[0] for c, plans in sets if c.own)                 # this run's folder (V88)
     out_dir = first.out.parent.parent / "compare" / figure.name
     res_dir = first.res.parent.parent / "compare" / figure.name / "root"
-    page_groups, curve_groups = axes_of(sets[0][0])
+    page_groups, curve_groups = axes_of(sets[0][0].configuration)
     root = merge(yodas, res_dir / f"{figure.name}.root", out_dir / "merged.sha256")
     return _pages(run, members, yodas, root, [replace(figure, kind="defined")], page_groups,
                   [[CONFIGURATION]] + curve_groups, out_dir, res_dir, implicit=False)
@@ -579,13 +582,14 @@ def _pages(run, complete: list, yodas: dict, merged: Path, declared: list, page_
         return list(chosen("band", [], [], (override, settings)) or [])
 
     by_page: dict[str, list] = {}
-    for plan in complete:
-        key = "_".join(tag_of(run.quantities[g[0]], plan.point.choice[g[0]]) for g in page_groups)
+    for plan in complete:                                  # a member of another run reads its own quantities (V88)
+        key = "_".join(tag_of(_run_of(run, plan).quantities[g[0]], plan.point.choice[g[0]]) for g in page_groups)
         by_page.setdefault(key, []).append(plan)
 
     style, base = run_style(run), base_style()
-    known = {plan.point.name: texts_of(run, plan, ", ".join(label_of(run.quantities[g[0]], plan.point.choice[g[0]])
-                                                           for g in page_groups)) for plan in complete}
+    known = {plan.point.name: texts_of(_run_of(run, plan), plan, ", ".join(
+                 label_of(_run_of(run, plan).quantities[g[0]], plan.point.choice[g[0]]) for g in page_groups))
+             for plan in complete}
     where = f"{run.path}: [plot]"
 
     def page_fill(plans):
@@ -615,8 +619,8 @@ def _pages(run, complete: list, yodas: dict, merged: Path, declared: list, page_
             figure = claimed.get(path)
             override = override_of(figure.table if figure else None)
             if path in two_d:                                  # V87: a page per member and variant
-                made += [_heatmap(run, plan, full, place(key, f"{short}/{plan.point.name}"), settings, override,
-                                  merged, out_dir, res_dir, run_style(run), key, curve_fill(plan))
+                made += [_heatmap(plan, full, place(key, f"{short}/{plan.point.name}"), settings, override,
+                                  merged, out_dir, res_dir, (style, base), key, curve_fill(plan))
                          for plan in members for full in variants.get(plan.point.name, {}).get(path, [])]
                 continue
             drawn = data if chosen("use_data", True, True, (override, settings)) is not False else {}
@@ -710,10 +714,12 @@ def _pages(run, complete: list, yodas: dict, merged: Path, declared: list, page_
     return made
 
 
-def _heatmap(run, plan, full: str, rel: str, settings: dict, override: dict, merged: Path, out_dir: Path,
-             res_dir: Path, style: dict, cell: str, fill) -> Page:
+def _heatmap(plan, full: str, rel: str, settings: dict, override: dict, merged: Path, out_dir: Path,
+             res_dir: Path, styles: tuple[dict, dict], cell: str, fill) -> Page:
     """A heat map page (V87): one member's 2D object, its .plot labels (ZLabel, LogZ too), its figure's
-    and [plot]'s titles, coloured by Paint; no ratio, data, voiding or range."""
+    and [plot]'s titles, coloured by Paint; no ratio, data, voiding or range. `styles`: the run's style
+    layers and base.toml."""
+    style, base = styles
     labels = labels_of(full)
     page, override = page_settings(settings, full, rel, res_dir / rel, False, fill=fill, child=override)
     page.update({"heatmap": True, "ratio": False, "z_label": canonical(fill(labels.get("ZLabel", ""))),
@@ -726,7 +732,7 @@ def _heatmap(run, plan, full: str, rel: str, settings: dict, override: dict, mer
     config.write_text(tomli_w.dumps(for_root(document)), encoding="utf-8")
     return Page(rel, config, res_dir / rel, cell=cell, object=base_of(full), document=document, sources=[],
                 variants=[full], overrides={k for k, v in override.items() if v != DEFAULT},
-                style=merge_style(base_style(), layer), plots=res_dir.parent)
+                style=merge_style(base, layer), plots=res_dir.parent)
 
 
 def texts_of(run, plan, cell: str) -> dict[str, str]:
@@ -780,9 +786,24 @@ def check_figures(run, configuration) -> None:
             raise HepError(f"a scan figure's x, {figure.x}, is its axis: it cannot be banded", where=f"{at.removesuffix('.x')}.band")
 
 
-def compared(run, figure: Figure) -> list:
+@dataclass(frozen=True)
+class Compared:
+    """One configuration of a compare figure: `ref` as the figure names it ("cfg", or
+    "<Project>/<config>:<cfg>" in another run TOML, V88), its run and its configuration."""
+    ref: str
+    run: object
+    configuration: object
+
+    @property
+    def own(self) -> bool:
+        return ":" not in self.ref
+
+
+def compared(run, figure: Figure) -> list[Compared]:
     """A compare figure's configurations (V83): those it names, else the sweep_runs ones; two at least,
-    every one with the same page and curve axes, so that their pages pair up."""
+    one of them this file's, every one with the same page and curve axes (another run's page axes with
+    the same tags too), so that their pages pair up."""
+    from .config import load
     at = f"{figure.where}.configurations"
     keys = list(figure.configurations) or (run.runs(None) if run.sweep_runs else [])
     if len(keys) < 2:
@@ -791,18 +812,33 @@ def compared(run, figure: Figure) -> list:
     if len(set(keys)) != len(keys):
         raise HepError("a compare figure names a configuration twice", where=at)
     out = []
-    for key in keys:
-        if key not in run.configurations:
-            raise HepError(f"a compare figure names '{key}', which is not a configuration", where=at,
-                           hint=did_you_mean(key, list(run.configurations)) or f"configurations: {', '.join(run.configurations)}")
-        out.append(run.configurations[key])
-    shapes = {c.key: axes_of(c) for c in out}
+    for ref in keys:
+        owner, key = (run, ref) if ":" not in ref else (None, ref.rsplit(":", 1)[1])
+        if owner is None:
+            try:
+                owner = load(ref.rsplit(":", 1)[0])
+            except HepError as error:
+                raise HepError(f"a compare figure names '{ref}': {error.message}", where=at, hint=error.hint) from None
+        if key not in owner.configurations:
+            raise HepError(f"a compare figure names '{ref}', which is not a configuration", where=at,
+                           hint=did_you_mean(key, list(owner.configurations)) or f"configurations: {', '.join(owner.configurations)}")
+        out.append(Compared(ref, owner, owner.configurations[key]))
+    if not any(c.own for c in out):
+        raise HepError("a compare figure names a configuration of its own file too", where=at,
+                       hint="its pages are drawn by that configuration's plot stage, into this run's compare/")
+    shapes = {c.ref: axes_of(c.configuration) for c in out}
     first = out[0]
     for c in out[1:]:
-        if shapes[c.key] != shapes[first.key]:
-            raise HepError(f"a compare figure's configurations differ in their axes: {first.key} {_shape(shapes[first.key])}, "
-                           f"{c.key} {_shape(shapes[c.key])}", where=at,
+        if shapes[c.ref] != shapes[first.ref]:
+            raise HepError(f"a compare figure's configurations differ in their axes: {first.ref} {_shape(shapes[first.ref])}, "
+                           f"{c.ref} {_shape(shapes[c.ref])}", where=at,
                            hint="compared configurations sweep the same quantities, with the same plot_points and combine")
+    for c in (c for c in out if not c.own):              # another run's page cells must be this run's
+        for group in shapes[c.ref][0]:
+            mine, theirs = run.quantities[group[0]], c.run.quantities[group[0]]
+            if [tag_of(mine, i) for i in range(len(mine.values))] != [tag_of(theirs, i) for i in range(len(theirs.values))]:
+                raise HepError(f"'{c.ref}' has other values of {group[0]}, a page axis, than this file", where=at,
+                               hint="its pages pair with this run's by the page axes' tags")
     if figure.labels and len(figure.labels) != len(out):
         raise HepError(f"a compare figure's labels give one label per configuration ({len(out)})", where=f"{figure.where}.labels")
     return out
@@ -940,9 +976,15 @@ def _banded(curves: list, curve_groups: list, band: list, of_plan) -> list:
     return out
 
 
+def _run_of(run, plan):
+    """The run whose quantities a member's choice indexes: its own, for another run's (V88)."""
+    return plan.context.get("run") or run
+
+
 def _curve_look(run, plan, curve_groups) -> dict:
     """A curve's own look (V67): the styles of its curve axes' values at its point, a later axis's key
     over an earlier's. Empty: the page style's palette, in turn."""
+    run = _run_of(run, plan)
     look: dict = {}
     for group in curve_groups:
         for name in group:
@@ -954,6 +996,7 @@ def _curve_look(run, plan, curve_groups) -> dict:
 def _curve_label(run, plan, curve_groups, fill=lambda text: text) -> str:
     """The curve axes' labels at its point, after its own (a compared configuration's, V83); the run's
     name when it has neither."""
+    run = _run_of(run, plan)
     own = [canonical(fill(plan.context["curve_label"]))] if plan.context.get("curve_label") else []
     labels = [canonical(fill(label_of(run.quantities[g[0]], plan.point.choice[g[0]]))) for g in curve_groups
               if g[0] in run.quantities]
@@ -1044,18 +1087,20 @@ def draw(run, configuration, plans, say, others=None) -> int:
     failed = _draw(run, paint, todo, f"{run.name} · {configuration.label}", say) if todo else 0
     if not todo:
         say("plot: no complete point has a YODA product to draw")
+    for figure in (f for f in figures(run) if f.kind == "sheet") if todo else ():
+        failed += sheet(run, figure, todo, say)
     for figure in (f for f in figures(run) if f.kind == "compare"):
         named = compared(run, figure)
-        if configuration.key not in {c.key for c in named}:
+        if configuration.key not in {c.ref for c in named if c.own}:
             continue
         sets, waiting = [], []
         for c in named:
-            mine = plans if c.key == configuration.key else (others(c.key) if others else [])
+            mine = plans if c.own and c.ref == configuration.key else (others(c.ref) if others else [])
             complete = [p for p in mine if is_complete(p) and yoda_of(p)]
             if complete:
                 sets.append((c, complete))
             else:
-                waiting.append(c.key)
+                waiting.append(c.ref)
         if waiting:
             say(f"plot: compare {figure.name} waits for {', '.join(waiting)}: no complete point yet")
             continue
@@ -1063,6 +1108,34 @@ def draw(run, configuration, plans, say, others=None) -> int:
         say(f"plot: compare {figure.name}, {len(named)} configurations")
         failed += _draw(run, paint, made, f"{run.name} · {figure.name}", say)
     return failed
+
+
+def sheet(run, figure: Figure, todo: list[Page], say) -> int:
+    """A sheet figure (V89): the drawn pages its globs name, in their order, tiled `columns` wide by
+    utils/Env/figures/sheet.py into plots/<backend>/sheets/<name>.pdf and .png, for Paint's pages and
+    mpl's (mkhtml lays its files out its own way). 1 when it could not be made."""
+    module = plugins.load(repo_root() / "utils" / "Env" / "figures" / "sheet.py", "sheet")
+    chosen_pages: list[Page] = []
+    for glob in figure.table_pages:
+        found = [p for p in todo if fnmatch.fnmatch(p.name, glob) and p not in chosen_pages]
+        if not found:
+            say(f"plot: sheet {figure.name}: '{glob}' names no page drawn here")
+            return 1
+        chosen_pages += found
+    columns = figure.columns or min(3, len(chosen_pages))
+    made = []
+    for name in (n for n in backends(run.plot) if n in ("root", "mpl")):
+        drawn = [p if name == "root" else for_backend(p, name) for p in chosen_pages]
+        files = {fmt: [Path(f"{p.output}.{fmt}") for p in drawn] for fmt in formats_of(run.plot)}
+        try:
+            formats = module.tile(files, todo[0].plots / name / "sheets" / figure.name, columns)
+        except ValueError as error:
+            say(f"plot: sheet {figure.name} ({name}): {error}")
+            return 1
+        made += [f"{name}: {', '.join(formats)}"] if formats else []
+    say(f"plot: sheet {figure.name}, {len(chosen_pages)} page(s) in {columns} column(s)"
+        + (f" ({'; '.join(made)})" if made else ": no pdf or png to tile"))
+    return 0
 
 
 def _draw(run, paint: Path, todo: list[Page], title: str, say) -> int:

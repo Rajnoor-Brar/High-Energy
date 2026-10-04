@@ -19,7 +19,6 @@ and layout stay:
 
 from __future__ import annotations
 
-import argparse
 import difflib
 import re
 import shutil

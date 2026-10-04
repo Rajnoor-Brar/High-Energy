@@ -453,9 +453,14 @@ failed; 2 a config error before anything ran; 6 stopped by the user.
 After the points and the post stage (and on `--only plot` or `hep plot <config>`), from the
 complete points only:
 
-1. **Objects**: the 1D objects of the points' YODA product (not `/RAW`, `/TMP`, the run counters or
-   weight variations), narrowed by `[plot].objects`. A swept analysis option gives each point its
-   own variant path; pages are keyed by the option-free path, and each variant is a curve.
+1. **Objects**: the 1D and 2D objects of the points' YODA product (not `/RAW`, `/TMP`, the run
+   counters or weight variations), narrowed by `[plot].objects`, plus a derived figure's objects
+   (V84, appended to a copy of each point's YODA). A swept analysis option gives each point its own
+   variant path; pages are keyed by the option-free path, and each variant is a curve.
+   **Figures** (`[plot.figures]`, V80–V89) are the recipes: `[plot].objects` is the implicit
+   `defined` one; `overlay`, `merged` (points merged for the figure), `scan` (a number per point)
+   and `derived` build their own member sets through the same page builder (`plot._pages`); a
+   `compare` figure is drawn once all its configurations are complete, and a `sheet` tiles drawn pages.
 2. **The sweep in one file**: every complete point's YODA merged by `App_yd2rt --merge` into
    `results/…/plots/root/<cfg>.root` (a directory per point, raw entries, `points.json`), rebuilt
    only when a point's YODA changed. The pages read it. The reference data, if any, are converted
@@ -463,8 +468,8 @@ complete points only:
 3. **Page configs**: one TOML per `plot_points` cell and object in `output/…/plots/`, with the labels
    from the analysis's `.plot` file (TLatex), the `[plot]` values and its figure's own (`[plot.figures]`, V80), the
    style layers' changes, the curves and the mapped data.
-4. **Draw**: `build/Paint.exe` on each page (the root backend), and/or the yoda backend on the same
-   pages with Paint's ranges and voids (`--dump-ranges`). A failed page is counted, and the run exits
+4. **Draw**: `build/Paint.exe` on each page (the root backend; heat maps are its alone), and/or the
+   yoda and mpl backends on the same pages with Paint's ranges and voids (`--dump-ranges`). A failed page is counted, and the run exits
    1, but the others are drawn.
 
 The style is a stack of TOML layers over `utils/Apps/Paint/base.toml` (V27), checked against it at
