@@ -21,7 +21,7 @@ conventions (§15–27). The principles behind both are [01](01_Overview.md#4-pr
 | `utils/Env/` | `hep`, `run`, `hep_env.sh`, `flags.sh`, `stack.toml` and `stack.py` (the software stack), `quantities.toml` (the vocabulary), `latex.toml`, `schema/`, `runner/`, the tool folders, the plot backends (`yoda/`, `mpl/`), `figures/` (the figures' plugins), `patches/` | yes |
 | `utils/Env/patches/` | patches this repository needs in the `~/HEP` stack, applied by hand; each file says to which source (`fastjet-3.5.0-siscone-thread-local-ranlux.patch`: `cd ~/HEP/src/fastjet-3.5.0 && patch -p0 < …`, rebuild, `make install`) | yes |
 | `tests/` | `runner/` (unit), `integration/` (real processes), `cxx/`, `fixtures/` (the configs tests load), `reference/` (data the gates compare against) | yes |
-| `docs/` | this manual; `audit_1/`, `audit_2/` (the audits and their plans) | yes |
+| `docs/` | this manual; `audit_2/01_Health.md` (the open health check; finished audits are in git) | yes |
 | `bots/` | agent rules (`BOT.md`), `intent.md` (ideas not built) | yes |
 | `build/` | everything compiled: apps, `<Project>/`, `Rivet/`, `tests/`, `deps/`, `flags.mk`, `Herwig/` | no |
 | `output/` | technical files per project, `output/tests/` | no |
@@ -1330,8 +1330,8 @@ Change a key, and the test says which page to update.
     `00/B5`).
   - A new lesson learned by running something becomes a ledger row, and a new decision a V-row.
     Ids are never reused.
-  - Audit ids (`docs/audit_1/`, `docs/audit_2/`: C, F, L, B, K, H, which overlap the record's own C,
-    F and L) are cited only there and in `bots/`, written "audit C6". Code and this manual cite the
+  - Audit ids (audit 1's C, F, L, B, K and audit 2's H, which overlap the record's own C, F and L) are
+    cited only in the audits and in `bots/`, written "audit C6". Code and this manual cite the
     V-row an audit item lands as.
 - **Docstrings carry the reasoning**: a module opens with what it owns and why its shape is what it
   is.
