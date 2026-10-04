@@ -587,6 +587,17 @@
       }
      ]
     },
+    "logz": {
+     "description": "a heat map's log z (default: the .plot's LogZ, V87)",
+     "anyOf": [
+      {
+       "type": "boolean"
+      },
+      {
+       "const": "default"
+      }
+     ]
+    },
     "auto_range": {
      "description": "x clipped to the bins with content",
      "anyOf": [
@@ -817,6 +828,17 @@
          }
         ]
        },
+       "logz": {
+        "description": "as [plot].logz, for these pages",
+        "anyOf": [
+         {
+          "type": "boolean"
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
        "auto_range": {
         "description": "as [plot].auto_range, for these pages",
         "anyOf": [
@@ -950,11 +972,12 @@
         "default": "defined"
        },
        "type": {
-        "description": "what is drawn: Hist1D (steps), Scatter2D (a marker per bin, as data: V86); default: a scan's Scatter2D, else Hist1D",
+        "description": "what is drawn: Hist1D (steps), Scatter2D (a marker per bin, as data: V86), HeatMap (a 2D object coloured, a page per point: V87); default: from the objects (2D: HeatMap), a scan's Scatter2D",
         "type": "string",
         "enum": [
          "Hist1D",
-         "Scatter2D"
+         "Scatter2D",
+         "HeatMap"
         ]
        },
        "name": {

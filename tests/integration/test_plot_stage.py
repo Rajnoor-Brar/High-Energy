@@ -227,6 +227,35 @@ def test_a_scatter2d_figure_is_drawn_as_markers(stage):
     assert plot.draw(run, configuration, plans, lambda line: None) == 0
 
 
+def test_a_2d_object_is_a_heat_map_per_point(stage):
+    """V87: a 2D object's pages are heat maps, one per point of the cell, drawn by Paint alone; a
+    derived figure projects it; a HeatMap type on a 1D object, or a 2D object in an overlay, is refused."""
+    yoda = pytest.importorskip("yoda")
+    run, configuration, plans = stage
+    h = yoda.Histo2D(4, 0, 4, 3, 0, 3, "/photo_eic/d90-x01-y01")
+    for i in range(60):
+        h.fill(i % 4 + 0.5, i % 3 + 0.5, 1.0 + i % 5)
+    extra = plans[0].out.parent / "h2.yoda"
+    yoda.write([h], str(extra))
+    for plan in plans:                                           # each point's YODA gains the 2D object
+        product = plot.yoda_of(plan)
+        product.write_text(product.read_text() + "\n" + extra.read_text())
+    run.plot["figures"]["px"] = {"class": "derived", "op": "projection-x", "objects": ["d90-x01-y01"], "ratio": False}
+    by = {p.name: p for p in plot.pages(run, configuration, plans)}
+    maps = sorted(n for n in by if "/d90-x01-y01/" in n)
+    assert len(maps) == len(plans) and all(by[n].document["page"]["heatmap"] for n in maps)
+    assert by["em/px"].document["page"]["x_label"] is not None
+    said = []
+    assert plot.draw(run, configuration, plans, said.append) == 0, said
+    assert (plans[0].res.parent / "plots" / "root" / maps[0]).with_suffix(".png").is_file()
+    run.plot["figures"]["bad"] = {"objects": ["d01-*"], "type": "HeatMap"}
+    with pytest.raises(plot.HepError, match="is a HeatMap, and /photo_eic/d01-x01-y01 is a 1D object"):
+        plot.pages(run, configuration, plans)
+    run.plot["figures"]["bad"] = {"class": "overlay", "objects": ["d90-x01-y01", "d01-x01-y01"]}
+    with pytest.raises(plot.HepError, match="is a 2D object, which a heat map draws alone"):
+        plot.pages(run, configuration, plans)
+
+
 def test_a_compare_figure_draws_configurations_together(stage):
     """V83: the objects' pages across configurations, curves labelled by the configuration first, drawn
     by the plot stage of whichever configuration completes it, into <run>/compare/<name>/."""

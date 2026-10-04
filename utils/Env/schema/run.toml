@@ -407,6 +407,12 @@ type       = "bool"
 default_ok = true
 doc        = "log x (default: the .plot's)"
 
+[plot.logz]
+page       = true
+type       = "bool"
+default_ok = true
+doc        = "a heat map's log z (default: the .plot's LogZ, V87)"
+
 [plot.auto_range]
 page       = true
 type       = "bool"
@@ -504,8 +510,8 @@ doc     = "how its pages are built: defined (an analysis object's own), overlay 
 
 [figure.type]
 type    = "str"
-choices = ["Hist1D", "Scatter2D"]
-doc     = "what is drawn: Hist1D (steps), Scatter2D (a marker per bin, as data: V86); default: a scan's Scatter2D, else Hist1D"
+choices = ["Hist1D", "Scatter2D", "HeatMap"]
+doc     = "what is drawn: Hist1D (steps), Scatter2D (a marker per bin, as data: V86), HeatMap (a 2D object coloured, a page per point: V87); default: from the objects (2D: HeatMap), a scan's Scatter2D"
 
 [figure.name]
 type = "str"

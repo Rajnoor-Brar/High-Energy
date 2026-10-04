@@ -20,6 +20,7 @@ from .paths import build_root
 COUNTERS = ("/_XSEC", "/_EVTCOUNT")
 TECHNICAL = ("/RAW/", "/TMP/")
 _BEGIN = re.compile(r"^BEGIN YODA_(?:ESTIMATE1D|HISTO1D|SCATTER2D)_V\d+ (\S+)$", re.M)
+_BEGIN_2D = re.compile(r"^BEGIN YODA_(?:ESTIMATE2D|HISTO2D)_V\d+ (\S+)$", re.M)
 
 
 @functools.lru_cache(maxsize=64)
@@ -39,6 +40,11 @@ def objects(path: Path) -> list[str]:
     writes a variation per extra weight, as /x[EXTRA__MEWeight])."""
     return [p for p in _BEGIN.findall(yoda_text(path))
             if not p.startswith(TECHNICAL) and p not in COUNTERS and not p.endswith("]")]
+
+
+def objects_2d(path: Path) -> list[str]:
+    """The 2D objects that get pages, as heat maps (V87): not /RAW or /TMP, the nominal weight only."""
+    return [p for p in _BEGIN_2D.findall(yoda_text(path)) if not p.startswith(TECHNICAL) and not p.endswith("]")]
 
 
 def base_path(path: str) -> str:

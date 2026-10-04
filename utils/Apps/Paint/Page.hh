@@ -34,6 +34,8 @@ namespace Paint {
         bool logx = false, logy = false, ratio = false, voidEmpty = false, autoRange = false;
         bool normalise = false;                                 // "area": unit area over the bins drawn (V68)
         bool markers = false;                                   // the curves as markers, as data (type Scatter2D, V86)
+        bool heatmap = false, logz = false;                     // one 2D object, coloured (type HeatMap, V87)
+        std::string zLabel;
         std::optional<double> yGutter, xGutter;                 // none: ROOT's own range ("default")
         int minEntries = 0, rangePad = 0;
         Style style;
@@ -84,6 +86,9 @@ namespace Paint {
         page.voidEmpty = p["void_empty"].value_or(false);
         page.autoRange = p["auto_range"].value_or(false);
         page.markers = p["markers"].value_or(false);
+        page.heatmap = p["heatmap"].value_or(false);
+        page.logz = p["logz"].value_or(false);
+        page.zLabel = p["z_label"].value_or(std::string(""));
         if (const auto node = p["normalise"]; node) {
             if (node.value<std::string>() == std::optional<std::string>("area")) page.normalise = true;
             else if (node.value<bool>() != std::optional<bool>(false))
@@ -117,6 +122,7 @@ namespace Paint {
             }
         }
         if (page.curves.empty()) throw std::runtime_error(path + ": a page needs at least one [[curve]]");
+        if (page.heatmap && page.curves.size() != 1) throw std::runtime_error(path + ": a heat map page draws one [[curve]]");
         if (auto* data = doc["data"].as_table()) {
             page.hasData = true;
             page.data = {(*data)["file"].value_or(std::string("")), (*data)["object"].value_or(std::string("")), "",
