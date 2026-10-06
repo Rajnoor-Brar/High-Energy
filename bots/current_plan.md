@@ -17,7 +17,9 @@ Nothing is in progress. Waiting on the user:
 
 - **R0 (the user's):**
   - review and commit the migrated `configs/`, together with the untracked
-    `configs/PhotoProduction/photo_zs.cmnd`, which three configs use (H1, H4);
+    `configs/PhotoProduction/photo_zs.cmnd`, which three configs use (H1, H4). Since 2026-10-06
+    `InProcEIC.toml` and `InProcZeus.toml` import eic.toml / zeus_validation.toml (the originals:
+    `git diff configs/PhotoProduction/InProc*`);
   - verify the mpl pages against mkhtml's, after which the yoda backend goes (H11).
 - **R1–R3** of the health check: quick fixes (a compare figure drawn once, H2), then structure
   (`runner/figures.py`, the figure-class rules in the schema), then sheets, tests and docs.

@@ -477,8 +477,44 @@ counting.
 `[tools.jets.config]` runs K Rivets on threads of their own, merged at the end. With 12 + 12 it is
 about 1.5× faster than the sharded chain (§7.1). K above 1 needs the SISCone patch in `~/HEP` (L29).
 
-The whole files are `configs/PhotoProduction/InProcEIC.toml` and `InProcZeus.toml`. How it is built:
-[06 §21](06_Internals.md#21-modulehh). → `eic inproc`.
+**A whole study in one process** imports the chain's run TOML (§4.9) and writes only what differs: the
+program, the configurations that run it, and a run name of its own. The physics (statics, quantities,
+the pythia and rivet tables, plots) is the chain's, so an edit there is an edit here, and a point with
+the chain's `event_count` and `threads` gets the chain's seeds, so the same events:
+
+```toml
+# configs/PhotoProduction/InProcZeus.toml
+[config]
+import = [{ from = "zeus_validation", only = ["static", "quantities", "tools", "plot"] }]   # no [prelim]: no FIFO
+
+[run]
+serial        = 1
+name          = "inproc_zeus"
+project       = "PhotoProduction"
+configuration = "default"
+event_count   = 1_000_000
+threads       = 12
+
+[run.defaults]
+tools = ["inproc", "yd2rt"]
+
+[run.default]
+sweeps = ["pdf"]                  # the file has ptref, mpi and single too, each a sweep and nothing more
+
+[tools.inproc]
+tool           = "module"
+executable     = "InprocJets.exe"
+output_file    = "zeus.yoda"
+pythia_cmnd    = true             # zeus_validation's pythia table: configured, not run
+rivet_analyses = true             # its rivet table's analyses
+
+[tools.inproc.config]
+rivet_threads = 12
+```
+
+→ `InProcZeus` (zeus_validation's), `InProcEIC` (eic's: it takes only the tables it uses, `only =
+["static", "quantities", "plot", "tools.pythia", "tools.rivet", "tools.yd2rt", "tools.merge"]`).
+How the program is built: [06 §21](06_Internals.md#21-modulehh).
 
 ### 6.3 A custom tool, and a Python one
 

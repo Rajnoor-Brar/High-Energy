@@ -76,7 +76,11 @@ def test_every_toml_block_parses_and_complete_runs_load(page, scratch):
         data = tomllib.loads(block)                    # raises on a bad block
         run = data.get("run", {})
         complete = {"name", "project", "configuration"} <= set(run) and isinstance(run.get(run["configuration"]), dict)
-        if complete:                                     # a whole run TOML, not a fragment of one
+        if complete and data.get("config", {}).get("import"):   # V94: read through its imports (the fixtures')
+            path = scratch / "example.toml"
+            path.write_text(block, encoding="utf-8")
+            config.load(str(path))
+        elif complete:                                   # a whole run TOML, not a fragment of one
             config.parse(data, scratch / "example.toml")   # C1–C5 on the example itself
 
 

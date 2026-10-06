@@ -1302,7 +1302,7 @@ make test-slow      # real generators and plots: the gates (several minutes)
 **The manual is tested.** `tests/runner/test_docs.py` checks that:
 - every relative link in `docs/` resolves, anchors included;
 - every TOML block parses, and every complete run TOML example loads through the runner's own
-  parser;
+  parser (one that imports, through its imports: the fixtures');
 - every key the schema accepts, every `base.toml` key and every tool folder's option appears in the
   reference, and every tool folder has its section in 05;
 - the generated blocks are current (`make docs`, V91);
