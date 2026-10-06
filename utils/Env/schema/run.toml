@@ -9,7 +9,7 @@
 #   min      the smallest number allowed
 #   required true: the table must set it
 #   default  the runner's value when the key is left out
-#   inherit  true: a configuration ([run.<cfg>]) inherits it from [run]
+#   inherit  true: a configuration ([run.cfgs.<cfg>]) inherits it from [run]
 #   default_ok  true: the value "default" is accepted. "default" means "keep it as it is" (V55): in a
 #            child it is the parent's value; at the top level nothing is set, and the tool decides.
 #   page     a [plot] key a figure ([plot.figures.<figure>]) may override
@@ -19,7 +19,7 @@
 #   notes    what a line cannot say: the reference's text for the key (docs/04_Config_Reference.md is
 #            generated from doc and notes, `make docs`), shown by `hep explain` and the editor too
 #
-# Tables: config, run, configuration ([run.<cfg>]), prelim, quantity ([quantities.<q>]), tool
+# Tables: config, run, configuration ([run.cfgs.<cfg>]), prelim, quantity ([quantities.<q>]), tool
 # ([tools.<tag>]: the keys every tool table may carry; a folder's [options] add its own), plot,
 # figure ([plot.figures.<figure>]), data.
 
@@ -48,7 +48,8 @@ notes = """\
   `[run]`'s own keys merge key by key, tables recursively. Imports nest (V94): an imported file's own \
   imports come first, depth-first; a circle is refused. Another project's file keeps its bare paths \
   (cards, filters, styles, executables) its own project's, so its tools plan as they do in it. The \
-  file that imports sets its own `[run].name` and `project`, and shares them with no imported run. \
+  file that imports sets its own `[run].name` and `project`; no folder of its configurations may be \
+  an imported run's (V100). \
   An entry may be `{ from = \"<config>\", only = [\"quantities\", \"run.default\", …] }`: only those \
   sections or dotted keys of that file, each of which it must have (V95). `--show-config` says where \
   each quantity, tool and configuration came from."""
@@ -72,7 +73,8 @@ notes = """\
   exactly one var takes its value as it is: `event_count = \"{var:events}\"` is an integer, and a \
   list stays a list; inside a longer string a var must be a scalar (`\"rivet:{var:ana}\"`). An \
   unknown name is refused with the nearest. An imported file's `{var:…}` takes this file's value, \
-  so a shared file can be written with parameters. Imports are read before vars, so an import's \
+  so a shared file can be written with parameters; its own `[config.vars]` come with whatever is \
+  taken of it (`only` included, V101), under this file's. Imports are read before vars, so an import's \
   name cannot cite one; `--set config.vars.<name>=…` changes one for a run."""
 
 [config.meta]
@@ -103,11 +105,20 @@ notes = """\
   the subfolder of `configs/`, `modules/`, `output/`, `results/`; must equal the folder the file \
   is in, when it is under `configs/`"""
 
+[run.cfgs]
+type  = "table"
+doc   = "the configurations: [run.cfgs.<cfg>], each a table of the keys below (V98)"
+notes = """\
+  the configurations, each `[run.cfgs.<cfg>]` (V98; they were `[run.<cfg>]`, which is refused \
+  with the form to write, and `hep migrate` rewrites it). A configuration's key is its name for \
+  `hep run <config> <cfg>`, `sweep_runs`, `extends` and compare figures, and its folder unless it \
+  sets a `label`. Any name may be used, a [run] key's included."""
+
 [run.configuration]
 type = "str"
 doc  = "the configuration hep run runs (required unless sweep_runs)"
 notes = """\
-  must name a `[run.<cfg>]` table (C2). Under `sweep_runs` it may be left out; `hep run <config>` \
+  must name a `[run.cfgs.<cfg>]` table (C2). Under `sweep_runs` it may be left out; `hep run <config>` \
   then ignores it"""
 
 [run.serial]
@@ -190,10 +201,10 @@ notes = """\
   point's generators' `[card] seed_range`: 899,999,999 for Pythia, checked when the point is \
   planned, V54); ignored otherwise (`--plan` says so)"""
 
-# ── [run.<cfg>] ──────────────────────────────────────────────────────────────────────────────
-# A configuration's value is its own, else the one it `extends` (and so on), else [run.defaults]'s (a
-# table of these keys shared by every configuration), else [run]'s, else the default here. label,
-# title, extends and swept are each configuration's own.
+# ── [run.cfgs.<cfg>] ──────────────────────────────────────────────────────────────────────────────
+# A configuration's value is its own, else the one it `extends` (and so on), else [run]'s (which takes
+# every key here but label, title, extends, swept, static and prelim: V99, it was [run.defaults]),
+# else the default here. label, title, extends and swept are each configuration's own.
 
 [configuration.extends]
 type = "str"

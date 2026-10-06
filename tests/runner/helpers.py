@@ -9,7 +9,7 @@ from runner import config, quantities, record, sweep, tools
 
 BASE = {
     "run": {"name": "t", "project": "PhotoProduction", "configuration": "one", "event_count": 10, "threads": 1,
-            "one": {"tools": [["pythia", "rivet"]]}},
+            "cfgs": {"one": {"tools": [["pythia", "rivet"]]}}},
     "prelim": {"fifo": ["events.hepmc"]},
     "tools": {
         "pythia": {"tool": "pythia", "baseconfig": "photo_ep.cmnd", "output_file": "events.hepmc"},

@@ -33,9 +33,9 @@ def test_delphes_reads_a_file_from_an_earlier_group_and_is_count_checked():
 @pytest.mark.skipif(not NEEDS["delphes"], reason="load_hep: DelphesHepMC3")
 def test_a_fifo_into_delphes_is_refused():
     with pytest.raises(HepError, match="'delphes' cannot read a FIFO"):
-        plans("PhotoProduction/eic", "delphes", sets=["run.delphes.prelim.fifo=['showered.hepmc']",
-                                                       "run.delphes.prelim.files=[]",
-                                                       "run.delphes.tools=[['pythia_file', 'delphes'], 'jets_reco']"])
+        plans("PhotoProduction/eic", "delphes", sets=["run.cfgs.delphes.prelim.fifo=['showered.hepmc']",
+                                                       "run.cfgs.delphes.prelim.files=[]",
+                                                       "run.cfgs.delphes.tools=[['pythia_file', 'delphes'], 'jets_reco']"])
 
 
 def test_the_root_count_reader_needs_the_file(scratch):

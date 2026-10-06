@@ -50,6 +50,8 @@ def test_a_toml_is_rewritten_line_by_line(scratch):
     assert 'executable = "path:python3" # the interpreter' in new
     assert 'labels = ["$E_{T}$ > 4 GeV", "$E_{T}$ > 5 GeV"] # thresholds' in new
     assert "title = '$\\sqrt{s}$ = 318 GeV'" in new
+    new = migrate.cfgs_text(new)                                    # V98: [run.a] → [run.cfgs.a]
+    assert "[run.cfgs.a]" in new and "[run.cfgs.c]" in new
     path.write_text(new, encoding="utf-8")
     config.load(str(path))                                          # it reads strictly now
 
@@ -69,11 +71,12 @@ def test_a_card_loses_the_lines_the_runner_sets():
 def test_the_command_diffs_then_applies(scratch, capsys):
     path = scratch / "sw.toml"
     path.write_text(OLD, encoding="utf-8")
-    with pytest.raises(HepError, match="swept is gone"):
+    with pytest.raises(HepError, match=r"configurations are \[run.cfgs.<cfg>\] now"):
         config.load(str(path))
     assert cli.cmd_migrate(argparse.Namespace(configs=[str(path)], apply=False)) == 0
     shown = capsys.readouterr().out
-    assert "-swept  = false" in shown and "(a dry run" in shown and path.read_text(encoding="utf-8") == OLD
+    assert "-swept  = false" in shown and "+[run.cfgs.a]" in shown and "(a dry run" in shown
+    assert path.read_text(encoding="utf-8") == OLD
     assert cli.cmd_migrate(argparse.Namespace(configs=[str(path)], apply=True)) == 0
     assert "migrated 1 file(s)" in capsys.readouterr().out
     config.load(str(path))
@@ -128,6 +131,14 @@ def test_the_old_figure_tables_become_figures(scratch, capsys):
     run = config.load(str(path))
     assert run.plot["figures"]["eta"]["style"] == {"ratio": {"range": [0.8, 1.1], "limits": [0.8, 1.1]}}
     assert run.plot["figures"]["d04"] == {"objects": ["d04-*"], "logy": True}
+
+
+def test_run_defaults_move_into_run():
+    """V99: its keys after [run]'s own, its value where both set one (it was the nearer layer)."""
+    text = '[run]\nname = "x"\nthreads = 4      # all\n\n[run.defaults]\nthreads = 8\ntools = ["a"]   # every one\n\n[run.cfgs.a]\nsweeps = []\n'
+    new = migrate.defaults_text(text)
+    assert new == '[run]\nname = "x"\nthreads = 8\ntools = ["a"]   # every one\n\n[run.cfgs.a]\nsweeps = []\n'
+    assert migrate.defaults_text(new) == new
 
 
 def test_master_becomes_config(scratch):

@@ -16,12 +16,12 @@ configuration = "single"
 event_count   = 5_000
 threads       = 1                   # Sherpa runs one process per point
 
-[run.single]
+[run.cfgs.single]
 description = "One point at 18x275 e+p, LO, no MPI (the card's Amisic note)"
 sweeps      = []
 tools       = [["sherpa", "rivet"], "yd2rt"]
 
-[run.pdf]
+[run.cfgs.pdf]
 serial      = 1
 description = "Proton-PDF comparison at 18x275"
 sweeps      = ["pdf"]

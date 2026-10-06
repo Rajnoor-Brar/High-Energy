@@ -1,6 +1,6 @@
 """The pre and post stages: tools run once, before every point or after them (rank 4).
 
-docs/06_Internals.md §7, docs/04_Config_Reference.md §5.4 (V15). `[run.<cfg>].post` has the form of
+docs/06_Internals.md §7, docs/04_Config_Reference.md §5.4 (V15). `[run.cfgs.<cfg>].post` has the form of
 `tools`. It is planned as one more point, named "post", in the configuration's directory:
 
 * it takes no quantities;
@@ -66,7 +66,7 @@ def _run_stage(stage: tools.PointPlan, waits_on: list, run_config, configuration
 def _reserved(run, configuration, names, name: str, stage: str) -> None:
     if name in names:
         raise HepError(f"a point is named '{name}', which is where the {stage} stage lives",
-                       where=f"{run.path}: [run.{configuration.key}]", hint="give that value another tag")
+                       where=f"{run.path}: [run.cfgs.{configuration.key}]", hint="give that value another tag")
 
 
 def plan_pre(run, configuration, master: dict, points: list) -> tools.PointPlan | None:
@@ -128,7 +128,7 @@ def plan_combined(run, configuration, master: dict, plans: list) -> list[tools.P
     plot stage draws the groups as it would draw points."""
     if not configuration.combine:
         return []
-    where = f"{run.path}: [run.{configuration.key}].combine"
+    where = f"{run.path}: [run.cfgs.{configuration.key}].combine"
     if MERGE_TAG in run.tools:
         raise HepError(f"[tools.{MERGE_TAG}] is the name combine uses for its merges", where=where,
                        hint="rename that table")

@@ -33,7 +33,7 @@ project = "PhotoProduction"
 configuration = "one"
 event_count = {events}
 threads = 1
-[run.one]
+[run.cfgs.one]
 tools = [["pythia", "rivet"]]
 [prelim]
 fifo = ["events.hepmc"]

@@ -14,12 +14,12 @@ configuration = "single"
 event_count   = 2_000
 threads       = 1
 
-[run.single]
+[run.cfgs.single]
 description = "Herwig ep DIS at 18x275, analysed by Rivet"
 sweeps      = []
 tools       = [["herwig", "rivet"], "yd2rt"]
 
-[run.export]
+[run.cfgs.export]
 description = "A custom tool asks for herwig_run: Herwig's read runs once (cached), the tool gets the path"
 sweeps      = []
 tools       = ["probe"]

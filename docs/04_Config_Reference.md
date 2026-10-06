@@ -34,8 +34,8 @@ YAML merge for Sherpa, and so on (see [05](05_Commands_and_Tools.md)).
 
 ```
 utils/Env/<tool>/quantities.toml  <  [config].master  <  [quantities.<q>].key / target  <  --set
-[static]  <  [run.<cfg>].static  <  --set static.<q>=…  <  the value a sweep gives the point
-[run]  <  [run.defaults]  <  extends  <  [run.<cfg>]  <  --set
+[static]  <  [run.cfgs.<cfg>].static  <  --set static.<q>=…  <  the value a sweep gives the point
+[run]  <  extends  <  [run.cfgs.<cfg>]  <  --set
 [config].import files  <  this file
 base.toml  <  [plot].root_style file  <  [plot.style]  <  [plot.figures.<figure>].style
 [plot]  <  [plot.figures.<figure>]
@@ -113,9 +113,9 @@ master = "master.toml"           # optional: configs/<project>/master.toml overl
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `master` | a string |  | overlays the tool folders' mappings key by key (`[quantities.<tool>.compatible_quantities]`): an entry for a (tool, quantity) pair replaces the framework's. The file must exist. |
-| `import` | a string or a list (a string or a table each) |  | run TOMLs this one starts from, in order, named as `hep run` names a config: `name` is this project's (`configs/<project>/name.toml`), `<Project>/<name>` another project's, `./…` from the repository root; `.toml` optional. **This file wins** (V56): a quantity, tool table or configuration of the file replaces the imported one whole; `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively. Imports nest (V94): an imported file's own imports come first, depth-first; a circle is refused. Another project's file keeps its bare paths (cards, filters, styles, executables) its own project's, so its tools plan as they do in it. The file that imports sets its own `[run].name` and `project`, and shares them with no imported run. An entry may be `{ from = "<config>", only = ["quantities", "run.default", …] }`: only those sections or dotted keys of that file, each of which it must have (V95). `--show-config` says where each quantity, tool and configuration came from. |
+| `import` | a string or a list (a string or a table each) |  | run TOMLs this one starts from, in order, named as `hep run` names a config: `name` is this project's (`configs/<project>/name.toml`), `<Project>/<name>` another project's, `./…` from the repository root; `.toml` optional. **This file wins** (V56): a quantity, tool table or configuration of the file replaces the imported one whole; `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively. Imports nest (V94): an imported file's own imports come first, depth-first; a circle is refused. Another project's file keeps its bare paths (cards, filters, styles, executables) its own project's, so its tools plan as they do in it. The file that imports sets its own `[run].name` and `project`; no folder of its configurations may be an imported run's (V100). An entry may be `{ from = "<config>", only = ["quantities", "run.default", …] }`: only those sections or dotted keys of that file, each of which it must have (V95). `--show-config` says where each quantity, tool and configuration came from. |
 | `drop` | a list (a string each) |  | dotted keys (`run.default4`, `plot.figures.statistics`, `quantities.radius`, `tools.jets`) taken out of what the imports brought in, before this file's own tables are laid over them (V95). Each must name something an import gave, so a misspelt drop is refused rather than keeping what it meant to remove; a file that imports nothing has nothing to drop. |
-| `vars` | a table |  | `name = value`, cited in any string of the file as `{var:name}` and replaced when the file is read, after its imports and `--set`, so an identity sees only the result (V96). A string that is exactly one var takes its value as it is: `event_count = "{var:events}"` is an integer, and a list stays a list; inside a longer string a var must be a scalar (`"rivet:{var:ana}"`). An unknown name is refused with the nearest. An imported file's `{var:…}` takes this file's value, so a shared file can be written with parameters. Imports are read before vars, so an import's name cannot cite one; `--set config.vars.<name>=…` changes one for a run. |
+| `vars` | a table |  | `name = value`, cited in any string of the file as `{var:name}` and replaced when the file is read, after its imports and `--set`, so an identity sees only the result (V96). A string that is exactly one var takes its value as it is: `event_count = "{var:events}"` is an integer, and a list stays a list; inside a longer string a var must be a scalar (`"rivet:{var:ana}"`). An unknown name is refused with the nearest. An imported file's `{var:…}` takes this file's value, so a shared file can be written with parameters; its own `[config.vars]` come with whatever is taken of it (`only` included, V101), under this file's. Imports are read before vars, so an import's name cannot cite one; `--set config.vars.<name>=…` changes one for a run. |
 | `meta` | a table |  | descriptive: it never changes a run (V97). Any key is free text for people (`author`, `references`, …) except `versions = { pythia8 = "8.317", rivet = "4.1.3" }`: the packages of `utils/Env/stack.toml` the file was run with, each version a string. A version the stack does not have (`6.5` matches 6.5.6) is a **warning** in `--plan`, at the run's start and in `hep check`, which still passes: the run goes ahead, at your own risk. A package stack.toml does not name is refused, since its warning could never come. |
 <!-- /generated -->
 
@@ -135,7 +135,10 @@ Its rules:
   when it is read, so its tools find their cards and plan to the same identities as in their own
   file.
 - **Location:** the file that imports sets its own `[run].name` and `project`; location is never
-  imported. No imported file may be the same run, or both would write the same folders.
+  imported. It may share an imported run's name, so its results sit beside the other's
+  (`results/PhotoProduction/zeus/03_PDFs_150M` beside zeus's own `02_PDFs_150M`), but no
+  configuration of the two may have the same folder (V100), or their points would overwrite each
+  other's.
 - **Part of a file** (V95): an entry `{ from = "zeus_validation", only = ["tools", "quantities",
   "run.default"] }` takes only those sections or dotted keys, each of which the file must have.
 - **Taking out** (V95): `drop = ["run.default4", "plot.figures.statistics"]` removes dotted keys from
@@ -165,7 +168,9 @@ file = "rivet:{var:ana}"            # inside a longer string: a scalar, as text
 
 They are replaced when the file is read, after its imports and `--set` (`--set
 config.vars.events=50000`), so a point's identity is that of the same file written out. An imported
-file's `{var:…}` takes this file's value: a shared file can be written with parameters. An unknown
+file's `{var:…}` takes this file's value: a shared file can be written with parameters. An imported
+file's own `[config.vars]` come with whatever is taken of it, `only` included (V101), below this
+file's, so the tables it gives always find the vars they cite. An unknown
 name is refused with the nearest. `{var:…}` is the run TOML's own; the page texts' placeholders
 (`{cell}`, `{q:…}`, `{opt:…}`, §10) are filled later, per page.
 
@@ -263,7 +268,8 @@ description   = "EIC photoproduction studies"
 |---|---|---|---|
 | `name` | a string | **required** | the run's directory name |
 | `project` | a string | **required** | the subfolder of `configs/`, `modules/`, `output/`, `results/`; must equal the folder the file is in, when it is under `configs/` |
-| `configuration` | a string |  | must name a `[run.<cfg>]` table (C2). Under `sweep_runs` it may be left out; `hep run <config>` then ignores it |
+| `cfgs` | a table |  | the configurations, each `[run.cfgs.<cfg>]` (V98; they were `[run.<cfg>]`, which is refused with the form to write, and `hep migrate` rewrites it). A configuration's key is its name for `hep run <config> <cfg>`, `sweep_runs`, `extends` and compare figures, and its folder unless it sets a `label`. Any name may be used, a [run] key's included. |
+| `configuration` | a string |  | must name a `[run.cfgs.<cfg>]` table (C2). Under `sweep_runs` it may be left out; `hep run <config>` then ignores it |
 | `serial` | an integer |  | the prefix `NN_` of each configuration's folder, `<name>/NN_<label>`: **location, never identity** (V12). A configuration's `serial` overrides it (V45). Changing it starts a fresh location. A configuration inherits it from `[run]`. |
 | `event_count` | an integer, ≥ 1 |  | default for configurations; one of the two must set it A configuration inherits it from `[run]`. |
 | `threads` | an integer, ≥ 0 | `1` | default for configurations. `0` means every core, **resolved to a number at plan time** A configuration inherits it from `[run]`. |
@@ -273,9 +279,15 @@ description   = "EIC photoproduction studies"
 | `notify` | a string: `"none"`, `"desktop"` | `"none"` | `"desktop"` (V76): a desktop notification (`notify-send`) when `hep run` ends, with its verdict; never fails a run |
 | `seed_type` | a string: `"identity"`, `"manual"`, `"random"` | `"identity"` | default for configurations: how a point's seeds are chosen, `"identity"`, `"manual"` or `"random"` (06 §8) A configuration inherits it from `[run]`. |
 | `manual_seed` | an integer, ≥ 1 |  | default for configurations: under `seed_type = "manual"`, every point's seed (from 1 to the point's generators' `[card] seed_range`: 899,999,999 for Pythia, checked when the point is planned, V54); ignored otherwise (`--plan` says so) A configuration inherits it from `[run]`. |
+| `tools` | a list | **required** | 04 §5.3 A configuration inherits it from `[run]`. |
+| `sweeps` | a list |  | 04 §5.1; `[]` is one point A configuration inherits it from `[run]`. |
+| `plot_points` | a list (a string each) |  | 04 §5.2 A configuration inherits it from `[run]`. |
+| `combine` | a list (a string each) |  | swept quantities whose points are merged into one curve (04 §5.5) A configuration inherits it from `[run]`. |
+| `pre` | a list |  | the form of `tools` (04 §5.4) A configuration inherits it from `[run]`. |
+| `post` | a list |  | the form of `tools` (04 §5.4) A configuration inherits it from `[run]`. |
 <!-- /generated -->
 
-Every other table inside `[run]` is a configuration (§5), and any other key is an error (C1).
+The configurations are `[run.cfgs.<cfg>]` (§5); any other key or table in `[run]` is an error (C1).
 `[run].configuration` is required unless `sweep_runs` is set. An integer `event_count` must be set
 here or in every configuration.
 
@@ -318,14 +330,21 @@ eic · pdf: 4 point(s), 1000000 events, 12 threads
 
 ---
 
-## 5. `[run.<configuration>]`
+## 5. `[run.cfgs.<cfg>]`
+
+The configurations are the tables of `[run.cfgs]` (V98). `[run]` itself holds only its own keys
+(§4), so a misspelt table there is an error, never a configuration, and a configuration may have any
+name, `threads` or `defaults` included. The old form, `[run.<cfg>]`, is refused with the table to
+write, and `hep migrate` rewrites it, commented-out configurations included. A configuration's
+dotted path is `run.cfgs.<cfg>.<key>`: `--set run.cfgs.pdf.threads=8`, `drop = ["run.cfgs.default4"]`,
+`hep explain run.cfgs.pdf.threads`.
 
 ```toml
-[run.defaults]                               # optional (V56): keys every configuration starts from
+[run]                                        # what every configuration starts from (V99) …
 tools       = [["pythia", "rivet"], "yd2rt"]
 threads     = 20
 
-[run.energy_pdf]
+[run.cfgs.energy_pdf]
 serial      = 3
 label       = "energy_pdf"                   # folder name (after the serial); defaults to the table key
 title       = "Beams x PDFs"                 # the header line under [run].sweep_runs (§4.1)
@@ -337,7 +356,7 @@ tools       = [["pythia", "rivet"], "yd2rt"] # group 1 together (FIFO), then gro
 static      = { energies = "18x275" }        # this configuration's own static values
 prelim      = { fifo = ["events.hepmc"] }    # replaces [prelim] for this configuration
 
-[run.pdfs_100M]
+[run.cfgs.pdfs_100M]
 extends     = "energy_pdf"                   # everything of energy_pdf, then these
 event_count = 100_000_000
 label       = "PDFs_100M"
@@ -346,13 +365,14 @@ label       = "PDFs_100M"
 A configuration's value is, in order:
 1. its own;
 2. else the one it `extends`'s, in turn;
-3. else `[run.defaults]`'s;
-4. else `[run]`'s;
-5. else the default (V56).
+3. else `[run]`'s;
+4. else the default (V56).
 
-`"default"` in a layer is the next layer's value. `label`, `title` and `extends` belong to each
-configuration alone, and `[run.defaults]` refuses them; `defaults` is never a configuration. A chain
-of `extends` is followed, and a circle is refused. `hep run CONFIG --show-config` prints every value
+`[run]` takes every configuration key (the tables of §4 and §5 say which) but `label`, `title` and
+`extends`, which belong to each configuration alone, and `static` and `prelim`, whose file-wide
+values are `[static]` and `[prelim]` (V99; this was `[run.defaults]`, which is refused now, and `hep
+migrate` moves its keys into `[run]`). `"default"` in a layer is the next layer's value. A chain of
+`extends` is followed, and a circle is refused. `hep run CONFIG --show-config` prints every value
 with the layer it came from.
 
 <!-- generated: keys configuration -->
@@ -438,7 +458,7 @@ each group becomes one curve with their statistics added. The typical use is see
 one PDF's five 1M-event seeds become one 5M-event curve:
 
 ```toml
-[run.default]
+[run.cfgs.default]
 sweeps  = ["pdf", "replica"]        # 4 PDFs × 5 seeds = 20 points
 combine = ["replica"]               # 4 groups, one per PDF: rivet-merge -e of its 5 seeds
 tools   = [["pythia", "rivet"]]
@@ -482,7 +502,7 @@ commands = [["lhapdf", "ls", "--installed"]] # argv arrays, run in order before 
 | `commands` | a list |  | run in the point's output directory; output to `logs/prelim.log`; a nonzero exit fails the point. Placeholders: `{repo}`, `{out}`, `{res}`, `{file:<name>}` |
 <!-- /generated -->
 
-A name declared twice is an error. `[run.<cfg>].prelim` replaces this table for one configuration.
+A name declared twice is an error. `[run.cfgs.<cfg>].prelim` replaces this table for one configuration.
 
 ---
 
@@ -497,7 +517,7 @@ pdf      = "#2"         # … or "#N", the N-th value (1-based)
 
 - **When it applies:** a static value applies **only when the quantity is not swept** in the
   active configuration.
-- **What it may name:** every key must be a declared quantity. `[run.<cfg>].static` is merged over
+- **What it may name:** every key must be a declared quantity. `[run.cfgs.<cfg>].static` is merged over
   it, and `--set static.<q>=…` over both.
 - **Inactive quantities:** a quantity that is neither swept nor static is **inactive**. It renders
   nothing, and the base card's value stands.
@@ -979,7 +999,7 @@ them, before anything runs.
 | # | Rule | Example message |
 |---|---|---|
 | **C1** | An unknown section or key is an error; a tool-specific key is checked against the tool folder's `[options]` (type, `required`). | `unknown key 'min_entry'` · `did you mean 'min_entries'?` |
-| **C2** | `[run].configuration`, and a configuration named on the command line, must name a `[run.<cfg>]`. | `no configuration 'energy-pdf'` |
+| **C2** | `[run].configuration`, and a configuration named on the command line, must name a `[run.cfgs.<cfg>]`. | `no configuration 'energy-pdf'` |
 | **C3** | Every `sweeps` entry names a declared quantity; entangled quantities have equal value counts; no quantity is swept twice. | `entangled quantities need equal value counts` · `pdf: 4, alphas: 3` |
 | **C4** | `plot_points` names only quantities swept in this configuration. | `plot_points names 'mpi', which is not swept here` |
 | **C5** | Every `tools`/`pre`/`post` entry is a `[tools.<tag>]` table; groups nest one level; an `@q` entry's values are tool tags. | `'pythya' is not a [tools.<tag>] table` · `did you mean 'pythia'?` |

@@ -26,13 +26,13 @@ configuration = "default"
 event_count   = 1_000_000                 # per seed, as the paper's per PDF
 threads       = 12                        # Pythia's; with rivet's 10 shards it fills the 24 hardware threads
 
-[run.default]
+[run.cfgs.default]
 description = "Proton-PDF comparison at 27.5x920 GeV e+p against ZEUS 2012: 5 seeds per PDF, merged"
 sweeps      = ["pdf", "replica"]
 combine     = ["replica"]
 tools       = [["pythia", "rivet"]]
 
-[run.spread]
+[run.cfgs.spread]
 description = "The same points, one page per PDF with a curve per seed"
 sweeps      = ["pdf", "replica"]
 plot_points = ["pdf"]

@@ -25,7 +25,7 @@ from helpers import parse, plan, raw
 def test_parallelism_is_read_from_run_and_the_configuration(scratch):
     assert parse(raw(), scratch).configuration(None).parallelism == 1
     assert parse(raw(run__parallelism=4), scratch).configuration(None).parallelism == 4
-    assert parse(raw(run__parallelism=4, run__one__parallelism=2), scratch).configuration(None).parallelism == 2
+    assert parse(raw(run__parallelism=4, run__cfgs__one__parallelism=2), scratch).configuration(None).parallelism == 2
     with pytest.raises(HepError, match="at least 1"):
         parse(raw(run__parallelism=0), scratch)
 

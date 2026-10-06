@@ -127,13 +127,13 @@ the others.
 - **`--why`** gives, for each point and stage that would run, what changed since it last completed,
   from its `identity.json`: `events: 10 → 20`, `tools.pythia.card: + PDF:pSet = …` (V57).
 - **`--show-config`** prints each configuration's resolved values and the layer each came from (its
-  own, `extends`, `[run.defaults]`, `[run]`, default), and what `[config].import` gave (V56).
+  own, `extends`, `[run]`, default), and what `[config].import` gave (V56).
 - **`--points SEL`** takes comma-separated point names, single tags, 1-based indices, or
   `quantity=tag`. The other points keep their state, and `points.json` lists them all. It is
   refused under a sweep of several runs: name the configuration.
 - **`--set KEY=VALUE`** overrides one value of the TOML, by dotted key, before anything is checked.
   The value is read as TOML, else as a string: `--set run.event_count=50000`, `--set
-  run.pdf.threads=8`, `--set static.energies=18x275`, `--set 'plot.formats=["png"]'`, `--set
+  run.cfgs.pdf.threads=8`, `--set static.energies=18x275`, `--set 'plot.formats=["png"]'`, `--set
   plot.min_entries=default`.
 - **`--rerun`** runs complete points (and the stages) again.
 - **`--only`:** `--only plot` draws the pages and runs nothing; `--only pre` and `--only post` run
@@ -479,7 +479,7 @@ says what it reads and writes.
 ## 7. `merge` — rivet-merge, in `post`
 
 ```toml
-[run.replicas]
+[run.cfgs.replicas]
 sweeps = ["replica"]
 tools  = [["pythia", "rivet"]]
 post   = ["merge"]
@@ -668,7 +668,7 @@ output_file = "events.hepmc"
 ## 15. `madgraph` — MadGraph5_aMC@NLO
 
 ```toml
-[run.single]
+[run.cfgs.single]
 tools = ["madgraph", ["shower", "rivet"], "yd2rt"]
 
 [prelim]

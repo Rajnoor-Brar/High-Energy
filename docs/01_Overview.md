@@ -29,7 +29,7 @@ The runner decides and supervises. The tools do the physics.
 hep run PhotoProduction/eic energy_pdf                      utils/Env/hep → utils/Env/run → runner.cli
   │
   ├─ load     configs/PhotoProduction/eic.toml  (+ utils/Env/quantities.toml, <tool>/quantities.toml: quantity → tool maps)
-  ├─ resolve  [run.energy_pdf]: sweeps, plot_points, tools, static, prelim
+  ├─ resolve  [run.cfgs.energy_pdf]: sweeps, plot_points, tools, static, prelim
   ├─ expand   sweeps = ["energies", "pdf"]  →  16 points   (a grid of axes; entangled groups zip)
   ├─ plan     per point: cards, config files, argv, connections, identity, seeds; every check (C1–C14)
   │
@@ -63,7 +63,7 @@ These words carry the design. The full glossary is [07 §10](07_Record.md#10-glo
 | Word | Means |
 |---|---|
 | **run** | one TOML under `configs/<Project>/` |
-| **configuration** | a named recipe inside a run (`[run.<name>]`): sweeps, tools, events, threads |
+| **configuration** | a named recipe inside a run (`[run.cfgs.<name>]`): sweeps, tools, events, threads |
 | **quantity** | a named value that can be swept or held static (`[quantities.<q>]`) |
 | **point** | one combination of swept values: one chain of processes, one output directory |
 | **tool** | one process in the chain (`[tools.<tag>]`), of a kind a tool folder describes |

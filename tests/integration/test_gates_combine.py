@@ -21,7 +21,7 @@ configuration = "one"
 event_count   = 1000
 threads       = 2
 
-[run.one]
+[run.cfgs.one]
 sweeps  = ["pdf", "replica"]
 combine = ["replica"]
 tools   = [["pythia", "rivet"]]

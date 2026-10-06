@@ -130,7 +130,7 @@ what their `// requires:` line names.
 | Type | Module | Holds |
 |---|---|---|
 | `RunConfig` | `config` | the parsed run TOML: `path`, `project`, `name`, `serial`, `default_configuration` (None under `sweep_runs`), `configurations`, `prelim`, `static`, `tools`, `quantities`, `plot`, `master_toml`, `raw`, `sweep_runs`, `sweep_list` (`sweep_runs = ["a", "b"]`), `sets` (the `--set`s it was loaded with), `included` (what came from `[config].import`) |
-| `Configuration` | `config` | one `[run.<cfg>]`: `key`, `label` (its folder: `[run.<cfg>].label`, else the key), `run_folder` (`[run.<cfg>].name`, else `[run].name`), `serial`, `title`, `description`, `event_count`, `threads` (resolved), `parallelism` (and `parallelism_auto`), `sweeps`, `plot_points`, `combine`, `tools`/`pre`/`post` (lists of groups), `static` (merged), `prelim`, `swept`, `seed_type`, `manual_seed`, `origins` (where each value came from, for `--show-config`) |
+| `Configuration` | `config` | one `[run.cfgs.<cfg>]`: `key`, `label` (its folder: `[run.cfgs.<cfg>].label`, else the key), `run_folder` (`[run.cfgs.<cfg>].name`, else `[run].name`), `serial`, `title`, `description`, `event_count`, `threads` (resolved), `parallelism` (and `parallelism_auto`), `sweeps`, `plot_points`, `combine`, `tools`/`pre`/`post` (lists of groups), `static` (merged), `prelim`, `swept`, `seed_type`, `manual_seed`, `origins` (where each value came from, for `--show-config`) |
 | `Tool`, `Quantity` | `config` | one table each; a tool's folder-specific keys and export requests are in `Tool.extra`; a quantity's `values`, `tags`, `labels`, `styles` (a look per value), `shape`, `exclude` |
 | `Point` | `sweep` | `index` (1-based; −1 pre, 0 post), `name`, `choice` (quantity → value index), `page`, `stage` (`"combined"`) |
 | `Mapping` | `quantities` | how one quantity reaches one tool: `tag`, `form` (`key`, `keys`, `flag`, `option`, `config`, `seed`), `key`, `format`, `analysis`, `check` |
@@ -349,10 +349,10 @@ Every rule of §6 then applies to the rewritten chain as to any other:
 | Scope | What runs there | Configured by |
 |---|---|---|
 | per run, once | load, expand, plan, checks | `[config]`, `[run]` |
-| **pre**, once before every point | a download, a shared build: products every point may name; its identity is in theirs | `[run.<cfg>].pre` |
-| **per point** | `[prelim]`, the prepare steps, then the `tools` groups | `[run.<cfg>].tools`, `[prelim]` |
-| **combined**, once per group | the merge of points that differ only in `combine`'s quantities | `[run.<cfg>].combine` |
-| **post**, once after every point | seed-replica merges, the sweep in one file, fits, any statistics; handed `points.json` and every point's product | `[run.<cfg>].post` |
+| **pre**, once before every point | a download, a shared build: products every point may name; its identity is in theirs | `[run.cfgs.<cfg>].pre` |
+| **per point** | `[prelim]`, the prepare steps, then the `tools` groups | `[run.cfgs.<cfg>].tools`, `[prelim]` |
+| **combined**, once per group | the merge of points that differ only in `combine`'s quantities | `[run.cfgs.<cfg>].combine` |
+| **post**, once after every point | seed-replica merges, the sweep in one file, fits, any statistics; handed `points.json` and every point's product | `[run.cfgs.<cfg>].post` |
 | **plot**, once, last | the figures' pages | `[plot]` |
 
 Points run **`parallelism` at a time** (V36; one after another by default), each with the
@@ -405,7 +405,7 @@ base  = lo + int(basis[:12], 16) mod (hi − lo + 1 − threads)    threads use 
 - The runner's seed lines come after the base card, so a seed set in the card (`Random:seed = 0`)
   never counts; `seed_type` is how to choose.
 
-**`seed_type`** (V39; `[run]` or `[run.<cfg>]`) chooses the base; the threads always use base … base
+**`seed_type`** (V39; `[run]` or `[run.cfgs.<cfg>]`) chooses the base; the threads always use base … base
 + threads − 1.
 
 | `seed_type` | base | in the identity |

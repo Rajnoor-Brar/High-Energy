@@ -37,45 +37,45 @@ configuration = "pdf"
 event_count   = 1_000_000
 threads       = 12            # Pythia's; as eic.toml, so the same seeds (10 + 14 Rivets is 7% faster)
 
-[run.single]
+[run.cfgs.single]
 description = "One run at the static point (27x920 e+p), in one process"
 sweeps      = []
 tools       = ["inproc", "yd2rt"]
 
-[run.pdf]
+[run.cfgs.pdf]
 serial      = 1
 description = "Proton-PDF comparison at the static beams, in one process"
 sweeps      = ["pdf"]
 tools       = ["inproc", "yd2rt"]
 
-[run.energies]
+[run.cfgs.energies]
 serial      = 2
 description = "Beam-energy comparison at the static PDF, in one process"
 sweeps      = ["energies"]
 tools       = ["inproc", "yd2rt"]
 
-[run.energy_pdf]
+[run.cfgs.energy_pdf]
 serial      = 3
 description = "Beams x PDF grid: one page per energy, PDF curves on each, in one process"
 sweeps      = ["energies", "pdf"]
 plot_points = ["energies"]
 tools       = ["inproc", "yd2rt"]
 
-[run.mpi]
+[run.cfgs.mpi]
 serial      = 4
 description = "MPI pT0Ref scan at 18x275 with MPI on, in one process"
 sweeps      = ["pt0ref"]
 tools       = ["inproc", "yd2rt"]
 static      = { energies = "18x275" }
 
-[run.mpi_onoff]
+[run.cfgs.mpi_onoff]
 serial      = 5
 description = "MPI on vs off at 18x275, in one process"
 sweeps      = ["mpi"]
 tools       = ["inproc", "yd2rt"]
 static      = { energies = "18x275" }
 
-[run.mpi_grid]
+[run.cfgs.mpi_grid]
 serial      = 6
 description = "pT0Ref x MPI grid: one page per MPI setting, pT0Ref curves on each, in one process"
 sweeps      = ["pt0ref", "mpi"]
@@ -83,27 +83,27 @@ plot_points = ["mpi"]
 tools       = ["inproc", "yd2rt"]
 static      = { energies = "18x275" }
 
-[run.pthatmin]
+[run.cfgs.pthatmin]
 serial      = 7
 description = "Generation-cut stability at the static beams (00/B27), in one process"
 sweeps      = ["pthatmin"]
 tools       = ["inproc", "yd2rt"]
 
-[run.process]
+[run.cfgs.process]
 serial      = 8
 description = "Photon:ProcessType 0 vs 1 at 18x275: a null comparison with this card (00/B13), in one process"
 sweeps      = ["process"]
 tools       = ["inproc", "yd2rt"]
 static      = { energies = "18x275" }
 
-[run.radius]
+[run.cfgs.radius]
 serial      = 9
 description = "Jet radius R at 18x275, in one process (the option reaches Rivet through rivet_analyses)"
 sweeps      = ["radius"]
 tools       = ["inproc", "yd2rt"]
 static      = { energies = "18x275" }
 
-[run.replicas]
+[run.cfgs.replicas]
 serial      = 10
 description = "Three seed replicas at the static point, merged after them by rivet-merge (post), in one process"
 sweeps      = ["replica"]

@@ -489,7 +489,7 @@ def _resolve_chain(run, configuration, point) -> list[list[str]]:
             if member.startswith("@"):
                 name = member[1:]
                 if name not in point.choice and name not in configuration.static:
-                    raise HepError(f"'{member}' needs {name} swept or static", where=f"[run.{configuration.key}].tools")
+                    raise HepError(f"'{member}' needs {name} swept or static", where=f"[run.cfgs.{configuration.key}].tools")
                 quantity = run.quantities[name]
                 index = point.choice.get(name)
                 if index is None:

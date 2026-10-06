@@ -33,7 +33,7 @@ def test_ls_lists_every_configuration_and_marks_what_runs():
 
 @pytest.mark.parametrize("key, shown", [
     ("plot.y_gutter", "default  0.5"), ("[plot].normalise", "choices  area, false"),
-    ("quantities.pdf.styles", "(a table each)"), ("run.one.event_count", "[configuration].event_count"),
+    ("quantities.pdf.styles", "(a table each)"), ("run.cfgs.one.event_count", "[configuration].event_count"),
     ("event_count", "[run].event_count"), ("tools.rivet.shards", "min      1"),
     ("plot.band", "(<q> envelope)")])                                        # V90: a key's notes
 def test_explain_reads_the_schema(key, shown):

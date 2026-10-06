@@ -29,22 +29,22 @@ configuration = "default"
 event_count   = 1_000_000
 threads       = 12            # Pythia's; 12 + 12 Rivets fill the 24 hardware threads
 
-[run.default]
+[run.cfgs.default]
 description = "Proton-PDF comparison at 27.5x920 GeV e+p against ZEUS 2012, in one process"
 sweeps      = ["pdf"]
 tools       = ["inproc", "yd2rt"]
 
-[run.ptref]
+[run.cfgs.ptref]
 description = "MPI pT0Ref scan, 2.8–3.4 GeV, at 27.5x920 GeV e+p, in one process"
 sweeps      = ["pt0ref"]
 tools       = ["inproc", "yd2rt"]
 
-[run.mpi]
+[run.cfgs.mpi]
 description = "Multiparton interactions on vs off, at the static pT0Ref, in one process"
 sweeps      = ["mpi"]
 tools       = ["inproc", "yd2rt"]
 
-[run.single]
+[run.cfgs.single]
 description = "One run at the static point, in one process"
 sweeps      = []
 tools       = ["inproc", "yd2rt"]

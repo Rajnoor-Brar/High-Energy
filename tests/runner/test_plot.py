@@ -299,7 +299,7 @@ def test_a_figure_overrides_every_page_key_of_plot(scratch):
 
 def test_a_figure_band_must_be_a_curve_axis_too(scratch):
     from helpers import plan
-    run, conf, _ = plan(raw(run__one__sweeps=["pdf"], run__one__plot_points=["pdf"],
+    run, conf, _ = plan(raw(run__cfgs__one__sweeps=["pdf"], run__cfgs__one__plot_points=["pdf"],
                             plot={"figures": {"f": {"objects": ["d01-*"], "band": ["pdf"]}}}), scratch)
     with pytest.raises(HepError, match=r"\[plot.figures.f\].band names pdf"):
         plot.check_figures(run, conf)
@@ -308,11 +308,11 @@ def test_a_figure_band_must_be_a_curve_axis_too(scratch):
 def test_a_merged_figure_merges_curve_axes_it_does_not_band(scratch):
     """V82: over names curve axes, checked at plan time, and is not banded too."""
     from helpers import plan
-    run, conf, _ = plan(raw(run__one__sweeps=["pdf"], run__one__plot_points=["pdf"],
+    run, conf, _ = plan(raw(run__cfgs__one__sweeps=["pdf"], run__cfgs__one__plot_points=["pdf"],
                             plot={"figures": {"m": {"class": "merged", "objects": ["d01-*"], "over": ["pdf"]}}}), scratch)
     with pytest.raises(HepError, match=r"\[plot.figures.m\].over names pdf, which is not a curve axis"):
         plot.check_figures(run, conf)
-    run, conf, _ = plan(raw(run__one__sweeps=["pdf"],
+    run, conf, _ = plan(raw(run__cfgs__one__sweeps=["pdf"],
                             plot={"figures": {"m": {"class": "merged", "objects": ["d01-*"], "over": ["pdf"], "band": ["pdf"]}}}), scratch)
     with pytest.raises(HepError, match="both merges and bands pdf"):
         plot.check_figures(run, conf)
@@ -324,16 +324,16 @@ def test_a_compare_figure_pairs_configurations_of_one_shape(scratch):
     """V83: two configurations or more, the sweep_runs ones by default, each with the same axes."""
     from helpers import plan
     figure = {"class": "compare", "objects": ["d01-*"]}
-    run, conf, _ = plan(raw(run__one__sweeps=["pdf"], plot={"figures": {"c": figure}}), scratch)
+    run, conf, _ = plan(raw(run__cfgs__one__sweeps=["pdf"], plot={"figures": {"c": figure}}), scratch)
     with pytest.raises(HepError, match="needs two configurations or more"):
         plot.check_figures(run, conf)
-    run, conf, _ = plan(raw(run__one__sweeps=["pdf"], run__two={"tools": ["pythia"], "sweeps": []},
+    run, conf, _ = plan(raw(run__cfgs__one__sweeps=["pdf"], run__cfgs__two={"tools": ["pythia"], "sweeps": []},
                             plot={"figures": {"c": {**figure, "configurations": ["one", "two"]}}}), scratch)
     with pytest.raises(HepError, match=r"differ in their axes: one \(pages: none; curves: pdf\), two \(pages: none; curves: none\)"):
         plot.check_figures(run, conf)
     from helpers import parse
-    run = parse(raw(run__sweep_runs=True, run__configuration=None, run__one__sweeps=["pdf"],
-                    run__two={"tools": ["pythia"], "sweeps": ["pdf"]}, plot={"figures": {"c": figure}}), scratch)
+    run = parse(raw(run__sweep_runs=True, run__configuration=None, run__cfgs__one__sweeps=["pdf"],
+                    run__cfgs__two={"tools": ["pythia"], "sweeps": ["pdf"]}, plot={"figures": {"c": figure}}), scratch)
     assert [c.ref for c in plot.compared(run, plot.figures(run)[0])] == ["one", "two"]
 
 
@@ -458,7 +458,7 @@ def test_a_quantity_value_has_its_own_curve_look(scratch):
     """V67: styles = [...], one per value, reach the value's curves; a later curve axis's key wins."""
     from helpers import plan
     styles = [{"colour": "#EE3311", "line": "dashed"}, {"width": 2.0, "colour": "default"}]
-    data = raw(run__one__sweeps=["pdf"], quantities__pdf__styles=styles)
+    data = raw(run__cfgs__one__sweeps=["pdf"], quantities__pdf__styles=styles)
     run, _, first = plan(data, scratch)
     _, _, second = plan(data, scratch, point=1)
     assert plot._curve_look(run, first, [["pdf"]]) == {"colour": "#EE3311", "line": "dashed"}
@@ -522,10 +522,10 @@ def test_a_band_folds_its_axis_into_one_curve_per_other_value():
 
 def test_a_band_must_be_a_curve_axis(scratch):
     from helpers import plan
-    run, conf, _ = plan(raw(run__one__sweeps=["pdf"], run__one__plot_points=["pdf"], plot={"band": ["pdf"]}), scratch)
+    run, conf, _ = plan(raw(run__cfgs__one__sweeps=["pdf"], run__cfgs__one__plot_points=["pdf"], plot={"band": ["pdf"]}), scratch)
     with pytest.raises(HepError, match="not a curve axis"):
         plot.check_figures(run, conf)
-    run, conf, _ = plan(raw(run__one__sweeps=["pdf"], plot={"band": ["pdf"]}), scratch)
+    run, conf, _ = plan(raw(run__cfgs__one__sweeps=["pdf"], plot={"band": ["pdf"]}), scratch)
     plot.check_figures(run, conf)
 
 

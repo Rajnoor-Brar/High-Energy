@@ -25,7 +25,7 @@ threads       = 2
 seed_type     = "{seed_type}"
 manual_seed   = 4242
 
-[run.one]
+[run.cfgs.one]
 tools = [["pythia", "rivet"]]
 
 [prelim]

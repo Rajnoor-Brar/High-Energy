@@ -139,7 +139,7 @@ def manual_seed_of(plan: PointPlan) -> int:
     seed = values[0] if values else plan.manual_seed
     if seed is None:
         raise HepError("seed_type is manual but this point has no seed", where=where,
-                       hint="set manual_seed in [run] or [run.<cfg>], or sweep a quantity targeting <tool>/seed")
+                       hint="set manual_seed in [run] or [run.cfgs.<cfg>], or sweep a quantity targeting <tool>/seed")
     lo, hi = plan.seed_range
     if isinstance(seed, bool) or not isinstance(seed, int) or not lo <= seed <= hi - plan.threads:
         raise HepError(f"the seed {seed!r} is not an integer from {lo:,} to {hi - plan.threads:,}", where=where,
