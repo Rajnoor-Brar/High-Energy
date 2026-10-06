@@ -115,6 +115,7 @@ master = "master.toml"           # optional: configs/<project>/master.toml overl
 | `master` | a string |  | overlays the tool folders' mappings key by key (`[quantities.<tool>.compatible_quantities]`): an entry for a (tool, quantity) pair replaces the framework's. The file must exist. |
 | `import` | a string or a list (a string or a table each) |  | run TOMLs this one starts from, in order, named as `hep run` names a config: `name` is this project's (`configs/<project>/name.toml`), `<Project>/<name>` another project's, `./…` from the repository root; `.toml` optional. **This file wins** (V56): a quantity, tool table or configuration of the file replaces the imported one whole; `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively. Imports nest (V94): an imported file's own imports come first, depth-first; a circle is refused. Another project's file keeps its bare paths (cards, filters, styles, executables) its own project's, so its tools plan as they do in it. The file that imports sets its own `[run].name` and `project`, and shares them with no imported run. An entry may be `{ from = "<config>", only = ["quantities", "run.default", …] }`: only those sections or dotted keys of that file, each of which it must have (V95). `--show-config` says where each quantity, tool and configuration came from. |
 | `drop` | a list (a string each) |  | dotted keys (`run.default4`, `plot.figures.statistics`, `quantities.radius`, `tools.jets`) taken out of what the imports brought in, before this file's own tables are laid over them (V95). Each must name something an import gave, so a misspelt drop is refused rather than keeping what it meant to remove; a file that imports nothing has nothing to drop. |
+| `vars` | a table |  | `name = value`, cited in any string of the file as `{var:name}` and replaced when the file is read, after its imports and `--set`, so an identity sees only the result (V96). A string that is exactly one var takes its value as it is: `event_count = "{var:events}"` is an integer, and a list stays a list; inside a longer string a var must be a scalar (`"rivet:{var:ana}"`). An unknown name is refused with the nearest. An imported file's `{var:…}` takes this file's value, so a shared file can be written with parameters. Imports are read before vars, so an import's name cannot cite one; `--set config.vars.<name>=…` changes one for a run. |
 <!-- /generated -->
 
 **`import`** (V56, V94). The imported files are read in order, then this file's tables are laid over
@@ -143,6 +144,29 @@ Its rules:
 
 `--show-config` lists where each quantity, tool and configuration came from, through every file
 (`run.default from zeus_validation.toml ← zeus_common.toml`).
+
+**`vars`** (V96). Names said once and cited anywhere in the file:
+
+```toml
+[config.vars]
+ana    = "ZEUS_2012_I1116258"
+events = 1_000_000
+
+[run]
+event_count = "{var:events}"        # one var, the whole value: an integer, as written there
+
+[tools.rivet]
+analyses = ["{var:ana}"]
+
+[plot.data]
+file = "rivet:{var:ana}"            # inside a longer string: a scalar, as text
+```
+
+They are replaced when the file is read, after its imports and `--set` (`--set
+config.vars.events=50000`), so a point's identity is that of the same file written out. An imported
+file's `{var:…}` takes this file's value: a shared file can be written with parameters. An unknown
+name is refused with the nearest. `{var:…}` is the run TOML's own; the page texts' placeholders
+(`{cell}`, `{q:…}`, `{opt:…}`, §10) are filled later, per page.
 
 **The vocabulary** (`utils/Env/quantities.toml`, V58) says what each quantity name means for every
 tool:
@@ -722,6 +746,9 @@ The rules:
 | `{std:<key>}` | an export's `path` (§9.4) |
 | `{points}` | pre and post: `points.json` |
 | `{<option>}` | every key of the folder's `[options]`: its value, empty when unset; `kind = "flag"` → the flag or nothing |
+
+**In the run TOML itself**, `{var:name}` is a `[config.vars]` value (§3), replaced when the file is
+read, everywhere, before any of these.
 
 **In page texts** (V66). These are the titles, `legend_header`, the axis labels, `[plot.data].legend`,
 a figure's `labels`, the quantities' `labels` and the `.plot`'s own. They may cite the points:

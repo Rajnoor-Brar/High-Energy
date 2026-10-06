@@ -63,6 +63,18 @@ notes = """\
   must name something an import gave, so a misspelt drop is refused rather than keeping what it \
   meant to remove; a file that imports nothing has nothing to drop."""
 
+[config.vars]
+type  = "table"
+doc   = "names said once and cited anywhere in the file as {var:name} (V96)"
+notes = """\
+  `name = value`, cited in any string of the file as `{var:name}` and replaced when the file is \
+  read, after its imports and `--set`, so an identity sees only the result (V96). A string that is \
+  exactly one var takes its value as it is: `event_count = \"{var:events}\"` is an integer, and a \
+  list stays a list; inside a longer string a var must be a scalar (`\"rivet:{var:ana}\"`). An \
+  unknown name is refused with the nearest. An imported file's `{var:…}` takes this file's value, \
+  so a shared file can be written with parameters. Imports are read before vars, so an import's \
+  name cannot cite one; `--set config.vars.<name>=…` changes one for a run."""
+
 # ── [run] ────────────────────────────────────────────────────────────────────────────────────
 
 [run.name]

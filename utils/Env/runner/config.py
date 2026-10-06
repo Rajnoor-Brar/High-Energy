@@ -514,6 +514,58 @@ def _with_imports(raw: dict, path: Path) -> tuple[dict, dict]:
     return merged, origins
 
 
+#: A var cited in a run TOML's text (V96); a page text's {q:…}/{opt:…} placeholders are the plot stage's.
+VAR = re.compile(r"\{var:([A-Za-z_][A-Za-z0-9_]*)\}")
+
+
+def _toml_text(value) -> str:
+    return ("true" if value else "false") if isinstance(value, bool) else str(value)
+
+
+def with_vars(raw: dict, path: Path) -> dict:
+    """[config.vars] (V96): `{var:name}` in any string of the file replaced, after the imports and --set,
+    before anything is checked, so an identity sees only the result. A string that is one var takes the
+    var's value as it is (a number stays a number); inside a longer string a var must be a scalar. An
+    imported file's {var:…} takes this file's value, so a shared file may be written with parameters."""
+    found = raw.get("config", {}).get("vars", {})
+    where = f"{path}: [config.vars]"
+    if not isinstance(found, dict):
+        raise HepError("[config.vars] is a table: name = value", where=where)
+    for name, value in found.items():
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+            raise HepError(f"a var's name is a word (letters, digits, _), not '{name}'", where=where)
+        if isinstance(value, dict) or (isinstance(value, str) and VAR.search(value)):
+            raise HepError(f"var '{name}' is a value, not a table or another var", where=f"{where}.{name}")
+
+    def lookup(name: str, at: str):
+        if name not in found:
+            raise HepError(f"{{var:{name}}} is not in [config.vars]", where=f"{path}: {at}",
+                           hint=did_you_mean(name, list(found)) or (f"vars: {', '.join(found)}" if found else "declare it in [config.vars]"))
+        return found[name]
+
+    def walk(value, at: str):
+        if isinstance(value, str):
+            if (whole := VAR.fullmatch(value)):
+                return lookup(whole[1], at)
+
+            def inline(match):
+                given = lookup(match[1], at)
+                if isinstance(given, list):
+                    raise HepError(f"{{var:{match[1]}}} is a list: it can only be a whole value", where=f"{path}: {at}")
+                return _toml_text(given)
+            return VAR.sub(inline, value)
+        if isinstance(value, dict):
+            return {k: walk(v, f"{at}.{k}" if at else k) for k, v in value.items()}
+        if isinstance(value, list):
+            return [walk(v, at) for v in value]
+        return value
+
+    out = {section: walk(value, section) for section, value in raw.items() if section != "config"}
+    if "config" in raw:
+        out["config"] = {k: (v if k == "vars" else walk(v, f"config.{k}")) for k, v in raw["config"].items()}
+    return out
+
+
 def load(name: str, *, sets: list[str] = (), strict: bool = True, text: str | None = None) -> RunConfig:
     """A run TOML, checked. `strict=False` (hep migrate only, V79) still reads the forms it rewrites;
     `text` (hep migrate's, V81) is read in place of the file's."""
@@ -527,6 +579,7 @@ def load(name: str, *, sets: list[str] = (), strict: bool = True, text: str | No
             raise HepError(f"not valid TOML, even migrated: {error}", where=str(path)) from None
     raw, included = _with_imports(first, path)
     apply_sets(raw, list(sets))
+    raw = with_vars(raw, path)
     run = parse(raw, path, strict=strict)
     run.included = included
     run.sets = list(sets)

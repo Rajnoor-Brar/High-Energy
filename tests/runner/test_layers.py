@@ -203,6 +203,47 @@ def test_drop_takes_out_what_an_import_gave(scratch):
         config.load(str(path))
 
 
+def _written(scratch, data, name="run.toml") -> str:
+    path = scratch / name
+    path.write_text(tomli_w.dumps(data), encoding="utf-8")
+    return str(path)
+
+
+def test_vars_are_said_once_and_keep_their_type(scratch):
+    """V96: a whole-value var keeps its type, an inline one is text; --set reaches them; the file plans as
+    if written out (the run it parses to is the same)."""
+    data = raw(config={"vars": {"events": 500, "ana": "photo_eic", "cuts": [4.0, 5.0]}},
+               run__event_count="{var:events}", tools__rivet__analyses=["{var:ana}"],
+               quantities__cut={"values": "{var:cuts}", "target": "rivet/photo_eic", "key": "ETMIN"},
+               plot={"title": "{var:ana}: {var:events} events"})
+    run = config.load(_written(scratch, data))
+    assert run.configuration(None).event_count == 500 and run.tools["rivet"].extra["analyses"] == ["photo_eic"]
+    assert run.quantities["cut"].values == [4.0, 5.0] and run.plot["title"] == "photo_eic: 500 events"
+    written = raw(run__event_count=500, quantities__cut={"values": [4.0, 5.0], "target": "rivet/photo_eic", "key": "ETMIN"},
+                  plot={"title": "photo_eic: 500 events"})
+    plain = config.load(_written(scratch, written, "plain.toml"))
+    assert (plain.quantities["cut"].values, plain.plot) == (run.quantities["cut"].values, run.plot)
+    assert config.load(_written(scratch, data), sets=["config.vars.events=7"]).configuration(None).event_count == 7
+
+
+def test_a_var_is_checked(scratch):
+    with pytest.raises(HepError, match=r"\{var:evnts\} is not in \[config.vars\]") as error:
+        config.load(_written(scratch, raw(config={"vars": {"events": 5}}, run__event_count="{var:evnts}")))
+    assert "events" in error.value.hint
+    with pytest.raises(HepError, match="is a list: it can only be a whole value"):
+        config.load(_written(scratch, raw(config={"vars": {"l": [1, 2]}}, plot={"title": "a {var:l}"})))
+
+
+def test_an_imported_file_takes_the_importers_vars(scratch):
+    """V96: a shared file written with parameters; the file that imports it gives them."""
+    shared = _written(scratch, {"tools": {"rivet": {"tool": "rivet", "input": "events.hepmc", "analyses": ["{var:ana}"],
+                                                    "output_file": "{var:ana}.yoda"}}}, "shared.toml")
+    data = raw(config={"import": shared, "vars": {"ana": "photo_eic"}})
+    del data["tools"]["rivet"]
+    run = config.load(_written(scratch, data))
+    assert run.tools["rivet"].extra["analyses"] == ["photo_eic"] and run.tools["rivet"].output_file == ["photo_eic.yoda"]
+
+
 def test_master_is_config_now(scratch):
     """V93 (break and migrate): [master] is refused with what to write."""
     with pytest.raises(HepError, match=r"\[master\] is \[config\] now") as error:
