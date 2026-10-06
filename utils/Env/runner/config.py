@@ -497,24 +497,44 @@ def _run_entries(raw: dict) -> list[str]:
     return [f"run.{CFGS}.{k}" for k in raw.get("run", {}).get(CFGS, {})]
 
 
-def _with_imports(raw: dict, path: Path) -> tuple[dict, dict]:
+def _with_imports(raw: dict, path: Path) -> tuple[dict, dict, list]:
     """The file being run, its imports laid under it (V94). Its location is its own: it sets [run].name
-    and project itself, and no imported file has the same, or both would write the same folders."""
+    and project itself (that no folder of it is an imported run's is load's to check, V100)."""
     if not _as_list(raw.get("config", {}).get("import")):
         if raw.get("config", {}).get("drop"):
             raise HepError("drop removes what an import brought in, and this file imports nothing", where=f"{path}: [config].drop")
-        return raw, {}
+        return raw, {}, []
     own = raw.get("run", {})
     missing = [k for k in ("project", "name") if k not in own]
     if missing:
         raise HepError(f"a file that imports sets its own [run].{' and '.join(missing)}: its location is never imported",
                        where=f"{path}: [run]")
     merged, origins, located = _imports(raw, path, own["project"], (path.resolve(),))
-    for project, name, source in located:
-        if (project, name) == (own["project"], own["name"]):
-            raise HepError(f"{source.name} is the run {project}/{name} too: the two would write the same folders",
-                           where=f"{path}: [run].name", hint="give this file a [run].name of its own")
-    return merged, origins
+    return merged, origins, sorted({source for *_, source in located})
+
+
+def _folders(run) -> dict[str, str]:
+    """Each configuration's folder, <project>/<run>/<NN_><label> (as tools.run_dir makes it) → its key."""
+    out = {}
+    for key, c in run.configurations.items():
+        folder = f"{c.serial:02d}_{c.label}" if c.serial is not None else c.label
+        out[f"{run.project}/{c.run_folder or run.name}/{folder}"] = key
+    return out
+
+
+def _shared_folders(run, imported: list[Path]) -> None:
+    """V100: an imported run may share this file's [run].name (its results beside the other's), but no
+    configuration of the two may have the same folder, or their points would overwrite each other's."""
+    mine = _folders(run)
+    for source in imported:
+        try:
+            theirs = _folders(load(str(source), strict=False))
+        except HepError:                                     # a file that cannot run on its own writes nothing
+            continue
+        for folder in sorted(set(mine) & set(theirs)):
+            raise HepError(f"[run.cfgs.{mine[folder]}] and {source.name}'s [run.cfgs.{theirs[folder]}] would both write "
+                           f"{folder}", where=f"{run.path}: [run]",
+                           hint="give one of them another serial, label or name: a folder belongs to one configuration")
 
 
 #: A var cited in a run TOML's text (V96); a page text's {q:…}/{opt:…} placeholders are the plot stage's.
@@ -580,10 +600,11 @@ def load(name: str, *, sets: list[str] = (), strict: bool = True, text: str | No
             first = tomllib.loads(text)
         except tomllib.TOMLDecodeError as error:
             raise HepError(f"not valid TOML, even migrated: {error}", where=str(path)) from None
-    raw, included = _with_imports(first, path)
+    raw, included, imported = _with_imports(first, path)
     apply_sets(raw, list(sets))
     raw = with_vars(raw, path)
     run = parse(raw, path, strict=strict)
+    _shared_folders(run, imported)
     run.included = included
     run.sets = list(sets)
     return run

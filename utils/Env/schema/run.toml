@@ -48,7 +48,8 @@ notes = """\
   `[run]`'s own keys merge key by key, tables recursively. Imports nest (V94): an imported file's own \
   imports come first, depth-first; a circle is refused. Another project's file keeps its bare paths \
   (cards, filters, styles, executables) its own project's, so its tools plan as they do in it. The \
-  file that imports sets its own `[run].name` and `project`, and shares them with no imported run. \
+  file that imports sets its own `[run].name` and `project`; no folder of its configurations may be \
+  an imported run's (V100). \
   An entry may be `{ from = \"<config>\", only = [\"quantities\", \"run.default\", …] }`: only those \
   sections or dotted keys of that file, each of which it must have (V95). `--show-config` says where \
   each quantity, tool and configuration came from."""

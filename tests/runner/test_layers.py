@@ -127,16 +127,20 @@ def test_an_import_circle_is_refused(scratch):
 
 
 def test_a_file_that_imports_has_its_own_location(scratch):
-    """V94: [run].name and project are never imported, and no imported run may share them."""
+    """V94, V100: [run].name and project are never imported; a run may share an imported run's name (its
+    results beside the other's), but no folder: a configuration's NN_label is its own."""
     other = scratch / "other.toml"
-    other.write_text(tomli_w.dumps(raw()), encoding="utf-8")
+    other.write_text(tomli_w.dumps(raw(run__serial=2)), encoding="utf-8")
     path = scratch / "run.toml"
     path.write_text(tomli_w.dumps({"config": {"import": str(other)}, "run": {"project": "PhotoProduction"}}), encoding="utf-8")
     with pytest.raises(HepError, match=r"sets its own \[run\].name"):
         config.load(str(path))
-    path.write_text(tomli_w.dumps({"config": {"import": str(other)}, "run": {"project": "PhotoProduction", "name": "t"}}),
-                    encoding="utf-8")
-    with pytest.raises(HepError, match="other.toml is the run PhotoProduction/t too"):
+    beside = {"config": {"import": str(other)}, "run": {"project": "PhotoProduction", "name": "t", "serial": 3}}
+    path.write_text(tomli_w.dumps(beside), encoding="utf-8")
+    assert set(config.load(str(path)).configurations) == {"one"}                 # t/03_one beside t/02_one
+    beside["run"]["serial"] = 2
+    path.write_text(tomli_w.dumps(beside), encoding="utf-8")
+    with pytest.raises(HepError, match=r"\[run.cfgs.one\] and other.toml's \[run.cfgs.one\] would both write PhotoProduction/t/02_one"):
         config.load(str(path))
 
 
