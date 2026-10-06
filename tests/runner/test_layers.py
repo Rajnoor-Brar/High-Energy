@@ -244,6 +244,21 @@ def test_an_imported_file_takes_the_importers_vars(scratch):
     assert run.tools["rivet"].extra["analyses"] == ["photo_eic"] and run.tools["rivet"].output_file == ["photo_eic.yoda"]
 
 
+def test_meta_versions_warn_and_never_refuse(scratch, monkeypatch):
+    """V97: the stack a file was run with; a different version is a warning, a misspelt package an error."""
+    from runner import tools
+    monkeypatch.setattr(tools, "_stack_version", {"pythia8": "8.317", "rivet": "rivet v4.1.3", "onnx": ""}.get)
+    run = parse(raw(config={"meta": {"author": "me", "versions": {"pythia8": "8.317", "rivet": "4.1", "onnx": "1.20"}}}), scratch)
+    assert tools.meta_notes(run) == ["t.toml was run with onnx 1.20; the stack gives no version of it to compare"]
+    run = parse(raw(config={"meta": {"versions": {"pythia8": "8.312", "rivet": "4.1.3"}}}), scratch)
+    assert tools.meta_notes(run) == ["t.toml was run with pythia8 8.312; the stack has 8.317 (it runs anyway, at your own risk)"]
+    with pytest.raises(HepError, match="'pythia' is not a package of utils/Env/stack.toml") as error:
+        parse(raw(config={"meta": {"versions": {"pythia": "8.317"}}}), scratch)
+    assert "pythia8" in error.value.hint
+    with pytest.raises(HepError, match="version is a string"):
+        parse(raw(config={"meta": {"versions": {"pythia8": 8.317}}}), scratch)
+
+
 def test_master_is_config_now(scratch):
     """V93 (break and migrate): [master] is refused with what to write."""
     with pytest.raises(HepError, match=r"\[master\] is \[config\] now") as error:

@@ -200,6 +200,8 @@ def print_plan(run, configuration, plans, post_plan=None, pre_plan=None, combine
         print(f"note: {crowded(configuration, plans)}")
     for note in notes_of(plans):
         print(f"note: {note}")
+    for warning in tools.meta_notes(run):                       # V97
+        print(f"warning: {warning}")
     if configuration.seed_type != "identity":
         print(f"seeds: {configuration.seed_type}")
     if configuration.manual_seed is not None and configuration.seed_type != "manual":
@@ -501,6 +503,8 @@ def run_one(args, key: str, stopper: execute.Stopper, *, number: int = 0, follow
         bus.say(f"   note: {crowded(configuration, plans)}")
     for note in notes_of(plans):
         bus.say(f"   note: {note}")
+    for warning in tools.meta_notes(run):                       # V97
+        bus.say(f"   warning: {warning}")
     def manifest() -> None:
         if base:
             record.write_atomic(base / "points.json",
@@ -617,6 +621,8 @@ def cmd_check(args) -> int:
                 planned = build_plans(argparse.Namespace(config=name, set=[], points=None, rerun=False, only=None), key)
                 points += len(planned.every)
             print(f"ok    {name}: {len(run.configurations)} configuration(s), {points} point(s)")
+            for warning in tools.meta_notes(run):               # V97: said, never failed
+                print(f"      warning: {warning}")
         except HepError as error:
             failed += 1
             print(f"FAIL  {name}")

@@ -15,9 +15,9 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import schema
+from . import plugins, schema
 from .errors import HepError, did_you_mean
-from .paths import config_file, configs_root, resolve
+from .paths import config_file, configs_root, repo_root, resolve
 from .quantities import check_shapes
 
 #: How a point's seeds are chosen (V39, 06 §8); the schema's [run.seed_type].choices.
@@ -132,6 +132,7 @@ class RunConfig:
     sweep_list: list = field(default_factory=list)      # sweep_runs = ["a", "b"]: these, in this order (V79)
     sets: list = field(default_factory=list)            # the --set overrides it was loaded with (V77: provenance)
     included: dict = field(default_factory=dict)        # "<section>.<name>" → the [config].import file it came from
+    meta: dict = field(default_factory=dict)            # [config.meta]: descriptive; versions warned about (V97)
 
     def configuration(self, name: str | None) -> Configuration:
         wanted = name or self.default_configuration
@@ -599,6 +600,7 @@ def parse(raw: dict, path: Path, strict: bool = True) -> RunConfig:
 
     file_config = raw.get("config", {})
     schema.check(file_config, "config", f"{where}: [config]")
+    check_meta(file_config.get("meta", {}), f"{where}: [config.meta]")
 
     run = raw.get("run")
     if not isinstance(run, dict):
@@ -787,11 +789,28 @@ def parse(raw: dict, path: Path, strict: bool = True) -> RunConfig:
     return RunConfig(path=path, project=project, name=run["name"], serial=run.get("serial"),
                      default_configuration=run.get("configuration"), configurations=configurations,
                      prelim=prelim, static=static, tools=tools, quantities=quantities, plot=plot,
-                     master_toml=file_config.get("master"), raw=raw, sweep_runs=sweep_on,
+                     master_toml=file_config.get("master"), meta=dict(file_config.get("meta", {})), raw=raw, sweep_runs=sweep_on,
                      sweep_list=list(run["sweep_runs"]) if isinstance(run.get("sweep_runs"), list) else [])
 
 
 TEXT_KEYS = ("labels", "title", "title_left", "title_right", "legend_header", "x_label", "y_label", "legend")
+
+
+def check_meta(meta: dict, where: str) -> None:
+    """[config.meta] (V97): free keys for people; `versions` names packages of utils/Env/stack.toml, each
+    with the version (a string) the file was run with. A misspelt package is refused, or its warning
+    would never come; a version that differs is only a warning (tools.meta_notes), never a refusal."""
+    versions = meta.get("versions", {})
+    if not isinstance(versions, dict):
+        raise HepError("[config.meta].versions is a table: package = \"version\"", where=f"{where}.versions",
+                       hint='versions = { pythia8 = "8.317", rivet = "4.1.3" }')
+    known = list(plugins.load(repo_root() / "utils" / "Env" / "stack.py", "stack").entries())
+    for name, version in versions.items():
+        if name not in known:
+            raise HepError(f"'{name}' is not a package of utils/Env/stack.toml", where=f"{where}.versions",
+                           hint=did_you_mean(name, known) or f"packages: {', '.join(known)}")
+        if not isinstance(version, str):
+            raise HepError(f"{name}'s version is a string (\"8.317\"), so its digits stay as written", where=f"{where}.versions.{name}")
 
 
 def no_tlatex(value, where: str) -> None:

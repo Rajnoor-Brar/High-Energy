@@ -116,6 +116,7 @@ master = "master.toml"           # optional: configs/<project>/master.toml overl
 | `import` | a string or a list (a string or a table each) |  | run TOMLs this one starts from, in order, named as `hep run` names a config: `name` is this project's (`configs/<project>/name.toml`), `<Project>/<name>` another project's, `./…` from the repository root; `.toml` optional. **This file wins** (V56): a quantity, tool table or configuration of the file replaces the imported one whole; `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively. Imports nest (V94): an imported file's own imports come first, depth-first; a circle is refused. Another project's file keeps its bare paths (cards, filters, styles, executables) its own project's, so its tools plan as they do in it. The file that imports sets its own `[run].name` and `project`, and shares them with no imported run. An entry may be `{ from = "<config>", only = ["quantities", "run.default", …] }`: only those sections or dotted keys of that file, each of which it must have (V95). `--show-config` says where each quantity, tool and configuration came from. |
 | `drop` | a list (a string each) |  | dotted keys (`run.default4`, `plot.figures.statistics`, `quantities.radius`, `tools.jets`) taken out of what the imports brought in, before this file's own tables are laid over them (V95). Each must name something an import gave, so a misspelt drop is refused rather than keeping what it meant to remove; a file that imports nothing has nothing to drop. |
 | `vars` | a table |  | `name = value`, cited in any string of the file as `{var:name}` and replaced when the file is read, after its imports and `--set`, so an identity sees only the result (V96). A string that is exactly one var takes its value as it is: `event_count = "{var:events}"` is an integer, and a list stays a list; inside a longer string a var must be a scalar (`"rivet:{var:ana}"`). An unknown name is refused with the nearest. An imported file's `{var:…}` takes this file's value, so a shared file can be written with parameters. Imports are read before vars, so an import's name cannot cite one; `--set config.vars.<name>=…` changes one for a run. |
+| `meta` | a table |  | descriptive: it never changes a run (V97). Any key is free text for people (`author`, `references`, …) except `versions = { pythia8 = "8.317", rivet = "4.1.3" }`: the packages of `utils/Env/stack.toml` the file was run with, each version a string. A version the stack does not have (`6.5` matches 6.5.6) is a **warning** in `--plan`, at the run's start and in `hep check`, which still passes: the run goes ahead, at your own risk. A package stack.toml does not name is refused, since its warning could never come. |
 <!-- /generated -->
 
 **`import`** (V56, V94). The imported files are read in order, then this file's tables are laid over
@@ -167,6 +168,20 @@ config.vars.events=50000`), so a point's identity is that of the same file writt
 file's `{var:…}` takes this file's value: a shared file can be written with parameters. An unknown
 name is refused with the nearest. `{var:…}` is the run TOML's own; the page texts' placeholders
 (`{cell}`, `{q:…}`, `{opt:…}`, §10) are filled later, per page.
+
+**`meta`** (V97). About the file, for people; it never changes a run:
+
+```toml
+[config.meta]
+author     = "R. Brar"
+references = ["ZEUS, Nucl. Phys. B 864 (2012) 1"]
+versions   = { pythia8 = "8.317", rivet = "4.1.3", lhapdf = "6.5" }   # the stack the file was run with
+```
+
+`versions` names packages of `utils/Env/stack.toml`, each with a version string. When the stack has
+another version, `--plan`, the run's start and `hep check` say so as a **warning**, and the run goes
+ahead at your own risk. What is written is compared: `6.5` matches 6.5.6. A package stack.toml does
+not name is refused, since its warning could never come. Every other key is free.
 
 **The vocabulary** (`utils/Env/quantities.toml`, V58) says what each quantity name means for every
 tool:

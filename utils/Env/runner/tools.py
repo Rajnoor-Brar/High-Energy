@@ -295,6 +295,31 @@ def version_of(folder: Folder) -> str:
     return _VERSIONS[key]
 
 
+@functools.cache
+def _stack_version(name: str) -> str:
+    return _stack().version(name)
+
+
+def _numbers(text: str) -> tuple[int, ...] | None:
+    found = re.search(r"\d+(?:\.\d+)*", text or "")
+    return tuple(int(part) for part in found[0].split(".")) if found else None
+
+
+def meta_notes(run) -> list[str]:
+    """[config.meta].versions (V97) against the stack: a warning for each package whose version is not
+    the one the file was run with (`6.5` matches 6.5.6: what is written is compared). Never a refusal:
+    the run goes ahead at the user's own risk."""
+    out = []
+    for name, written in run.meta.get("versions", {}).items():
+        found = _stack_version(name)
+        want, have = _numbers(written), _numbers(found)
+        if have is None:
+            out.append(f"{run.path.name} was run with {name} {written}; the stack gives no version of it to compare")
+        elif want is None or have[:len(want)] != want:
+            out.append(f"{run.path.name} was run with {name} {written}; the stack has {found} (it runs anyway, at your own risk)")
+    return out
+
+
 @functools.lru_cache(maxsize=1)
 def _stack():
     """utils/Env/stack.py, the stack registry's reader (V78)."""

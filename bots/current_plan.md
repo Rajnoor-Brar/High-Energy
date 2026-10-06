@@ -9,6 +9,7 @@
 - audit 1 (V52–V89, `git show c5cbaa3:docs/audit_1/06_Plan.md`);
 - the figures (V80–V89);
 - the manual's rebuild (V90–V92, `git show c5cbaa3:docs/audit_2/02_Manual.md`).
+- `[config]` (V93–V97): it replaces `[master]`; `import` nests, crosses projects and takes `only` a part; `drop`; `vars`; `meta` (version warnings). The doc is 04 §3.
 
 ## Now
 
@@ -27,6 +28,7 @@ Nothing is in progress. Waiting on the user:
   - `PhotoProduction/xx/madgraph.toml`.
 
   They are left for the user.
+- **`hep migrate --stamp`** (the [config] plan's optional C3 S3): it would write the stack's versions into `[config.meta].versions`. Only if wanted.
 - **Later**, on the user's word:
   - F8 `--more`;
   - F9, a Slurm/HTCondor executor;

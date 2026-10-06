@@ -708,6 +708,8 @@ hep reproduce output/…/<point>/provenance.json   # the point again, beside it,
   - `[plot.overlay]` and `[plot.object]`;
   - a bare `executable`;
   - base-card lines the runner owns.
+- **Which stack a study was made with:** `[config.meta] versions = { pythia8 = "8.317", … }`. A
+  different stack is a warning in `hep check` and `--plan`, never a refusal (04 §3).
 - **Reproduce:** `hep reproduce` stops and says what changed when the setup is no longer the one the
   provenance records; `--anyway` runs today's setup with the recorded seed.
 
