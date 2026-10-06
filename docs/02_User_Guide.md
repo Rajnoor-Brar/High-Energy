@@ -265,6 +265,48 @@ current run (hep exits 6 and bash carries on), and a typo in a later configurati
 `hep run eic pdf` still runs only `pdf`, and `--set run.sweep_runs=false` turns the sweep off for one
 call.
 
+### 4.9 A study built on another
+
+When a run shares most of another's set-up (its beams, tools, quantities, data and plots), import it
+instead of copying it, and write only what differs:
+
+```toml
+# configs/PhotoProduction/zeus_seedSweep.toml
+[config]
+import = [{ from = "zeus_validation", only = ["prelim", "static", "tools", "quantities", "plot"] }]
+drop   = ["quantities.mpi", "plot.backend"]     # its MPI scan, and its mpl+yoda pages: Paint's here
+
+[run]
+name       = "zeus_seeds"                     # a file that imports always names its own run
+project    = "PhotoProduction"
+sweep_runs = ["default", "spread"]
+
+[run.default]
+sweeps  = ["pdf", "replica"]
+combine = ["replica"]
+tools   = [["pythia", "rivet"]]
+
+[run.spread]
+sweeps      = ["pdf", "replica"]
+plot_points = ["pdf"]
+tools       = [["pythia", "rivet"]]
+
+[quantities.replica]                          # its own quantity, beside the imported ones
+target = "pythia/seed"
+values = [1, 2, 3, 4, 5]
+tags   = ["s1", "s2", "s3", "s4", "s5"]
+```
+
+- **Taking a part:** `only` takes those sections or dotted keys (`run.default`, `plot.figures.eta`)
+  and nothing else; without it, the whole file comes, its configurations too.
+- **Removing:** `drop` takes things back out, before this file's tables. A drop that names nothing
+  an import gave is refused, so a typo never keeps what it meant to remove.
+- **Overriding:** this file's tables then win: its own quantity or tool replaces the imported one
+  whole, and its `[plot]` keys go over the imported `[plot]` one by one.
+- **Nesting:** imports nest, and `Other/run` imports another project's file, whose cards stay its
+  own. The points of an unchanged tool keep their identities, so nothing reruns for being imported.
+- **Checking:** `hep run … --show-config` says where every value and table came from.
+
 ---
 
 ## 5. Generators and chains

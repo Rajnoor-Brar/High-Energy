@@ -345,6 +345,65 @@ def _import_path(name, project: str, where: str) -> Path:
     return source
 
 
+def _parts(dotted, where: str) -> list[str]:
+    if not isinstance(dotted, str) or not dotted or any(not p for p in dotted.split(".")):
+        raise HepError(f"expected a dotted key (quantities.pdf, run.default, plot.figures.eta), got {dotted!r}", where=where)
+    return dotted.split(".")
+
+
+def _has(table: dict, parts: list[str]) -> bool:
+    for part in parts:
+        if not isinstance(table, dict) or part not in table:
+            return False
+        table = table[part]
+    return True
+
+
+def _nearest(table: dict, parts: list[str]) -> str | None:
+    """The nearest existing key at the level where a dotted path stops matching."""
+    for part in parts:
+        if not isinstance(table, dict) or part not in table:
+            return did_you_mean(part, list(table)) if isinstance(table, dict) else None
+        table = table[part]
+    return None
+
+
+def _without(table: dict, parts: list[str]) -> dict:
+    out = dict(table)
+    if len(parts) == 1:
+        del out[parts[0]]
+    else:
+        out[parts[0]] = _without(out[parts[0]], parts[1:])
+    return out
+
+
+def _only(part: dict, keys: list, source: Path, where: str) -> dict:
+    """An import's `only` (V95): just these sections or dotted keys of the file, each of which it has."""
+    out: dict = {}
+    for dotted in _as_list(keys):
+        parts = _parts(dotted, where)
+        if not _has(part, parts):
+            raise HepError(f"only names '{dotted}', which {source.name} has not", where=where,
+                           hint=_nearest(part, parts) or f"its sections: {', '.join(part)}")
+        value, target = part, out
+        for name in parts[:-1]:
+            value = value[name]
+            target = target.setdefault(name, {})
+        target[parts[-1]] = value[parts[-1]]
+    return out
+
+
+def _entry(entry, where: str) -> tuple[str, list | None]:
+    """An import entry: a name, or { from = name, only = [keys] }."""
+    if isinstance(entry, dict):
+        unknown = sorted(set(entry) - {"from", "only"})
+        if unknown or "from" not in entry:
+            raise HepError("an import table is { from = \"<config>\", only = [\"<section or dotted key>\", …] }",
+                           where=where, hint=f"not {unknown[0]}" if unknown else "it needs from")
+        return entry["from"], _as_list(entry.get("only")) or None
+    return entry, None
+
+
 def _project_of(path: Path, raw: dict, fallback: str) -> str:
     """The project a file's bare paths are relative to: its folder under configs/, else its [run].project."""
     try:
@@ -386,12 +445,15 @@ def _imports(raw: dict, path: Path, project: str, chain: tuple[Path, ...]) -> tu
     ("b.toml" or, through b, "b.toml ← c.toml"), and every imported file's (project, name)."""
     names = _as_list(raw.get("config", {}).get("import"))
     if not names:
+        if raw.get("config", {}).get("drop"):
+            raise HepError("drop removes what an import brought in, and this file imports nothing", where=f"{path}: [config].drop")
         return raw, {}, []
     where = f"{path}: [config].import"
     merged: dict = {}
     origins: dict[str, str] = {}
     located: list = []
-    for name in names:
+    for entry in names:
+        name, only = _entry(entry, where)
         source = _import_path(name, project, where)
         if source.resolve() in chain:
             circle = " → ".join(p.name for p in (*chain, source.resolve()))
@@ -402,18 +464,27 @@ def _imports(raw: dict, path: Path, project: str, chain: tuple[Path, ...]) -> tu
                            where=f"{source}: [master]", hint="hep migrate rewrites it")
         theirs = _project_of(source, part, project)
         part, inner, deeper = _imports(part, source, theirs, (*chain, source.resolve()))
+        if only is not None:
+            part = _only(part, only, source, where)
         if theirs != project:
             part = _rebased(part, theirs)
         if "name" in part.get("run", {}):
             located.append((part["run"].get("project", theirs), part["run"]["name"], source))
         located += deeper
-        part = {**part, "config": {k: v for k, v in part.get("config", {}).items() if k != "import"}}
+        part = {**part, "config": {k: v for k, v in part.get("config", {}).items() if k not in ("import", "drop")}}
         if not part["config"]:
             del part["config"]
         for key in [f"{s}.{k}" for s in ENTRIES for k in part.get(s, {})] + \
                    [f"run.{k}" for k, v in part.get("run", {}).items() if isinstance(v, dict)]:
             origins[key] = f"{source.name} ← {inner[key]}" if key in inner else source.name
         merged = _over(merged, part)
+    for dotted in _as_list(raw.get("config", {}).get("drop")):        # V95: out of what came in, before this file
+        parts = _parts(dotted, f"{path}: [config].drop")
+        if not _has(merged, parts):
+            raise HepError(f"drop names '{dotted}', which no import gave", where=f"{path}: [config].drop",
+                           hint=_nearest(merged, parts) or "drop removes what an import brought in")
+        merged = _without(merged, parts)
+        origins = {k: v for k, v in origins.items() if k != dotted and not k.startswith(dotted + ".")}
     for section in ENTRIES:                                           # the file's own entries are its own
         for key in raw.get(section, {}):
             origins.pop(f"{section}.{key}", None)
@@ -427,6 +498,8 @@ def _with_imports(raw: dict, path: Path) -> tuple[dict, dict]:
     """The file being run, its imports laid under it (V94). Its location is its own: it sets [run].name
     and project itself, and no imported file has the same, or both would write the same folders."""
     if not _as_list(raw.get("config", {}).get("import")):
+        if raw.get("config", {}).get("drop"):
+            raise HepError("drop removes what an import brought in, and this file imports nothing", where=f"{path}: [config].drop")
         return raw, {}
     own = raw.get("run", {})
     missing = [k for k in ("project", "name") if k not in own]

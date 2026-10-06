@@ -113,7 +113,8 @@ master = "master.toml"           # optional: configs/<project>/master.toml overl
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `master` | a string |  | overlays the tool folders' mappings key by key (`[quantities.<tool>.compatible_quantities]`): an entry for a (tool, quantity) pair replaces the framework's. The file must exist. |
-| `import` | a string or a list (a string each) |  | run TOMLs this one starts from, in order, named as `hep run` names a config: `name` is this project's (`configs/<project>/name.toml`), `<Project>/<name>` another project's, `./…` from the repository root; `.toml` optional. **This file wins** (V56): a quantity, tool table or configuration of the file replaces the imported one whole; `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively. Imports nest (V94): an imported file's own imports come first, depth-first; a circle is refused. Another project's file keeps its bare paths (cards, filters, styles, executables) its own project's, so its tools plan as they do in it. The file that imports sets its own `[run].name` and `project`, and shares them with no imported run. `--show-config` says where each quantity, tool and configuration came from. |
+| `import` | a string or a list (a string or a table each) |  | run TOMLs this one starts from, in order, named as `hep run` names a config: `name` is this project's (`configs/<project>/name.toml`), `<Project>/<name>` another project's, `./…` from the repository root; `.toml` optional. **This file wins** (V56): a quantity, tool table or configuration of the file replaces the imported one whole; `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively. Imports nest (V94): an imported file's own imports come first, depth-first; a circle is refused. Another project's file keeps its bare paths (cards, filters, styles, executables) its own project's, so its tools plan as they do in it. The file that imports sets its own `[run].name` and `project`, and shares them with no imported run. An entry may be `{ from = "<config>", only = ["quantities", "run.default", …] }`: only those sections or dotted keys of that file, each of which it must have (V95). `--show-config` says where each quantity, tool and configuration came from. |
+| `drop` | a list (a string each) |  | dotted keys (`run.default4`, `plot.figures.statistics`, `quantities.radius`, `tools.jets`) taken out of what the imports brought in, before this file's own tables are laid over them (V95). Each must name something an import gave, so a misspelt drop is refused rather than keeping what it meant to remove; a file that imports nothing has nothing to drop. |
 <!-- /generated -->
 
 **`import`** (V56, V94). The imported files are read in order, then this file's tables are laid over
@@ -133,6 +134,12 @@ Its rules:
   file.
 - **Location:** the file that imports sets its own `[run].name` and `project`; location is never
   imported. No imported file may be the same run, or both would write the same folders.
+- **Part of a file** (V95): an entry `{ from = "zeus_validation", only = ["tools", "quantities",
+  "run.default"] }` takes only those sections or dotted keys, each of which the file must have.
+- **Taking out** (V95): `drop = ["run.default4", "plot.figures.statistics"]` removes dotted keys from
+  what the imports gave, before this file's tables. Each must name something an import gave, and a
+  file that imports nothing has nothing to drop. An imported file's own `drop` applies to its own
+  imports.
 
 `--show-config` lists where each quantity, tool and configuration came from, through every file
 (`run.default from zeus_validation.toml ← zeus_common.toml`).

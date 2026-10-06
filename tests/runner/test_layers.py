@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 import tomli_w
 
@@ -154,6 +156,51 @@ def test_another_projects_file_brings_its_cards_and_plans_the_same(scratch, monk
     assert mine[0].tools["pythia"].baseconfig == [str(root / "Other" / "photo_ep.cmnd")]
     assert mine[0].included["tools.pythia"] == "other.toml" and mine[0].project == "PhotoProduction"
     assert mine[1] == theirs[1]
+
+
+def _other(scratch) -> Path:
+    """A run with two configurations, a figure and an extra quantity, to import parts of."""
+    data = raw(run__name="other", run__two={"tools": [["pythia", "rivet"]], "event_count": 99},
+               quantities__energies={"values": [[275, 18]], "tags": ["18x275"]},
+               plot={"ratio": True, "figures": {"tails": {"objects": ["d04-*"]}, "keep": {"objects": ["d05-*"]}}})
+    path = scratch / "other.toml"
+    path.write_text(tomli_w.dumps(data), encoding="utf-8")
+    return path
+
+
+def test_an_import_may_take_only_some_of_a_file(scratch):
+    """V95: `only` keeps those sections or dotted keys; one the file has not is refused, with the nearest."""
+    other = _other(scratch)
+    path = scratch / "run.toml"
+    mine = {"run": {"name": "mine", "project": "PhotoProduction", "configuration": "two"}}
+    path.write_text(tomli_w.dumps({**mine, "config": {"import": [{"from": str(other), "only": ["run.two", "quantities", "tools", "prelim"]}]}}),
+                    encoding="utf-8")
+    run = config.load(str(path))
+    assert set(run.configurations) == {"two"} and run.configuration(None).event_count == 99
+    assert not run.plot and set(run.quantities) == {"pdf", "energies"}
+    path.write_text(tomli_w.dumps({**mine, "config": {"import": [{"from": str(other), "only": ["run.tow"]}]}}), encoding="utf-8")
+    with pytest.raises(HepError, match="only names 'run.tow', which other.toml has not") as error:
+        config.load(str(path))
+    assert "two" in error.value.hint
+
+
+def test_drop_takes_out_what_an_import_gave(scratch):
+    """V95: before this file's tables; a drop that names nothing is refused, and so is one with no import."""
+    other = _other(scratch)
+    path = scratch / "run.toml"
+    mine = {"run": {"name": "mine", "project": "PhotoProduction"}}
+    path.write_text(tomli_w.dumps({**mine, "config": {"import": str(other), "drop": ["run.two", "plot.figures.tails", "quantities.energies"]}}),
+                    encoding="utf-8")
+    run = config.load(str(path))
+    assert set(run.configurations) == {"one"} and set(run.plot["figures"]) == {"keep"} and "energies" not in run.quantities
+    assert "quantities.energies" not in run.included and run.included["run.one"] == "other.toml"
+    path.write_text(tomli_w.dumps({**mine, "config": {"import": str(other), "drop": ["plot.figures.tials"]}}), encoding="utf-8")
+    with pytest.raises(HepError, match="drop names 'plot.figures.tials', which no import gave") as error:
+        config.load(str(path))
+    assert "tails" in error.value.hint
+    path.write_text(tomli_w.dumps(raw(config={"drop": ["run.one"]})), encoding="utf-8")
+    with pytest.raises(HepError, match="this file imports nothing"):
+        config.load(str(path))
 
 
 def test_master_is_config_now(scratch):

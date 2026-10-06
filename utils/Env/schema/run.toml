@@ -38,7 +38,7 @@ notes = """\
 
 [config.import]
 type  = "str|list"
-items = "str"
+items = "str|table"
 doc   = "run TOMLs whose tables this one starts from, in order; this file wins (V56, V93, V94)"
 notes = """\
   run TOMLs this one starts from, in order, named as `hep run` names a config: `name` is this \
@@ -49,7 +49,19 @@ notes = """\
   imports come first, depth-first; a circle is refused. Another project's file keeps its bare paths \
   (cards, filters, styles, executables) its own project's, so its tools plan as they do in it. The \
   file that imports sets its own `[run].name` and `project`, and shares them with no imported run. \
-  `--show-config` says where each quantity, tool and configuration came from."""
+  An entry may be `{ from = \"<config>\", only = [\"quantities\", \"run.default\", …] }`: only those \
+  sections or dotted keys of that file, each of which it must have (V95). `--show-config` says where \
+  each quantity, tool and configuration came from."""
+
+[config.drop]
+type  = "list"
+items = "str"
+doc   = "dotted keys taken out of what the imports gave, before this file's tables (V95)"
+notes = """\
+  dotted keys (`run.default4`, `plot.figures.statistics`, `quantities.radius`, `tools.jets`) taken \
+  out of what the imports brought in, before this file's own tables are laid over them (V95). Each \
+  must name something an import gave, so a misspelt drop is refused rather than keeping what it \
+  meant to remove; a file that imports nothing has nothing to drop."""
 
 # ── [run] ────────────────────────────────────────────────────────────────────────────────────
 
