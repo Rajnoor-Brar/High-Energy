@@ -13,7 +13,7 @@ configuration = "single"
 event_count   = 1_000
 threads       = 1                   # Pythia reads one LHE: one instance (no PythiaParallel split)
 
-[run.single]
+[run.cfgs.single]
 description = "MadGraph ep DIS at 18x275, showered by Pythia, analysed by Rivet"
 sweeps      = []
 tools       = ["madgraph", ["shower", "rivet"], "yd2rt"]

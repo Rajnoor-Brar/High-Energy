@@ -90,7 +90,7 @@ class Quantity:
 @dataclass
 class Configuration:
     key: str
-    label: str                                      # its folder: [run.<cfg>].label, else the table key (V45)
+    label: str                                      # its folder: [run.cfgs.<cfg>].label, else the table key (V45)
     serial: int | None
     description: str
     event_count: int
@@ -107,7 +107,7 @@ class Configuration:
     parallelism_auto: bool = False                      # "auto" (V75): set from the plans, cores ÷ a point's
     swept: bool = True                                  # run by [run].sweep_runs (V38)
     title: str = ""                                     # the `run NN - <title> -` header of a sweep
-    run_folder: str = ""                                # <project>/<run_folder>/…: [run.<cfg>].name, else [run].name (V46)
+    run_folder: str = ""                                # <project>/<run_folder>/…: [run.cfgs.<cfg>].name, else [run].name (V46)
     seed_type: str = "identity"                         # SEED_TYPES (V39)
     manual_seed: int | None = None                      # seed_type = "manual": every point's seed
     origins: dict = field(default_factory=dict)         # key → where its value came from (--show-config, V56)
@@ -160,17 +160,23 @@ class RunConfig:
 
 # ── checking ───────────────────────────────────────────────────────────────────────────────────
 
-#: [run.defaults]: keys every configuration shares (V56); a reserved name, never a configuration.
+#: [run.defaults]: keys every configuration shares (V56), never a configuration.
 DEFAULTS = "defaults"
+#: [run.cfgs.<cfg>]: the configurations (V98; they were [run.<cfg>], beside [run]'s own keys).
+CFGS = "cfgs"
 #: Each configuration's own: never taken from the one it extends, [run.defaults] or [run].
 OWN = ("label", "title", "extends", "swept")
 
 
 def _layers(run: dict, where: str) -> dict[str, list[tuple[str, dict]]]:
-    """Each configuration's layers, most specific first (V56): its own table, the ones it `extends`, in
-    turn, then [run.defaults]. [run] and the schema's defaults come after, in `inherited`."""
-    tables = {k: v for k, v in run.items() if isinstance(v, dict)}
-    defaults = tables.pop(DEFAULTS, None)
+    """Each configuration's layers, most specific first (V56): its own table ([run.cfgs.<cfg>], V98), the
+    ones it `extends`, in turn, then [run.defaults]. [run] and the schema's defaults come after, in
+    `inherited`."""
+    tables = run.get(CFGS, {})
+    for key, table in tables.items():
+        if not isinstance(table, dict):
+            raise HepError("a configuration is a table", where=f"{where}: [run.{CFGS}.{key}]")
+    defaults = run.get(DEFAULTS)
     if defaults is not None:
         schema.check(defaults, "configuration", f"{where}: [run.{DEFAULTS}]")
         own = [k for k in OWN if k in defaults]
@@ -179,16 +185,16 @@ def _layers(run: dict, where: str) -> dict[str, list[tuple[str, dict]]]:
                            where=f"{where}: [run.{DEFAULTS}]", hint="set them in the configurations")
     out = {}
     for key, table in tables.items():
-        schema.check(table, "configuration", f"{where}: [run.{key}]")
-        chain, seen, parent = [(f"[run.{key}]", table)], {key}, table.get("extends")
+        schema.check(table, "configuration", f"{where}: [run.{CFGS}.{key}]")
+        chain, seen, parent = [(f"[run.{CFGS}.{key}]", table)], {key}, table.get("extends")
         while parent:
             if parent not in tables:
-                raise HepError(f"extends names '{parent}', which is not a configuration", where=f"{where}: [run.{chain[-1][0][5:-1]}].extends",
+                raise HepError(f"extends names '{parent}', which is not a configuration", where=f"{where}: {chain[-1][0]}.extends",
                                hint=did_you_mean(parent, tables) or f"configurations: {', '.join(tables)}")
             if parent in seen:
-                raise HepError(f"extends goes round in a circle: {' → '.join([*seen, parent])}", where=f"{where}: [run.{key}].extends")
+                raise HepError(f"extends goes round in a circle: {' → '.join([*seen, parent])}", where=f"{where}: [run.{CFGS}.{key}].extends")
             seen.add(parent)
-            chain.append((f"[run.{parent}]", tables[parent]))
+            chain.append((f"[run.{CFGS}.{parent}]", tables[parent]))
             parent = tables[parent].get("extends")
         if defaults is not None:
             chain.append((f"[run.{DEFAULTS}]", defaults))
@@ -283,7 +289,7 @@ def _literal(text: str):
 
 
 def apply_sets(raw: dict, sets: list[str]) -> None:
-    """`--set static.energies=18x275`, `--set run.pdf.threads=4`: override one value (dotted keys)."""
+    """`--set static.energies=18x275`, `--set run.cfgs.pdf.threads=4`: override one value (dotted keys)."""
     for item in sets:
         key, sep, value = item.partition("=")
         if not sep or not key:
@@ -321,8 +327,11 @@ def _over(base: dict, over: dict) -> dict:
     for section, value in over.items():
         if section in ENTRIES and isinstance(value, dict):
             out[section] = {**out.get(section, {}), **value}
-        elif section == "run" and isinstance(value, dict):          # configurations whole, [run] keys one by one
-            out[section] = {**out.get(section, {}), **value}
+        elif section == "run" and isinstance(value, dict):          # [run] keys one by one, configurations whole
+            below = out.get(section, {})
+            out[section] = {**below, **value}
+            if isinstance(below.get(CFGS), dict) and isinstance(value.get(CFGS), dict):
+                out[section][CFGS] = {**below[CFGS], **value[CFGS]}
         elif isinstance(value, dict) and isinstance(out.get(section), dict):
             out[section] = _deep(out[section], value)
         else:
@@ -475,8 +484,7 @@ def _imports(raw: dict, path: Path, project: str, chain: tuple[Path, ...]) -> tu
         part = {**part, "config": {k: v for k, v in part.get("config", {}).items() if k not in ("import", "drop")}}
         if not part["config"]:
             del part["config"]
-        for key in [f"{s}.{k}" for s in ENTRIES for k in part.get(s, {})] + \
-                   [f"run.{k}" for k, v in part.get("run", {}).items() if isinstance(v, dict)]:
+        for key in [f"{s}.{k}" for s in ENTRIES for k in part.get(s, {})] + _run_entries(part):
             origins[key] = f"{source.name} ← {inner[key]}" if key in inner else source.name
         merged = _over(merged, part)
     for dotted in _as_list(raw.get("config", {}).get("drop")):        # V95: out of what came in, before this file
@@ -489,10 +497,15 @@ def _imports(raw: dict, path: Path, project: str, chain: tuple[Path, ...]) -> tu
     for section in ENTRIES:                                           # the file's own entries are its own
         for key in raw.get(section, {}):
             origins.pop(f"{section}.{key}", None)
-    for key, value in raw.get("run", {}).items():
-        if isinstance(value, dict):
-            origins.pop(f"run.{key}", None)
+    for key in _run_entries(raw):
+        origins.pop(key, None)
     return _over(merged, raw), origins, located
+
+
+def _run_entries(raw: dict) -> list[str]:
+    """The tables of [run] an import gives whole: run.cfgs.<cfg> and run.defaults."""
+    run = raw.get("run", {})
+    return [f"run.{CFGS}.{k}" for k in run.get(CFGS, {})] + ([f"run.{DEFAULTS}"] if isinstance(run.get(DEFAULTS), dict) else [])
 
 
 def _with_imports(raw: dict, path: Path) -> tuple[dict, dict]:
@@ -605,13 +618,22 @@ def parse(raw: dict, path: Path, strict: bool = True) -> RunConfig:
     run = raw.get("run")
     if not isinstance(run, dict):
         raise HepError("missing [run]", where=where, hint="every run TOML has [run] name, project, configuration")
-    schema.check(run, "run", f"{where}: [run]", subtables=True)
+    old = [k for k, v in run.items() if isinstance(v, dict) and k not in (CFGS, DEFAULTS) and k not in schema.keys("run")]
+    if old and strict:                                                # break and migrate (V98)
+        raise HepError(f"[run.{old[0]}] is a configuration, and configurations are [run.{CFGS}.<cfg>] now (V98)",
+                       where=f"{where}: [run.{old[0]}]",
+                       hint=f"did you mean [run.{DEFAULTS}]?" if did_you_mean(old[0], [DEFAULTS])
+                       else f"write [run.{CFGS}.{old[0]}]; hep migrate rewrites the file")
+    if old:                                      # hep migrate reads the old form it rewrites (V79, V98)
+        run = {**{k: v for k, v in run.items() if k not in old}, CFGS: {**{k: run[k] for k in old}, **run.get(CFGS, {})}}
+        raw = {**raw, "run": run}
+    schema.check(run, "run", f"{where}: [run]")
     sweep_on = run.get("sweep_runs") is True or (isinstance(run.get("sweep_runs"), list) and bool(run["sweep_runs"]))
     if strict:                                  # V79: the forms hep migrate rewrites
-        for key, table in run.items():
+        for key, table in run.get(CFGS, {}).items():
             if isinstance(table, dict) and "swept" in table:
-                raise HepError(f"[run.{key}].swept is gone (V79): [run].sweep_runs lists the configurations it runs",
-                               where=f"{where}: [run.{key}].swept",
+                raise HepError(f"[run.{CFGS}.{key}].swept is gone (V79): [run].sweep_runs lists the configurations it runs",
+                               where=f"{where}: [run.{CFGS}.{key}].swept",
                                hint="sweep_runs = [\"a\", \"b\"], in the order to run them; hep migrate rewrites this file")
     for required in ("name", "project") + (() if sweep_on else ("configuration",)):
         if required not in run:
@@ -687,7 +709,7 @@ def parse(raw: dict, path: Path, strict: bool = True) -> RunConfig:
     configurations: dict[str, Configuration] = {}
     for key, chain in _layers(run, where).items():
         table = chain[0][1]
-        at = f"{where}: [run.{key}]"
+        at = f"{where}: [run.{CFGS}.{key}]"
         origins: dict[str, str] = {}
 
         def inherited(name: str, fallback=None):
@@ -766,7 +788,7 @@ def parse(raw: dict, path: Path, strict: bool = True) -> RunConfig:
         listed = run["sweep_runs"]
         for name in listed:
             if name not in configurations:
-                raise HepError(f"[run].sweep_runs names '{name}', which is not a [run.<name>] table",
+                raise HepError(f"[run].sweep_runs names '{name}', which is not a [run.cfgs.<cfg>] table",
                                where=f"{where}: [run].sweep_runs", hint=did_you_mean(name, configurations) or
                                f"configurations: {', '.join(configurations)}")
         if len(set(listed)) != len(listed):
@@ -775,7 +797,7 @@ def parse(raw: dict, path: Path, strict: bool = True) -> RunConfig:
         raise HepError("[run].sweep_runs is on but every configuration has swept = false", where=f"{where}: [run].sweep_runs",
                        hint="leave one in, or turn the sweep off")
     if "configuration" in run and run["configuration"] not in configurations:
-        raise HepError(f"[run].configuration is '{run['configuration']}', which is not a [run.<name>] table",
+        raise HepError(f"[run].configuration is '{run['configuration']}', which is not a [run.cfgs.<cfg>] table",
                        where=f"{where}: [run].configuration",
                        hint=did_you_mean(run["configuration"], configurations)
                        or f"configurations: {', '.join(configurations) or '(none)'}")

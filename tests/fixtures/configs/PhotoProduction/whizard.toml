@@ -15,7 +15,7 @@ configuration = "single"
 event_count   = 2_000
 threads       = 1
 
-[run.single]
+[run.cfgs.single]
 description = "Direct photoproduction at 18x275 e+p"
 sweeps      = []
 tools       = [["whizard", "rivet"], "yd2rt"]

@@ -24,45 +24,45 @@ configuration = "pdf"
 event_count   = 1_000_000
 threads       = 12            # Pythia's; with rivet's 10 shards that fills the 24 hardware threads
 
-[run.single]
+[run.cfgs.single]
 description = "One run at the static point (27x920 e+p)"
 sweeps      = []
 tools       = [["pythia", "rivet"], "yd2rt"]
 
-[run.pdf]
+[run.cfgs.pdf]
 serial      = 1
 description = "Proton-PDF comparison at the static beams"
 sweeps      = ["pdf"]
 tools       = [["pythia", "rivet"], "yd2rt"]
 
-[run.energies]
+[run.cfgs.energies]
 serial      = 2
 description = "Beam-energy comparison at the static PDF"
 sweeps      = ["energies"]
 tools       = [["pythia", "rivet"], "yd2rt"]
 
-[run.energy_pdf]
+[run.cfgs.energy_pdf]
 serial      = 3
 description = "Beams x PDF grid: one page per energy, PDF curves on each"
 sweeps      = ["energies", "pdf"]
 plot_points = ["energies"]
 tools       = [["pythia", "rivet"], "yd2rt"]
 
-[run.mpi]
+[run.cfgs.mpi]
 serial      = 4
 description = "MPI pT0Ref scan at 18x275 with MPI on"
 sweeps      = ["pt0ref"]
 tools       = [["pythia", "rivet"], "yd2rt"]
 static      = { energies = "18x275" }
 
-[run.mpi_onoff]
+[run.cfgs.mpi_onoff]
 serial      = 5
 description = "MPI on vs off at 18x275"
 sweeps      = ["mpi"]
 tools       = [["pythia", "rivet"], "yd2rt"]
 static      = { energies = "18x275" }
 
-[run.mpi_grid]
+[run.cfgs.mpi_grid]
 serial      = 6
 description = "pT0Ref x MPI grid: one page per MPI setting, pT0Ref curves on each"
 sweeps      = ["pt0ref", "mpi"]
@@ -70,41 +70,41 @@ plot_points = ["mpi"]
 tools       = [["pythia", "rivet"], "yd2rt"]
 static      = { energies = "18x275" }
 
-[run.pthatmin]
+[run.cfgs.pthatmin]
 serial      = 7
 description = "Generation-cut stability at the static beams (00/B27)"
 sweeps      = ["pthatmin"]
 tools       = [["pythia", "rivet"], "yd2rt"]
 
-[run.process]
+[run.cfgs.process]
 serial      = 8
 description = "Photon:ProcessType 0 vs 1 at 18x275: a null comparison with this card (00/B13)"
 sweeps      = ["process"]
 tools       = [["pythia", "rivet"], "yd2rt"]
 static      = { energies = "18x275" }
 
-[run.radius]
+[run.cfgs.radius]
 serial      = 9
 description = "Jet radius R at 18x275 (three points, three generations: V9)"
 sweeps      = ["radius"]
 tools       = [["pythia", "rivet"], "yd2rt"]
 static      = { energies = "18x275" }
 
-[run.inproc]
+[run.cfgs.inproc]
 serial      = 11
 description = "Pythia and Rivet in one process (InprocJets): the card and seeds of `single`, no FIFO"
 sweeps      = []
 tools       = ["jets", "yd2rt"]
 prelim      = {}              # no FIFO: the events never leave the process
 
-[run.delphes]
+[run.cfgs.delphes]
 serial      = 12
 description = "Detector level: the events to a file, Delphes (ATLAS card), then a jet count (02 §5.1)"
 sweeps      = []
 tools       = ["pythia_file", "delphes", "jets_reco"]
 prelim      = { files = ["showered.hepmc"] }       # a file: Delphes cannot read a FIFO (L11)
 
-[run.replicas]
+[run.cfgs.replicas]
 serial      = 10
 description = "Three seed replicas at the static point, merged after them by rivet-merge (post)"
 sweeps      = ["replica"]

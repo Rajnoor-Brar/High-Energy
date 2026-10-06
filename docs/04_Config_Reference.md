@@ -34,8 +34,8 @@ YAML merge for Sherpa, and so on (see [05](05_Commands_and_Tools.md)).
 
 ```
 utils/Env/<tool>/quantities.toml  <  [config].master  <  [quantities.<q>].key / target  <  --set
-[static]  <  [run.<cfg>].static  <  --set static.<q>=…  <  the value a sweep gives the point
-[run]  <  [run.defaults]  <  extends  <  [run.<cfg>]  <  --set
+[static]  <  [run.cfgs.<cfg>].static  <  --set static.<q>=…  <  the value a sweep gives the point
+[run]  <  [run.defaults]  <  extends  <  [run.cfgs.<cfg>]  <  --set
 [config].import files  <  this file
 base.toml  <  [plot].root_style file  <  [plot.style]  <  [plot.figures.<figure>].style
 [plot]  <  [plot.figures.<figure>]
@@ -263,7 +263,9 @@ description   = "EIC photoproduction studies"
 |---|---|---|---|
 | `name` | a string | **required** | the run's directory name |
 | `project` | a string | **required** | the subfolder of `configs/`, `modules/`, `output/`, `results/`; must equal the folder the file is in, when it is under `configs/` |
-| `configuration` | a string |  | must name a `[run.<cfg>]` table (C2). Under `sweep_runs` it may be left out; `hep run <config>` then ignores it |
+| `cfgs` | a table |  | the configurations, each `[run.cfgs.<cfg>]` (V98; they were `[run.<cfg>]`, which is refused with the form to write, and `hep migrate` rewrites it). A configuration's key is its name for `hep run <config> <cfg>`, `sweep_runs`, `extends` and compare figures, and its folder unless it sets a `label`. Any name may be used, a [run] key's included. |
+| `defaults` | a table |  | keys every configuration starts from (V56), below each configuration's own and the one it `extends`, above `[run]`'s. It is not a configuration; it may not set `label`, `title` or `extends`, which are each configuration's own. |
+| `configuration` | a string |  | must name a `[run.cfgs.<cfg>]` table (C2). Under `sweep_runs` it may be left out; `hep run <config>` then ignores it |
 | `serial` | an integer |  | the prefix `NN_` of each configuration's folder, `<name>/NN_<label>`: **location, never identity** (V12). A configuration's `serial` overrides it (V45). Changing it starts a fresh location. A configuration inherits it from `[run]`. |
 | `event_count` | an integer, ≥ 1 |  | default for configurations; one of the two must set it A configuration inherits it from `[run]`. |
 | `threads` | an integer, ≥ 0 | `1` | default for configurations. `0` means every core, **resolved to a number at plan time** A configuration inherits it from `[run]`. |
@@ -275,7 +277,7 @@ description   = "EIC photoproduction studies"
 | `manual_seed` | an integer, ≥ 1 |  | default for configurations: under `seed_type = "manual"`, every point's seed (from 1 to the point's generators' `[card] seed_range`: 899,999,999 for Pythia, checked when the point is planned, V54); ignored otherwise (`--plan` says so) A configuration inherits it from `[run]`. |
 <!-- /generated -->
 
-Every other table inside `[run]` is a configuration (§5), and any other key is an error (C1).
+The configurations are `[run.cfgs.<cfg>]` (§5); any other key or table in `[run]` is an error (C1).
 `[run].configuration` is required unless `sweep_runs` is set. An integer `event_count` must be set
 here or in every configuration.
 
@@ -318,14 +320,21 @@ eic · pdf: 4 point(s), 1000000 events, 12 threads
 
 ---
 
-## 5. `[run.<configuration>]`
+## 5. `[run.cfgs.<cfg>]`
+
+The configurations are the tables of `[run.cfgs]` (V98). `[run]` itself holds only its own keys
+(§4), so a misspelt table there is an error, never a configuration, and a configuration may have any
+name, `threads` or `defaults` included. The old form, `[run.<cfg>]`, is refused with the table to
+write, and `hep migrate` rewrites it, commented-out configurations included. A configuration's
+dotted path is `run.cfgs.<cfg>.<key>`: `--set run.cfgs.pdf.threads=8`, `drop = ["run.cfgs.default4"]`,
+`hep explain run.cfgs.pdf.threads`.
 
 ```toml
 [run.defaults]                               # optional (V56): keys every configuration starts from
 tools       = [["pythia", "rivet"], "yd2rt"]
 threads     = 20
 
-[run.energy_pdf]
+[run.cfgs.energy_pdf]
 serial      = 3
 label       = "energy_pdf"                   # folder name (after the serial); defaults to the table key
 title       = "Beams x PDFs"                 # the header line under [run].sweep_runs (§4.1)
@@ -337,7 +346,7 @@ tools       = [["pythia", "rivet"], "yd2rt"] # group 1 together (FIFO), then gro
 static      = { energies = "18x275" }        # this configuration's own static values
 prelim      = { fifo = ["events.hepmc"] }    # replaces [prelim] for this configuration
 
-[run.pdfs_100M]
+[run.cfgs.pdfs_100M]
 extends     = "energy_pdf"                   # everything of energy_pdf, then these
 event_count = 100_000_000
 label       = "PDFs_100M"
@@ -351,7 +360,7 @@ A configuration's value is, in order:
 5. else the default (V56).
 
 `"default"` in a layer is the next layer's value. `label`, `title` and `extends` belong to each
-configuration alone, and `[run.defaults]` refuses them; `defaults` is never a configuration. A chain
+configuration alone, and `[run.defaults]` refuses them; `[run.defaults]` is never a configuration. A chain
 of `extends` is followed, and a circle is refused. `hep run CONFIG --show-config` prints every value
 with the layer it came from.
 
@@ -438,7 +447,7 @@ each group becomes one curve with their statistics added. The typical use is see
 one PDF's five 1M-event seeds become one 5M-event curve:
 
 ```toml
-[run.default]
+[run.cfgs.default]
 sweeps  = ["pdf", "replica"]        # 4 PDFs × 5 seeds = 20 points
 combine = ["replica"]               # 4 groups, one per PDF: rivet-merge -e of its 5 seeds
 tools   = [["pythia", "rivet"]]
@@ -482,7 +491,7 @@ commands = [["lhapdf", "ls", "--installed"]] # argv arrays, run in order before 
 | `commands` | a list |  | run in the point's output directory; output to `logs/prelim.log`; a nonzero exit fails the point. Placeholders: `{repo}`, `{out}`, `{res}`, `{file:<name>}` |
 <!-- /generated -->
 
-A name declared twice is an error. `[run.<cfg>].prelim` replaces this table for one configuration.
+A name declared twice is an error. `[run.cfgs.<cfg>].prelim` replaces this table for one configuration.
 
 ---
 
@@ -497,7 +506,7 @@ pdf      = "#2"         # … or "#N", the N-th value (1-based)
 
 - **When it applies:** a static value applies **only when the quantity is not swept** in the
   active configuration.
-- **What it may name:** every key must be a declared quantity. `[run.<cfg>].static` is merged over
+- **What it may name:** every key must be a declared quantity. `[run.cfgs.<cfg>].static` is merged over
   it, and `--set static.<q>=…` over both.
 - **Inactive quantities:** a quantity that is neither swept nor static is **inactive**. It renders
   nothing, and the base card's value stands.
@@ -979,7 +988,7 @@ them, before anything runs.
 | # | Rule | Example message |
 |---|---|---|
 | **C1** | An unknown section or key is an error; a tool-specific key is checked against the tool folder's `[options]` (type, `required`). | `unknown key 'min_entry'` · `did you mean 'min_entries'?` |
-| **C2** | `[run].configuration`, and a configuration named on the command line, must name a `[run.<cfg>]`. | `no configuration 'energy-pdf'` |
+| **C2** | `[run].configuration`, and a configuration named on the command line, must name a `[run.cfgs.<cfg>]`. | `no configuration 'energy-pdf'` |
 | **C3** | Every `sweeps` entry names a declared quantity; entangled quantities have equal value counts; no quantity is swept twice. | `entangled quantities need equal value counts` · `pdf: 4, alphas: 3` |
 | **C4** | `plot_points` names only quantities swept in this configuration. | `plot_points names 'mpi', which is not swept here` |
 | **C5** | Every `tools`/`pre`/`post` entry is a `[tools.<tag>]` table; groups nest one level; an `@q` entry's values are tool tags. | `'pythya' is not a [tools.<tag>] table` · `did you mean 'pythia'?` |

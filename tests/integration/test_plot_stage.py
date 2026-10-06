@@ -28,7 +28,7 @@ pytestmark = pytest.mark.skipif(not BUILT, reason="make utils/Apps/Paint.exe uti
 @pytest.fixture
 def stage(scratch, request):
     backend = getattr(request, "param", "root")
-    data = raw(run__name=f"plotstage_{backend}", run__one__sweeps=["lepton", "pdf"], run__one__plot_points=["lepton"],
+    data = raw(run__name=f"plotstage_{backend}", run__cfgs__one__sweeps=["lepton", "pdf"], run__cfgs__one__plot_points=["lepton"],
                quantities__lepton={"key": {"pythia": "Beams:idB"}, "values": [11, -11], "tags": ["em", "ep"]},
                quantities__pdf__labels=["MSTW 2008 LO", "NNPDF 2.3 LO"],
                plot={"backend": backend, "formats": ["png"], "ratio": True, "min_entries": 10, "range_pad": 1,
@@ -193,7 +193,7 @@ def test_a_scan_figure_draws_one_number_per_point(scratch):
     """V85: x a numeric curve axis, y the cross section of each point, a Scatter2D per page cell (here
     per PDF), its points at the x values with ranges halfway to their neighbours; refused for a quantity
     of names, or a page axis."""
-    data = raw(run__name="plotscan", run__one__sweeps=["lepton", "pdf"], run__one__plot_points=["pdf"],
+    data = raw(run__name="plotscan", run__cfgs__one__sweeps=["lepton", "pdf"], run__cfgs__one__plot_points=["pdf"],
                quantities__lepton={"key": {"pythia": "Beams:idB"}, "values": [11, -11, 22], "tags": ["em", "ep", "g"]},
                plot={"formats": ["png"], "figures": {"xs": {"class": "scan", "x": "lepton", "y": "sigma", "logy": False},
                                                      "b2": {"class": "scan", "x": "lepton", "y": "bin:2",
@@ -306,7 +306,7 @@ def test_a_compare_figure_reaches_another_run_toml(stage, scratch):
     import tomli_w
     from runner import config
     run, configuration, plans = stage
-    other = raw(run__name="plotstage_other", run__one__sweeps=["lepton", "pdf"], run__one__plot_points=["lepton"],
+    other = raw(run__name="plotstage_other", run__cfgs__one__sweeps=["lepton", "pdf"], run__cfgs__one__plot_points=["lepton"],
                 quantities__lepton={"key": {"pythia": "Beams:idB"}, "values": [11, -11], "tags": ["em", "ep"]},
                 quantities__pdf__labels=["MSTW", "NNPDF"])
     path = scratch / "other.toml"
@@ -394,7 +394,7 @@ def test_both_backends_draw_both_trees(stage):
 def test_a_swept_analysis_option_is_a_curve_not_a_page(scratch):
     """Each point's YODA holds its own variant (/photo_eic:R=0.4/…): one page per object, one curve
     per point, each read from its own path (found by the Lambda masswindow run, P4 S1)."""
-    data = raw(run__name="plotvariants", run__one__sweeps=["radius"],
+    data = raw(run__name="plotvariants", run__cfgs__one__sweeps=["radius"],
                quantities__radius={"target": "rivet/photo_eic", "key": "R", "values": [0.4, 0.7], "tags": ["r04", "r07"]},
                plot={"formats": ["png"], "min_entries": 10})
     run = parse(data, scratch)

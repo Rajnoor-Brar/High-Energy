@@ -16,6 +16,8 @@ and layout stay:
   subtables too; in a figure, a style key written bare (`ratio.range = […]`, which beside `ratio = true`
   is not even TOML) → `style.ratio.range`. This runs on the text first, so a file it makes TOML reads.
 * (V93) `[master]` → `[config]`, its `master_toml` → `master` and `include` → `import`, on the text too.
+* (V98) `[run.<cfg>]` → `[run.cfgs.<cfg>]`, its subtables too (`[run.<cfg>.static]`), and the same
+  headers in comments (a configuration commented out stays one to uncomment); `[run.defaults]` stays.
 """
 
 from __future__ import annotations
@@ -50,6 +52,27 @@ def _slug(glob: str, taken: set) -> str:
         name = f"{base}_{n}"
     taken.add(name)
     return name
+
+
+_RUN_TABLE = re.compile(r"^(\s*#*\s*)\[\s*run\.([A-Za-z0-9_\-]+)((?:\.[A-Za-z0-9_\-]+)*)\s*\](.*)$", re.S)
+
+
+def cfgs_text(text: str) -> str:
+    """[run.<cfg>] as [run.cfgs.<cfg>] (V98), by line: a table header (or a commented-out one) under
+    [run] that is not one of [run]'s own keys, `defaults` or `cfgs`."""
+    from . import schema
+    own = set(schema.keys("run"))
+    out = []
+    for line in text.splitlines(keepends=True):
+        match = _RUN_TABLE.match(line)
+        if match and match[2] not in own:
+            tail = match[4]
+            pad = len(tail) - len(tail.lstrip(" "))
+            if pad and tail.lstrip(" ").startswith("#"):             # a comment after it keeps its column
+                tail = " " * max(1, pad - len("cfgs.")) + tail.lstrip(" ")
+            line = f"{match[1]}[run.cfgs.{match[2]}{match[3]}]{tail}"
+        out.append(line)
+    return "".join(out)
 
 
 #: [master]'s keys as [config] names them (V93).
@@ -161,7 +184,7 @@ def toml_text(text: str, run=None, project: str = "") -> str:
     out: list[str] = []
     table = ""
     swept_members = run.runs(None) if run is not None and run.sweep_runs else None
-    has_swept = run is not None and any("swept" in run.raw.get("run", {}).get(k, {}) for k in run.configurations)
+    has_swept = run is not None and any("swept" in run.raw.get("run", {}).get("cfgs", {}).get(k, {}) for k in run.configurations)
     i = 0
     while i < len(lines):
         line = lines[i]
@@ -255,7 +278,7 @@ def plan(names: list[str]) -> dict[Path, tuple[str, str]]:
     changes: dict[Path, tuple[str, str]] = {}
     for name in names:
         text = config_file(name).read_text(encoding="utf-8")
-        first = config_text(figure_text(text))
+        first = cfgs_text(config_text(figure_text(text)))
         run = configmod.load(name, strict=False, text=first)
         new = toml_text(first, run, run.project)
         if new != text:

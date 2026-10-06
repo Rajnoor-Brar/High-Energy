@@ -16,8 +16,8 @@ REPLICA = {"target": "pythia/seed", "values": [1, 2, 3], "tags": ["s1", "s2", "s
 
 
 def seeded(**changes):
-    return raw(**{"quantities__replica": REPLICA, "run__one__sweeps": ["pdf", "replica"],
-                  "run__one__combine": ["replica"], **changes})
+    return raw(**{"quantities__replica": REPLICA, "run__cfgs__one__sweeps": ["pdf", "replica"],
+                  "run__cfgs__one__combine": ["replica"], **changes})
 
 
 def build(data, scratch):
@@ -62,15 +62,15 @@ def test_seeds_differ_across_replicas_and_the_groups_have_their_own(scratch):
 
 
 def test_combining_everything_is_one_group_named_combined(scratch):
-    _, _, _, groups = build(raw(quantities__replica=REPLICA, run__one__sweeps=["replica"], run__one__combine=["replica"]),
+    _, _, _, groups = build(raw(quantities__replica=REPLICA, run__cfgs__one__sweeps=["replica"], run__cfgs__one__combine=["replica"]),
                             scratch)
     assert [g.point.name for g in groups] == ["combined"]
 
 
 @pytest.mark.parametrize("changes, message", [
-    ({"run__one__combine": ["pdf"], "run__one__sweeps": ["replica"]}, "not swept here"),
-    ({"run__one__plot_points": ["replica"]}, "both combined and a page axis"),
-    ({"run__one__sweeps": [["pdf", "replica"]], "quantities__replica": {**REPLICA, "values": [1, 2],
+    ({"run__cfgs__one__combine": ["pdf"], "run__cfgs__one__sweeps": ["replica"]}, "not swept here"),
+    ({"run__cfgs__one__plot_points": ["replica"]}, "both combined and a page axis"),
+    ({"run__cfgs__one__sweeps": [["pdf", "replica"]], "quantities__replica": {**REPLICA, "values": [1, 2],
                                                                        "tags": ["s1", "s2"]}}, "axis of its own"),
 ])
 def test_what_cannot_be_combined_is_refused(scratch, changes, message):

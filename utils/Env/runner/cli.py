@@ -426,8 +426,8 @@ def show_config(run, keys: list[str]) -> list[str]:
             value = fields.get(name)
             if value in (None, [], {}, "") and name not in configuration.origins:
                 continue
-            own = run.raw.get("run", {}).get(key, {})
-            origin = configuration.origins.get(name, f"[run.{key}]" if name in own else "default")
+            own = run.raw.get("run", {}).get("cfgs", {}).get(key, {})
+            origin = configuration.origins.get(name, f"[run.cfgs.{key}]" if name in own else "default")
             lines.append(f"  {name:{width}s} = {json.dumps(value, default=str):40s} {origin}")
     for entry, source in sorted(run.included.items()):
         lines.append(f"  included {entry} from {source}")
@@ -473,9 +473,9 @@ def run_one(args, key: str, stopper: execute.Stopper, *, number: int = 0, follow
             return 0
         return 1 if plot.draw(run, configuration, combined or every, print, others=others_of(args)) else 0
     if args.only == "post" and post_plan is None:
-        raise HepError(f"configuration '{configuration.key}' has no post tools", where=f"{run.path}: [run.{configuration.key}].post")
+        raise HepError(f"configuration '{configuration.key}' has no post tools", where=f"{run.path}: [run.cfgs.{configuration.key}].post")
     if args.only == "pre" and pre_plan is None:
-        raise HepError(f"configuration '{configuration.key}' has no pre tools", where=f"{run.path}: [run.{configuration.key}].pre")
+        raise HepError(f"configuration '{configuration.key}' has no pre tools", where=f"{run.path}: [run.cfgs.{configuration.key}].pre")
     if stopper.requested:                    # Ctrl-C while this run was being planned
         return 6
 

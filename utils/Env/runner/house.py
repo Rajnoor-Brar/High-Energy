@@ -67,14 +67,15 @@ def ls(project: str | None = None) -> list[str]:
 def explain(key: str) -> list[str]:
     """A key's type, default, choices, bounds, inheritance and doc, from utils/Env/schema/run.toml.
     `plot.y_gutter`, `[plot].y_gutter`, `run.event_count`, `quantities.<q>.styles`, `tools.<tag>.shards`,
-    `plot.figures.<figure>.logy`; a bare key is looked up in every table."""
+    `plot.figures.<figure>.logy`, `run.cfgs.<cfg>.threads` (a configuration's, V98); a bare key is looked
+    up in every table."""
     parts = [p for p in key.replace("[", "").replace("]", ".").split(".") if p]
     if not parts:
         raise HepError("explain which key?", hint="e.g. hep explain plot.y_gutter")
     found = []
     if len(parts) >= 2 and parts[0] in TABLES:
         table = TABLES[parts[0]]
-        if parts[0] == "run" and len(parts) == 3:            # run.<cfg>.<key>: a configuration's
+        if parts[0] == "run" and len(parts) >= 3 and parts[1] in ("cfgs", "defaults"):   # a configuration's (V98)
             table = "configuration"
         name = parts[-1]
         if name in schema.keys(table):

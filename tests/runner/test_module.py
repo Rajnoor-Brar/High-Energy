@@ -15,7 +15,7 @@ MODULE = {"tool": "module", "executable": "/bin/true", "output_file": "lambda.ro
 
 def test_a_module_reading_a_fifo_gets_no_sidecar_and_is_count_checked(scratch):
     data = raw(prelim={"fifo": ["events.hepmc", "to_module.hepmc"]},
-               run__one__tools=[["pythia", "rivet", "lambda"]],
+               run__cfgs__one__tools=[["pythia", "rivet", "lambda"]],
                tools__pythia__output_file=["events.hepmc", "to_module.hepmc"],
                tools__lambda={**MODULE, "input": "to_module.hepmc"})
     _, _, p = plan(data, scratch)
@@ -29,7 +29,7 @@ def test_a_module_reading_a_fifo_gets_no_sidecar_and_is_count_checked(scratch):
 
 
 def test_a_module_in_a_later_group_gets_the_producer_sidecar(scratch):
-    data = raw(prelim={"files": ["events.hepmc"]}, run__one__tools=["pythia", "lambda"],
+    data = raw(prelim={"files": ["events.hepmc"]}, run__cfgs__one__tools=["pythia", "lambda"],
                tools__lambda={**MODULE, "input": "events.hepmc"})
     _, _, p = plan(data, scratch)
     assert f"--sidecar={p.rendered['pythia'].sidecar}" in p.rendered["lambda"].argv
@@ -64,9 +64,9 @@ def _plans(data, scratch, configuration):
 def test_seeds_follow_the_generator_not_the_rest_of_the_chain(scratch):
     """The same generator setup gives the same events in any configuration (the chain against an
     integrated program, P4 S1 row 6); within one plan, points never share a seed block (V9)."""
-    data = raw(run__two={"tools": [["pythia", "rivet"], "yd2rt"]},
+    data = raw(run__cfgs__two={"tools": [["pythia", "rivet"], "yd2rt"]},
                tools__yd2rt={"tool": "yd2rt", "input": "photo.yoda", "output_file": "photo.root"},
-               run__sweep={"tools": [["pythia", "rivet"]], "sweeps": ["radius"]},
+               run__cfgs__sweep={"tools": [["pythia", "rivet"]], "sweeps": ["radius"]},
                quantities__radius={"target": "rivet/photo_eic", "key": "R", "values": [0.4, 0.7], "tags": ["r04", "r07"]})
     [one], [two] = _plans(data, scratch, "one"), _plans(data, scratch, "two")
     assert one.identity != two.identity and one.seed == two.seed

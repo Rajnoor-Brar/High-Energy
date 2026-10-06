@@ -90,7 +90,7 @@ configuration = "pdf"             # what `hep run PhotoProduction/mini` runs
 event_count   = 100_000
 threads       = 8
 
-[run.pdf]                         # a configuration: one recipe
+[run.cfgs.pdf]                    # a configuration: one recipe
 description = "Two proton PDFs at the static beams"
 sweeps      = ["pdf"]             # 2 points
 tools       = [["pythia", "rivet"], "yd2rt"]   # group 1 runs together (FIFO), then group 2
@@ -163,7 +163,7 @@ you can run them.
 ### 4.2 A sweep: one quantity, one page
 
 ```toml
-[run.pdf]
+[run.cfgs.pdf]
 sweeps = ["pdf"]
 tools  = [["pythia", "rivet"], "yd2rt"]
 ```
@@ -173,7 +173,7 @@ One page per histogram, with a curve per PDF. → `eic pdf`, `zeus_validation de
 ### 4.3 A grid, split into pages
 
 ```toml
-[run.energy_pdf]
+[run.cfgs.energy_pdf]
 sweeps      = ["energies", "pdf"]     # 4 × 4 = 16 points
 plot_points = ["energies"]            # a page folder per energy; the PDFs are the curves
 tools       = [["pythia", "rivet"], "yd2rt"]
@@ -194,7 +194,7 @@ A quantity's `exclude = [N, …]` leaves values out of a sweep (1-based).
 ### 4.5 A configuration's own fixed values
 
 ```toml
-[run.mpi]
+[run.cfgs.mpi]
 sweeps = ["pt0ref"]
 tools  = [["pythia", "rivet"], "yd2rt"]
 static = { energies = "18x275" }      # over [static], for this configuration only
@@ -246,10 +246,10 @@ To run several of a TOML's configurations in one go, list them, or say `true` fo
 [run]
 sweep_runs = ["pdf", "energies"]   # hep run eic: these, in this order (true: every one, in file order)
 
-[run.pdf]
+[run.cfgs.pdf]
 title = "Proton PDFs"              # the header line: run 01 - Proton PDFs -
 
-[run.delphes]                      # not listed: hep run eic delphes still runs it
+[run.cfgs.delphes]                 # not listed: hep run eic delphes still runs it
 ```
 
 - **Each configuration is an ordinary run**, with its own title, blocks, verdict and folder, exactly
@@ -281,12 +281,12 @@ name       = "zeus_seeds"                     # a file that imports always names
 project    = "PhotoProduction"
 sweep_runs = ["default", "spread"]
 
-[run.default]
+[run.cfgs.default]
 sweeps  = ["pdf", "replica"]
 combine = ["replica"]
 tools   = [["pythia", "rivet"]]
 
-[run.spread]
+[run.cfgs.spread]
 sweeps      = ["pdf", "replica"]
 plot_points = ["pdf"]
 tools       = [["pythia", "rivet"]]
@@ -314,7 +314,7 @@ tags   = ["s1", "s2", "s3", "s4", "s5"]
 ### 5.1 A file chain: generator → Delphes → your analysis
 
 ```toml
-[run.delphes]
+[run.cfgs.delphes]
 sweeps = []
 tools  = ["pythia_file", "delphes", "jets_reco"]    # three groups, strictly in order
 prelim = { files = ["showered.hepmc"] }             # a file: every hop crosses a group
@@ -373,7 +373,7 @@ examples are under `tests/fixtures/configs/PhotoProduction/` (`herwig.toml`, `sh
 ### 5.3 The same study with several generators
 
 ```toml
-[run.compare]
+[run.cfgs.compare]
 sweeps = ["generator"]
 tools  = [["@generator", "spectra"], "yd2rt"]   # "@q": the tool tag the point's value names
 
@@ -390,7 +390,7 @@ reaches a tool of the configuration. → `Comparison/generators`.
 ### 5.4 Something every point needs, made once
 
 ```toml
-[run.pdf]
+[run.cfgs.pdf]
 sweeps = ["pdf"]
 pre    = ["fetch"]                                # once, before every point
 tools  = [["pythia", "rivet"]]
@@ -414,7 +414,7 @@ When Rivet is not the right tool (candidate reconstruction, ML features, detecto
 program with the module kit ([06 §21](06_Internals.md#21-modulehh)):
 
 ```toml
-[run.single]
+[run.cfgs.single]
 sweeps = []
 tools  = [["pythia", "lamriv", "lambda"], "yd2rt"]
 
@@ -454,7 +454,7 @@ precision.
 One process that runs Pythia (and Rivet) itself, with the runner's sweeps and seeds:
 
 ```toml
-[run.inproc]
+[run.cfgs.inproc]
 sweeps = []
 tools  = ["jets", "yd2rt"]
 prelim = {}                                       # no FIFO: the events never leave the process
@@ -498,7 +498,7 @@ threads       = 12
 [run.defaults]
 tools = ["inproc", "yd2rt"]
 
-[run.default]
+[run.cfgs.default]
 sweeps = ["pdf"]                  # the file has ptref, mpi and single too, each a sweep and nothing more
 
 [tools.inproc]
@@ -549,7 +549,7 @@ A Rivet process uses one core, so in a Pythia → Rivet chain it is the limit (a
 with ZEUS_2012), and more Pythia threads only wait for it. Split its events among several:
 
 ```toml
-[run.default]
+[run.cfgs.default]
 threads = 12                     # Pythia's threads
 
 [tools.rivet]
@@ -567,7 +567,7 @@ merges them with `rivet-merge -e` ([05 §5.1](05_Commands_and_Tools.md#51-sharde
 - **The result:** the events are the same as unsharded, so the result is the same. The point
   reruns, since its commands changed.
 - **Cores:** keep `threads + shards` within the machine's cores.
-- **For one run only:** `--set tools.rivet.shards=10 --set run.default.threads=12`.
+- **For one run only:** `--set tools.rivet.shards=10 --set run.cfgs.default.threads=12`.
 - **Analyses:** every analysis must be re-entrant (`Reentrant: true` in its `.info`).
 
 ### 7.2 Several points at once
@@ -591,7 +591,7 @@ parallelism = 4                  # 4 points at a time: ~4 × (5 + its Rivets) co
 ### 7.3 Replicas, merged
 
 ```toml
-[run.replicas]
+[run.cfgs.replicas]
 sweeps = ["replica"]
 tools  = [["pythia", "rivet"]]
 post   = ["merge"]                   # once, after every point is complete
@@ -614,7 +614,7 @@ reruns when any point changes.
 replica beside the quantity you compare, and merge each value's seeds into one curve.
 
 ```toml
-[run.default]
+[run.cfgs.default]
 sweeps  = ["pdf", "replica"]         # 4 PDFs × 5 seeds
 combine = ["replica"]                # one curve per PDF: its 5 seeds merged, 5× the statistics
 tools   = [["pythia", "rivet"]]
@@ -637,7 +637,7 @@ choose the seeds yourself:
 ```toml
 [run]
 seed_type   = "manual"           # "identity" (default) | "manual" | "random"
-manual_seed = 3245364            # every point's seed; [run.<cfg>] can set its own
+manual_seed = 3245364            # every point's seed; [run.cfgs.<cfg>] can set its own
 
 [quantities.seed]                # or one exact seed per point, swept like anything else
 target = "pythia/seed"
@@ -677,7 +677,7 @@ values = [1001, 2001, 3001]
 
 The identity covers cards, argv, binaries, analyses and their plugins, events and threads, and the
 seeds derive from it. So a rerun of an unchanged point does nothing, and a changed one reruns by
-itself. Threads are part of the identity: `--set run.pdf.threads=8` makes every point "to run".
+itself. Threads are part of the identity: `--set run.cfgs.pdf.threads=8` makes every point "to run".
 
 ---
 

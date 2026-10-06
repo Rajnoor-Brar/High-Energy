@@ -158,7 +158,8 @@ def json_schema() -> dict:
     """run.schema.json: the run TOML for an editor (Even Better TOML / Taplo, `#:schema` or settings)."""
     configuration = _object("configuration")
     run = _object("run")
-    run["additionalProperties"] = configuration                      # [run.<cfg>]
+    run["properties"]["cfgs"] = {"type": "object", "additionalProperties": configuration}   # [run.cfgs.<cfg>] (V98)
+    run["properties"]["defaults"] = configuration
     figure = _object("figure")
     plot = _object("plot")
     plot["properties"]["figures"] = {"type": "object", "additionalProperties": figure}

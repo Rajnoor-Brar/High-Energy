@@ -49,8 +49,317 @@
      "description": "the project; a config under configs/<X>/ belongs to X\n\nthe subfolder of `configs/`, `modules/`, `output/`, `results/`; must equal the folder the file is in, when it is under `configs/`",
      "type": "string"
     },
+    "cfgs": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "object",
+      "properties": {
+       "extends": {
+        "description": "another configuration this one starts from; its own keys win\n\nanother configuration this one starts from (chains are followed; a circle is refused)",
+        "type": "string"
+       },
+       "serial": {
+        "description": "this configuration's NN_ (else [run]'s)\n\noverrides `[run].serial` for this configuration: its points go to `<P>/<run name>/NN_<label>/` (V45)",
+        "anyOf": [
+         {
+          "type": "integer"
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "name": {
+        "description": "this configuration's run folder (else [run].name)\n\nthe run folder above this configuration's: `<P>/<name>/NN_<label>/` (V46)",
+        "type": "string"
+       },
+       "label": {
+        "description": "this configuration's folder: NN_<label> (else its table key)\n\nthe configuration's folder, after the serial: `NN_<label>`; empty means the table key (V45)",
+        "type": "string"
+       },
+       "title": {
+        "description": "the run NN - <title> - header of a sweep\n\nthe header line of the run under `[run].sweep_runs`: `run 02 - <title> -` (04 §4.1)",
+        "type": "string"
+       },
+       "description": {
+        "description": "what the configuration is for",
+        "type": "string"
+       },
+       "event_count": {
+        "description": "events per point (else [run]'s)\n\nrequired here if `[run]` has none",
+        "anyOf": [
+         {
+          "type": "integer",
+          "minimum": 1
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "threads": {
+        "description": "threads per generator (else [run]'s); 0 = every core\n\n`0` = every core",
+        "anyOf": [
+         {
+          "type": "integer",
+          "minimum": 0
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "parallelism": {
+        "description": "points run at once (else [run]'s); \"auto\": cores ÷ a point's cores (V75)\n\npoints at once (`\"auto\"`: cores ÷ a point's cores, V75); `--plan` and the run's title say about how many cores that is, and warn past the machine's",
+        "anyOf": [
+         {
+          "type": [
+           "integer",
+           "string"
+          ],
+          "minimum": 1,
+          "enum": [
+           "auto"
+          ]
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "swept": {
+        "description": "false: [run].sweep_runs leaves this configuration out",
+        "type": "boolean",
+        "default": true
+       },
+       "seed_type": {
+        "description": "how seeds are chosen (else [run]'s)\n\n`\"identity\"`: from the generator's identity; `\"manual\"`: exactly the given seed; `\"random\"`: drawn when the point runs (06 §8)",
+        "anyOf": [
+         {
+          "type": "string",
+          "enum": [
+           "identity",
+           "manual",
+           "random"
+          ]
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "manual_seed": {
+        "description": "seed_type = manual: every point's seed (else [run]'s)\n\nthe seed of every point under `\"manual\"`; a quantity targeting `<tool>/seed` gives a point its own",
+        "anyOf": [
+         {
+          "type": "integer",
+          "minimum": 1
+         },
+         {
+          "const": "default"
+         }
+        ]
+       },
+       "sweeps": {
+        "description": "swept quantities: a name is an axis, an inner list an entangled group\n\n04 §5.1; `[]` is one point",
+        "type": "array"
+       },
+       "plot_points": {
+        "description": "swept quantities whose grid makes the pages\n\n04 §5.2",
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       },
+       "combine": {
+        "description": "swept quantities whose points are merged into one (seed replicas)\n\nswept quantities whose points are merged into one curve (04 §5.5)",
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       },
+       "tools": {
+        "description": "the chain: [A, [B, C], D]; an inner list runs together\n\n04 §5.3",
+        "type": "array"
+       },
+       "pre": {
+        "description": "tools run once, before every point\n\nthe form of `tools` (04 §5.4)",
+        "type": "array"
+       },
+       "post": {
+        "description": "tools run once, after every point\n\nthe form of `tools` (04 §5.4)",
+        "type": "array"
+       },
+       "static": {
+        "description": "quantity = value for this configuration, over [static]\n\nmerged over `[static]` and the layers', key by key (04 §7); a `\"default\"` keeps the layer below's",
+        "type": "object"
+       },
+       "prelim": {
+        "description": "this configuration's [prelim]\n\nthe nearest layer's **replaces** `[prelim]` whole for this configuration (its chain's interfaces); `{}` means none",
+        "type": "object"
+       }
+      },
+      "required": [
+       "tools"
+      ],
+      "additionalProperties": false
+     }
+    },
+    "defaults": {
+     "type": "object",
+     "properties": {
+      "extends": {
+       "description": "another configuration this one starts from; its own keys win\n\nanother configuration this one starts from (chains are followed; a circle is refused)",
+       "type": "string"
+      },
+      "serial": {
+       "description": "this configuration's NN_ (else [run]'s)\n\noverrides `[run].serial` for this configuration: its points go to `<P>/<run name>/NN_<label>/` (V45)",
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "const": "default"
+        }
+       ]
+      },
+      "name": {
+       "description": "this configuration's run folder (else [run].name)\n\nthe run folder above this configuration's: `<P>/<name>/NN_<label>/` (V46)",
+       "type": "string"
+      },
+      "label": {
+       "description": "this configuration's folder: NN_<label> (else its table key)\n\nthe configuration's folder, after the serial: `NN_<label>`; empty means the table key (V45)",
+       "type": "string"
+      },
+      "title": {
+       "description": "the run NN - <title> - header of a sweep\n\nthe header line of the run under `[run].sweep_runs`: `run 02 - <title> -` (04 §4.1)",
+       "type": "string"
+      },
+      "description": {
+       "description": "what the configuration is for",
+       "type": "string"
+      },
+      "event_count": {
+       "description": "events per point (else [run]'s)\n\nrequired here if `[run]` has none",
+       "anyOf": [
+        {
+         "type": "integer",
+         "minimum": 1
+        },
+        {
+         "const": "default"
+        }
+       ]
+      },
+      "threads": {
+       "description": "threads per generator (else [run]'s); 0 = every core\n\n`0` = every core",
+       "anyOf": [
+        {
+         "type": "integer",
+         "minimum": 0
+        },
+        {
+         "const": "default"
+        }
+       ]
+      },
+      "parallelism": {
+       "description": "points run at once (else [run]'s); \"auto\": cores ÷ a point's cores (V75)\n\npoints at once (`\"auto\"`: cores ÷ a point's cores, V75); `--plan` and the run's title say about how many cores that is, and warn past the machine's",
+       "anyOf": [
+        {
+         "type": [
+          "integer",
+          "string"
+         ],
+         "minimum": 1,
+         "enum": [
+          "auto"
+         ]
+        },
+        {
+         "const": "default"
+        }
+       ]
+      },
+      "swept": {
+       "description": "false: [run].sweep_runs leaves this configuration out",
+       "type": "boolean",
+       "default": true
+      },
+      "seed_type": {
+       "description": "how seeds are chosen (else [run]'s)\n\n`\"identity\"`: from the generator's identity; `\"manual\"`: exactly the given seed; `\"random\"`: drawn when the point runs (06 §8)",
+       "anyOf": [
+        {
+         "type": "string",
+         "enum": [
+          "identity",
+          "manual",
+          "random"
+         ]
+        },
+        {
+         "const": "default"
+        }
+       ]
+      },
+      "manual_seed": {
+       "description": "seed_type = manual: every point's seed (else [run]'s)\n\nthe seed of every point under `\"manual\"`; a quantity targeting `<tool>/seed` gives a point its own",
+       "anyOf": [
+        {
+         "type": "integer",
+         "minimum": 1
+        },
+        {
+         "const": "default"
+        }
+       ]
+      },
+      "sweeps": {
+       "description": "swept quantities: a name is an axis, an inner list an entangled group\n\n04 §5.1; `[]` is one point",
+       "type": "array"
+      },
+      "plot_points": {
+       "description": "swept quantities whose grid makes the pages\n\n04 §5.2",
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "combine": {
+       "description": "swept quantities whose points are merged into one (seed replicas)\n\nswept quantities whose points are merged into one curve (04 §5.5)",
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "tools": {
+       "description": "the chain: [A, [B, C], D]; an inner list runs together\n\n04 §5.3",
+       "type": "array"
+      },
+      "pre": {
+       "description": "tools run once, before every point\n\nthe form of `tools` (04 §5.4)",
+       "type": "array"
+      },
+      "post": {
+       "description": "tools run once, after every point\n\nthe form of `tools` (04 §5.4)",
+       "type": "array"
+      },
+      "static": {
+       "description": "quantity = value for this configuration, over [static]\n\nmerged over `[static]` and the layers', key by key (04 §7); a `\"default\"` keeps the layer below's",
+       "type": "object"
+      },
+      "prelim": {
+       "description": "this configuration's [prelim]\n\nthe nearest layer's **replaces** `[prelim]` whole for this configuration (its chain's interfaces); `{}` means none",
+       "type": "object"
+      }
+     },
+     "required": [
+      "tools"
+     ],
+     "additionalProperties": false
+    },
     "configuration": {
-     "description": "the configuration hep run runs (required unless sweep_runs)\n\nmust name a `[run.<cfg>]` table (C2). Under `sweep_runs` it may be left out; `hep run <config>` then ignores it",
+     "description": "the configuration hep run runs (required unless sweep_runs)\n\nmust name a `[run.cfgs.<cfg>]` table (C2). Under `sweep_runs` it may be left out; `hep run <config>` then ignores it",
      "type": "string"
     },
     "serial": {
@@ -124,159 +433,7 @@
     "name",
     "project"
    ],
-   "additionalProperties": {
-    "type": "object",
-    "properties": {
-     "extends": {
-      "description": "another configuration this one starts from; its own keys win\n\nanother configuration this one starts from (chains are followed; a circle is refused)",
-      "type": "string"
-     },
-     "serial": {
-      "description": "this configuration's NN_ (else [run]'s)\n\noverrides `[run].serial` for this configuration: its points go to `<P>/<run name>/NN_<label>/` (V45)",
-      "anyOf": [
-       {
-        "type": "integer"
-       },
-       {
-        "const": "default"
-       }
-      ]
-     },
-     "name": {
-      "description": "this configuration's run folder (else [run].name)\n\nthe run folder above this configuration's: `<P>/<name>/NN_<label>/` (V46)",
-      "type": "string"
-     },
-     "label": {
-      "description": "this configuration's folder: NN_<label> (else its table key)\n\nthe configuration's folder, after the serial: `NN_<label>`; empty means the table key (V45)",
-      "type": "string"
-     },
-     "title": {
-      "description": "the run NN - <title> - header of a sweep\n\nthe header line of the run under `[run].sweep_runs`: `run 02 - <title> -` (04 §4.1)",
-      "type": "string"
-     },
-     "description": {
-      "description": "what the configuration is for",
-      "type": "string"
-     },
-     "event_count": {
-      "description": "events per point (else [run]'s)\n\nrequired here if `[run]` has none",
-      "anyOf": [
-       {
-        "type": "integer",
-        "minimum": 1
-       },
-       {
-        "const": "default"
-       }
-      ]
-     },
-     "threads": {
-      "description": "threads per generator (else [run]'s); 0 = every core\n\n`0` = every core",
-      "anyOf": [
-       {
-        "type": "integer",
-        "minimum": 0
-       },
-       {
-        "const": "default"
-       }
-      ]
-     },
-     "parallelism": {
-      "description": "points run at once (else [run]'s); \"auto\": cores ÷ a point's cores (V75)\n\npoints at once (`\"auto\"`: cores ÷ a point's cores, V75); `--plan` and the run's title say about how many cores that is, and warn past the machine's",
-      "anyOf": [
-       {
-        "type": [
-         "integer",
-         "string"
-        ],
-        "minimum": 1,
-        "enum": [
-         "auto"
-        ]
-       },
-       {
-        "const": "default"
-       }
-      ]
-     },
-     "swept": {
-      "description": "false: [run].sweep_runs leaves this configuration out",
-      "type": "boolean",
-      "default": true
-     },
-     "seed_type": {
-      "description": "how seeds are chosen (else [run]'s)\n\n`\"identity\"`: from the generator's identity; `\"manual\"`: exactly the given seed; `\"random\"`: drawn when the point runs (06 §8)",
-      "anyOf": [
-       {
-        "type": "string",
-        "enum": [
-         "identity",
-         "manual",
-         "random"
-        ]
-       },
-       {
-        "const": "default"
-       }
-      ]
-     },
-     "manual_seed": {
-      "description": "seed_type = manual: every point's seed (else [run]'s)\n\nthe seed of every point under `\"manual\"`; a quantity targeting `<tool>/seed` gives a point its own",
-      "anyOf": [
-       {
-        "type": "integer",
-        "minimum": 1
-       },
-       {
-        "const": "default"
-       }
-      ]
-     },
-     "sweeps": {
-      "description": "swept quantities: a name is an axis, an inner list an entangled group\n\n04 §5.1; `[]` is one point",
-      "type": "array"
-     },
-     "plot_points": {
-      "description": "swept quantities whose grid makes the pages\n\n04 §5.2",
-      "type": "array",
-      "items": {
-       "type": "string"
-      }
-     },
-     "combine": {
-      "description": "swept quantities whose points are merged into one (seed replicas)\n\nswept quantities whose points are merged into one curve (04 §5.5)",
-      "type": "array",
-      "items": {
-       "type": "string"
-      }
-     },
-     "tools": {
-      "description": "the chain: [A, [B, C], D]; an inner list runs together\n\n04 §5.3",
-      "type": "array"
-     },
-     "pre": {
-      "description": "tools run once, before every point\n\nthe form of `tools` (04 §5.4)",
-      "type": "array"
-     },
-     "post": {
-      "description": "tools run once, after every point\n\nthe form of `tools` (04 §5.4)",
-      "type": "array"
-     },
-     "static": {
-      "description": "quantity = value for this configuration, over [static]\n\nmerged over `[static]` and the layers', key by key (04 §7); a `\"default\"` keeps the layer below's",
-      "type": "object"
-     },
-     "prelim": {
-      "description": "this configuration's [prelim]\n\nthe nearest layer's **replaces** `[prelim]` whole for this configuration (its chain's interfaces); `{}` means none",
-      "type": "object"
-     }
-    },
-    "required": [
-     "tools"
-    ],
-    "additionalProperties": false
-   }
+   "additionalProperties": false
   },
   "prelim": {
    "type": "object",

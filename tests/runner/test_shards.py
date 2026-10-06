@@ -53,7 +53,7 @@ def test_sharding_does_not_move_the_seeds(scratch):
 @pytest.mark.parametrize("radius", [{"target": "rivet/photo_eic", "key": "R"},        # eic's radius
                                     {"target": "rivet/photo_eic", "key": {"rivet": "R"}}])
 def test_a_quantity_aimed_at_the_table_reaches_every_shard(scratch, radius):
-    data = sharded(3, run__one__sweeps=["radius"],
+    data = sharded(3, run__cfgs__one__sweeps=["radius"],
                    quantities__radius={**radius, "values": [0.4, 0.7], "tags": ["r04", "r07"]})
     _, _, p = plan(data, scratch, point=1)
     for i in range(1, 4):
@@ -67,7 +67,7 @@ def test_other_outputs_still_get_every_event(scratch):
                    tools__pythia__output_file=["events.hepmc", "copy.hepmc"],
                    tools__probe={"tool": "custom", "executable": "/bin/cat", "arguments": ["{input}"],
                                  "input": "copy.hepmc", "streamable": True},
-                   run__one__tools=[["pythia", "rivet", "probe"]])
+                   run__cfgs__one__tools=[["pythia", "rivet", "probe"]])
     _, _, p = plan(data, scratch)
     groups = p.rendered["pythia"].argv[1].split(",")
     assert groups == [f"{p.out / 'events.s1.hepmc'}+{p.out / 'events.s2.hepmc'}", str(p.out / "copy.hepmc")]
@@ -76,14 +76,14 @@ def test_other_outputs_still_get_every_event(scratch):
 def test_an_output_path_with_a_separator_is_refused(scratch):
     """`+` and `,` separate App_Pythia's outputs: a path holding one would be split into others."""
     with pytest.raises(HepError, match="contains ',' or '\\+'"):
-        plan(sharded(2, run__one__sweeps=["q"], quantities__q={"key": {"pythia": "MultipartonInteractions:pT0Ref"},
+        plan(sharded(2, run__cfgs__one__sweeps=["q"], quantities__q={"key": {"pythia": "MultipartonInteractions:pT0Ref"},
                                                                  "values": [3.0, 3.2], "tags": ["a+b", "c"]}), scratch)
 
 
 @pytest.mark.parametrize("changes, message", [
     ({"tools__rivet__shards": 0}, "at least 1"),
     ({"tools__yd2rt": {"tool": "yd2rt", "input": "photo.yoda", "output_file": "photo.root", "shards": 2},
-      "run__one__tools": [["pythia", "rivet"], "yd2rt"]}, "cannot be sharded"),
+      "run__cfgs__one__tools": [["pythia", "rivet"], "yd2rt"]}, "cannot be sharded"),
     ({"tools__rivet__shards": 2, "tools__pythia": {"tool": "custom", "executable": "/bin/true",
                                                    "output_file": "events.hepmc"}}, "cannot deal"),
     ({"tools__rivet__shards": 2, "prelim__fifo": [], "tools__rivet__input": "./tests/reference/legacy_run/x.hepmc"},

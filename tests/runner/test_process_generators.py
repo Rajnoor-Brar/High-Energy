@@ -90,7 +90,7 @@ def test_each_point_runs_its_own_generator_and_takes_what_it_consumes():
 
 
 def test_an_at_chain_still_refuses_a_value_no_alternative_consumes(scratch):
-    data = raw(run__one__tools=[["@gen", "rivet"]], run__one__sweeps=["gen"],
+    data = raw(run__cfgs__one__tools=[["@gen", "rivet"]], run__cfgs__one__sweeps=["gen"],
                quantities__gen={"values": ["pythia"], "tags": ["py"]},
                quantities__nothing={"values": [1], "key": {"herwig": "X"}}, static={"nothing": 1})
     run = parse(data, scratch)

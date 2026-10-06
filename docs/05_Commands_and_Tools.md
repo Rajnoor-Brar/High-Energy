@@ -133,7 +133,7 @@ the others.
   refused under a sweep of several runs: name the configuration.
 - **`--set KEY=VALUE`** overrides one value of the TOML, by dotted key, before anything is checked.
   The value is read as TOML, else as a string: `--set run.event_count=50000`, `--set
-  run.pdf.threads=8`, `--set static.energies=18x275`, `--set 'plot.formats=["png"]'`, `--set
+  run.cfgs.pdf.threads=8`, `--set static.energies=18x275`, `--set 'plot.formats=["png"]'`, `--set
   plot.min_entries=default`.
 - **`--rerun`** runs complete points (and the stages) again.
 - **`--only`:** `--only plot` draws the pages and runs nothing; `--only pre` and `--only post` run
@@ -479,7 +479,7 @@ says what it reads and writes.
 ## 7. `merge` — rivet-merge, in `post`
 
 ```toml
-[run.replicas]
+[run.cfgs.replicas]
 sweeps = ["replica"]
 tools  = [["pythia", "rivet"]]
 post   = ["merge"]
@@ -668,7 +668,7 @@ output_file = "events.hepmc"
 ## 15. `madgraph` — MadGraph5_aMC@NLO
 
 ```toml
-[run.single]
+[run.cfgs.single]
 tools = ["madgraph", ["shower", "rivet"], "yd2rt"]
 
 [prelim]

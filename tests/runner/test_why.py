@@ -56,7 +56,7 @@ def test_check_plans_every_configuration_and_fails_with_2(scratch, capsys):
     ok = argparse.Namespace(configs=["PhotoProduction/eic", "PhotoProduction/zeus_validation"])
     assert cli.cmd_check(ok) == 0
     bad = scratch / "bad.toml"
-    bad.write_text(tomli_w.dumps(raw(run__one__sweeps=["pfd"])), encoding="utf-8")
+    bad.write_text(tomli_w.dumps(raw(run__cfgs__one__sweeps=["pfd"])), encoding="utf-8")
     assert cli.cmd_check(argparse.Namespace(configs=[str(bad)])) == 2
     out = capsys.readouterr().out
     assert "ok    PhotoProduction/eic: 13 configuration(s)" in out and "FAIL  " + str(bad) in out

@@ -51,7 +51,7 @@ def test_every_eic_configuration_plans_and_its_seed_blocks_are_disjoint():
 
 
 def test_entangled_quantities_move_together_and_axes_form_a_grid(scratch):
-    data = raw(run__one__sweeps=["pdf", ["a", "b"]],
+    data = raw(run__cfgs__one__sweeps=["pdf", ["a", "b"]],
                quantities__a={"values": [1, 2, 3], "tags": ["a1", "a2", "a3"], "key": {"pythia": "A:x"}},
                quantities__b={"values": [4, 5, 6], "tags": ["b1", "b2", "b3"], "key": {"pythia": "B:y"}})
     run = config.parse(data, scratch / "t.toml")
@@ -153,7 +153,7 @@ def swept(scratch, **changes):
 
 
 def test_exclude_leaves_values_out_of_the_sweep(scratch):
-    got = swept(scratch, quantities__pt0ref={**THREE, "exclude": [2]}, run__one__sweeps=["pdf", "pt0ref"])
+    got = swept(scratch, quantities__pt0ref={**THREE, "exclude": [2]}, run__cfgs__one__sweeps=["pdf", "pt0ref"])
     assert [p.name for p in got] == ["MSTW08lo_pt30", "MSTW08lo_pt34", "NNPDF23lo_pt30", "NNPDF23lo_pt34"]
     assert [p.index for p in got] == [1, 2, 3, 4]                     # numbered over what is swept
     assert got[1].choice == {"pdf": 0, "pt0ref": 2}                    # the value keeps its own place
@@ -162,7 +162,7 @@ def test_exclude_leaves_values_out_of_the_sweep(scratch):
 def test_an_entangled_group_loses_the_value_any_of_its_quantities_excludes(scratch):
     alphas = {"values": [0.118, 0.130], "tags": ["as118", "as130"], "key": {"pythia": "SigmaProcess:alphaSvalue"},
               "exclude": [1]}
-    got = swept(scratch, quantities__alphas=alphas, run__one__sweeps=[["pdf", "alphas"]])
+    got = swept(scratch, quantities__alphas=alphas, run__cfgs__one__sweeps=[["pdf", "alphas"]])
     assert [p.name for p in got] == ["NNPDF23lo_as130"]
 
 
@@ -172,8 +172,8 @@ def test_a_static_value_may_still_be_an_excluded_one(scratch):
 
 
 def test_exclude_changes_no_remaining_point(scratch):
-    _, _, before = plan(raw(quantities__pt0ref=THREE, run__one__sweeps=["pt0ref"]), scratch)
-    _, _, after = plan(raw(quantities__pt0ref={**THREE, "exclude": [2, 3]}, run__one__sweeps=["pt0ref"]), scratch)
+    _, _, before = plan(raw(quantities__pt0ref=THREE, run__cfgs__one__sweeps=["pt0ref"]), scratch)
+    _, _, after = plan(raw(quantities__pt0ref={**THREE, "exclude": [2, 3]}, run__cfgs__one__sweeps=["pt0ref"]), scratch)
     assert (before.point.name, before.identity) == (after.point.name, after.identity)
 
 
@@ -183,7 +183,7 @@ def test_exclude_changes_no_remaining_point(scratch):
 ])
 def test_what_exclude_refuses(scratch, exclude, message):
     with pytest.raises(HepError, match=message):
-        swept(scratch, quantities__pt0ref={**THREE, "exclude": exclude}, run__one__sweeps=["pt0ref"])
+        swept(scratch, quantities__pt0ref={**THREE, "exclude": exclude}, run__cfgs__one__sweeps=["pt0ref"])
 
 
 def test_an_entangled_group_with_nothing_left_is_refused(scratch):
@@ -191,4 +191,4 @@ def test_an_entangled_group_with_nothing_left_is_refused(scratch):
               "exclude": [2]}
     with pytest.raises(HepError, match="no value"):
         swept(scratch, quantities__alphas=alphas, quantities__pdf={**raw()["quantities"]["pdf"], "exclude": [1]},
-              run__one__sweeps=[["pdf", "alphas"]])
+              run__cfgs__one__sweeps=[["pdf", "alphas"]])

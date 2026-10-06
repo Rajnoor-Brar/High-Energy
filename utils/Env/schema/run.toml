@@ -9,7 +9,7 @@
 #   min      the smallest number allowed
 #   required true: the table must set it
 #   default  the runner's value when the key is left out
-#   inherit  true: a configuration ([run.<cfg>]) inherits it from [run]
+#   inherit  true: a configuration ([run.cfgs.<cfg>]) inherits it from [run]
 #   default_ok  true: the value "default" is accepted. "default" means "keep it as it is" (V55): in a
 #            child it is the parent's value; at the top level nothing is set, and the tool decides.
 #   page     a [plot] key a figure ([plot.figures.<figure>]) may override
@@ -19,7 +19,7 @@
 #   notes    what a line cannot say: the reference's text for the key (docs/04_Config_Reference.md is
 #            generated from doc and notes, `make docs`), shown by `hep explain` and the editor too
 #
-# Tables: config, run, configuration ([run.<cfg>]), prelim, quantity ([quantities.<q>]), tool
+# Tables: config, run, configuration ([run.cfgs.<cfg>]), prelim, quantity ([quantities.<q>]), tool
 # ([tools.<tag>]: the keys every tool table may carry; a folder's [options] add its own), plot,
 # figure ([plot.figures.<figure>]), data.
 
@@ -103,11 +103,28 @@ notes = """\
   the subfolder of `configs/`, `modules/`, `output/`, `results/`; must equal the folder the file \
   is in, when it is under `configs/`"""
 
+[run.cfgs]
+type  = "table"
+doc   = "the configurations: [run.cfgs.<cfg>], each a table of the keys below (V98)"
+notes = """\
+  the configurations, each `[run.cfgs.<cfg>]` (V98; they were `[run.<cfg>]`, which is refused \
+  with the form to write, and `hep migrate` rewrites it). A configuration's key is its name for \
+  `hep run <config> <cfg>`, `sweep_runs`, `extends` and compare figures, and its folder unless it \
+  sets a `label`. Any name may be used, a [run] key's included."""
+
+[run.defaults]
+type  = "table"
+doc   = "keys every configuration starts from (V56): a configuration's table, never run itself"
+notes = """\
+  keys every configuration starts from (V56), below each configuration's own and the one it \
+  `extends`, above `[run]`'s. It is not a configuration; it may not set `label`, `title` or \
+  `extends`, which are each configuration's own."""
+
 [run.configuration]
 type = "str"
 doc  = "the configuration hep run runs (required unless sweep_runs)"
 notes = """\
-  must name a `[run.<cfg>]` table (C2). Under `sweep_runs` it may be left out; `hep run <config>` \
+  must name a `[run.cfgs.<cfg>]` table (C2). Under `sweep_runs` it may be left out; `hep run <config>` \
   then ignores it"""
 
 [run.serial]
@@ -190,7 +207,7 @@ notes = """\
   point's generators' `[card] seed_range`: 899,999,999 for Pythia, checked when the point is \
   planned, V54); ignored otherwise (`--plan` says so)"""
 
-# ── [run.<cfg>] ──────────────────────────────────────────────────────────────────────────────
+# ── [run.cfgs.<cfg>] ──────────────────────────────────────────────────────────────────────────────
 # A configuration's value is its own, else the one it `extends` (and so on), else [run.defaults]'s (a
 # table of these keys shared by every configuration), else [run]'s, else the default here. label,
 # title, extends and swept are each configuration's own.

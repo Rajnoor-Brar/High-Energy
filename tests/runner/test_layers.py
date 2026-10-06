@@ -1,4 +1,4 @@
-"""Layers (V56): [run.defaults], extends, [config].import (V93), "default" in a child, sweeping events, --show-config."""
+"""Layers (V56): [run.defaults], extends, [run.cfgs.<cfg>] (V98), [config].import (V93), "default" in a child, sweeping events, --show-config."""
 
 from __future__ import annotations
 
@@ -14,11 +14,13 @@ from helpers import parse, plan, raw
 
 
 def configurations(**tables) -> dict:
-    """raw() with [run.one] replaced by these configurations ([run.configuration] = the first)."""
+    """raw() with [run.cfgs.one] replaced by these configurations ([run.configuration] = the first);
+    `defaults` is [run.defaults]."""
     data = raw()
-    del data["run"]["one"]
-    data["run"].update(tables)
-    data["run"]["configuration"] = next(k for k in tables if k != "defaults")
+    if "defaults" in tables:
+        data["run"]["defaults"] = tables.pop("defaults")
+    data["run"]["cfgs"] = tables
+    data["run"]["configuration"] = next(iter(tables))
     return data
 
 
@@ -27,7 +29,7 @@ def test_run_defaults_reach_every_configuration_and_their_own_keys_win(scratch):
                                a={}, b={"event_count": 7}), scratch)
     a, b = run.configurations["a"], run.configurations["b"]
     assert a.tools == b.tools == [["pythia", "rivet"]] and (a.event_count, b.event_count) == (50, 7)
-    assert a.origins["event_count"] == "[run.defaults]" and b.origins["event_count"] == "[run.b]"
+    assert a.origins["event_count"] == "[run.defaults]" and b.origins["event_count"] == "[run.cfgs.b]"
     assert "defaults" not in run.configurations                       # a reserved name, not a configuration
 
 
@@ -37,7 +39,7 @@ def test_extends_takes_the_parents_keys_but_not_its_folder_or_title(scratch):
     big = run.configurations["big"]
     assert big.sweeps == ["pdf"] and big.event_count == 900 and big.tools == [["pythia", "rivet"]]
     assert big.label == "big" and big.title == "big"                  # its own label and title
-    assert big.origins["sweeps"] == "[run.base]"
+    assert big.origins["sweeps"] == "[run.cfgs.base]"
 
 
 def test_extends_chains_and_refuses_a_circle_or_a_missing_parent(scratch):
@@ -160,7 +162,7 @@ def test_another_projects_file_brings_its_cards_and_plans_the_same(scratch, monk
 
 def _other(scratch) -> Path:
     """A run with two configurations, a figure and an extra quantity, to import parts of."""
-    data = raw(run__name="other", run__two={"tools": [["pythia", "rivet"]], "event_count": 99},
+    data = raw(run__name="other", run__cfgs__two={"tools": [["pythia", "rivet"]], "event_count": 99},
                quantities__energies={"values": [[275, 18]], "tags": ["18x275"]},
                plot={"ratio": True, "figures": {"tails": {"objects": ["d04-*"]}, "keep": {"objects": ["d05-*"]}}})
     path = scratch / "other.toml"
@@ -173,13 +175,13 @@ def test_an_import_may_take_only_some_of_a_file(scratch):
     other = _other(scratch)
     path = scratch / "run.toml"
     mine = {"run": {"name": "mine", "project": "PhotoProduction", "configuration": "two"}}
-    path.write_text(tomli_w.dumps({**mine, "config": {"import": [{"from": str(other), "only": ["run.two", "quantities", "tools", "prelim"]}]}}),
+    path.write_text(tomli_w.dumps({**mine, "config": {"import": [{"from": str(other), "only": ["run.cfgs.two", "quantities", "tools", "prelim"]}]}}),
                     encoding="utf-8")
     run = config.load(str(path))
     assert set(run.configurations) == {"two"} and run.configuration(None).event_count == 99
     assert not run.plot and set(run.quantities) == {"pdf", "energies"}
-    path.write_text(tomli_w.dumps({**mine, "config": {"import": [{"from": str(other), "only": ["run.tow"]}]}}), encoding="utf-8")
-    with pytest.raises(HepError, match="only names 'run.tow', which other.toml has not") as error:
+    path.write_text(tomli_w.dumps({**mine, "config": {"import": [{"from": str(other), "only": ["run.cfgs.tow"]}]}}), encoding="utf-8")
+    with pytest.raises(HepError, match="only names 'run.cfgs.tow', which other.toml has not") as error:
         config.load(str(path))
     assert "two" in error.value.hint
 
@@ -189,16 +191,16 @@ def test_drop_takes_out_what_an_import_gave(scratch):
     other = _other(scratch)
     path = scratch / "run.toml"
     mine = {"run": {"name": "mine", "project": "PhotoProduction"}}
-    path.write_text(tomli_w.dumps({**mine, "config": {"import": str(other), "drop": ["run.two", "plot.figures.tails", "quantities.energies"]}}),
+    path.write_text(tomli_w.dumps({**mine, "config": {"import": str(other), "drop": ["run.cfgs.two", "plot.figures.tails", "quantities.energies"]}}),
                     encoding="utf-8")
     run = config.load(str(path))
     assert set(run.configurations) == {"one"} and set(run.plot["figures"]) == {"keep"} and "energies" not in run.quantities
-    assert "quantities.energies" not in run.included and run.included["run.one"] == "other.toml"
+    assert "quantities.energies" not in run.included and run.included["run.cfgs.one"] == "other.toml"
     path.write_text(tomli_w.dumps({**mine, "config": {"import": str(other), "drop": ["plot.figures.tials"]}}), encoding="utf-8")
     with pytest.raises(HepError, match="drop names 'plot.figures.tials', which no import gave") as error:
         config.load(str(path))
     assert "tails" in error.value.hint
-    path.write_text(tomli_w.dumps(raw(config={"drop": ["run.one"]})), encoding="utf-8")
+    path.write_text(tomli_w.dumps(raw(config={"drop": ["run.cfgs.one"]})), encoding="utf-8")
     with pytest.raises(HepError, match="this file imports nothing"):
         config.load(str(path))
 
@@ -267,7 +269,7 @@ def test_master_is_config_now(scratch):
 
 
 def test_events_swept_as_a_quantity_set_each_points_count(scratch):
-    data = raw(run__one__sweeps=["events"], quantities__events={"values": [100, 2500], "tags": ["e100", "e2500"]})
+    data = raw(run__cfgs__one__sweeps=["events"], quantities__events={"values": [100, 2500], "tags": ["e100", "e2500"]})
     _, _, small = plan(data, scratch, point=0)
     _, _, large = plan(data, scratch, point=1)
     assert (small.events, large.events) == (100, 2500)
@@ -279,6 +281,6 @@ def test_show_config_says_where_each_value_came_from(scratch):
     run = parse(configurations(defaults={"tools": [["pythia", "rivet"]]}, a={"event_count": 5}), scratch)
     lines = cli.show_config(run, ["a"])
     assert any(l.split()[0] == "tools" and l.endswith("[run.defaults]") for l in lines[1:])
-    assert any(l.split()[0] == "event_count" and l.endswith("[run.a]") for l in lines[1:])
+    assert any(l.split()[0] == "event_count" and l.endswith("[run.cfgs.a]") for l in lines[1:])
     assert any(l.split()[0] == "parallelism" and l.endswith("default") for l in lines[1:])
     assert any(l.split()[0] == "label" and l.endswith("default") for l in lines[1:])

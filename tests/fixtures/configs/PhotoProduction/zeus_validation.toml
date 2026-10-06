@@ -14,12 +14,12 @@ configuration = "default"
 event_count   = 1_000_000
 threads       = 20
 
-[run.default]
+[run.cfgs.default]
 description = "Proton-PDF comparison at 27.5x920 GeV e+p against ZEUS 2012 (built-in Rivet analysis)"
 sweeps      = ["pdf"]
 tools       = [["pythia", "rivet"], "yd2rt"]
 
-[run.single]
+[run.cfgs.single]
 description = "One run at the static point"
 sweeps      = []
 tools       = [["pythia", "rivet"], "yd2rt"]
