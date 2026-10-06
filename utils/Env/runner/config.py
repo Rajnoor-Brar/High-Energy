@@ -160,29 +160,21 @@ class RunConfig:
 
 # ── checking ───────────────────────────────────────────────────────────────────────────────────
 
-#: [run.defaults]: keys every configuration shares (V56), never a configuration.
+#: [run.defaults] (V56) is gone: [run] itself gives every configuration its keys (V99).
 DEFAULTS = "defaults"
 #: [run.cfgs.<cfg>]: the configurations (V98; they were [run.<cfg>], beside [run]'s own keys).
 CFGS = "cfgs"
-#: Each configuration's own: never taken from the one it extends, [run.defaults] or [run].
+#: Each configuration's own: never taken from the one it extends or [run].
 OWN = ("label", "title", "extends", "swept")
 
 
 def _layers(run: dict, where: str) -> dict[str, list[tuple[str, dict]]]:
     """Each configuration's layers, most specific first (V56): its own table ([run.cfgs.<cfg>], V98), the
-    ones it `extends`, in turn, then [run.defaults]. [run] and the schema's defaults come after, in
-    `inherited`."""
+    ones it `extends`, in turn. [run] (V99) and the schema's defaults come after, in `inherited`."""
     tables = run.get(CFGS, {})
     for key, table in tables.items():
         if not isinstance(table, dict):
             raise HepError("a configuration is a table", where=f"{where}: [run.{CFGS}.{key}]")
-    defaults = run.get(DEFAULTS)
-    if defaults is not None:
-        schema.check(defaults, "configuration", f"{where}: [run.{DEFAULTS}]")
-        own = [k for k in OWN if k in defaults]
-        if own:
-            raise HepError(f"[run.{DEFAULTS}] sets {', '.join(own)}, which each configuration has of its own",
-                           where=f"{where}: [run.{DEFAULTS}]", hint="set them in the configurations")
     out = {}
     for key, table in tables.items():
         schema.check(table, "configuration", f"{where}: [run.{CFGS}.{key}]")
@@ -196,8 +188,6 @@ def _layers(run: dict, where: str) -> dict[str, list[tuple[str, dict]]]:
             seen.add(parent)
             chain.append((f"[run.{CFGS}.{parent}]", tables[parent]))
             parent = tables[parent].get("extends")
-        if defaults is not None:
-            chain.append((f"[run.{DEFAULTS}]", defaults))
         out[key] = chain
     return out
 
@@ -503,9 +493,8 @@ def _imports(raw: dict, path: Path, project: str, chain: tuple[Path, ...]) -> tu
 
 
 def _run_entries(raw: dict) -> list[str]:
-    """The tables of [run] an import gives whole: run.cfgs.<cfg> and run.defaults."""
-    run = raw.get("run", {})
-    return [f"run.{CFGS}.{k}" for k in run.get(CFGS, {})] + ([f"run.{DEFAULTS}"] if isinstance(run.get(DEFAULTS), dict) else [])
+    """The tables of [run] an import gives whole: run.cfgs.<cfg>."""
+    return [f"run.{CFGS}.{k}" for k in raw.get("run", {}).get(CFGS, {})]
 
 
 def _with_imports(raw: dict, path: Path) -> tuple[dict, dict]:
@@ -618,12 +607,17 @@ def parse(raw: dict, path: Path, strict: bool = True) -> RunConfig:
     run = raw.get("run")
     if not isinstance(run, dict):
         raise HepError("missing [run]", where=where, hint="every run TOML has [run] name, project, configuration")
-    old = [k for k, v in run.items() if isinstance(v, dict) and k not in (CFGS, DEFAULTS) and k not in schema.keys("run")]
+    if isinstance(run.get(DEFAULTS), dict):                         # V99: [run] gives what it gave
+        if strict:
+            raise HepError(f"[run.{DEFAULTS}] is [run] now (V99): its keys go in [run] itself, which every configuration "
+                           "starts from", where=f"{where}: [run.{DEFAULTS}]", hint="hep migrate moves them")
+        run = {**{k: v for k, v in run.items() if k != DEFAULTS}, **run[DEFAULTS]}   # it was above [run]
+        raw = {**raw, "run": run}
+    old = [k for k, v in run.items() if isinstance(v, dict) and k != CFGS and k not in schema.keys("run")]
     if old and strict:                                                # break and migrate (V98)
         raise HepError(f"[run.{old[0]}] is a configuration, and configurations are [run.{CFGS}.<cfg>] now (V98)",
                        where=f"{where}: [run.{old[0]}]",
-                       hint=f"did you mean [run.{DEFAULTS}]?" if did_you_mean(old[0], [DEFAULTS])
-                       else f"write [run.{CFGS}.{old[0]}]; hep migrate rewrites the file")
+                       hint=f"write [run.{CFGS}.{old[0]}]; hep migrate rewrites the file")
     if old:                                      # hep migrate reads the old form it rewrites (V79, V98)
         run = {**{k: v for k, v in run.items() if k not in old}, CFGS: {**{k: run[k] for k in old}, **run.get(CFGS, {})}}
         raw = {**raw, "run": run}
@@ -713,7 +707,7 @@ def parse(raw: dict, path: Path, strict: bool = True) -> RunConfig:
         origins: dict[str, str] = {}
 
         def inherited(name: str, fallback=None):
-            """The most specific layer's value (V56): own, extended, [run.defaults], then [run]; a
+            """The most specific layer's value (V56): own, extended, then [run] (V99); a
             "default" in a layer is the next one's (V55); else the schema's default."""
             layers = chain[:1] if name in OWN else chain
             if name in schema.keys("run"):
@@ -738,7 +732,7 @@ def parse(raw: dict, path: Path, strict: bool = True) -> RunConfig:
         tools_entries = inherited("tools")
         if tools_entries is None:
             raise HepError("a configuration needs tools = [...]", where=at,
-                           hint="here, in the configuration it extends, or in [run.defaults]")
+                           hint="here, in the configuration it extends, or in [run]")
         sweeps = _sweeps(inherited("sweeps", []), f"{at}.sweeps", quantities)
         swept = {n for entry in sweeps for n in (entry if isinstance(entry, list) else [entry])}
         plot_points = inherited("plot_points", [])

@@ -127,7 +127,7 @@ the others.
 - **`--why`** gives, for each point and stage that would run, what changed since it last completed,
   from its `identity.json`: `events: 10 → 20`, `tools.pythia.card: + PDF:pSet = …` (V57).
 - **`--show-config`** prints each configuration's resolved values and the layer each came from (its
-  own, `extends`, `[run.defaults]`, `[run]`, default), and what `[config].import` gave (V56).
+  own, `extends`, `[run]`, default), and what `[config].import` gave (V56).
 - **`--points SEL`** takes comma-separated point names, single tags, 1-based indices, or
   `quantity=tag`. The other points keep their state, and `points.json` lists them all. It is
   refused under a sweep of several runs: name the configuration.

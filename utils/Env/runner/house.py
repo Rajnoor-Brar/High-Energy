@@ -75,7 +75,7 @@ def explain(key: str) -> list[str]:
     found = []
     if len(parts) >= 2 and parts[0] in TABLES:
         table = TABLES[parts[0]]
-        if parts[0] == "run" and len(parts) >= 3 and parts[1] in ("cfgs", "defaults"):   # a configuration's (V98)
+        if parts[0] == "run" and len(parts) >= 3 and parts[1] == "cfgs":   # a configuration's (V98)
             table = "configuration"
         name = parts[-1]
         if name in schema.keys(table):

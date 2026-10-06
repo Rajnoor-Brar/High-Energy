@@ -17,7 +17,9 @@ and layout stay:
   is not even TOML) → `style.ratio.range`. This runs on the text first, so a file it makes TOML reads.
 * (V93) `[master]` → `[config]`, its `master_toml` → `master` and `include` → `import`, on the text too.
 * (V98) `[run.<cfg>]` → `[run.cfgs.<cfg>]`, its subtables too (`[run.<cfg>.static]`), and the same
-  headers in comments (a configuration commented out stays one to uncomment); `[run.defaults]` stays.
+  headers in comments (a configuration commented out stays one to uncomment).
+* (V99) `[run.defaults]` → its keys moved into `[run]`, at the end of its keys; one [run] sets too is
+  [run.defaults]'s value (it was the nearer layer). Its comments go with it.
 """
 
 from __future__ import annotations
@@ -59,9 +61,9 @@ _RUN_TABLE = re.compile(r"^(\s*#*\s*)\[\s*run\.([A-Za-z0-9_\-]+)((?:\.[A-Za-z0-9
 
 def cfgs_text(text: str) -> str:
     """[run.<cfg>] as [run.cfgs.<cfg>] (V98), by line: a table header (or a commented-out one) under
-    [run] that is not one of [run]'s own keys, `defaults` or `cfgs`."""
+    [run] that is not one of [run]'s own keys, `defaults` (V99's to move) or `cfgs`."""
     from . import schema
-    own = set(schema.keys("run"))
+    own = set(schema.keys("run")) | {"defaults", "cfgs"}
     out = []
     for line in text.splitlines(keepends=True):
         match = _RUN_TABLE.match(line)
@@ -73,6 +75,31 @@ def cfgs_text(text: str) -> str:
             line = f"{match[1]}[run.cfgs.{match[2]}{match[3]}]{tail}"
         out.append(line)
     return "".join(out)
+
+
+def defaults_text(text: str) -> str:
+    """[run.defaults]'s keys into [run] (V99), by line: the block is taken out (its header and its
+    lines up to the next table) and its lines go after [run]'s own; a key [run] sets too loses [run]'s
+    line, since [run.defaults] was the nearer layer."""
+    lines = text.splitlines(keepends=True)
+    heads = [i for i, l in enumerate(lines) if _TABLE.match(l)]
+    start = next((i for i in heads if _TABLE.match(lines[i])[1].strip() == "run.defaults"), None)
+    run = next((i for i in heads if _TABLE.match(lines[i])[1].strip() == "run"), None)
+    if start is None or run is None:
+        return text
+    end = next((i for i in heads if i > start), len(lines))
+    block = lines[start + 1:end]
+    while block and not block[-1].strip():
+        block.pop()
+    moved = {m[2] for l in block if (m := _KEY.match(l.rstrip("\n")))}
+    rest = lines[:start] + lines[end:]
+    run = next(i for i, l in enumerate(rest) if _TABLE.match(l) and _TABLE.match(l)[1].strip() == "run")
+    after = next((i for i in range(run + 1, len(rest)) if _TABLE.match(rest[i])), len(rest))
+    body = [l for l in rest[run + 1:after] if not ((m := _KEY.match(l.rstrip("\n"))) and m[2] in moved)]
+    tail = []
+    while body and not body[-1].strip():
+        tail.insert(0, body.pop())
+    return "".join(rest[:run + 1] + body + block + (tail or ["\n"]) + rest[after:])
 
 
 #: [master]'s keys as [config] names them (V93).
@@ -278,7 +305,7 @@ def plan(names: list[str]) -> dict[Path, tuple[str, str]]:
     changes: dict[Path, tuple[str, str]] = {}
     for name in names:
         text = config_file(name).read_text(encoding="utf-8")
-        first = cfgs_text(config_text(figure_text(text)))
+        first = defaults_text(cfgs_text(config_text(figure_text(text))))
         run = configmod.load(name, strict=False, text=first)
         new = toml_text(first, run, run.project)
         if new != text:

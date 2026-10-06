@@ -112,14 +112,6 @@ notes = """\
   `hep run <config> <cfg>`, `sweep_runs`, `extends` and compare figures, and its folder unless it \
   sets a `label`. Any name may be used, a [run] key's included."""
 
-[run.defaults]
-type  = "table"
-doc   = "keys every configuration starts from (V56): a configuration's table, never run itself"
-notes = """\
-  keys every configuration starts from (V56), below each configuration's own and the one it \
-  `extends`, above `[run]`'s. It is not a configuration; it may not set `label`, `title` or \
-  `extends`, which are each configuration's own."""
-
 [run.configuration]
 type = "str"
 doc  = "the configuration hep run runs (required unless sweep_runs)"
@@ -208,9 +200,9 @@ notes = """\
   planned, V54); ignored otherwise (`--plan` says so)"""
 
 # ── [run.cfgs.<cfg>] ──────────────────────────────────────────────────────────────────────────────
-# A configuration's value is its own, else the one it `extends` (and so on), else [run.defaults]'s (a
-# table of these keys shared by every configuration), else [run]'s, else the default here. label,
-# title, extends and swept are each configuration's own.
+# A configuration's value is its own, else the one it `extends` (and so on), else [run]'s (which takes
+# every key here but label, title, extends, swept, static and prelim: V99, it was [run.defaults]),
+# else the default here. label, title, extends and swept are each configuration's own.
 
 [configuration.extends]
 type = "str"

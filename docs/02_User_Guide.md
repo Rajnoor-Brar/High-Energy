@@ -494,9 +494,7 @@ project       = "PhotoProduction"
 configuration = "default"
 event_count   = 1_000_000
 threads       = 12
-
-[run.defaults]
-tools = ["inproc", "yd2rt"]
+tools         = ["inproc", "yd2rt"]   # every configuration's, unless it sets its own
 
 [run.cfgs.default]
 sweeps = ["pdf"]                  # the file has ptref, mpi and single too, each a sweep and nothing more

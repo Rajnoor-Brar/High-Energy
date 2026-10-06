@@ -133,6 +133,14 @@ def test_the_old_figure_tables_become_figures(scratch, capsys):
     assert run.plot["figures"]["d04"] == {"objects": ["d04-*"], "logy": True}
 
 
+def test_run_defaults_move_into_run():
+    """V99: its keys after [run]'s own, its value where both set one (it was the nearer layer)."""
+    text = '[run]\nname = "x"\nthreads = 4      # all\n\n[run.defaults]\nthreads = 8\ntools = ["a"]   # every one\n\n[run.cfgs.a]\nsweeps = []\n'
+    new = migrate.defaults_text(text)
+    assert new == '[run]\nname = "x"\nthreads = 8\ntools = ["a"]   # every one\n\n[run.cfgs.a]\nsweeps = []\n'
+    assert migrate.defaults_text(new) == new
+
+
 def test_master_becomes_config(scratch):
     """V93: the table and its two keys renamed, by line; the file then reads."""
     common = scratch / "common.toml"

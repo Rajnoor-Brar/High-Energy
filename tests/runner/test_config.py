@@ -49,7 +49,7 @@ def test_configurations_are_run_cfgs_and_run_holds_only_its_own_keys(scratch):
     assert "[run.cfgs.pdf]" in error.value.hint and "hep migrate" in error.value.hint
     with pytest.raises(HepError, match=r"\[run.defualts\] is a configuration") as error:
         parse(raw(run__defualts={"event_count": 5}), scratch)
-    assert "[run.defaults]" in error.value.hint
+    assert "[run.cfgs.defualts]" in error.value.hint
     with pytest.raises(HepError, match="'threads' must be an integer"):
         parse(raw(run__threads={"tools": [["pythia", "rivet"]]}), scratch)
     run = parse(raw(run__configuration="threads", run__cfgs__threads={"tools": [["pythia", "rivet"]]}), scratch)

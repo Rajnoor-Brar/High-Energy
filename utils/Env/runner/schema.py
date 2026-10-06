@@ -41,6 +41,11 @@ def spec() -> dict:
         raise HepError(f"cannot read the schema: {error}", where=str(path())) from None
 
 
+#: Configuration keys [run] gives every configuration (V99; they were [run.defaults]'s), besides the
+#: ones the schema marks `inherit` in [run] itself.
+RUN_GIVES = ("tools", "sweeps", "plot_points", "combine", "pre", "post")
+
+
 def keys(table: str) -> dict[str, dict]:
     """The keys of one schema table: name → its entry. A figure's are every [plot] key marked `page`, as
     a child has them ("default" is [plot]'s value; no default of its own), then its own."""
@@ -49,6 +54,9 @@ def keys(table: str) -> dict[str, dict]:
                          "doc": f"as [plot].{k}, for these pages"}
                      for k, e in spec().get("plot", {}).items() if e.get("page")}
         return inherited | spec().get(table, {})
+    if table == "run":
+        given = {k: {**spec()["configuration"][k], "inherit": True} for k in RUN_GIVES}
+        return spec().get("run", {}) | given
     return spec().get(table, {})
 
 
@@ -159,7 +167,6 @@ def json_schema() -> dict:
     configuration = _object("configuration")
     run = _object("run")
     run["properties"]["cfgs"] = {"type": "object", "additionalProperties": configuration}   # [run.cfgs.<cfg>] (V98)
-    run["properties"]["defaults"] = configuration
     figure = _object("figure")
     plot = _object("plot")
     plot["properties"]["figures"] = {"type": "object", "additionalProperties": figure}

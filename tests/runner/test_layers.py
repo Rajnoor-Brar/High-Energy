@@ -1,4 +1,4 @@
-"""Layers (V56): [run.defaults], extends, [run.cfgs.<cfg>] (V98), [config].import (V93), "default" in a child, sweeping events, --show-config."""
+"""Layers (V56): [run] for every configuration (V99, was [run.defaults]), extends, [run.cfgs.<cfg>] (V98), [config].import (V93), "default" in a child, sweeping events, --show-config."""
 
 from __future__ import annotations
 
@@ -15,22 +15,21 @@ from helpers import parse, plan, raw
 
 def configurations(**tables) -> dict:
     """raw() with [run.cfgs.one] replaced by these configurations ([run.configuration] = the first);
-    `defaults` is [run.defaults]."""
+    `run` adds keys to [run] itself, which every configuration starts from (V99)."""
     data = raw()
-    if "defaults" in tables:
-        data["run"]["defaults"] = tables.pop("defaults")
+    data["run"].update(tables.pop("run", {}))
     data["run"]["cfgs"] = tables
     data["run"]["configuration"] = next(iter(tables))
     return data
 
 
-def test_run_defaults_reach_every_configuration_and_their_own_keys_win(scratch):
-    run = parse(configurations(defaults={"tools": [["pythia", "rivet"]], "event_count": 50},
+def test_run_gives_every_configuration_its_keys_and_their_own_win(scratch):
+    run = parse(configurations(run={"tools": [["pythia", "rivet"]], "event_count": 50},
                                a={}, b={"event_count": 7}), scratch)
     a, b = run.configurations["a"], run.configurations["b"]
     assert a.tools == b.tools == [["pythia", "rivet"]] and (a.event_count, b.event_count) == (50, 7)
-    assert a.origins["event_count"] == "[run.defaults]" and b.origins["event_count"] == "[run.cfgs.b]"
-    assert "defaults" not in run.configurations                       # a reserved name, not a configuration
+    assert a.origins["event_count"] == "[run]" and b.origins["event_count"] == "[run.cfgs.b]"
+    assert a.origins["tools"] == "[run]"
 
 
 def test_extends_takes_the_parents_keys_but_not_its_folder_or_title(scratch):
@@ -53,18 +52,26 @@ def test_extends_chains_and_refuses_a_circle_or_a_missing_parent(scratch):
     assert "'a'" in caught.value.hint
 
 
-def test_run_defaults_cannot_set_a_configurations_own_keys(scratch):
-    with pytest.raises(HepError, match="each configuration has of its own"):
-        parse(configurations(defaults={"label": "x"}, a={"tools": [["pythia", "rivet"]]}), scratch)
+def test_run_cannot_set_a_configurations_own_keys_and_run_defaults_is_gone(scratch):
+    """V99: label, title and extends are each configuration's own; [run.defaults] is refused, read
+    leniently (hep migrate's) as keys of [run], and `defaults` may now name a configuration."""
+    with pytest.raises(HepError, match="unknown key 'label'"):
+        parse(configurations(run={"label": "x"}, a={"tools": [["pythia", "rivet"]]}), scratch)
+    data = raw(run__defaults={"threads": 3})
+    with pytest.raises(HepError, match=r"\[run.defaults\] is \[run\] now") as error:
+        parse(data, scratch)
+    assert "hep migrate" in error.value.hint
+    assert config.parse(data, scratch / "t.toml", strict=False).configuration(None).threads == 3
+    assert "defaults" in parse(configurations(defaults={"tools": [["pythia", "rivet"]]}), scratch).configurations
 
 
 def test_default_in_a_child_is_the_next_layers_value(scratch):
-    run = parse(configurations(defaults={"threads": 4}, a={"tools": [["pythia", "rivet"]], "threads": "default"}), scratch)
-    assert run.configurations["a"].threads == 4 and run.configurations["a"].origins["threads"] == "[run.defaults]"
+    run = parse(configurations(run={"threads": 4}, a={"tools": [["pythia", "rivet"]], "threads": "default"}), scratch)
+    assert run.configurations["a"].threads == 4 and run.configurations["a"].origins["threads"] == "[run]"
 
 
 def test_static_merges_through_the_layers_and_default_at_the_top_unsets(scratch):
-    data = configurations(defaults={"static": {"pdf": "NNPDF23lo"}}, a={"tools": [["pythia", "rivet"]]},
+    data = configurations(a={"tools": [["pythia", "rivet"]], "static": {"pdf": "NNPDF23lo"}},
                           b={"extends": "a", "static": {"pdf": "default"}})
     run = parse(data, scratch)
     assert run.configurations["b"].static == {"pdf": "NNPDF23lo"}      # "default" keeps the parent's
@@ -83,7 +90,7 @@ def test_include_gives_tables_and_the_file_wins(scratch):
         "quantities": {"energies": {"values": [[275, 18]], "tags": ["18x275"]},
                        "pdf": {"values": ["LHAPDF6:MSTW2008lo68cl"], "tags": ["old"]}},
         "plot": {"ratio": True, "y_gutter": 2.0},
-        "run": {"defaults": {"event_count": 33}},
+        "run": {"event_count": 33},
     }), encoding="utf-8")
     data = raw(config={"import": [str(common)]}, plot={"y_gutter": 0.3})
     del data["run"]["event_count"]
@@ -94,7 +101,7 @@ def test_include_gives_tables_and_the_file_wins(scratch):
     assert run.quantities["pdf"].tags == ["MSTW08lo", "NNPDF23lo"]      # the file's own, whole: nothing of "old"
     assert run.plot["ratio"] is True and run.plot["y_gutter"] == 0.3   # tables deep, the file's keys win
     assert run.configuration(None).event_count == 33
-    assert run.included == {"quantities.energies": "common.toml", "run.defaults": "common.toml"}
+    assert run.included == {"quantities.energies": "common.toml"}
 
 
 def test_imports_nest_depth_first_and_say_where_from(scratch):
@@ -278,9 +285,9 @@ def test_events_swept_as_a_quantity_set_each_points_count(scratch):
 
 
 def test_show_config_says_where_each_value_came_from(scratch):
-    run = parse(configurations(defaults={"tools": [["pythia", "rivet"]]}, a={"event_count": 5}), scratch)
+    run = parse(configurations(run={"tools": [["pythia", "rivet"]]}, a={"event_count": 5}), scratch)
     lines = cli.show_config(run, ["a"])
-    assert any(l.split()[0] == "tools" and l.endswith("[run.defaults]") for l in lines[1:])
+    assert any(l.split()[0] == "tools" and l.endswith("[run]") for l in lines[1:])
     assert any(l.split()[0] == "event_count" and l.endswith("[run.cfgs.a]") for l in lines[1:])
     assert any(l.split()[0] == "parallelism" and l.endswith("default") for l in lines[1:])
     assert any(l.split()[0] == "label" and l.endswith("default") for l in lines[1:])

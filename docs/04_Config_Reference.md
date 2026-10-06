@@ -35,7 +35,7 @@ YAML merge for Sherpa, and so on (see [05](05_Commands_and_Tools.md)).
 ```
 utils/Env/<tool>/quantities.toml  <  [config].master  <  [quantities.<q>].key / target  <  --set
 [static]  <  [run.cfgs.<cfg>].static  <  --set static.<q>=…  <  the value a sweep gives the point
-[run]  <  [run.defaults]  <  extends  <  [run.cfgs.<cfg>]  <  --set
+[run]  <  extends  <  [run.cfgs.<cfg>]  <  --set
 [config].import files  <  this file
 base.toml  <  [plot].root_style file  <  [plot.style]  <  [plot.figures.<figure>].style
 [plot]  <  [plot.figures.<figure>]
@@ -264,7 +264,6 @@ description   = "EIC photoproduction studies"
 | `name` | a string | **required** | the run's directory name |
 | `project` | a string | **required** | the subfolder of `configs/`, `modules/`, `output/`, `results/`; must equal the folder the file is in, when it is under `configs/` |
 | `cfgs` | a table |  | the configurations, each `[run.cfgs.<cfg>]` (V98; they were `[run.<cfg>]`, which is refused with the form to write, and `hep migrate` rewrites it). A configuration's key is its name for `hep run <config> <cfg>`, `sweep_runs`, `extends` and compare figures, and its folder unless it sets a `label`. Any name may be used, a [run] key's included. |
-| `defaults` | a table |  | keys every configuration starts from (V56), below each configuration's own and the one it `extends`, above `[run]`'s. It is not a configuration; it may not set `label`, `title` or `extends`, which are each configuration's own. |
 | `configuration` | a string |  | must name a `[run.cfgs.<cfg>]` table (C2). Under `sweep_runs` it may be left out; `hep run <config>` then ignores it |
 | `serial` | an integer |  | the prefix `NN_` of each configuration's folder, `<name>/NN_<label>`: **location, never identity** (V12). A configuration's `serial` overrides it (V45). Changing it starts a fresh location. A configuration inherits it from `[run]`. |
 | `event_count` | an integer, ≥ 1 |  | default for configurations; one of the two must set it A configuration inherits it from `[run]`. |
@@ -275,6 +274,12 @@ description   = "EIC photoproduction studies"
 | `notify` | a string: `"none"`, `"desktop"` | `"none"` | `"desktop"` (V76): a desktop notification (`notify-send`) when `hep run` ends, with its verdict; never fails a run |
 | `seed_type` | a string: `"identity"`, `"manual"`, `"random"` | `"identity"` | default for configurations: how a point's seeds are chosen, `"identity"`, `"manual"` or `"random"` (06 §8) A configuration inherits it from `[run]`. |
 | `manual_seed` | an integer, ≥ 1 |  | default for configurations: under `seed_type = "manual"`, every point's seed (from 1 to the point's generators' `[card] seed_range`: 899,999,999 for Pythia, checked when the point is planned, V54); ignored otherwise (`--plan` says so) A configuration inherits it from `[run]`. |
+| `tools` | a list | **required** | 04 §5.3 A configuration inherits it from `[run]`. |
+| `sweeps` | a list |  | 04 §5.1; `[]` is one point A configuration inherits it from `[run]`. |
+| `plot_points` | a list (a string each) |  | 04 §5.2 A configuration inherits it from `[run]`. |
+| `combine` | a list (a string each) |  | swept quantities whose points are merged into one curve (04 §5.5) A configuration inherits it from `[run]`. |
+| `pre` | a list |  | the form of `tools` (04 §5.4) A configuration inherits it from `[run]`. |
+| `post` | a list |  | the form of `tools` (04 §5.4) A configuration inherits it from `[run]`. |
 <!-- /generated -->
 
 The configurations are `[run.cfgs.<cfg>]` (§5); any other key or table in `[run]` is an error (C1).
@@ -330,7 +335,7 @@ dotted path is `run.cfgs.<cfg>.<key>`: `--set run.cfgs.pdf.threads=8`, `drop = [
 `hep explain run.cfgs.pdf.threads`.
 
 ```toml
-[run.defaults]                               # optional (V56): keys every configuration starts from
+[run]                                        # what every configuration starts from (V99) …
 tools       = [["pythia", "rivet"], "yd2rt"]
 threads     = 20
 
@@ -355,13 +360,14 @@ label       = "PDFs_100M"
 A configuration's value is, in order:
 1. its own;
 2. else the one it `extends`'s, in turn;
-3. else `[run.defaults]`'s;
-4. else `[run]`'s;
-5. else the default (V56).
+3. else `[run]`'s;
+4. else the default (V56).
 
-`"default"` in a layer is the next layer's value. `label`, `title` and `extends` belong to each
-configuration alone, and `[run.defaults]` refuses them; `[run.defaults]` is never a configuration. A chain
-of `extends` is followed, and a circle is refused. `hep run CONFIG --show-config` prints every value
+`[run]` takes every configuration key (the tables of §4 and §5 say which) but `label`, `title` and
+`extends`, which belong to each configuration alone, and `static` and `prelim`, whose file-wide
+values are `[static]` and `[prelim]` (V99; this was `[run.defaults]`, which is refused now, and `hep
+migrate` moves its keys into `[run]`). `"default"` in a layer is the next layer's value. A chain of
+`extends` is followed, and a circle is refused. `hep run CONFIG --show-config` prints every value
 with the layer it came from.
 
 <!-- generated: keys configuration -->
