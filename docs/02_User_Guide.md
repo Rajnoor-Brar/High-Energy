@@ -265,6 +265,48 @@ current run (hep exits 6 and bash carries on), and a typo in a later configurati
 `hep run eic pdf` still runs only `pdf`, and `--set run.sweep_runs=false` turns the sweep off for one
 call.
 
+### 4.9 A study built on another
+
+When a run shares most of another's set-up (its beams, tools, quantities, data and plots), import it
+instead of copying it, and write only what differs:
+
+```toml
+# configs/PhotoProduction/zeus_seedSweep.toml
+[config]
+import = [{ from = "zeus_validation", only = ["prelim", "static", "tools", "quantities", "plot"] }]
+drop   = ["quantities.mpi", "plot.backend"]     # its MPI scan, and its mpl+yoda pages: Paint's here
+
+[run]
+name       = "zeus_seeds"                     # a file that imports always names its own run
+project    = "PhotoProduction"
+sweep_runs = ["default", "spread"]
+
+[run.default]
+sweeps  = ["pdf", "replica"]
+combine = ["replica"]
+tools   = [["pythia", "rivet"]]
+
+[run.spread]
+sweeps      = ["pdf", "replica"]
+plot_points = ["pdf"]
+tools       = [["pythia", "rivet"]]
+
+[quantities.replica]                          # its own quantity, beside the imported ones
+target = "pythia/seed"
+values = [1, 2, 3, 4, 5]
+tags   = ["s1", "s2", "s3", "s4", "s5"]
+```
+
+- **Taking a part:** `only` takes those sections or dotted keys (`run.default`, `plot.figures.eta`)
+  and nothing else; without it, the whole file comes, its configurations too.
+- **Removing:** `drop` takes things back out, before this file's tables. A drop that names nothing
+  an import gave is refused, so a typo never keeps what it meant to remove.
+- **Overriding:** this file's tables then win: its own quantity or tool replaces the imported one
+  whole, and its `[plot]` keys go over the imported `[plot]` one by one.
+- **Nesting:** imports nest, and `Other/run` imports another project's file, whose cards stay its
+  own. The points of an unchanged tool keep their identities, so nothing reruns for being imported.
+- **Checking:** `hep run … --show-config` says where every value and table came from.
+
 ---
 
 ## 5. Generators and chains
@@ -435,8 +477,44 @@ counting.
 `[tools.jets.config]` runs K Rivets on threads of their own, merged at the end. With 12 + 12 it is
 about 1.5× faster than the sharded chain (§7.1). K above 1 needs the SISCone patch in `~/HEP` (L29).
 
-The whole files are `configs/PhotoProduction/InProcEIC.toml` and `InProcZeus.toml`. How it is built:
-[06 §21](06_Internals.md#21-modulehh). → `eic inproc`.
+**A whole study in one process** imports the chain's run TOML (§4.9) and writes only what differs: the
+program, the configurations that run it, and a run name of its own. The physics (statics, quantities,
+the pythia and rivet tables, plots) is the chain's, so an edit there is an edit here, and a point with
+the chain's `event_count` and `threads` gets the chain's seeds, so the same events:
+
+```toml
+# configs/PhotoProduction/InProcZeus.toml
+[config]
+import = [{ from = "zeus_validation", only = ["static", "quantities", "tools", "plot"] }]   # no [prelim]: no FIFO
+
+[run]
+serial        = 1
+name          = "inproc_zeus"
+project       = "PhotoProduction"
+configuration = "default"
+event_count   = 1_000_000
+threads       = 12
+
+[run.defaults]
+tools = ["inproc", "yd2rt"]
+
+[run.default]
+sweeps = ["pdf"]                  # the file has ptref, mpi and single too, each a sweep and nothing more
+
+[tools.inproc]
+tool           = "module"
+executable     = "InprocJets.exe"
+output_file    = "zeus.yoda"
+pythia_cmnd    = true             # zeus_validation's pythia table: configured, not run
+rivet_analyses = true             # its rivet table's analyses
+
+[tools.inproc.config]
+rivet_threads = 12
+```
+
+→ `InProcZeus` (zeus_validation's), `InProcEIC` (eic's: it takes only the tables it uses, `only =
+["static", "quantities", "plot", "tools.pythia", "tools.rivet", "tools.yd2rt", "tools.merge"]`).
+How the program is built: [06 §21](06_Internals.md#21-modulehh).
 
 ### 6.3 A custom tool, and a Python one
 
@@ -666,6 +744,8 @@ hep reproduce output/…/<point>/provenance.json   # the point again, beside it,
   - `[plot.overlay]` and `[plot.object]`;
   - a bare `executable`;
   - base-card lines the runner owns.
+- **Which stack a study was made with:** `[config.meta] versions = { pythia8 = "8.317", … }`. A
+  different stack is a warning in `hep check` and `--plan`, never a refusal (04 §3).
 - **Reproduce:** `hep reproduce` stops and says what changed when the setup is no longer the one the
   provenance records; `--anyway` runs today's setup with the recorded seed.
 
@@ -704,5 +784,5 @@ installed: for notebooks and statistics tools.
    programs as `<Name>.cc` with a `// requires:` line. Headers beside them are shared by both.
 3. `hep build`, then `hep check <Project>/<run>`, then `hep run <Project>/<run> --plan`.
 4. A quantity the vocabulary does not map gets a `key`. One your project uses everywhere can go in
-   `configs/<Project>/master.toml`, named by `[master] master_toml = "master.toml"`.
-5. Tables several run TOMLs share can live in one file that each names in `[master] include` (04 §1).
+   `configs/<Project>/master.toml`, named by `[config] master = "master.toml"`.
+5. Tables several run TOMLs share can live in one file that each names in `[config] import` (04 §3).

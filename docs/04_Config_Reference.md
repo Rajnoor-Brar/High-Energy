@@ -33,15 +33,15 @@ YAML merge for Sherpa, and so on (see [05](05_Commands_and_Tools.md)).
 **Precedence of a value, lowest to highest:**
 
 ```
-utils/Env/<tool>/quantities.toml  <  [master].master_toml  <  [quantities.<q>].key / target  <  --set
+utils/Env/<tool>/quantities.toml  <  [config].master  <  [quantities.<q>].key / target  <  --set
 [static]  <  [run.<cfg>].static  <  --set static.<q>=…  <  the value a sweep gives the point
 [run]  <  [run.defaults]  <  extends  <  [run.<cfg>]  <  --set
-[master].include files  <  this file
+[config].import files  <  this file
 base.toml  <  [plot].root_style file  <  [plot.style]  <  [plot.figures.<figure>].style
 [plot]  <  [plot.figures.<figure>]
 ```
 
-A run TOML has exactly these top-level sections, and any other is an error (C1): `[master]`,
+A run TOML has exactly these top-level sections, and any other is an error (C1): `[config]`,
 `[run]`, `[prelim]`, `[static]`, `[tools]`, `[quantities]`, `[plot]`.
 
 **`"default"` means "keep it as it is"** (V55). Only a key whose type says so takes it:
@@ -68,7 +68,7 @@ Every key that takes a path has **one** convention root. There is no search path
 | Key | Root of a bare name | Example |
 |---|---|---|
 | `hep run <config>`, `hep plot <config>` | `configs/`, `.toml` optional | `PhotoProduction/eic` → `configs/PhotoProduction/eic.toml` |
-| `[master].master_toml`, `[master].include` | `configs/<project>/` | `master.toml` |
+| `[config].master`, `[config].import` | `configs/<project>/` | `master.toml` |
 | `[tools.*].baseconfig` | `configs/<project>/` | `photo_ep.cmnd` |
 | `[tools.*].executable` | `build/<project>/`, which must exist; `path:<command>` asks for a command on `PATH` by name (V54) | `Lambda.exe` → `build/Lambda/Lambda.exe`; `path:python3` |
 | `[tools.*].filters` | `configs/<project>/` | `fit_filters.toml` |
@@ -98,27 +98,90 @@ results/<P>/<run>/<cfg>/<point>/    the products
 
 ---
 
-## 3. `[master]`
+## 3. `[config]`
+
+How the file is read (V93; it was `[master]`, which is refused with the `[config]` to write, and
+`hep migrate` rewrites it).
 
 ```toml
-[master]
-master_toml = "master.toml"      # optional: configs/<project>/master.toml overlays the framework's
-include     = ["common.toml"]    # optional: run TOMLs whose tables this one starts from (V56)
+[config]
+import = ["common.toml"]         # optional: run TOMLs whose tables this one starts from; this file wins
+master = "master.toml"           # optional: configs/<project>/master.toml overlays the tool folders' mappings
 ```
 
-<!-- generated: keys master -->
+<!-- generated: keys config -->
 | Key | Type | Default | Meaning |
 |---|---|---|---|
-| `master_toml` | a string |  | overlays the tool folders' mappings key by key (`[quantities.<tool>.compatible_quantities]`): an entry for a (tool, quantity) pair replaces the framework's. The file must exist. |
-| `include` | a string or a list (a string each) |  | files under `configs/<project>/` (`.toml` optional) whose tables the run starts from, in order; **this file wins** (V56). A quantity, tool table or configuration of the file replaces the included one whole; `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively. An included file has no `[master]` of its own. `--show-config` lists what came from where. |
+| `master` | a string |  | overlays the tool folders' mappings key by key (`[quantities.<tool>.compatible_quantities]`): an entry for a (tool, quantity) pair replaces the framework's. The file must exist. |
+| `import` | a string or a list (a string or a table each) |  | run TOMLs this one starts from, in order, named as `hep run` names a config: `name` is this project's (`configs/<project>/name.toml`), `<Project>/<name>` another project's, `./…` from the repository root; `.toml` optional. **This file wins** (V56): a quantity, tool table or configuration of the file replaces the imported one whole; `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively. Imports nest (V94): an imported file's own imports come first, depth-first; a circle is refused. Another project's file keeps its bare paths (cards, filters, styles, executables) its own project's, so its tools plan as they do in it. The file that imports sets its own `[run].name` and `project`, and shares them with no imported run. An entry may be `{ from = "<config>", only = ["quantities", "run.default", …] }`: only those sections or dotted keys of that file, each of which it must have (V95). `--show-config` says where each quantity, tool and configuration came from. |
+| `drop` | a list (a string each) |  | dotted keys (`run.default4`, `plot.figures.statistics`, `quantities.radius`, `tools.jets`) taken out of what the imports brought in, before this file's own tables are laid over them (V95). Each must name something an import gave, so a misspelt drop is refused rather than keeping what it meant to remove; a file that imports nothing has nothing to drop. |
+| `vars` | a table |  | `name = value`, cited in any string of the file as `{var:name}` and replaced when the file is read, after its imports and `--set`, so an identity sees only the result (V96). A string that is exactly one var takes its value as it is: `event_count = "{var:events}"` is an integer, and a list stays a list; inside a longer string a var must be a scalar (`"rivet:{var:ana}"`). An unknown name is refused with the nearest. An imported file's `{var:…}` takes this file's value, so a shared file can be written with parameters. Imports are read before vars, so an import's name cannot cite one; `--set config.vars.<name>=…` changes one for a run. |
+| `meta` | a table |  | descriptive: it never changes a run (V97). Any key is free text for people (`author`, `references`, …) except `versions = { pythia8 = "8.317", rivet = "4.1.3" }`: the packages of `utils/Env/stack.toml` the file was run with, each version a string. A version the stack does not have (`6.5` matches 6.5.6) is a **warning** in `--plan`, at the run's start and in `hep check`, which still passes: the run goes ahead, at your own risk. A package stack.toml does not name is refused, since its warning could never come. |
 <!-- /generated -->
 
-**`include`:**
-- The included files are read in order, and **this file wins**.
-- A quantity, tool table or configuration of the file replaces the included one whole.
-- `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively.
-- An included file has no `[master]` of its own.
-- `--show-config` lists what came from where.
+**`import`** (V56, V94). The imported files are read in order, then this file's tables are laid over
+them:
+- a quantity, tool table or configuration of the file replaces the imported one whole;
+- `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively;
+- `"default"` in this file keeps the imported value.
+
+Its rules:
+- **Names:** an import is named as `hep run` names a config: `zeus_common` is this project's,
+  `PhotoProduction/zeus_validation` another project's, and `./…` is from the repository root.
+- **Nesting:** an imported file is read the same way first, so its own imports come before it,
+  depth-first. A circle is refused, naming it.
+- **Another project's file:** its bare paths stay its own project's (the keys the schema marks
+  `path`: `baseconfig`, `filters`, `executable`, `root_style`, `master`). They are made absolute
+  when it is read, so its tools find their cards and plan to the same identities as in their own
+  file.
+- **Location:** the file that imports sets its own `[run].name` and `project`; location is never
+  imported. No imported file may be the same run, or both would write the same folders.
+- **Part of a file** (V95): an entry `{ from = "zeus_validation", only = ["tools", "quantities",
+  "run.default"] }` takes only those sections or dotted keys, each of which the file must have.
+- **Taking out** (V95): `drop = ["run.default4", "plot.figures.statistics"]` removes dotted keys from
+  what the imports gave, before this file's tables. Each must name something an import gave, and a
+  file that imports nothing has nothing to drop. An imported file's own `drop` applies to its own
+  imports.
+
+`--show-config` lists where each quantity, tool and configuration came from, through every file
+(`run.default from zeus_validation.toml ← zeus_common.toml`).
+
+**`vars`** (V96). Names said once and cited anywhere in the file:
+
+```toml
+[config.vars]
+ana    = "ZEUS_2012_I1116258"
+events = 1_000_000
+
+[run]
+event_count = "{var:events}"        # one var, the whole value: an integer, as written there
+
+[tools.rivet]
+analyses = ["{var:ana}"]
+
+[plot.data]
+file = "rivet:{var:ana}"            # inside a longer string: a scalar, as text
+```
+
+They are replaced when the file is read, after its imports and `--set` (`--set
+config.vars.events=50000`), so a point's identity is that of the same file written out. An imported
+file's `{var:…}` takes this file's value: a shared file can be written with parameters. An unknown
+name is refused with the nearest. `{var:…}` is the run TOML's own; the page texts' placeholders
+(`{cell}`, `{q:…}`, `{opt:…}`, §10) are filled later, per page.
+
+**`meta`** (V97). About the file, for people; it never changes a run:
+
+```toml
+[config.meta]
+author     = "R. Brar"
+references = ["ZEUS, Nucl. Phys. B 864 (2012) 1"]
+versions   = { pythia8 = "8.317", rivet = "4.1.3", lhapdf = "6.5" }   # the stack the file was run with
+```
+
+`versions` names packages of `utils/Env/stack.toml`, each with a version string. When the stack has
+another version, `--plan`, the run's start and `hep check` say so as a **warning**, and the run goes
+ahead at your own risk. What is written is compared: `6.5` matches 6.5.6. A package stack.toml does
+not name is refused, since its warning could never come. Every other key is free.
 
 **The vocabulary** (`utils/Env/quantities.toml`, V58) says what each quantity name means for every
 tool:
@@ -698,6 +761,9 @@ The rules:
 | `{std:<key>}` | an export's `path` (§9.4) |
 | `{points}` | pre and post: `points.json` |
 | `{<option>}` | every key of the folder's `[options]`: its value, empty when unset; `kind = "flag"` → the flag or nothing |
+
+**In the run TOML itself**, `{var:name}` is a `[config.vars]` value (§3), replaced when the file is
+read, everywhere, before any of these.
 
 **In page texts** (V66). These are the titles, `legend_header`, the axis labels, `[plot.data].legend`,
 a figure's `labels`, the quantities' `labels` and the `.plot`'s own. They may cite the points:

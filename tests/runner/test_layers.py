@@ -1,6 +1,8 @@
-"""Layers (V56): [run.defaults], extends, [master].include, "default" in a child, sweeping events, --show-config."""
+"""Layers (V56): [run.defaults], extends, [config].import (V93), "default" in a child, sweeping events, --show-config."""
 
 from __future__ import annotations
+
+from pathlib import Path
 
 import pytest
 import tomli_w
@@ -81,7 +83,7 @@ def test_include_gives_tables_and_the_file_wins(scratch):
         "plot": {"ratio": True, "y_gutter": 2.0},
         "run": {"defaults": {"event_count": 33}},
     }), encoding="utf-8")
-    data = raw(master={"include": [str(common)]}, plot={"y_gutter": 0.3})
+    data = raw(config={"import": [str(common)]}, plot={"y_gutter": 0.3})
     del data["run"]["event_count"]
     path = scratch / "run.toml"
     path.write_text(tomli_w.dumps(data), encoding="utf-8")
@@ -93,13 +95,175 @@ def test_include_gives_tables_and_the_file_wins(scratch):
     assert run.included == {"quantities.energies": "common.toml", "run.defaults": "common.toml"}
 
 
-def test_an_include_cannot_include(scratch):
+def test_imports_nest_depth_first_and_say_where_from(scratch):
+    """V94: an imported file's own imports come first; the file over it wins; origins name the path."""
     inner = scratch / "inner.toml"
-    inner.write_text('[master]\ninclude = ["x.toml"]\n', encoding="utf-8")
+    inner.write_text(tomli_w.dumps({"quantities": {"energies": {"values": [[275, 18]], "tags": ["18x275"]}},
+                                    "plot": {"ratio": True, "y_gutter": 2.0}}), encoding="utf-8")
+    middle = scratch / "middle.toml"
+    middle.write_text(tomli_w.dumps({"config": {"import": str(inner)}, "plot": {"y_gutter": 1.0}}), encoding="utf-8")
     path = scratch / "run.toml"
-    path.write_text(tomli_w.dumps(raw(master={"include": str(inner)})), encoding="utf-8")
-    with pytest.raises(HepError, match="do not nest"):
+    path.write_text(tomli_w.dumps(raw(config={"import": str(middle)})), encoding="utf-8")
+    run = config.load(str(path))
+    assert run.quantities["energies"].tags == ["18x275"] and run.plot == {"ratio": True, "y_gutter": 1.0}
+    assert run.included == {"quantities.energies": "middle.toml ← inner.toml"}
+
+
+def test_an_import_circle_is_refused(scratch):
+    a, b = scratch / "a.toml", scratch / "b.toml"
+    a.write_text(tomli_w.dumps(raw(run__name="a", config={"import": str(b)})), encoding="utf-8")
+    b.write_text(tomli_w.dumps({"config": {"import": str(a)}}), encoding="utf-8")
+    with pytest.raises(HepError, match="imports go round in a circle: a.toml → b.toml → a.toml"):
+        config.load(str(a))
+
+
+def test_a_file_that_imports_has_its_own_location(scratch):
+    """V94: [run].name and project are never imported, and no imported run may share them."""
+    other = scratch / "other.toml"
+    other.write_text(tomli_w.dumps(raw()), encoding="utf-8")
+    path = scratch / "run.toml"
+    path.write_text(tomli_w.dumps({"config": {"import": str(other)}, "run": {"project": "PhotoProduction"}}), encoding="utf-8")
+    with pytest.raises(HepError, match=r"sets its own \[run\].name"):
         config.load(str(path))
+    path.write_text(tomli_w.dumps({"config": {"import": str(other)}, "run": {"project": "PhotoProduction", "name": "t"}}),
+                    encoding="utf-8")
+    with pytest.raises(HepError, match="other.toml is the run PhotoProduction/t too"):
+        config.load(str(path))
+
+
+def test_another_projects_file_brings_its_cards_and_plans_the_same(scratch, monkeypatch):
+    """V94: `<Project>/<name>`; its bare card paths stay its project's, so its points keep their identities."""
+    import shutil
+    from runner import quantities, record, sweep, tools
+    from runner.paths import configs_root
+    fixtures = configs_root()
+    root = scratch / "configs"
+    (root / "Other").mkdir(parents=True)
+    (root / "PhotoProduction").mkdir()
+    shutil.copy(fixtures / "PhotoProduction" / "photo_ep.cmnd", root / "Other" / "photo_ep.cmnd")
+    monkeypatch.setenv("HEKIT_CONFIGS", str(root))
+    (root / "Other" / "other.toml").write_text(tomli_w.dumps(raw(run__name="other", run__project="Other")), encoding="utf-8")
+    (root / "PhotoProduction" / "mine.toml").write_text(tomli_w.dumps(
+        {"config": {"import": "Other/other"}, "run": {"name": "mine", "project": "PhotoProduction"}}), encoding="utf-8")
+
+    def identity(name):
+        run = config.load(name)
+        conf = run.configuration(None)
+        plan = tools.plan_point(run, conf, sweep.points(run, conf)[0], quantities.load_master(run.project, run.master_toml))
+        return run, record.identity(plan)
+
+    theirs, mine = identity("Other/other"), identity("PhotoProduction/mine")
+    assert mine[0].tools["pythia"].baseconfig == [str(root / "Other" / "photo_ep.cmnd")]
+    assert mine[0].included["tools.pythia"] == "other.toml" and mine[0].project == "PhotoProduction"
+    assert mine[1] == theirs[1]
+
+
+def _other(scratch) -> Path:
+    """A run with two configurations, a figure and an extra quantity, to import parts of."""
+    data = raw(run__name="other", run__two={"tools": [["pythia", "rivet"]], "event_count": 99},
+               quantities__energies={"values": [[275, 18]], "tags": ["18x275"]},
+               plot={"ratio": True, "figures": {"tails": {"objects": ["d04-*"]}, "keep": {"objects": ["d05-*"]}}})
+    path = scratch / "other.toml"
+    path.write_text(tomli_w.dumps(data), encoding="utf-8")
+    return path
+
+
+def test_an_import_may_take_only_some_of_a_file(scratch):
+    """V95: `only` keeps those sections or dotted keys; one the file has not is refused, with the nearest."""
+    other = _other(scratch)
+    path = scratch / "run.toml"
+    mine = {"run": {"name": "mine", "project": "PhotoProduction", "configuration": "two"}}
+    path.write_text(tomli_w.dumps({**mine, "config": {"import": [{"from": str(other), "only": ["run.two", "quantities", "tools", "prelim"]}]}}),
+                    encoding="utf-8")
+    run = config.load(str(path))
+    assert set(run.configurations) == {"two"} and run.configuration(None).event_count == 99
+    assert not run.plot and set(run.quantities) == {"pdf", "energies"}
+    path.write_text(tomli_w.dumps({**mine, "config": {"import": [{"from": str(other), "only": ["run.tow"]}]}}), encoding="utf-8")
+    with pytest.raises(HepError, match="only names 'run.tow', which other.toml has not") as error:
+        config.load(str(path))
+    assert "two" in error.value.hint
+
+
+def test_drop_takes_out_what_an_import_gave(scratch):
+    """V95: before this file's tables; a drop that names nothing is refused, and so is one with no import."""
+    other = _other(scratch)
+    path = scratch / "run.toml"
+    mine = {"run": {"name": "mine", "project": "PhotoProduction"}}
+    path.write_text(tomli_w.dumps({**mine, "config": {"import": str(other), "drop": ["run.two", "plot.figures.tails", "quantities.energies"]}}),
+                    encoding="utf-8")
+    run = config.load(str(path))
+    assert set(run.configurations) == {"one"} and set(run.plot["figures"]) == {"keep"} and "energies" not in run.quantities
+    assert "quantities.energies" not in run.included and run.included["run.one"] == "other.toml"
+    path.write_text(tomli_w.dumps({**mine, "config": {"import": str(other), "drop": ["plot.figures.tials"]}}), encoding="utf-8")
+    with pytest.raises(HepError, match="drop names 'plot.figures.tials', which no import gave") as error:
+        config.load(str(path))
+    assert "tails" in error.value.hint
+    path.write_text(tomli_w.dumps(raw(config={"drop": ["run.one"]})), encoding="utf-8")
+    with pytest.raises(HepError, match="this file imports nothing"):
+        config.load(str(path))
+
+
+def _written(scratch, data, name="run.toml") -> str:
+    path = scratch / name
+    path.write_text(tomli_w.dumps(data), encoding="utf-8")
+    return str(path)
+
+
+def test_vars_are_said_once_and_keep_their_type(scratch):
+    """V96: a whole-value var keeps its type, an inline one is text; --set reaches them; the file plans as
+    if written out (the run it parses to is the same)."""
+    data = raw(config={"vars": {"events": 500, "ana": "photo_eic", "cuts": [4.0, 5.0]}},
+               run__event_count="{var:events}", tools__rivet__analyses=["{var:ana}"],
+               quantities__cut={"values": "{var:cuts}", "target": "rivet/photo_eic", "key": "ETMIN"},
+               plot={"title": "{var:ana}: {var:events} events"})
+    run = config.load(_written(scratch, data))
+    assert run.configuration(None).event_count == 500 and run.tools["rivet"].extra["analyses"] == ["photo_eic"]
+    assert run.quantities["cut"].values == [4.0, 5.0] and run.plot["title"] == "photo_eic: 500 events"
+    written = raw(run__event_count=500, quantities__cut={"values": [4.0, 5.0], "target": "rivet/photo_eic", "key": "ETMIN"},
+                  plot={"title": "photo_eic: 500 events"})
+    plain = config.load(_written(scratch, written, "plain.toml"))
+    assert (plain.quantities["cut"].values, plain.plot) == (run.quantities["cut"].values, run.plot)
+    assert config.load(_written(scratch, data), sets=["config.vars.events=7"]).configuration(None).event_count == 7
+
+
+def test_a_var_is_checked(scratch):
+    with pytest.raises(HepError, match=r"\{var:evnts\} is not in \[config.vars\]") as error:
+        config.load(_written(scratch, raw(config={"vars": {"events": 5}}, run__event_count="{var:evnts}")))
+    assert "events" in error.value.hint
+    with pytest.raises(HepError, match="is a list: it can only be a whole value"):
+        config.load(_written(scratch, raw(config={"vars": {"l": [1, 2]}}, plot={"title": "a {var:l}"})))
+
+
+def test_an_imported_file_takes_the_importers_vars(scratch):
+    """V96: a shared file written with parameters; the file that imports it gives them."""
+    shared = _written(scratch, {"tools": {"rivet": {"tool": "rivet", "input": "events.hepmc", "analyses": ["{var:ana}"],
+                                                    "output_file": "{var:ana}.yoda"}}}, "shared.toml")
+    data = raw(config={"import": shared, "vars": {"ana": "photo_eic"}})
+    del data["tools"]["rivet"]
+    run = config.load(_written(scratch, data))
+    assert run.tools["rivet"].extra["analyses"] == ["photo_eic"] and run.tools["rivet"].output_file == ["photo_eic.yoda"]
+
+
+def test_meta_versions_warn_and_never_refuse(scratch, monkeypatch):
+    """V97: the stack a file was run with; a different version is a warning, a misspelt package an error."""
+    from runner import tools
+    monkeypatch.setattr(tools, "_stack_version", {"pythia8": "8.317", "rivet": "rivet v4.1.3", "onnx": ""}.get)
+    run = parse(raw(config={"meta": {"author": "me", "versions": {"pythia8": "8.317", "rivet": "4.1", "onnx": "1.20"}}}), scratch)
+    assert tools.meta_notes(run) == ["t.toml was run with onnx 1.20; the stack gives no version of it to compare"]
+    run = parse(raw(config={"meta": {"versions": {"pythia8": "8.312", "rivet": "4.1.3"}}}), scratch)
+    assert tools.meta_notes(run) == ["t.toml was run with pythia8 8.312; the stack has 8.317 (it runs anyway, at your own risk)"]
+    with pytest.raises(HepError, match="'pythia' is not a package of utils/Env/stack.toml") as error:
+        parse(raw(config={"meta": {"versions": {"pythia": "8.317"}}}), scratch)
+    assert "pythia8" in error.value.hint
+    with pytest.raises(HepError, match="version is a string"):
+        parse(raw(config={"meta": {"versions": {"pythia8": 8.317}}}), scratch)
+
+
+def test_master_is_config_now(scratch):
+    """V93 (break and migrate): [master] is refused with what to write."""
+    with pytest.raises(HepError, match=r"\[master\] is \[config\] now") as error:
+        parse(raw(master={"master_toml": "m.toml"}), scratch)
+    assert "hep migrate" in error.value.hint
 
 
 def test_events_swept_as_a_quantity_set_each_points_count(scratch):

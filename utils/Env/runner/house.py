@@ -20,7 +20,7 @@ from .events import greeting, hubs
 from .paths import configs_root, output_root, results_root
 from .record import is_complete, complete_marker
 
-TABLES = {"run": "run", "master": "master", "prelim": "prelim", "plot": "plot", "data": "data",
+TABLES = {"run": "run", "config": "config", "prelim": "prelim", "plot": "plot", "data": "data",
           "configuration": "configuration", "quantity": "quantity", "quantities": "quantity", "tool": "tool",
           "tools": "tool", "figure": "figure", "figures": "figure"}
 

@@ -15,9 +15,9 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import schema
+from . import plugins, schema
 from .errors import HepError, did_you_mean
-from .paths import config_file, configs_root, resolve
+from .paths import config_file, configs_root, repo_root, resolve
 from .quantities import check_shapes
 
 #: How a point's seeds are chosen (V39, 06 §8); the schema's [run.seed_type].choices.
@@ -131,7 +131,8 @@ class RunConfig:
     sweep_runs: bool = False                            # `hep run` executes every swept configuration (V38)
     sweep_list: list = field(default_factory=list)      # sweep_runs = ["a", "b"]: these, in this order (V79)
     sets: list = field(default_factory=list)            # the --set overrides it was loaded with (V77: provenance)
-    included: dict = field(default_factory=dict)        # "<section>.<name>" → the [master].include file it came from
+    included: dict = field(default_factory=dict)        # "<section>.<name>" → the [config].import file it came from
+    meta: dict = field(default_factory=dict)            # [config.meta]: descriptive; versions warned about (V97)
 
     def configuration(self, name: str | None) -> Configuration:
         wanted = name or self.default_configuration
@@ -329,34 +330,241 @@ def _over(base: dict, over: dict) -> dict:
     return out
 
 
-def _with_includes(raw: dict, path: Path) -> tuple[dict, dict]:
-    """[master].include = ["common.toml"]: the run starts from those files' tables, in order, and its own
-    win (V56). Returns the merged tables and which included file gave each quantity, tool and configuration."""
-    names = _as_list(raw.get("master", {}).get("include"))
+def _import_path(name, project: str, where: str) -> Path:
+    """An import, named as `hep run` names a config (V94): `name` is this project's file
+    (configs/<project>/), `<Project>/<name>` another project's, `./…` from the repository root, `/…`
+    absolute; `.toml` optional."""
+    if not isinstance(name, str) or not name:
+        raise HepError(f"an import names a file, got {name!r}", where=where)
+    plain = "/" in name and not name.startswith(("./", "/"))
+    source = resolve(name, "config" if plain else "import", project=project, where=where)
+    if source.suffix != ".toml" and not source.exists():
+        source = source.with_name(source.name + ".toml")
+    if not source.is_file():
+        raise HepError(f"no file '{name}' to import", where=where,
+                       hint="a bare name is this project's (configs/<project>/); <Project>/<name> another's; ./… the repository's")
+    return source
+
+
+def _parts(dotted, where: str) -> list[str]:
+    if not isinstance(dotted, str) or not dotted or any(not p for p in dotted.split(".")):
+        raise HepError(f"expected a dotted key (quantities.pdf, run.default, plot.figures.eta), got {dotted!r}", where=where)
+    return dotted.split(".")
+
+
+def _has(table: dict, parts: list[str]) -> bool:
+    for part in parts:
+        if not isinstance(table, dict) or part not in table:
+            return False
+        table = table[part]
+    return True
+
+
+def _nearest(table: dict, parts: list[str]) -> str | None:
+    """The nearest existing key at the level where a dotted path stops matching."""
+    for part in parts:
+        if not isinstance(table, dict) or part not in table:
+            return did_you_mean(part, list(table)) if isinstance(table, dict) else None
+        table = table[part]
+    return None
+
+
+def _without(table: dict, parts: list[str]) -> dict:
+    out = dict(table)
+    if len(parts) == 1:
+        del out[parts[0]]
+    else:
+        out[parts[0]] = _without(out[parts[0]], parts[1:])
+    return out
+
+
+def _only(part: dict, keys: list, source: Path, where: str) -> dict:
+    """An import's `only` (V95): just these sections or dotted keys of the file, each of which it has."""
+    out: dict = {}
+    for dotted in _as_list(keys):
+        parts = _parts(dotted, where)
+        if not _has(part, parts):
+            raise HepError(f"only names '{dotted}', which {source.name} has not", where=where,
+                           hint=_nearest(part, parts) or f"its sections: {', '.join(part)}")
+        value, target = part, out
+        for name in parts[:-1]:
+            value = value[name]
+            target = target.setdefault(name, {})
+        target[parts[-1]] = value[parts[-1]]
+    return out
+
+
+def _entry(entry, where: str) -> tuple[str, list | None]:
+    """An import entry: a name, or { from = name, only = [keys] }."""
+    if isinstance(entry, dict):
+        unknown = sorted(set(entry) - {"from", "only"})
+        if unknown or "from" not in entry:
+            raise HepError("an import table is { from = \"<config>\", only = [\"<section or dotted key>\", …] }",
+                           where=where, hint=f"not {unknown[0]}" if unknown else "it needs from")
+        return entry["from"], _as_list(entry.get("only")) or None
+    return entry, None
+
+
+def _project_of(path: Path, raw: dict, fallback: str) -> str:
+    """The project a file's bare paths are relative to: its folder under configs/, else its [run].project."""
+    try:
+        parts = path.resolve().relative_to(configs_root().resolve()).parts
+    except ValueError:
+        parts = ()
+    return parts[0] if len(parts) > 1 else raw.get("run", {}).get("project") or fallback
+
+
+def _rebased(raw: dict, project: str) -> dict:
+    """A file of another project, its bare path keys made absolute against its own project (V94), so its
+    tools find their cards wherever it is imported. The keys are those the schema marks `path`; a value
+    that is ./…, /… or path:<command> is left as it is. Paths are resolved alike either way, so no
+    identity moves."""
+    def fixed(value, root: str):
+        if isinstance(value, list):
+            return [fixed(v, root) for v in value]
+        if not isinstance(value, str) or not value or value.startswith(("./", "/", "path:")) or value == DEFAULT:
+            return value
+        return str(resolve(value, root, project=project))
+
+    def marked(table: str) -> dict[str, str]:
+        return {k: e["path"] for k, e in schema.spec().get(table, {}).items() if "path" in e}
+
+    out = {**raw}
+    if isinstance(raw.get("tools"), dict):
+        out["tools"] = {tag: {k: fixed(v, marked("tool")[k]) if k in marked("tool") else v for k, v in table.items()}
+                        if isinstance(table, dict) else table for tag, table in raw["tools"].items()}
+    for section in ("plot", "config"):
+        if isinstance(raw.get(section), dict):
+            out[section] = {k: fixed(v, marked(section)[k]) if k in marked(section) else v for k, v in raw[section].items()}
+    return out
+
+
+def _imports(raw: dict, path: Path, project: str, chain: tuple[Path, ...]) -> tuple[dict, dict, list]:
+    """[config].import = ["common", "Other/run"]: the run starts from those files' tables, in order, and its
+    own win (V56, V93). Each imported file is read the same way first, so imports nest (V94), depth-first;
+    a circle is refused. Returns the merged tables, which file gave each quantity, tool and configuration
+    ("b.toml" or, through b, "b.toml ← c.toml"), and every imported file's (project, name)."""
+    names = _as_list(raw.get("config", {}).get("import"))
     if not names:
-        return raw, {}
-    project = raw.get("run", {}).get("project")
-    if not project:
-        raise HepError("[master].include needs [run].project in the file itself", where=f"{path}: [master].include")
-    merged, included = {}, {}
-    for name in names:
-        source = resolve(name, "master", project=project, where=f"{path}: [master].include")
-        if source.suffix != ".toml":
-            source = source.with_name(source.name + ".toml")
+        if raw.get("config", {}).get("drop"):
+            raise HepError("drop removes what an import brought in, and this file imports nothing", where=f"{path}: [config].drop")
+        return raw, {}, []
+    where = f"{path}: [config].import"
+    merged: dict = {}
+    origins: dict[str, str] = {}
+    located: list = []
+    for entry in names:
+        name, only = _entry(entry, where)
+        source = _import_path(name, project, where)
+        if source.resolve() in chain:
+            circle = " → ".join(p.name for p in (*chain, source.resolve()))
+            raise HepError(f"imports go round in a circle: {circle}", where=where)
         part = _read(source)
         if "master" in part:
-            raise HepError("an included file has no [master] of its own (includes do not nest)", where=str(source))
-        for section in ENTRIES:
-            included.update({f"{section}.{key}": source.name for key in part.get(section, {})})
-        included.update({f"run.{key}": source.name for key, v in part.get("run", {}).items() if isinstance(v, dict)})
+            raise HepError("[master] is [config] now (V93): master_toml is master, include is import",
+                           where=f"{source}: [master]", hint="hep migrate rewrites it")
+        theirs = _project_of(source, part, project)
+        part, inner, deeper = _imports(part, source, theirs, (*chain, source.resolve()))
+        if only is not None:
+            part = _only(part, only, source, where)
+        if theirs != project:
+            part = _rebased(part, theirs)
+        if "name" in part.get("run", {}):
+            located.append((part["run"].get("project", theirs), part["run"]["name"], source))
+        located += deeper
+        part = {**part, "config": {k: v for k, v in part.get("config", {}).items() if k not in ("import", "drop")}}
+        if not part["config"]:
+            del part["config"]
+        for key in [f"{s}.{k}" for s in ENTRIES for k in part.get(s, {})] + \
+                   [f"run.{k}" for k, v in part.get("run", {}).items() if isinstance(v, dict)]:
+            origins[key] = f"{source.name} ← {inner[key]}" if key in inner else source.name
         merged = _over(merged, part)
+    for dotted in _as_list(raw.get("config", {}).get("drop")):        # V95: out of what came in, before this file
+        parts = _parts(dotted, f"{path}: [config].drop")
+        if not _has(merged, parts):
+            raise HepError(f"drop names '{dotted}', which no import gave", where=f"{path}: [config].drop",
+                           hint=_nearest(merged, parts) or "drop removes what an import brought in")
+        merged = _without(merged, parts)
+        origins = {k: v for k, v in origins.items() if k != dotted and not k.startswith(dotted + ".")}
     for section in ENTRIES:                                           # the file's own entries are its own
         for key in raw.get(section, {}):
-            included.pop(f"{section}.{key}", None)
+            origins.pop(f"{section}.{key}", None)
     for key, value in raw.get("run", {}).items():
         if isinstance(value, dict):
-            included.pop(f"run.{key}", None)
-    return _over(merged, raw), included
+            origins.pop(f"run.{key}", None)
+    return _over(merged, raw), origins, located
+
+
+def _with_imports(raw: dict, path: Path) -> tuple[dict, dict]:
+    """The file being run, its imports laid under it (V94). Its location is its own: it sets [run].name
+    and project itself, and no imported file has the same, or both would write the same folders."""
+    if not _as_list(raw.get("config", {}).get("import")):
+        if raw.get("config", {}).get("drop"):
+            raise HepError("drop removes what an import brought in, and this file imports nothing", where=f"{path}: [config].drop")
+        return raw, {}
+    own = raw.get("run", {})
+    missing = [k for k in ("project", "name") if k not in own]
+    if missing:
+        raise HepError(f"a file that imports sets its own [run].{' and '.join(missing)}: its location is never imported",
+                       where=f"{path}: [run]")
+    merged, origins, located = _imports(raw, path, own["project"], (path.resolve(),))
+    for project, name, source in located:
+        if (project, name) == (own["project"], own["name"]):
+            raise HepError(f"{source.name} is the run {project}/{name} too: the two would write the same folders",
+                           where=f"{path}: [run].name", hint="give this file a [run].name of its own")
+    return merged, origins
+
+
+#: A var cited in a run TOML's text (V96); a page text's {q:…}/{opt:…} placeholders are the plot stage's.
+VAR = re.compile(r"\{var:([A-Za-z_][A-Za-z0-9_]*)\}")
+
+
+def _toml_text(value) -> str:
+    return ("true" if value else "false") if isinstance(value, bool) else str(value)
+
+
+def with_vars(raw: dict, path: Path) -> dict:
+    """[config.vars] (V96): `{var:name}` in any string of the file replaced, after the imports and --set,
+    before anything is checked, so an identity sees only the result. A string that is one var takes the
+    var's value as it is (a number stays a number); inside a longer string a var must be a scalar. An
+    imported file's {var:…} takes this file's value, so a shared file may be written with parameters."""
+    found = raw.get("config", {}).get("vars", {})
+    where = f"{path}: [config.vars]"
+    if not isinstance(found, dict):
+        raise HepError("[config.vars] is a table: name = value", where=where)
+    for name, value in found.items():
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+            raise HepError(f"a var's name is a word (letters, digits, _), not '{name}'", where=where)
+        if isinstance(value, dict) or (isinstance(value, str) and VAR.search(value)):
+            raise HepError(f"var '{name}' is a value, not a table or another var", where=f"{where}.{name}")
+
+    def lookup(name: str, at: str):
+        if name not in found:
+            raise HepError(f"{{var:{name}}} is not in [config.vars]", where=f"{path}: {at}",
+                           hint=did_you_mean(name, list(found)) or (f"vars: {', '.join(found)}" if found else "declare it in [config.vars]"))
+        return found[name]
+
+    def walk(value, at: str):
+        if isinstance(value, str):
+            if (whole := VAR.fullmatch(value)):
+                return lookup(whole[1], at)
+
+            def inline(match):
+                given = lookup(match[1], at)
+                if isinstance(given, list):
+                    raise HepError(f"{{var:{match[1]}}} is a list: it can only be a whole value", where=f"{path}: {at}")
+                return _toml_text(given)
+            return VAR.sub(inline, value)
+        if isinstance(value, dict):
+            return {k: walk(v, f"{at}.{k}" if at else k) for k, v in value.items()}
+        if isinstance(value, list):
+            return [walk(v, at) for v in value]
+        return value
+
+    out = {section: walk(value, section) for section, value in raw.items() if section != "config"}
+    if "config" in raw:
+        out["config"] = {k: (v if k == "vars" else walk(v, f"config.{k}")) for k, v in raw["config"].items()}
+    return out
 
 
 def load(name: str, *, sets: list[str] = (), strict: bool = True, text: str | None = None) -> RunConfig:
@@ -370,8 +578,9 @@ def load(name: str, *, sets: list[str] = (), strict: bool = True, text: str | No
             first = tomllib.loads(text)
         except tomllib.TOMLDecodeError as error:
             raise HepError(f"not valid TOML, even migrated: {error}", where=str(path)) from None
-    raw, included = _with_includes(first, path)
+    raw, included = _with_imports(first, path)
     apply_sets(raw, list(sets))
+    raw = with_vars(raw, path)
     run = parse(raw, path, strict=strict)
     run.included = included
     run.sets = list(sets)
@@ -381,13 +590,17 @@ def load(name: str, *, sets: list[str] = (), strict: bool = True, text: str | No
 def parse(raw: dict, path: Path, strict: bool = True) -> RunConfig:
     where = str(path)
     sections = schema.sections()
+    if "master" in raw:                                    # break and migrate (V93)
+        raise HepError("[master] is [config] now (V93): master_toml is master, include is import", where=f"{where}: [master]",
+                       hint="hep migrate rewrites it")
     for key in raw:
         if key not in sections:
             raise HepError(f"unknown section [{key}]", where=where,
                            hint=did_you_mean(key, sections) or f"sections: {', '.join(sections)}")
 
-    master = raw.get("master", {})
-    schema.check(master, "master", f"{where}: [master]")
+    file_config = raw.get("config", {})
+    schema.check(file_config, "config", f"{where}: [config]")
+    check_meta(file_config.get("meta", {}), f"{where}: [config.meta]")
 
     run = raw.get("run")
     if not isinstance(run, dict):
@@ -576,11 +789,28 @@ def parse(raw: dict, path: Path, strict: bool = True) -> RunConfig:
     return RunConfig(path=path, project=project, name=run["name"], serial=run.get("serial"),
                      default_configuration=run.get("configuration"), configurations=configurations,
                      prelim=prelim, static=static, tools=tools, quantities=quantities, plot=plot,
-                     master_toml=master.get("master_toml"), raw=raw, sweep_runs=sweep_on,
+                     master_toml=file_config.get("master"), meta=dict(file_config.get("meta", {})), raw=raw, sweep_runs=sweep_on,
                      sweep_list=list(run["sweep_runs"]) if isinstance(run.get("sweep_runs"), list) else [])
 
 
 TEXT_KEYS = ("labels", "title", "title_left", "title_right", "legend_header", "x_label", "y_label", "legend")
+
+
+def check_meta(meta: dict, where: str) -> None:
+    """[config.meta] (V97): free keys for people; `versions` names packages of utils/Env/stack.toml, each
+    with the version (a string) the file was run with. A misspelt package is refused, or its warning
+    would never come; a version that differs is only a warning (tools.meta_notes), never a refusal."""
+    versions = meta.get("versions", {})
+    if not isinstance(versions, dict):
+        raise HepError("[config.meta].versions is a table: package = \"version\"", where=f"{where}.versions",
+                       hint='versions = { pythia8 = "8.317", rivet = "4.1.3" }')
+    known = list(plugins.load(repo_root() / "utils" / "Env" / "stack.py", "stack").entries())
+    for name, version in versions.items():
+        if name not in known:
+            raise HepError(f"'{name}' is not a package of utils/Env/stack.toml", where=f"{where}.versions",
+                           hint=did_you_mean(name, known) or f"packages: {', '.join(known)}")
+        if not isinstance(version, str):
+            raise HepError(f"{name}'s version is a string (\"8.317\"), so its digits stay as written", where=f"{where}.versions.{name}")
 
 
 def no_tlatex(value, where: str) -> None:

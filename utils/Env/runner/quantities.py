@@ -82,11 +82,11 @@ def _folders_master() -> dict:
 
 def load_master(project: str, master_toml: str | None) -> dict:
     """The tool folders' mappings (utils/Env/<tool>/quantities.toml), overlaid key by key by the project's
-    master if [master].master_toml names one ([quantities.<tool>.compatible_quantities], as before)."""
+    master if [config].master names one ([quantities.<tool>.compatible_quantities], as before)."""
     master = copy.deepcopy(_folders_master())
     read = _read
     if master_toml:
-        overlay_path = resolve(master_toml, "master", project=project, where="[master].master_toml")
+        overlay_path = resolve(master_toml, "master", project=project, where="[config].master")
         if not overlay_path.exists():
             raise HepError("the project master TOML does not exist", where=str(overlay_path))
         overlay = read(overlay_path)

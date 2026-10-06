@@ -9,6 +9,7 @@
 - audit 1 (V52–V89, `git show 3a5ec16:docs/audit_1/06_Plan.md`);
 - the figures (V80–V89);
 - the manual's rebuild (V90–V92, `git show 3a5ec16:docs/audit_2/02_Manual.md`).
+- `[config]` (V93–V97): it replaces `[master]`; `import` nests, crosses projects and takes `only` a part; `drop`; `vars`; `meta` (version warnings). The doc is 04 §3.
 
 ## Now
 
@@ -16,7 +17,9 @@ Nothing is in progress. Waiting on the user:
 
 - **R0 (the user's):**
   - review and commit the migrated `configs/`, together with the untracked
-    `configs/PhotoProduction/photo_zs.cmnd`, which three configs use (H1, H4);
+    `configs/PhotoProduction/photo_zs.cmnd`, which three configs use (H1, H4). Since 2026-10-06
+    `InProcEIC.toml` and `InProcZeus.toml` import eic.toml / zeus_validation.toml (the originals:
+    `git diff configs/PhotoProduction/InProc*`);
   - verify the mpl pages against mkhtml's, after which the yoda backend goes (H11).
 - **R1–R3** of the health check: quick fixes (a compare figure drawn once, H2), then structure
   (`runner/figures.py`, the figure-class rules in the schema), then sheets, tests and docs.
@@ -27,6 +30,7 @@ Nothing is in progress. Waiting on the user:
   - `PhotoProduction/xx/madgraph.toml`.
 
   They are left for the user.
+- **`hep migrate --stamp`** (the [config] plan's optional C3 S3): it would write the stack's versions into `[config.meta].versions`. Only if wanted.
 - **Later**, on the user's word:
   - F8 `--more`;
   - F9, a Slurm/HTCondor executor;
