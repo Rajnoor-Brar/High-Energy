@@ -11,7 +11,7 @@
      "type": "string"
     },
     "import": {
-     "description": "run TOMLs whose tables this one starts from (configs/<Project>/…); this file wins\n\nfiles under `configs/<project>/` (`.toml` optional) whose tables the run starts from, in order; **this file wins** (V56). A quantity, tool table or configuration of the file replaces the included one whole; `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively. An imported file has no `[config]` of its own. `--show-config` lists what came from where.",
+     "description": "run TOMLs whose tables this one starts from, in order; this file wins (V56, V93, V94)\n\nrun TOMLs this one starts from, in order, named as `hep run` names a config: `name` is this project's (`configs/<project>/name.toml`), `<Project>/<name>` another project's, `./…` from the repository root; `.toml` optional. **This file wins** (V56): a quantity, tool table or configuration of the file replaces the imported one whole; `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively. Imports nest (V94): an imported file's own imports come first, depth-first; a circle is refused. Another project's file keeps its bare paths (cards, filters, styles, executables) its own project's, so its tools plan as they do in it. The file that imports sets its own `[run].name` and `project`, and shares them with no imported run. `--show-config` says where each quantity, tool and configuration came from.",
      "type": [
       "string",
       "array"

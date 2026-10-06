@@ -113,15 +113,29 @@ master = "master.toml"           # optional: configs/<project>/master.toml overl
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `master` | a string |  | overlays the tool folders' mappings key by key (`[quantities.<tool>.compatible_quantities]`): an entry for a (tool, quantity) pair replaces the framework's. The file must exist. |
-| `import` | a string or a list (a string each) |  | files under `configs/<project>/` (`.toml` optional) whose tables the run starts from, in order; **this file wins** (V56). A quantity, tool table or configuration of the file replaces the included one whole; `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively. An imported file has no `[config]` of its own. `--show-config` lists what came from where. |
+| `import` | a string or a list (a string each) |  | run TOMLs this one starts from, in order, named as `hep run` names a config: `name` is this project's (`configs/<project>/name.toml`), `<Project>/<name>` another project's, `./…` from the repository root; `.toml` optional. **This file wins** (V56): a quantity, tool table or configuration of the file replaces the imported one whole; `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively. Imports nest (V94): an imported file's own imports come first, depth-first; a circle is refused. Another project's file keeps its bare paths (cards, filters, styles, executables) its own project's, so its tools plan as they do in it. The file that imports sets its own `[run].name` and `project`, and shares them with no imported run. `--show-config` says where each quantity, tool and configuration came from. |
 <!-- /generated -->
 
-**`import`.** The imported files are read in order, then this file's tables are laid over them:
+**`import`** (V56, V94). The imported files are read in order, then this file's tables are laid over
+them:
 - a quantity, tool table or configuration of the file replaces the imported one whole;
 - `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively;
 - `"default"` in this file keeps the imported value.
 
-`--show-config` lists what came from where.
+Its rules:
+- **Names:** an import is named as `hep run` names a config: `zeus_common` is this project's,
+  `PhotoProduction/zeus_validation` another project's, and `./…` is from the repository root.
+- **Nesting:** an imported file is read the same way first, so its own imports come before it,
+  depth-first. A circle is refused, naming it.
+- **Another project's file:** its bare paths stay its own project's (the keys the schema marks
+  `path`: `baseconfig`, `filters`, `executable`, `root_style`, `master`). They are made absolute
+  when it is read, so its tools find their cards and plan to the same identities as in their own
+  file.
+- **Location:** the file that imports sets its own `[run].name` and `project`; location is never
+  imported. No imported file may be the same run, or both would write the same folders.
+
+`--show-config` lists where each quantity, tool and configuration came from, through every file
+(`run.default from zeus_validation.toml ← zeus_common.toml`).
 
 **The vocabulary** (`utils/Env/quantities.toml`, V58) says what each quantity name means for every
 tool:

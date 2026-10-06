@@ -93,13 +93,67 @@ def test_include_gives_tables_and_the_file_wins(scratch):
     assert run.included == {"quantities.energies": "common.toml", "run.defaults": "common.toml"}
 
 
-def test_an_include_cannot_include(scratch):
+def test_imports_nest_depth_first_and_say_where_from(scratch):
+    """V94: an imported file's own imports come first; the file over it wins; origins name the path."""
     inner = scratch / "inner.toml"
-    inner.write_text('[config]\nimport = ["x.toml"]\n', encoding="utf-8")
+    inner.write_text(tomli_w.dumps({"quantities": {"energies": {"values": [[275, 18]], "tags": ["18x275"]}},
+                                    "plot": {"ratio": True, "y_gutter": 2.0}}), encoding="utf-8")
+    middle = scratch / "middle.toml"
+    middle.write_text(tomli_w.dumps({"config": {"import": str(inner)}, "plot": {"y_gutter": 1.0}}), encoding="utf-8")
     path = scratch / "run.toml"
-    path.write_text(tomli_w.dumps(raw(config={"import": str(inner)})), encoding="utf-8")
-    with pytest.raises(HepError, match="do not nest"):
+    path.write_text(tomli_w.dumps(raw(config={"import": str(middle)})), encoding="utf-8")
+    run = config.load(str(path))
+    assert run.quantities["energies"].tags == ["18x275"] and run.plot == {"ratio": True, "y_gutter": 1.0}
+    assert run.included == {"quantities.energies": "middle.toml ← inner.toml"}
+
+
+def test_an_import_circle_is_refused(scratch):
+    a, b = scratch / "a.toml", scratch / "b.toml"
+    a.write_text(tomli_w.dumps(raw(run__name="a", config={"import": str(b)})), encoding="utf-8")
+    b.write_text(tomli_w.dumps({"config": {"import": str(a)}}), encoding="utf-8")
+    with pytest.raises(HepError, match="imports go round in a circle: a.toml → b.toml → a.toml"):
+        config.load(str(a))
+
+
+def test_a_file_that_imports_has_its_own_location(scratch):
+    """V94: [run].name and project are never imported, and no imported run may share them."""
+    other = scratch / "other.toml"
+    other.write_text(tomli_w.dumps(raw()), encoding="utf-8")
+    path = scratch / "run.toml"
+    path.write_text(tomli_w.dumps({"config": {"import": str(other)}, "run": {"project": "PhotoProduction"}}), encoding="utf-8")
+    with pytest.raises(HepError, match=r"sets its own \[run\].name"):
         config.load(str(path))
+    path.write_text(tomli_w.dumps({"config": {"import": str(other)}, "run": {"project": "PhotoProduction", "name": "t"}}),
+                    encoding="utf-8")
+    with pytest.raises(HepError, match="other.toml is the run PhotoProduction/t too"):
+        config.load(str(path))
+
+
+def test_another_projects_file_brings_its_cards_and_plans_the_same(scratch, monkeypatch):
+    """V94: `<Project>/<name>`; its bare card paths stay its project's, so its points keep their identities."""
+    import shutil
+    from runner import quantities, record, sweep, tools
+    from runner.paths import configs_root
+    fixtures = configs_root()
+    root = scratch / "configs"
+    (root / "Other").mkdir(parents=True)
+    (root / "PhotoProduction").mkdir()
+    shutil.copy(fixtures / "PhotoProduction" / "photo_ep.cmnd", root / "Other" / "photo_ep.cmnd")
+    monkeypatch.setenv("HEKIT_CONFIGS", str(root))
+    (root / "Other" / "other.toml").write_text(tomli_w.dumps(raw(run__name="other", run__project="Other")), encoding="utf-8")
+    (root / "PhotoProduction" / "mine.toml").write_text(tomli_w.dumps(
+        {"config": {"import": "Other/other"}, "run": {"name": "mine", "project": "PhotoProduction"}}), encoding="utf-8")
+
+    def identity(name):
+        run = config.load(name)
+        conf = run.configuration(None)
+        plan = tools.plan_point(run, conf, sweep.points(run, conf)[0], quantities.load_master(run.project, run.master_toml))
+        return run, record.identity(plan)
+
+    theirs, mine = identity("Other/other"), identity("PhotoProduction/mine")
+    assert mine[0].tools["pythia"].baseconfig == [str(root / "Other" / "photo_ep.cmnd")]
+    assert mine[0].included["tools.pythia"] == "other.toml" and mine[0].project == "PhotoProduction"
+    assert mine[1] == theirs[1]
 
 
 def test_master_is_config_now(scratch):

@@ -329,34 +329,116 @@ def _over(base: dict, over: dict) -> dict:
     return out
 
 
-def _with_includes(raw: dict, path: Path) -> tuple[dict, dict]:
-    """[config].import = ["common.toml"]: the run starts from those files' tables, in order, and its own
-    win (V56, V93). Returns the merged tables and which included file gave each quantity, tool and configuration."""
+def _import_path(name, project: str, where: str) -> Path:
+    """An import, named as `hep run` names a config (V94): `name` is this project's file
+    (configs/<project>/), `<Project>/<name>` another project's, `./…` from the repository root, `/…`
+    absolute; `.toml` optional."""
+    if not isinstance(name, str) or not name:
+        raise HepError(f"an import names a file, got {name!r}", where=where)
+    plain = "/" in name and not name.startswith(("./", "/"))
+    source = resolve(name, "config" if plain else "import", project=project, where=where)
+    if source.suffix != ".toml" and not source.exists():
+        source = source.with_name(source.name + ".toml")
+    if not source.is_file():
+        raise HepError(f"no file '{name}' to import", where=where,
+                       hint="a bare name is this project's (configs/<project>/); <Project>/<name> another's; ./… the repository's")
+    return source
+
+
+def _project_of(path: Path, raw: dict, fallback: str) -> str:
+    """The project a file's bare paths are relative to: its folder under configs/, else its [run].project."""
+    try:
+        parts = path.resolve().relative_to(configs_root().resolve()).parts
+    except ValueError:
+        parts = ()
+    return parts[0] if len(parts) > 1 else raw.get("run", {}).get("project") or fallback
+
+
+def _rebased(raw: dict, project: str) -> dict:
+    """A file of another project, its bare path keys made absolute against its own project (V94), so its
+    tools find their cards wherever it is imported. The keys are those the schema marks `path`; a value
+    that is ./…, /… or path:<command> is left as it is. Paths are resolved alike either way, so no
+    identity moves."""
+    def fixed(value, root: str):
+        if isinstance(value, list):
+            return [fixed(v, root) for v in value]
+        if not isinstance(value, str) or not value or value.startswith(("./", "/", "path:")) or value == DEFAULT:
+            return value
+        return str(resolve(value, root, project=project))
+
+    def marked(table: str) -> dict[str, str]:
+        return {k: e["path"] for k, e in schema.spec().get(table, {}).items() if "path" in e}
+
+    out = {**raw}
+    if isinstance(raw.get("tools"), dict):
+        out["tools"] = {tag: {k: fixed(v, marked("tool")[k]) if k in marked("tool") else v for k, v in table.items()}
+                        if isinstance(table, dict) else table for tag, table in raw["tools"].items()}
+    for section in ("plot", "config"):
+        if isinstance(raw.get(section), dict):
+            out[section] = {k: fixed(v, marked(section)[k]) if k in marked(section) else v for k, v in raw[section].items()}
+    return out
+
+
+def _imports(raw: dict, path: Path, project: str, chain: tuple[Path, ...]) -> tuple[dict, dict, list]:
+    """[config].import = ["common", "Other/run"]: the run starts from those files' tables, in order, and its
+    own win (V56, V93). Each imported file is read the same way first, so imports nest (V94), depth-first;
+    a circle is refused. Returns the merged tables, which file gave each quantity, tool and configuration
+    ("b.toml" or, through b, "b.toml ← c.toml"), and every imported file's (project, name)."""
     names = _as_list(raw.get("config", {}).get("import"))
     if not names:
-        return raw, {}
-    project = raw.get("run", {}).get("project")
-    if not project:
-        raise HepError("[config].import needs [run].project in the file itself", where=f"{path}: [config].import")
-    merged, included = {}, {}
+        return raw, {}, []
+    where = f"{path}: [config].import"
+    merged: dict = {}
+    origins: dict[str, str] = {}
+    located: list = []
     for name in names:
-        source = resolve(name, "import", project=project, where=f"{path}: [config].import")
-        if source.suffix != ".toml":
-            source = source.with_name(source.name + ".toml")
+        source = _import_path(name, project, where)
+        if source.resolve() in chain:
+            circle = " → ".join(p.name for p in (*chain, source.resolve()))
+            raise HepError(f"imports go round in a circle: {circle}", where=where)
         part = _read(source)
-        if "config" in part:
-            raise HepError("an imported file has no [config] of its own (imports do not nest)", where=str(source))
-        for section in ENTRIES:
-            included.update({f"{section}.{key}": source.name for key in part.get(section, {})})
-        included.update({f"run.{key}": source.name for key, v in part.get("run", {}).items() if isinstance(v, dict)})
+        if "master" in part:
+            raise HepError("[master] is [config] now (V93): master_toml is master, include is import",
+                           where=f"{source}: [master]", hint="hep migrate rewrites it")
+        theirs = _project_of(source, part, project)
+        part, inner, deeper = _imports(part, source, theirs, (*chain, source.resolve()))
+        if theirs != project:
+            part = _rebased(part, theirs)
+        if "name" in part.get("run", {}):
+            located.append((part["run"].get("project", theirs), part["run"]["name"], source))
+        located += deeper
+        part = {**part, "config": {k: v for k, v in part.get("config", {}).items() if k != "import"}}
+        if not part["config"]:
+            del part["config"]
+        for key in [f"{s}.{k}" for s in ENTRIES for k in part.get(s, {})] + \
+                   [f"run.{k}" for k, v in part.get("run", {}).items() if isinstance(v, dict)]:
+            origins[key] = f"{source.name} ← {inner[key]}" if key in inner else source.name
         merged = _over(merged, part)
     for section in ENTRIES:                                           # the file's own entries are its own
         for key in raw.get(section, {}):
-            included.pop(f"{section}.{key}", None)
+            origins.pop(f"{section}.{key}", None)
     for key, value in raw.get("run", {}).items():
         if isinstance(value, dict):
-            included.pop(f"run.{key}", None)
-    return _over(merged, raw), included
+            origins.pop(f"run.{key}", None)
+    return _over(merged, raw), origins, located
+
+
+def _with_imports(raw: dict, path: Path) -> tuple[dict, dict]:
+    """The file being run, its imports laid under it (V94). Its location is its own: it sets [run].name
+    and project itself, and no imported file has the same, or both would write the same folders."""
+    if not _as_list(raw.get("config", {}).get("import")):
+        return raw, {}
+    own = raw.get("run", {})
+    missing = [k for k in ("project", "name") if k not in own]
+    if missing:
+        raise HepError(f"a file that imports sets its own [run].{' and '.join(missing)}: its location is never imported",
+                       where=f"{path}: [run]")
+    merged, origins, located = _imports(raw, path, own["project"], (path.resolve(),))
+    for project, name, source in located:
+        if (project, name) == (own["project"], own["name"]):
+            raise HepError(f"{source.name} is the run {project}/{name} too: the two would write the same folders",
+                           where=f"{path}: [run].name", hint="give this file a [run].name of its own")
+    return merged, origins
 
 
 def load(name: str, *, sets: list[str] = (), strict: bool = True, text: str | None = None) -> RunConfig:
@@ -370,7 +452,7 @@ def load(name: str, *, sets: list[str] = (), strict: bool = True, text: str | No
             first = tomllib.loads(text)
         except tomllib.TOMLDecodeError as error:
             raise HepError(f"not valid TOML, even migrated: {error}", where=str(path)) from None
-    raw, included = _with_includes(first, path)
+    raw, included = _with_imports(first, path)
     apply_sets(raw, list(sets))
     run = parse(raw, path, strict=strict)
     run.included = included
