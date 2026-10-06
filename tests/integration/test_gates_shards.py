@@ -26,10 +26,10 @@ configuration = "one"
 event_count   = 4000
 threads       = 4
 
-[run.one]
+[run.cfgs.one]
 tools = [["pythia", "rivet"]]
 
-[run.four]
+[run.cfgs.four]
 tools = [["pythia", "rivet4"]]
 
 [prelim]

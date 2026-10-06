@@ -25,7 +25,7 @@ configuration = "one"
 event_count   = 2000
 threads       = 2
 
-[run.one]
+[run.cfgs.one]
 sweeps = ["pdf", "replica"]
 tools  = [["pythia", "rivet"]]
 
@@ -78,7 +78,7 @@ configuration = "one"
 event_count   = 1
 parallelism   = 3
 
-[run.one]
+[run.cfgs.one]
 sweeps = ["{sweep}"]
 tools  = ["check"]
 

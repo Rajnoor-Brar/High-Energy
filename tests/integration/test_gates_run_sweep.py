@@ -39,18 +39,18 @@ project     = "PhotoProduction"
 sweep_runs  = ["a", "b", "d"]                # V79: c is not in the sweep
 event_count = 1
 
-[run.a]
+[run.cfgs.a]
 tools = ["check"]
 
-[run.b]
+[run.cfgs.b]
 title  = "Bee"
 tools  = ["check"]
 static = {{ fail = "bad", nap = "{b_nap}" }}
 
-[run.c]
+[run.cfgs.c]
 tools = ["check"]
 
-[run.d]
+[run.cfgs.d]
 tools  = ["check"]
 static = {d_static}
 
@@ -145,11 +145,11 @@ sweep_runs  = true
 event_count = 1
 parallelism = 2
 
-[run.x]
+[run.cfgs.x]
 sweeps = ["slot"]
 tools  = ["check"]
 
-[run.y]
+[run.cfgs.y]
 sweeps = ["slot"]
 tools  = ["check"]
 
