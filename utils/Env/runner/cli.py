@@ -402,7 +402,7 @@ def _pipelined(args, run, keys: list[str], stopper: execute.Stopper, bus: Bus, a
 
 def show_config(run, keys: list[str]) -> list[str]:
     """--show-config (V56): every resolved value of each configuration with the layer it came from: its
-    own table, one it extends, [run.defaults], [run], or the schema's default; and what [master].include
+    own table, one it extends, [run.defaults], [run], or the schema's default; and what [config].import
     gave the file."""
     from . import schema
     order = [k for k in schema.keys("configuration") if k not in ("extends",)]

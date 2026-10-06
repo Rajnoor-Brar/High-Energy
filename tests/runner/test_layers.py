@@ -1,4 +1,4 @@
-"""Layers (V56): [run.defaults], extends, [master].include, "default" in a child, sweeping events, --show-config."""
+"""Layers (V56): [run.defaults], extends, [config].import (V93), "default" in a child, sweeping events, --show-config."""
 
 from __future__ import annotations
 
@@ -81,7 +81,7 @@ def test_include_gives_tables_and_the_file_wins(scratch):
         "plot": {"ratio": True, "y_gutter": 2.0},
         "run": {"defaults": {"event_count": 33}},
     }), encoding="utf-8")
-    data = raw(master={"include": [str(common)]}, plot={"y_gutter": 0.3})
+    data = raw(config={"import": [str(common)]}, plot={"y_gutter": 0.3})
     del data["run"]["event_count"]
     path = scratch / "run.toml"
     path.write_text(tomli_w.dumps(data), encoding="utf-8")
@@ -95,11 +95,18 @@ def test_include_gives_tables_and_the_file_wins(scratch):
 
 def test_an_include_cannot_include(scratch):
     inner = scratch / "inner.toml"
-    inner.write_text('[master]\ninclude = ["x.toml"]\n', encoding="utf-8")
+    inner.write_text('[config]\nimport = ["x.toml"]\n', encoding="utf-8")
     path = scratch / "run.toml"
-    path.write_text(tomli_w.dumps(raw(master={"include": str(inner)})), encoding="utf-8")
+    path.write_text(tomli_w.dumps(raw(config={"import": str(inner)})), encoding="utf-8")
     with pytest.raises(HepError, match="do not nest"):
         config.load(str(path))
+
+
+def test_master_is_config_now(scratch):
+    """V93 (break and migrate): [master] is refused with what to write."""
+    with pytest.raises(HepError, match=r"\[master\] is \[config\] now") as error:
+        parse(raw(master={"master_toml": "m.toml"}), scratch)
+    assert "hep migrate" in error.value.hint
 
 
 def test_events_swept_as_a_quantity_set_each_points_count(scratch):

@@ -128,3 +128,13 @@ def test_the_old_figure_tables_become_figures(scratch, capsys):
     run = config.load(str(path))
     assert run.plot["figures"]["eta"]["style"] == {"ratio": {"range": [0.8, 1.1], "limits": [0.8, 1.1]}}
     assert run.plot["figures"]["d04"] == {"objects": ["d04-*"], "logy": True}
+
+
+def test_master_becomes_config(scratch):
+    """V93: the table and its two keys renamed, by line; the file then reads."""
+    common = scratch / "common.toml"
+    common.write_text('[static]\nenergies = "27x920"\n', encoding="utf-8")
+    text = OLD.replace("[run]\n", f'[master]                           # how the file is read\ninclude     = ["{common}"]\n\n[run]\n', 1)
+    new = migrate.config_text(text)
+    assert new.startswith(f'[config]                           # how the file is read\nimport     = ["{common}"]\n')
+    assert migrate.config_text(new) == new

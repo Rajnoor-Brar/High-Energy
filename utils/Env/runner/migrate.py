@@ -15,6 +15,7 @@ and layout stay:
   `[plot.object."<glob>"]` → `[plot.figures.<glob, as a name>]` with `objects = ["<glob>"]`, their
   subtables too; in a figure, a style key written bare (`ratio.range = […]`, which beside `ratio = true`
   is not even TOML) → `style.ratio.range`. This runs on the text first, so a file it makes TOML reads.
+* (V93) `[master]` → `[config]`, its `master_toml` → `master` and `include` → `import`, on the text too.
 """
 
 from __future__ import annotations
@@ -49,6 +50,25 @@ def _slug(glob: str, taken: set) -> str:
         name = f"{base}_{n}"
     taken.add(name)
     return name
+
+
+#: [master]'s keys as [config] names them (V93).
+CONFIG_KEYS = {"master_toml": "master", "include": "import"}
+
+
+def config_text(text: str) -> str:
+    """[master] as [config] (V93), by line: the table's header and its two keys."""
+    out, inside = [], False
+    for line in text.splitlines(keepends=True):
+        header = _TABLE.match(line)
+        if header:
+            inside = header[1].strip() == "master"
+            if inside:
+                line = re.sub(r"\[\s*master\s*\]", "[config]", line, count=1)
+        elif inside and (key := _KEY.match(line.rstrip("\n"))) and key[2] in CONFIG_KEYS:
+            line = f"{key[1]}{CONFIG_KEYS[key[2]]}{key[3]}{key[4]}\n"
+        out.append(line)
+    return "".join(out)
 
 
 def figure_text(text: str) -> str:
@@ -235,7 +255,7 @@ def plan(names: list[str]) -> dict[Path, tuple[str, str]]:
     changes: dict[Path, tuple[str, str]] = {}
     for name in names:
         text = config_file(name).read_text(encoding="utf-8")
-        first = figure_text(text)
+        first = config_text(figure_text(text))
         run = configmod.load(name, strict=False, text=first)
         new = toml_text(first, run, run.project)
         if new != text:

@@ -77,6 +77,7 @@ POINT_KEYS = ("prelim", "input", "output")
 ROOTS = {
     "config":     lambda project: configs_root(),
     "master":     lambda project: configs_root() / project,
+    "import":     lambda project: configs_root() / project,
     "baseconfig": lambda project: configs_root() / project,
     "executable": lambda project: build_root() / project,
     "data":       lambda project: repo_root() / "datasets",

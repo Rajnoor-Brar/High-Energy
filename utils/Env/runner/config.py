@@ -131,7 +131,7 @@ class RunConfig:
     sweep_runs: bool = False                            # `hep run` executes every swept configuration (V38)
     sweep_list: list = field(default_factory=list)      # sweep_runs = ["a", "b"]: these, in this order (V79)
     sets: list = field(default_factory=list)            # the --set overrides it was loaded with (V77: provenance)
-    included: dict = field(default_factory=dict)        # "<section>.<name>" → the [master].include file it came from
+    included: dict = field(default_factory=dict)        # "<section>.<name>" → the [config].import file it came from
 
     def configuration(self, name: str | None) -> Configuration:
         wanted = name or self.default_configuration
@@ -330,22 +330,22 @@ def _over(base: dict, over: dict) -> dict:
 
 
 def _with_includes(raw: dict, path: Path) -> tuple[dict, dict]:
-    """[master].include = ["common.toml"]: the run starts from those files' tables, in order, and its own
-    win (V56). Returns the merged tables and which included file gave each quantity, tool and configuration."""
-    names = _as_list(raw.get("master", {}).get("include"))
+    """[config].import = ["common.toml"]: the run starts from those files' tables, in order, and its own
+    win (V56, V93). Returns the merged tables and which included file gave each quantity, tool and configuration."""
+    names = _as_list(raw.get("config", {}).get("import"))
     if not names:
         return raw, {}
     project = raw.get("run", {}).get("project")
     if not project:
-        raise HepError("[master].include needs [run].project in the file itself", where=f"{path}: [master].include")
+        raise HepError("[config].import needs [run].project in the file itself", where=f"{path}: [config].import")
     merged, included = {}, {}
     for name in names:
-        source = resolve(name, "master", project=project, where=f"{path}: [master].include")
+        source = resolve(name, "import", project=project, where=f"{path}: [config].import")
         if source.suffix != ".toml":
             source = source.with_name(source.name + ".toml")
         part = _read(source)
-        if "master" in part:
-            raise HepError("an included file has no [master] of its own (includes do not nest)", where=str(source))
+        if "config" in part:
+            raise HepError("an imported file has no [config] of its own (imports do not nest)", where=str(source))
         for section in ENTRIES:
             included.update({f"{section}.{key}": source.name for key in part.get(section, {})})
         included.update({f"run.{key}": source.name for key, v in part.get("run", {}).items() if isinstance(v, dict)})
@@ -381,13 +381,16 @@ def load(name: str, *, sets: list[str] = (), strict: bool = True, text: str | No
 def parse(raw: dict, path: Path, strict: bool = True) -> RunConfig:
     where = str(path)
     sections = schema.sections()
+    if "master" in raw:                                    # break and migrate (V93)
+        raise HepError("[master] is [config] now (V93): master_toml is master, include is import", where=f"{where}: [master]",
+                       hint="hep migrate rewrites it")
     for key in raw:
         if key not in sections:
             raise HepError(f"unknown section [{key}]", where=where,
                            hint=did_you_mean(key, sections) or f"sections: {', '.join(sections)}")
 
-    master = raw.get("master", {})
-    schema.check(master, "master", f"{where}: [master]")
+    file_config = raw.get("config", {})
+    schema.check(file_config, "config", f"{where}: [config]")
 
     run = raw.get("run")
     if not isinstance(run, dict):
@@ -576,7 +579,7 @@ def parse(raw: dict, path: Path, strict: bool = True) -> RunConfig:
     return RunConfig(path=path, project=project, name=run["name"], serial=run.get("serial"),
                      default_configuration=run.get("configuration"), configurations=configurations,
                      prelim=prelim, static=static, tools=tools, quantities=quantities, plot=plot,
-                     master_toml=master.get("master_toml"), raw=raw, sweep_runs=sweep_on,
+                     master_toml=file_config.get("master"), raw=raw, sweep_runs=sweep_on,
                      sweep_list=list(run["sweep_runs"]) if isinstance(run.get("sweep_runs"), list) else [])
 
 

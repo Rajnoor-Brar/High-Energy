@@ -77,7 +77,7 @@ layering was not had nine cycles.)
 | 0 | `schema.py` | the run TOML's schema, `utils/Env/schema/run.toml`: every key's type, choices, bounds, default, inheritance, doc and notes; checking a table against it; the editor schema (V55, V90) |
 | 0 | `hepfiles.py` | reading YODA text (1D and 2D objects, `/RAW` twins, counters; `.gz` too) and Rivet's data directories, once (V60) |
 | 0 | `plugins.py` | loading a folder's Python by path, once: `render.py`, `backend.py`, `provider.py`, the figures' plugins (V61) |
-| 1 | `config.py` | load the TOML, `include`, `--set`, the strict schema check and the figure rules; the typed model (`RunConfig`, `Configuration`, `Tool`, `Quantity`) |
+| 1 | `config.py` | load the TOML, `[config].import`, `--set`, the strict schema check and the figure rules; the typed model (`RunConfig`, `Configuration`, `Tool`, `Quantity`) |
 | 1 | `quantities.py` | the master TOML, static values and selectors, who consumes what (C7), provider checks (C10) |
 | 1 | `sweep.py` | points from `sweeps` (grid and zip), point names, pages, `--points` |
 | 1 | `labels.py` | Rivet `.plot` keys, YODA's text macros, line breaks, LaTeX → TLatex for Paint, TLatex → LaTeX for `hep migrate` |
@@ -129,7 +129,7 @@ what their `// requires:` line names.
 
 | Type | Module | Holds |
 |---|---|---|
-| `RunConfig` | `config` | the parsed run TOML: `path`, `project`, `name`, `serial`, `default_configuration` (None under `sweep_runs`), `configurations`, `prelim`, `static`, `tools`, `quantities`, `plot`, `master_toml`, `raw`, `sweep_runs`, `sweep_list` (`sweep_runs = ["a", "b"]`), `sets` (the `--set`s it was loaded with), `included` (what came from `[master].include`) |
+| `RunConfig` | `config` | the parsed run TOML: `path`, `project`, `name`, `serial`, `default_configuration` (None under `sweep_runs`), `configurations`, `prelim`, `static`, `tools`, `quantities`, `plot`, `master_toml`, `raw`, `sweep_runs`, `sweep_list` (`sweep_runs = ["a", "b"]`), `sets` (the `--set`s it was loaded with), `included` (what came from `[config].import`) |
 | `Configuration` | `config` | one `[run.<cfg>]`: `key`, `label` (its folder: `[run.<cfg>].label`, else the key), `run_folder` (`[run.<cfg>].name`, else `[run].name`), `serial`, `title`, `description`, `event_count`, `threads` (resolved), `parallelism` (and `parallelism_auto`), `sweeps`, `plot_points`, `combine`, `tools`/`pre`/`post` (lists of groups), `static` (merged), `prelim`, `swept`, `seed_type`, `manual_seed`, `origins` (where each value came from, for `--show-config`) |
 | `Tool`, `Quantity` | `config` | one table each; a tool's folder-specific keys and export requests are in `Tool.extra`; a quantity's `values`, `tags`, `labels`, `styles` (a look per value), `shape`, `exclude` |
 | `Point` | `sweep` | `index` (1-based; −1 pre, 0 post), `name`, `choice` (quantity → value index), `page`, `stage` (`"combined"`) |
@@ -173,7 +173,7 @@ and what it reads and writes**, which its tool folder declares.
 
 **Planning** (`cli.build_plans`, returned as one `cli.Planned`) writes nothing:
 
-1. **Load** (`config.load`): the run TOML and its `include`s, `--set` applied to the raw table, then
+1. **Load** (`config.load`): the run TOML and its `[config].import`s, `--set` applied to the raw table, then
    the file checked (C1–C5, C12, C14): every section, key and type against the schema, the figure
    rules, the sweeps, `plot_points` and tool lists. `threads = 0` becomes a number.
 2. **Expand** (`sweep.points`): the grid of the axes, names from the tags, unique names (C11); then
@@ -348,7 +348,7 @@ Every rule of §6 then applies to the rewritten chain as to any other:
 
 | Scope | What runs there | Configured by |
 |---|---|---|
-| per run, once | load, expand, plan, checks | `[run]`, `[master]` |
+| per run, once | load, expand, plan, checks | `[config]`, `[run]` |
 | **pre**, once before every point | a download, a shared build: products every point may name; its identity is in theirs | `[run.<cfg>].pre` |
 | **per point** | `[prelim]`, the prepare steps, then the `tools` groups | `[run.<cfg>].tools`, `[prelim]` |
 | **combined**, once per group | the merge of points that differ only in `combine`'s quantities | `[run.<cfg>].combine` |

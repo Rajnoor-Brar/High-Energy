@@ -17,23 +17,23 @@
 #   notes    what a line cannot say: the reference's text for the key (docs/04_Config_Reference.md is
 #            generated from doc and notes, `make docs`), shown by `hep explain` and the editor too
 #
-# Tables: master, run, configuration ([run.<cfg>]), prelim, quantity ([quantities.<q>]), tool
+# Tables: config, run, configuration ([run.<cfg>]), prelim, quantity ([quantities.<q>]), tool
 # ([tools.<tag>]: the keys every tool table may carry; a folder's [options] add its own), plot,
 # figure ([plot.figures.<figure>]), data.
 
 [sections]
-order = ["master", "run", "prelim", "static", "tools", "quantities", "plot"]
+order = ["config", "run", "prelim", "static", "tools", "quantities", "plot"]
 
-# ── [master] ─────────────────────────────────────────────────────────────────────────────────
+# ── [config]: how the file is read (V93) ─────────────────────────────────────────────────────────────────────────────────
 
-[master.master_toml]
+[config.master]
 type = "str"
 doc  = "a project master overlaid on the tool folders' quantities.toml (configs/<Project>/…)"
 notes = """\
   overlays the tool folders' mappings key by key (`[quantities.<tool>.compatible_quantities]`): an \
   entry for a (tool, quantity) pair replaces the framework's. The file must exist."""
 
-[master.include]
+[config.import]
 type  = "str|list"
 items = "str"
 doc   = "run TOMLs whose tables this one starts from (configs/<Project>/…); this file wins"
@@ -41,7 +41,7 @@ notes = """\
   files under `configs/<project>/` (`.toml` optional) whose tables the run starts from, in order; \
   **this file wins** (V56). A quantity, tool table or configuration of the file replaces the \
   included one whole; `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, \
-  tables recursively. An included file has no `[master]` of its own. `--show-config` lists what \
+  tables recursively. An imported file has no `[config]` of its own. `--show-config` lists what \
   came from where."""
 
 # ── [run] ────────────────────────────────────────────────────────────────────────────────────

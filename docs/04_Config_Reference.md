@@ -33,15 +33,15 @@ YAML merge for Sherpa, and so on (see [05](05_Commands_and_Tools.md)).
 **Precedence of a value, lowest to highest:**
 
 ```
-utils/Env/<tool>/quantities.toml  <  [master].master_toml  <  [quantities.<q>].key / target  <  --set
+utils/Env/<tool>/quantities.toml  <  [config].master  <  [quantities.<q>].key / target  <  --set
 [static]  <  [run.<cfg>].static  <  --set static.<q>=…  <  the value a sweep gives the point
 [run]  <  [run.defaults]  <  extends  <  [run.<cfg>]  <  --set
-[master].include files  <  this file
+[config].import files  <  this file
 base.toml  <  [plot].root_style file  <  [plot.style]  <  [plot.figures.<figure>].style
 [plot]  <  [plot.figures.<figure>]
 ```
 
-A run TOML has exactly these top-level sections, and any other is an error (C1): `[master]`,
+A run TOML has exactly these top-level sections, and any other is an error (C1): `[config]`,
 `[run]`, `[prelim]`, `[static]`, `[tools]`, `[quantities]`, `[plot]`.
 
 **`"default"` means "keep it as it is"** (V55). Only a key whose type says so takes it:
@@ -68,7 +68,7 @@ Every key that takes a path has **one** convention root. There is no search path
 | Key | Root of a bare name | Example |
 |---|---|---|
 | `hep run <config>`, `hep plot <config>` | `configs/`, `.toml` optional | `PhotoProduction/eic` → `configs/PhotoProduction/eic.toml` |
-| `[master].master_toml`, `[master].include` | `configs/<project>/` | `master.toml` |
+| `[config].master`, `[config].import` | `configs/<project>/` | `master.toml` |
 | `[tools.*].baseconfig` | `configs/<project>/` | `photo_ep.cmnd` |
 | `[tools.*].executable` | `build/<project>/`, which must exist; `path:<command>` asks for a command on `PATH` by name (V54) | `Lambda.exe` → `build/Lambda/Lambda.exe`; `path:python3` |
 | `[tools.*].filters` | `configs/<project>/` | `fit_filters.toml` |
@@ -98,27 +98,30 @@ results/<P>/<run>/<cfg>/<point>/    the products
 
 ---
 
-## 3. `[master]`
+## 3. `[config]`
+
+How the file is read (V93; it was `[master]`, which is refused with the `[config]` to write, and
+`hep migrate` rewrites it).
 
 ```toml
-[master]
-master_toml = "master.toml"      # optional: configs/<project>/master.toml overlays the framework's
-include     = ["common.toml"]    # optional: run TOMLs whose tables this one starts from (V56)
+[config]
+import = ["common.toml"]         # optional: run TOMLs whose tables this one starts from; this file wins
+master = "master.toml"           # optional: configs/<project>/master.toml overlays the tool folders' mappings
 ```
 
-<!-- generated: keys master -->
+<!-- generated: keys config -->
 | Key | Type | Default | Meaning |
 |---|---|---|---|
-| `master_toml` | a string |  | overlays the tool folders' mappings key by key (`[quantities.<tool>.compatible_quantities]`): an entry for a (tool, quantity) pair replaces the framework's. The file must exist. |
-| `include` | a string or a list (a string each) |  | files under `configs/<project>/` (`.toml` optional) whose tables the run starts from, in order; **this file wins** (V56). A quantity, tool table or configuration of the file replaces the included one whole; `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively. An included file has no `[master]` of its own. `--show-config` lists what came from where. |
+| `master` | a string |  | overlays the tool folders' mappings key by key (`[quantities.<tool>.compatible_quantities]`): an entry for a (tool, quantity) pair replaces the framework's. The file must exist. |
+| `import` | a string or a list (a string each) |  | files under `configs/<project>/` (`.toml` optional) whose tables the run starts from, in order; **this file wins** (V56). A quantity, tool table or configuration of the file replaces the included one whole; `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively. An imported file has no `[config]` of its own. `--show-config` lists what came from where. |
 <!-- /generated -->
 
-**`include`:**
-- The included files are read in order, and **this file wins**.
-- A quantity, tool table or configuration of the file replaces the included one whole.
-- `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively.
-- An included file has no `[master]` of its own.
-- `--show-config` lists what came from where.
+**`import`.** The imported files are read in order, then this file's tables are laid over them:
+- a quantity, tool table or configuration of the file replaces the imported one whole;
+- `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively;
+- `"default"` in this file keeps the imported value.
+
+`--show-config` lists what came from where.
 
 **The vocabulary** (`utils/Env/quantities.toml`, V58) says what each quantity name means for every
 tool:

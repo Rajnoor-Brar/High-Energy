@@ -24,7 +24,7 @@ TYPES = {"int": int, "float": (int, float), "str": str, "bool": bool, "list": li
 NAMES = {"int": "an integer", "float": "a number", "str": "a string", "bool": "true or false", "list": "a list",
          "table": "a table"}
 #: The tables of run.toml that describe keys (the rest, [sections], describe the file).
-TABLES = ("master", "run", "configuration", "prelim", "quantity", "tool", "plot", "figure", "data")
+TABLES = ("config", "run", "configuration", "prelim", "quantity", "tool", "plot", "figure", "data")
 #: A figure's own keys: the rest are what it sets for its pages.
 FIGURE_OWN = ("class", "type", "name", "objects", "labels", "over", "configurations", "op", "x", "y", "pages", "columns")
 
@@ -169,7 +169,7 @@ def json_schema() -> dict:
         "title": "hep run TOML (generated from utils/Env/schema/run.toml)",
         "type": "object",
         "properties": {
-            "master": _object("master"), "run": run, "prelim": _object("prelim"),
+            "config": _object("config"), "run": run, "prelim": _object("prelim"),
             "static": {"type": "object", "description": "quantity = a tag, a value or \"#N\""},
             "tools": {"type": "object", "additionalProperties": _object("tool", open_=True)},
             "quantities": {"type": "object", "additionalProperties": _object("quantity")},

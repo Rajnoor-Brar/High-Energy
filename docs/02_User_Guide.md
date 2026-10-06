@@ -704,5 +704,5 @@ installed: for notebooks and statistics tools.
    programs as `<Name>.cc` with a `// requires:` line. Headers beside them are shared by both.
 3. `hep build`, then `hep check <Project>/<run>`, then `hep run <Project>/<run> --plan`.
 4. A quantity the vocabulary does not map gets a `key`. One your project uses everywhere can go in
-   `configs/<Project>/master.toml`, named by `[master] master_toml = "master.toml"`.
-5. Tables several run TOMLs share can live in one file that each names in `[master] include` (04 §1).
+   `configs/<Project>/master.toml`, named by `[config] master = "master.toml"`.
+5. Tables several run TOMLs share can live in one file that each names in `[config] import` (04 §3).

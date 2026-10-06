@@ -3,15 +3,15 @@
  "title": "hep run TOML (generated from utils/Env/schema/run.toml)",
  "type": "object",
  "properties": {
-  "master": {
+  "config": {
    "type": "object",
    "properties": {
-    "master_toml": {
+    "master": {
      "description": "a project master overlaid on the tool folders' quantities.toml (configs/<Project>/…)\n\noverlays the tool folders' mappings key by key (`[quantities.<tool>.compatible_quantities]`): an entry for a (tool, quantity) pair replaces the framework's. The file must exist.",
      "type": "string"
     },
-    "include": {
-     "description": "run TOMLs whose tables this one starts from (configs/<Project>/…); this file wins\n\nfiles under `configs/<project>/` (`.toml` optional) whose tables the run starts from, in order; **this file wins** (V56). A quantity, tool table or configuration of the file replaces the included one whole; `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively. An included file has no `[master]` of its own. `--show-config` lists what came from where.",
+    "import": {
+     "description": "run TOMLs whose tables this one starts from (configs/<Project>/…); this file wins\n\nfiles under `configs/<project>/` (`.toml` optional) whose tables the run starts from, in order; **this file wins** (V56). A quantity, tool table or configuration of the file replaces the included one whole; `[plot]`, `[static]`, `[prelim]` and `[run]`'s own keys merge key by key, tables recursively. An imported file has no `[config]` of its own. `--show-config` lists what came from where.",
      "type": [
       "string",
       "array"
