@@ -464,8 +464,11 @@ def _imports(raw: dict, path: Path, project: str, chain: tuple[Path, ...]) -> tu
                            where=f"{source}: [master]", hint="hep migrate rewrites it")
         theirs = _project_of(source, part, project)
         part, inner, deeper = _imports(part, source, theirs, (*chain, source.resolve()))
-        if only is not None:
+        if only is not None:                     # V101: a file's vars come with whatever is taken of it
+            given = part.get("config", {}).get("vars")
             part = _only(part, only, source, where)
+            if given:
+                part = {**part, "config": {**part.get("config", {}), "vars": given}}
         if theirs != project:
             part = _rebased(part, theirs)
         if "name" in part.get("run", {}):

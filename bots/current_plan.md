@@ -11,7 +11,7 @@
 - the manual's rebuild (V90–V92, `git show c5cbaa3:docs/audit_2/02_Manual.md`).
 - `[config]` (V93–V97): it replaces `[master]`; `import` nests, crosses projects and takes `only` a part; `drop`; `vars`; `meta` (version warnings). The doc is 04 §3.
 - `[run.cfgs.<cfg>]` (V98–V100): configurations moved out of `[run]`; `[run]` gives every configuration its keys (`[run.defaults]` gone); an import's location rule is per folder. The user's configs were migrated by `hep migrate` (2026-10-06, backup in the scratchpad `configs_before_cfgs/`), uncommitted.
-- PhotoProduction TOMLs refactored (2026-10-06, uncommitted): `[run].tools`, `extends` for the event-count series, zeus_seedSweep and InProcZeus importing zeus_validation's shared parts; every point's identity, folder and plot settings checked unchanged (143 points).
+- PhotoProduction TOMLs refactored (2026-10-06, uncommitted): `configs/PhotoProduction/common.toml` (new) holds the chain's tools (parameterised by `[config.vars]` card/analysis/product/shards), the shared quantities, statics and plot keys; eic and zeus_validation import it, zeus_seedSweep and InProcZeus import zeus_validation, InProcEIC eic. Identities unchanged except zeus_seedSweep's (its PDFs now zeus_validation's Pythia sets) and InProcEIC's new pt28 points (pt0ref's 4 values). Backup: scratchpad `refactor_before/`.
 
 ## Now
 

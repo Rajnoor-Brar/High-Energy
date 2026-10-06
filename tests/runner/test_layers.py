@@ -272,6 +272,17 @@ def test_meta_versions_warn_and_never_refuse(scratch, monkeypatch):
         parse(raw(config={"meta": {"versions": {"pythia8": 8.317}}}), scratch)
 
 
+def test_an_imported_files_vars_come_with_the_part_taken(scratch):
+    """V101: `only` keeps the file's [config.vars], under the importer's, so its tables' {var:…} resolve."""
+    shared = _written(scratch, {"config": {"vars": {"ana": "photo_eic", "out": "photo"}},
+                                "tools": {"rivet": {"tool": "rivet", "input": "events.hepmc", "analyses": ["{var:ana}"],
+                                                    "output_file": "{var:out}.yoda"}}}, "shared.toml")
+    data = raw(config={"import": [{"from": shared, "only": ["tools.rivet"]}], "vars": {"out": "mine"}})
+    del data["tools"]["rivet"]
+    run = config.load(_written(scratch, data))
+    assert run.tools["rivet"].extra["analyses"] == ["photo_eic"] and run.tools["rivet"].output_file == ["mine.yoda"]
+
+
 def test_master_is_config_now(scratch):
     """V93 (break and migrate): [master] is refused with what to write."""
     with pytest.raises(HepError, match=r"\[master\] is \[config\] now") as error:

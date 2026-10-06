@@ -73,7 +73,8 @@ notes = """\
   exactly one var takes its value as it is: `event_count = \"{var:events}\"` is an integer, and a \
   list stays a list; inside a longer string a var must be a scalar (`\"rivet:{var:ana}\"`). An \
   unknown name is refused with the nearest. An imported file's `{var:…}` takes this file's value, \
-  so a shared file can be written with parameters. Imports are read before vars, so an import's \
+  so a shared file can be written with parameters; its own `[config.vars]` come with whatever is \
+  taken of it (`only` included, V101), under this file's. Imports are read before vars, so an import's \
   name cannot cite one; `--set config.vars.<name>=…` changes one for a run."""
 
 [config.meta]
