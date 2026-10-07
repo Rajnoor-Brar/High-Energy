@@ -1,0 +1,200 @@
+# docs/stack/packages.toml — the stack's packages, in build order: where each one's source is and how
+# it is built (the lab PC's versions and fixes; README.md §3 says why each flag is there).
+#
+#   release   its version: the stamp's, {release} below, and {series} (it without its last ".x")
+#   url       its tarball
+#   kind      autotools  ./configure --prefix={install} ARGS, make, make install, in {src}
+#             cmake      {src} built in {build} and installed into {install} (Release, C++{cxx_std})
+#             unpack     the tarball unpacked into {install}; nothing built
+#             none       only its pre and post commands
+#   needs     the packages it builds against: added to a run when they are not installed
+#   group     "core" (the default) or "extra": packages = "core" builds the first, "all" both
+#   install   its directory under install/ (default: its name): the names hep_env.sh expects
+#   probe     the file that shows it installed (default: {install})
+#   args      configure or cmake arguments
+#   optional  { package = [args] }: added when that package is installed or in the run
+#   patch     a patch (-p0) for the unpacked source; a path from the repository root
+#   env       environment for its commands
+#   pre, post commands run before configuring and after installing (in {src}; shell words, no shell)
+#   jobs      its parallel jobs (default {jobs})
+#
+# Placeholders: any setting ({jobs}, {graphics}, …), and {prefix} {inst} {venv} {src} {build}
+# {install} {release} {series} {py} {pyxy} {pyinc} {cxxflags} {arch} {repo}. A word that is only a
+# list setting ({pdf_sets}) becomes its words.
+
+[python]
+kind  = "none"
+probe = "{venv}/bin/python"
+pre   = ["{python} -m venv {venv}", "{venv}/bin/pip install {python_packages}"]
+
+[lhapdf]
+release = "6.5.6"
+url     = "https://lhapdf.hepforge.org/downloads/?f=LHAPDF-{release}.tar.gz"
+kind    = "autotools"
+needs   = ["python"]
+install = "LHAPDF"
+
+[hepmc3]
+release = "3.3.1"
+url     = "https://hepmc.web.cern.ch/hepmc/releases/HepMC3-{release}.tar.gz"
+kind    = "cmake"
+needs   = ["python"]
+# The Python directory is HEPMC3_Python_SITEARCH<XY> (HEPMC3_PYTHON_INSTALL_DIR is ignored); LTO strips
+# the pybind11 symbols.
+args = [
+  "-DHEPMC3_ENABLE_PYTHON=ON", "-DHEPMC3_PYTHON_VERSIONS={py}",
+  "-DHEPMC3_Python_SITEARCH{pyxy}={venv}/lib/python{py}/site-packages",
+  "-DHEPMC3_ENABLE_ROOTIO=OFF", "-DHEPMC3_ENABLE_SEARCH=ON", "-DHEPMC3_BUILD_EXAMPLES=OFF",
+  "-DCMAKE_CXX_FLAGS={cxxflags} -fno-lto", "-DCMAKE_SHARED_LINKER_FLAGS=-fno-lto",
+]
+
+[fastjet]
+release = "3.5.0"
+url     = "https://fastjet.fr/repo/fastjet-{release}.tar.gz"
+kind    = "autotools"
+# SISCone's random-number state is one per process: threads clustering at once get other jets (L29).
+# The patch makes it per thread. fastjet.patch="" builds without it.
+patch   = "utils/Env/patches/fastjet-3.5.0-siscone-thread-local-ranlux.patch"
+args    = ["--enable-shared", "--enable-allcxxplugins"]
+
+[fjcontrib]
+release = "1.104"
+url     = "https://fastjet.hepforge.org/contrib/downloads/fjcontrib-{release}.tar.gz"
+kind    = "autotools"
+needs   = ["fastjet"]
+install = "fastjet"                                   # into FastJet's prefix, as the lab PC has it
+probe   = "{install}/lib/libfastjetcontribfragile.so"
+args    = ["--fastjet-config={inst}/fastjet/bin/fastjet-config", "CXXFLAGS={cxxflags} -fPIC"]
+post    = ["make fragile-shared-install"]             # libfastjetcontribfragile.so, which Rivet links
+
+[root]
+release = "6.40.04"                                   # not 6.40.00: its rootcling_stage1 does not link
+url     = "https://root.cern/download/root_v{release}.source.tar.gz"
+kind    = "cmake"
+needs   = ["python"]
+jobs    = "{root_jobs}"
+args = [
+  "-DPython3_EXECUTABLE={venv}/bin/python", "-Dpyroot=ON",
+  "-Dmathmore=ON", "-Droofit=ON", "-Dtmva=ON", "-Dfftw3=ON", "-Dsqlite=ON", "-Dxml=ON", "-Dgdml=ON",
+  "-Dhttp=ON", "-Dimt=ON", "-Dssl=ON", "-Dvdt=ON",
+  "-Dx11={graphics}", "-Dopengl={graphics}", "-Dwebgui={graphics}", "-Dasimage={graphics}",
+  "-Dbuiltin_freetype=ON", "-Dbuiltin_pcre=ON", "-Dxrootd=ON", "-Dbuiltin_xrootd=ON", "-Ddavix=OFF",
+  "{root_extra}",
+]
+
+[yoda]
+release = "2.1.3"
+url     = "https://yoda.hepforge.org/downloads?f=YODA-{release}.tar.gz"
+kind    = "autotools"
+needs   = ["python"]
+
+[rivet]
+release = "4.1.3"
+url     = "https://rivet.hepforge.org/downloads/?f=Rivet-{release}.tar.gz"
+kind    = "autotools"
+needs   = ["python", "hepmc3", "yoda", "fastjet", "fjcontrib"]
+args    = ["--with-hepmc3={inst}/hepmc3", "--with-yoda={inst}/yoda", "--with-fastjet={inst}/fastjet"]
+
+[pythia8]
+release = "8317"
+url     = "https://pythia.org/download/pythia83/pythia{release}.tgz"     # pythia83: the 8.3 series
+kind    = "autotools"
+needs   = ["python", "lhapdf", "hepmc3", "fastjet"]
+args = [
+  "--with-lhapdf6={inst}/LHAPDF", "--with-hepmc3={inst}/hepmc3", "--with-fastjet3={inst}/fastjet",
+  "--with-python-bin={venv}/bin/", "--with-python-lib={venv}/lib/python{py}",
+  "--with-python-include={pyinc}", "--cxx-common={cxxflags} -fPIC",
+]
+# Its ROOT and Rivet plugins (Pythia8Plugins/RivetHooks.h) exist only when built after them.
+optional = { root = ["--with-root={inst}/root"], rivet = ["--with-rivet={inst}/rivet"] }
+
+[thepeg]
+release = "2.3.0"
+url     = "https://thepeg.hepforge.org/downloads/?f=ThePEG-{release}.tar.bz2"
+kind    = "autotools"
+needs   = ["lhapdf", "hepmc3", "fastjet"]
+install = "herwig7"
+probe   = "{install}/bin/setupThePEG"
+# --with-hepmcversion=3: else ThePEG looks for HepMC2 under the HepMC3 prefix.
+args    = ["--with-hepmc={inst}/hepmc3", "--with-hepmcversion=3", "--with-fastjet={inst}/fastjet",
+           "--with-lhapdf={inst}/LHAPDF"]
+
+[herwig]
+release = "7.3.0"
+url     = "https://herwig.hepforge.org/downloads/?f=Herwig-{release}.tar.bz2"
+kind    = "autotools"
+needs   = ["thepeg", "lhapdf", "fastjet"]
+install = "herwig7"
+probe   = "{install}/bin/Herwig"
+pre     = ["lhapdf install CT14lo CT14nlo"]           # its defaults read them: make install needs them (L15)
+args    = ["--with-thepeg={inst}/herwig7", "--with-fastjet={inst}/fastjet", "--with-lhapdf={inst}/LHAPDF"]
+
+[delphes]
+release = "3.5.1"
+url     = "https://github.com/delphes/delphes/archive/refs/tags/{release}.tar.gz"
+kind    = "cmake"
+needs   = ["root"]
+env     = { PYTHIA8 = "{inst}/pythia8" }              # DelphesPythia8 too, when Pythia8 is there
+args    = ["-DROOT_DIR={inst}/root/cmake"]
+
+[sherpa]
+release = "3.0.5"
+url     = "https://gitlab.com/sherpa-team/sherpa/-/archive/v{release}/sherpa-v{release}.tar.gz"
+kind    = "cmake"
+group   = "extra"
+needs   = ["hepmc3", "lhapdf", "rivet", "fastjet"]
+# The _DIR spellings are Sherpa's own; HepMC3_DIR is the CMake config directory.
+args = [
+  "-DSHERPA_ENABLE_HEPMC3=ON", "-DHepMC3_DIR={inst}/hepmc3/share/HepMC3/cmake",
+  "-DSHERPA_ENABLE_RIVET=ON", "-DRIVET_DIR={inst}/rivet",
+  "-DSHERPA_ENABLE_FASTJET=ON", "-DFASTJET_DIR={inst}/fastjet",
+  "-DSHERPA_ENABLE_LHAPDF=ON", "-DLHAPDF_DIR={inst}/LHAPDF",
+  "-DSHERPA_ENABLE_INTERNAL_PDFS=ON", "-DSHERPA_ENABLE_EXAMPLES=ON",
+]
+
+[madgraph]
+release = "3.7.3"                                     # Launchpad renames releases: set madgraph.url when it 404s
+url     = "https://launchpad.net/mg5amcnlo/3.0/{series}.x/+download/MG5_aMC_v{release}.tar.gz"
+kind    = "unpack"                                    # a Python/Fortran tree, pointed at the stack
+group   = "extra"
+needs   = ["lhapdf", "pythia8"]
+post = ["""sed -i
+  -e 's|^#* *lhapdf *=.*|lhapdf = {inst}/LHAPDF/bin/lhapdf-config|'
+  -e 's|^#* *pythia8_path *=.*|pythia8_path = {inst}/pythia8|'
+  -e 's|^#* *automatic_html_opening *=.*|automatic_html_opening = False|'
+  {install}/input/mg5_configuration.txt"""]
+
+[whizard]
+release = "3.1.8"
+url     = "https://whizard.hepforge.org/downloads/?f=whizard-{release}.tar.gz"
+kind    = "autotools"
+group   = "extra"
+needs   = ["hepmc3", "fastjet", "lhapdf", "pythia8"]
+# --enable-hepmc takes HepMC3 (there are no *hepmc3 options); O'Mega needs OCaml.
+args = [
+  "--enable-lhapdf", "--enable-hepmc", "--with-hepmc={inst}/hepmc3", "--enable-fastjet",
+  "--with-fastjet={inst}/fastjet", "--enable-pythia8", "--with-pythia8={inst}/pythia8",
+  "--disable-dependency-tracking", "FC=gfortran",
+]
+
+[onnxruntime]
+release = "1.29.0"
+url     = "https://github.com/microsoft/onnxruntime/releases/download/v{release}/onnxruntime-linux-{arch}-{release}.tgz"
+kind    = "unpack"                                    # a released binary: no ABI to match
+group   = "extra"
+
+[geant4]
+release = "11.4.2"
+url     = "https://github.com/Geant4/geant4/archive/refs/tags/v{release}.tar.gz"
+kind    = "cmake"
+group   = "extra"
+args = [
+  "-DGEANT4_BUILD_MULTITHREADED=ON", "-DGEANT4_INSTALL_DATA={geant4_data}", "-DGEANT4_USE_GDML=ON",
+  "-DGEANT4_USE_OPENGL_X11={graphics}", "-DGEANT4_USE_SYSTEM_CLHEP=OFF", "-DGEANT4_USE_SYSTEM_EXPAT=OFF",
+  "-DGEANT4_USE_SYSTEM_ZLIB=OFF", "-DGEANT4_INSTALL_DATA_TIMEOUT=1500",
+]
+
+[pdfsets]
+kind  = "none"
+needs = ["lhapdf"]
+post  = ["lhapdf install {pdf_sets}"]                 # a set already there is skipped

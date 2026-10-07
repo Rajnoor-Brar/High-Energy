@@ -1,0 +1,57 @@
+# docs/stack/settings.toml — build_stack.py's settings, each with its default.
+#
+# Change one with key=value on the command line (`jobs=8`, `packages="rivet pythia8"`), or with
+# --config FILE: a TOML file holding any of these keys, and [package] tables that change or add
+# packages.toml's entries. The command line wins over the file.
+
+prefix      = "~/HEP"      # src/ build/ install/ .venv/ logs/ .stamps/ setup.sh
+packages    = "core"       # "core", "all", or names: "rivet pythia8" (what they need is added)
+jobs        = 0            # parallel jobs; 0: one per core
+root_jobs   = 0            # ROOT's; 0: one per 3 GB of RAM (its LLVM/Cling OOM-kills cc1plus at more)
+cxx_std     = 17           # one C++ standard for the whole stack: ROOT, Rivet and Pythia8 share ABIs
+opt_flags   = "-O2"
+python      = "python3"    # the interpreter the venv is made from
+system      = true         # apt-get install apt_packages first (sudo when not root); false: they are there
+graphics    = "ON"         # ROOT's x11/opengl/webgui/asimage and Geant4's OpenGL; "OFF" when headless
+geant4_data = "ON"         # Geant4's datasets (~4 GB), downloaded during its build
+root_extra  = []           # more ROOT cmake arguments: ["-Droofit=OFF"]
+hekit_root  = ""           # the checkout setup.sh loads utils/Env/hep_env.sh from; "": this one
+
+# The venv's packages: the framework's. Add the analysis ones you want (scipy, pandas, pyhf, …).
+python_packages = ["numpy", "cython", "tomli_w", "rich", "pyyaml", "pillow", "matplotlib", "uproot",
+                   "awkward", "pytest"]
+
+# What the `pdfsets` package installs: the sets the configs and the tests use (the lab PC's).
+pdf_sets = ["CT14lo", "CT14nlo", "CT10", "CT18NLO", "CT18NNLO", "cteq6l1", "MSHT20nlo_as118",
+            "MSTW2008lo68cl", "MSTW2008lo90cl", "MSTW2008lo68cl_nf3", "MSTW2008lo68cl_nf4",
+            "MSTW2008lo68cl_nf4as5", "MSTW2008lo90cl_nf3", "MSTW2008lo90cl_nf4", "MSTW2008lo90cl_nf4as5",
+            "NNPDF23_lo_as_0130_qed", "NNPDF23_nlo_as_0119_qed", "NNPDF40_nlo_as_01180", "PDF4LHC21_40",
+            "PDF4LHC21_40_pdfas", "nNNPDF30_nlo_as_0118_A208_Z82"]
+
+# The system packages (Ubuntu 24.04 names), by what needs them.
+apt_packages = [
+  # build
+  "build-essential", "gfortran", "cmake", "git", "curl", "ca-certificates", "patch", "pkg-config",
+  "libtool", "autoconf", "automake",
+  # Python
+  "python3-venv", "python3-dev",
+  # ROOT
+  "libxml2-dev", "libfftw3-dev", "libsqlite3-dev", "libx11-dev", "libxpm-dev", "libxft-dev",
+  "libxext-dev", "liblzma-dev", "libpcre3-dev", "libglew-dev", "libgif-dev", "libftgl-dev",
+  "libgraphviz-dev", "libcurl4-openssl-dev", "uuid-dev", "libkrb5-dev", "libssl-dev",
+  # ThePEG, Herwig; LHAPDF; Sherpa
+  "libgsl-dev", "libboost-all-dev", "libyaml-cpp-dev", "libzip-dev", "libbz2-dev",
+  # Whizard (O'Mega)
+  "ocaml", "ocaml-findlib", "libgc-dev",
+  # Geant4
+  "libxerces-c-dev", "libgl1-mesa-dev", "libglu1-mesa-dev", "libxmu-dev", "libxi-dev",
+  # the framework: Paint, App_Pythia, the module kit; pdflatex for sheet figures
+  "libtomlplusplus-dev", "libzstd-dev", "zlib1g-dev", "texlive-latex-base", "texlive-latex-extra",
+]
+
+# The build's environment. Besides these, every install's bin/, lib/ and Python directory is put on
+# PATH, LD_LIBRARY_PATH and PYTHONPATH, the venv's bin/ first: what setup.sh gives later.
+[env]
+CXXFLAGS         = "{cxxflags}"
+VIRTUAL_ENV      = "{venv}"
+LHAPDF_DATA_PATH = "{inst}/LHAPDF/share/LHAPDF"

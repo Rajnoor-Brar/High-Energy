@@ -14,7 +14,7 @@ load_hep            # or: source ~/HEP/setup.sh — the ~/HEP stack, the venv, `
 hep build           # every app, module program and Rivet plugin, and Herwig's repository
 ```
 
-On a new machine, build the stack first: `bash docs/stack/build_stack.sh` builds it from source into
+On a new machine, build the stack first: `python3 docs/stack/build_stack.py` builds it from source into
 `~/HEP`, or into a Docker image ([stack/README.md](stack/README.md)).
 
 `hep build` takes these options:

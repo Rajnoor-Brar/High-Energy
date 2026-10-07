@@ -1,6 +1,6 @@
-# docs/stack/Dockerfile — the HEP stack in a container, built by build_stack.sh (Ubuntu 24.04, as the lab PC).
+# docs/stack/Dockerfile — the HEP stack in a container, built by build_stack.py (Ubuntu 24.04, as the lab PC).
 #
-# From the repository root (Dockerfile.dockerignore sends only the script and the patches):
+# From the repository root (Dockerfile.dockerignore sends only docs/stack/ and the patches):
 #
 #   docker build -f docs/stack/Dockerfile -t hep-stack .                                  # the core stack
 #   docker build -f docs/stack/Dockerfile --build-arg PACKAGES=all -t hep-stack:all .     # everything
@@ -15,19 +15,20 @@
 FROM ubuntu:24.04
 
 ARG PACKAGES=core
-ARG JOBS=""
-ARG ROOT_JOBS=""
+ARG JOBS=0
+ARG ROOT_JOBS=0
 ARG GRAPHICS=OFF
 ARG GEANT4_DATA=ON
 
-ENV HEP_PREFIX=/opt/hep HEKIT_ROOT=/work LANG=C.UTF-8
+ENV HEKIT_ROOT=/work LANG=C.UTF-8
 
-COPY docs/stack/build_stack.sh /opt/hep-build/build_stack.sh
-COPY utils/Env/patches/ /opt/hep-build/patches/
+# The repository's layout, so packages.toml's patch path resolves.
+COPY docs/stack/ /opt/hek/docs/stack/
+COPY utils/Env/patches/ /opt/hek/utils/Env/patches/
 
-RUN bash /opt/hep-build/build_stack.sh PACKAGES="$PACKAGES" ${JOBS:+JOBS=$JOBS} ${ROOT_JOBS:+ROOT_JOBS=$ROOT_JOBS} \
-        GRAPHICS="$GRAPHICS" GEANT4_DATA="$GEANT4_DATA" \
-        FASTJET_PATCH=/opt/hep-build/patches/fastjet-3.5.0-siscone-thread-local-ranlux.patch && \
+RUN apt-get update && apt-get install -y --no-install-recommends python3 && \
+    python3 /opt/hek/docs/stack/build_stack.py prefix=/opt/hep hekit_root=/work packages="$PACKAGES" \
+        jobs="$JOBS" root_jobs="$ROOT_JOBS" graphics="$GRAPHICS" geant4_data="$GEANT4_DATA" && \
     rm -rf /opt/hep/src /opt/hep/build /var/lib/apt/lists/* /root/.cache/pip
 
 RUN echo '[ -n "$BASH_VERSION" ] && [ -f "$HEKIT_ROOT/utils/Env/hep_env.sh" ] && . /opt/hep/setup.sh' \
