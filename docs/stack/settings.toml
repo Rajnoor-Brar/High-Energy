@@ -16,8 +16,8 @@ python      = "python3"    # the interpreter the venv is made from
 system      = true         # apt-get install apt_packages first (sudo when not root); false: they are there
 graphics    = "ON"         # ROOT's x11/opengl/webgui/asimage and Geant4's OpenGL; "OFF" when headless
 geant4_data = "ON"         # Geant4's datasets (~4 GB), downloaded during its build
-root_extra  = []           # more ROOT cmake arguments: ["-Droofit=OFF"]
 hekit_root  = ""           # the checkout setup.sh loads utils/Env/hep_env.sh from; "": this one
+setup_extra = []           # lines setup.sh gets after sourcing hep_env.sh (placeholders expanded)
 
 # The venv's packages: the framework's. Add the analysis ones you want (scipy, pandas, pyhf, …).
 python_packages = ["numpy", "cython", "tomli_w", "rich", "pyyaml", "pillow", "matplotlib", "uproot",
@@ -52,7 +52,8 @@ apt_packages = [
 ]
 
 # The build's environment. Besides these, every install's bin/, lib/ and Python directory is put on
-# PATH, LD_LIBRARY_PATH and PYTHONPATH, the venv's bin/ first: what setup.sh gives later.
+# PATH, LD_LIBRARY_PATH (DYLD_LIBRARY_PATH on macOS) and PYTHONPATH, the venv's bin/ first: what
+# setup.sh gives later.
 [env]
 CXXFLAGS         = "{cxxflags}"
 VIRTUAL_ENV      = "{venv}"

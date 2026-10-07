@@ -2,8 +2,9 @@
 
 `build_stack.py` builds, from source, the software stack the framework runs on: the one the lab PC
 has in `~/HEP` (Ubuntu 24.04, GCC 13), with the same versions, the same features and the fixes its
-build needed. It runs on a Linux machine with apt, or in a Docker container. It needs only `python3`
-(3.11+, or older with `tomli`): its standard library, no other packages.
+build needed. It runs on a Linux machine with apt, in a Docker container, or on macOS with Homebrew
+([mac/](mac/README.md)). It needs only `python3` (3.11+, or older with `tomli`): its standard library,
+no other packages.
 
 | File | Is |
 |---|---|
@@ -11,6 +12,7 @@ build needed. It runs on a Linux machine with apt, or in a Docker container. It 
 | [settings.toml](settings.toml) | the run's settings, each with its default: prefix, cores, features, the apt, pip and PDF lists |
 | [build_stack.py](build_stack.py) | the engine: reads both, then fetches, builds, stamps and logs |
 | [Dockerfile](Dockerfile) (+ `Dockerfile.dockerignore`) | the same build in an Ubuntu 24.04 image |
+| [mac/](mac/README.md) | macOS: a Brewfile, the `mac.toml` overlay, `build.sh` and `launch.sh`, and the steps by hand |
 
 The data says what is built; the engine knows only five steps (fetch, unpack, configure or cmake,
 install, stamp) and four kinds of package. A version bump, a new flag or a new package is a TOML
@@ -35,7 +37,8 @@ source ~/HEP/setup.sh                                    # then, in this reposit
 
 **Settings.** Any key of `settings.toml` is `key=value` on the command line (`prefix=/opt/hep
 cores=8 graphics=OFF`); any key of a package is `<package>.<key>=value` (`root.release=6.40.06`,
-`madgraph.url=…`, `fastjet.patch=` for none). For many changes, `--config my.toml`: a TOML file with
+`madgraph.url=…`, `fastjet.patch=` for none, `root.extra="-Droofit=OFF"` for more arguments after a
+package's own). For many changes, `--config my.toml`: a TOML file with
 settings and `[package]` tables, which change packages or add new ones. The command line wins.
 
 **Cores.** `cores` is how many compilers run at once: each package's build gets it as

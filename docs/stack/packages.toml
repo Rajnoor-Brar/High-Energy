@@ -12,6 +12,8 @@
 #   install   its directory under install/ (default: its name): the names hep_env.sh expects
 #   probe     the file that shows it installed (default: {install})
 #   args      configure or cmake arguments
+#   extra     more of them, after args: for an overlay or the command line (root.extra="-Droofit=OFF"),
+#             without repeating args (CMake and configure take the last of a repeated option)
 #   optional  { package = [args] }: added when that package is installed or in the run
 #   patch     a patch (-p0) for the unpacked source; a path from the repository root
 #   env       environment for its commands
@@ -19,8 +21,9 @@
 #   cores     how many compilers it runs at once, its make -j (default {cores})
 #
 # Placeholders: any setting ({cores}, {graphics}, …), and {prefix} {inst} {venv} {src} {build}
-# {install} {release} {series} {py} {pyxy} {pyinc} {cxxflags} {arch} {repo}. A word that is only a
-# list setting ({pdf_sets}) becomes its words.
+# {install} {release} {series} {py} {pyxy} {pyinc} {cxxflags} {arch} {machine} {dylib} {repo}, and any
+# environment variable ({HOMEBREW_PREFIX}). A word that is only a list setting ({pdf_sets}) becomes its
+# words.
 
 [python]
 kind  = "none"
@@ -63,9 +66,9 @@ url     = "https://fastjet.hepforge.org/contrib/downloads/fjcontrib-{release}.ta
 kind    = "autotools"
 needs   = ["fastjet"]
 install = "fastjet"                                   # into FastJet's prefix, as the lab PC has it
-probe   = "{install}/lib/libfastjetcontribfragile.so"
+probe   = "{install}/lib/libfastjetcontribfragile.{dylib}"
 args    = ["--fastjet-config={inst}/fastjet/bin/fastjet-config", "CXXFLAGS={cxxflags} -fPIC"]
-post    = ["make fragile-shared-install"]             # libfastjetcontribfragile.so, which Rivet links
+post    = ["make fragile-shared-install"]             # libfastjetcontribfragile.so (.dylib), which Rivet links
 
 [root]
 release = "6.40.04"                                   # not 6.40.00: its rootcling_stage1 does not link
@@ -79,7 +82,6 @@ args = [
   "-Dhttp=ON", "-Dimt=ON", "-Dssl=ON", "-Dvdt=ON",
   "-Dx11={graphics}", "-Dopengl={graphics}", "-Dwebgui={graphics}", "-Dasimage={graphics}",
   "-Dbuiltin_freetype=ON", "-Dbuiltin_pcre=ON", "-Dxrootd=ON", "-Dbuiltin_xrootd=ON", "-Ddavix=OFF",
-  "{root_extra}",
 ]
 
 [yoda]
@@ -158,7 +160,7 @@ url     = "https://launchpad.net/mg5amcnlo/3.0/{series}.x/+download/MG5_aMC_v{re
 kind    = "unpack"                                    # a Python/Fortran tree, pointed at the stack
 group   = "extra"
 needs   = ["lhapdf", "pythia8"]
-post = ["""sed -i
+post = ["""sed -i.orig
   -e 's|^#* *lhapdf *=.*|lhapdf = {inst}/LHAPDF/bin/lhapdf-config|'
   -e 's|^#* *pythia8_path *=.*|pythia8_path = {inst}/pythia8|'
   -e 's|^#* *automatic_html_opening *=.*|automatic_html_opening = False|'

@@ -49,12 +49,14 @@ def test_needs_are_added_only_when_missing(bs, tmp_path):
 
 
 def test_overrides_reach_the_tarball_and_the_arguments(bs, tmp_path):
-    (_, _), packages, c = planned(bs, tmp_path, "root.release=6.40.06", "graphics=OFF", "root_extra=-Da=1 -Db=2")
+    (_, _), packages, c = planned(bs, tmp_path, "root.release=6.40.06", "graphics=OFF", "root.extra=-Da=1 -Db=2")
     file, url = bs.tarball("root", packages["root"], c)
     assert file.name == "root-6.40.06.tar.gz" and url.endswith("root_v6.40.06.source.tar.gz")
     k = bs.scope("root", packages["root"], c)
     args = bs.words(packages["root"]["args"], k)
-    assert "-Dx11=OFF" in args and args[-2:] == ["-Da=1", "-Db=2"]   # a list setting gives its words
+    assert "-Dx11=OFF" in args and packages["root"]["extra"] == "-Da=1 -Db=2"
+    k["names"] = ["a", "b"]
+    assert bs.words(["-x", "{names}", "-y={names}"], k) == ["-x", "a", "b", "-y=a b"]   # a list's words
     _, s, packages = bs.options([f"prefix={tmp_path}", "madgraph.release=3.6.2"])
     assert "/3.6.x/" in bs.tarball("madgraph", packages["madgraph"], bs.context(s))[1]   # {series}
 
@@ -87,3 +89,25 @@ def test_the_dry_run_is_a_bash_script_and_writes_nothing(bs, tmp_path, capsys):
                  f"--with-root={prefix}/install/root", "lhapdf install CT14lo CT14nlo", "cat > "):
         assert line in script, line
     assert script.index("# == root") < script.index("# == pythia8")
+
+
+def test_the_mac_overlay(bs, tmp_path, monkeypatch, capsys):
+    """docs/stack/mac/mac.toml as build.sh gives it, with macOS switched on: no apt, Homebrew's paths,
+    ROOT through Cocoa, absolute install names, DYLD_LIBRARY_PATH, the macOS ONNX Runtime."""
+    monkeypatch.setattr(bs, "MAC", True)
+    monkeypatch.setenv("HOMEBREW_PREFIX", "/opt/homebrew")
+    prefix = tmp_path / "hep"
+    bs.main(["--dry-run", "--config", str(REPO / "docs/stack/mac/mac.toml"), f"prefix={prefix}", "packages=all"])
+    script = capsys.readouterr().out
+    root = next(line for line in script.splitlines() if line.startswith(f"cmake -S {prefix}/src/root "))
+    assert root.index("-Dx11=OFF") < root.index("-Dcocoa=ON")        # the overlay's come last, and win
+    assert "-DOPENSSL_ROOT_DIR=/opt/homebrew/opt/openssl@3" in root
+    assert f"-DCMAKE_INSTALL_NAME_DIR={prefix}/install/hepmc3/lib" in script
+    assert "-DCMAKE_INSTALL_NAME_DIR" not in next(line for line in script.splitlines()
+                                                  if line.startswith(f"cmake -S {prefix}/src/sherpa "))
+    for line in ("export DYLD_LIBRARY_PATH=", "export CPPFLAGS=-I/opt/homebrew/include", "onnxruntime-osx-",
+                 "sed -i.orig", "export DYLD_LIBRARY_PATH=$LD_LIBRARY_PATH",
+                 "PATH=/opt/homebrew/opt/$_g/libexec/gnubin:$PATH"):
+        assert line in script, line
+    assert "apt-get" not in script and "export LD_LIBRARY_PATH=" not in script
+    assert subprocess.run(["bash", "-n"], input=script, text=True, encoding="utf-8").returncode == 0

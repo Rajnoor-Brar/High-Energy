@@ -1,0 +1,45 @@
+# docs/stack/mac/mac.toml — what build_stack.py does differently on macOS (Apple clang, Homebrew):
+# build.sh gives it as --config. Everything else is packages.toml's and settings.toml's, unchanged.
+# {HOMEBREW_PREFIX} is the environment variable `brew shellenv` sets (/opt/homebrew, or /usr/local on
+# an Intel Mac).
+
+system   = false                  # Homebrew instead of apt: build.sh runs `brew bundle` (Brewfile)
+graphics = "OFF"                  # no X11 on macOS: Geant4 without its OpenGL/X11 viewer; ROOT: Cocoa below
+
+# setup.sh, after hep_env.sh: the libraries on DYLD_LIBRARY_PATH too (hep_env.sh sets LD_LIBRARY_PATH,
+# which macOS ignores), and GNU make, sed and coreutils ahead of Apple's for the framework.
+setup_extra = [
+  "export DYLD_LIBRARY_PATH=$LD_LIBRARY_PATH",
+  "for _g in make gnu-sed coreutils; do PATH={HOMEBREW_PREFIX}/opt/$_g/libexec/gnubin:$PATH; done",
+  "unset _g; export PATH",
+]
+
+# Homebrew's headers and libraries for the configure scripts (Boost, GSL for ThePEG and Herwig), and its
+# prefix for CMake's find_package (GSL, FFTW, Xerces-C, libzip).
+[env]
+CPPFLAGS          = "-I{HOMEBREW_PREFIX}/include"
+LDFLAGS           = "-L{HOMEBREW_PREFIX}/lib"
+CMAKE_PREFIX_PATH = "{HOMEBREW_PREFIX}"
+BOOST_ROOT        = "{HOMEBREW_PREFIX}"
+OPENSSL_ROOT_DIR  = "{HOMEBREW_PREFIX}/opt/openssl@3"
+
+# ROOT's graphics through Cocoa (after packages.toml's -Dx11=OFF …: CMake takes the last of an option);
+# OpenSSL is keg-only in Homebrew, so ROOT and its builtin xrootd are told where it is.
+[root]
+extra = ["-Dcocoa=ON", "-Dopengl=ON", "-Dwebgui=ON", "-Dasimage=ON",
+         "-DOPENSSL_ROOT_DIR={HOMEBREW_PREFIX}/opt/openssl@3"]
+
+# Absolute install names for the CMake-built libraries whose *-config gives no rpath: a program linked
+# against them finds them without DYLD_LIBRARY_PATH, which macOS drops for its own programs (/usr/bin/env,
+# /bin/sh). Not Sherpa: its libraries are in lib/SHERPA-MC, and only its own programs use them.
+[hepmc3]
+extra = ["-DCMAKE_INSTALL_NAME_DIR={install}/lib"]
+
+[delphes]
+extra = ["-DCMAKE_INSTALL_NAME_DIR={install}/lib"]
+
+[geant4]
+extra = ["-DCMAKE_INSTALL_NAME_DIR={install}/lib"]
+
+[onnxruntime]                     # the macOS release: onnxruntime-osx-arm64 / -x86_64
+url = "https://github.com/microsoft/onnxruntime/releases/download/v{release}/onnxruntime-osx-{machine}-{release}.tgz"

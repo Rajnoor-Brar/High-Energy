@@ -13,7 +13,8 @@ A finished package is stamped ($prefix/.stamps/<name>-<release>) and skipped aft
 resumes; delete a stamp to redo its package. Every tarball is fetched before the first build, so a
 dead link stops the run at once. Each package logs to $prefix/logs/<name>.log.
 
-Standard library only: Python 3.11+ (tomllib), or an older Python with tomli.
+Linux and macOS (docs/stack/mac/ adds Homebrew and mac.toml). Standard library only: Python 3.11+
+(tomllib), or an older Python with tomli.
 """
 
 from __future__ import annotations
@@ -40,10 +41,11 @@ except ModuleNotFoundError:                                        # Python < 3.
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
-FIELDS = {"release", "url", "kind", "needs", "group", "install", "probe", "args", "optional", "patch",
-          "env", "pre", "post", "cores"}
+FIELDS = {"release", "url", "kind", "needs", "group", "install", "probe", "args", "extra", "optional",
+          "patch", "env", "pre", "post", "cores"}
 KINDS = ("autotools", "cmake", "unpack", "none")
 PLACEHOLDER = re.compile(r"\{(\w+)\}")
+MAC = sys.platform == "darwin"
 TARBALLS = (".tar.gz", ".tar.bz2", ".tar.xz", ".tgz")
 
 SETUP = """#!/bin/bash
@@ -153,8 +155,8 @@ def probe(command: list[str]) -> str:
 
 def ram_kb() -> int:
     try:
-        return int(re.search(r"MemTotal:\s+(\d+)", Path("/proc/meminfo").read_text())[1])
-    except (OSError, TypeError):
+        return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") // 1024    # Linux and macOS
+    except (ValueError, OSError):
         return 8_000_000
 
 
@@ -163,13 +165,15 @@ def context(s: dict) -> dict:
     prefix = Path(s["prefix"]).expanduser().resolve()
     python = shutil.which(s["python"]) or die(f"no {s['python']}: install Python 3, or set python=")
     py = probe([python, "-c", "import sys; print('%d.%d' % sys.version_info[:2])"])
-    cores = s["cores"] or len(os.sched_getaffinity(0))             # the CPUs this process may run on
+    cores = s["cores"] or (len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity")   # Linux: the
+                           else os.cpu_count() or 4)                                       # CPUs it may use
     machine = os.uname().machine
     return {**s, "prefix": str(prefix), "inst": str(prefix / "install"), "venv": str(prefix / ".venv"),
             "cores": cores, "root_cores": s["root_cores"] or max(1, min(cores, ram_kb() // 3_000_000)),
             "python": python, "py": py, "pyxy": py.replace(".", ""),
             "pyinc": probe([python, "-c", "import sysconfig; print(sysconfig.get_paths()['include'])"]),
             "cxxflags": f"{s['opt_flags']} -std=c++{s['cxx_std']}", "arch": {"x86_64": "x64"}.get(machine, machine),
+            "machine": machine, "dylib": "dylib" if MAC else "so",
             "repo": str(REPO), "hekit_root": s["hekit_root"] or str(REPO)}
 
 
@@ -183,9 +187,9 @@ def scope(name: str, p: dict, c: dict) -> dict:
 
 def expand(text: str, k: dict) -> str:
     def one(match: re.Match) -> str:
-        if match[1] not in k:
+        if match[1] not in k and match[1] not in os.environ:      # an environment variable: {HOMEBREW_PREFIX}
             die(f"no placeholder {{{match[1]}}} (in '{text}')")
-        value = k[match[1]]
+        value = k.get(match[1], os.environ.get(match[1]))
         return " ".join(map(str, value)) if isinstance(value, list) else str(value)
     return PLACEHOLDER.sub(one, str(text))
 
@@ -321,7 +325,8 @@ def build(name: str, p: dict, c: dict, shell: Shell, have: set[str]) -> None:
     where = {"unpack": k["install"], "none": c["prefix"]}.get(kind, k["src"])
     for text in p.get("pre", []):
         shell.run(words(shlex.split(text), k), where, env)
-    args = words(p.get("args", []), k)
+    extra = p.get("extra", [])
+    args = words([*p.get("args", []), *(shlex.split(extra) if isinstance(extra, str) else extra)], k)
     for other, extra in p.get("optional", {}).items():
         if other in have:
             args += words(extra, k)
@@ -363,7 +368,7 @@ def environment(s: dict, c: dict, packages: dict) -> tuple[dict[str, list[str]],
     """The build's paths (each install's bin/, lib/ and Python directory; the venv first) and [env]."""
     dirs = dict.fromkeys(f"{c['inst']}/{p.get('install', n)}" for n, p in packages.items() if p["kind"] != "none")
     paths = {"PATH": [f"{c['venv']}/bin", *(f"{d}/bin" for d in dirs)],
-             "LD_LIBRARY_PATH": [f"{d}/lib" for d in dirs],
+             "DYLD_LIBRARY_PATH" if MAC else "LD_LIBRARY_PATH": [f"{d}/lib" for d in dirs],
              "PYTHONPATH": [f"{d}/lib/python{c['py']}/site-packages" for d in dirs]}
     return paths, {key: expand(value, c) for key, value in s["env"].items()}
 
@@ -377,6 +382,11 @@ def show(order: list[str], packages: dict, c: dict) -> None:
         run = "build" if name in order and not built else ""
         print(f"{name:12} {p.get('release', '—'):9} {p.get('group', 'core'):6} {state:10} {run:9} "
               f"{' '.join(p.get('needs', []))}")
+
+
+def setup_text(c: dict) -> str:
+    """setup.sh: the lab PC's stub, then settings.toml's setup_extra lines."""
+    return SETUP.format(**c) + "".join(expand(line, c) + "\n" for line in c["setup_extra"])
 
 
 def main(argv: list[str]) -> None:
@@ -433,9 +443,9 @@ def main(argv: list[str]) -> None:
     setup = prefix / "setup.sh"                                    # the lab PC's stub; one already there is kept
     if script:
         print(f"\n[ -e {shlex.quote(str(setup))} ] || cat > {shlex.quote(str(setup))} <<'EOF'\n"
-              f"{SETUP.format(**c)}EOF")
+              f"{setup_text(c)}EOF")
     elif not setup.exists():
-        setup.write_text(SETUP.format(**c), encoding="utf-8")
+        setup.write_text(setup_text(c), encoding="utf-8")
     say(f"done: source {setup}")
 
 
