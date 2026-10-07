@@ -34,6 +34,9 @@ The documents this manual replaced (v1's design set and retrospective, the rewor
 logs) are in git: `git show rework/v1-final:docs/…` and `git log --all -- docs/rework_v2`. Ideas
 found in them, not yet built, are in [bots/intent.md](../bots/intent.md).
 
+Building the software stack itself (LHAPDF … ROOT … Rivet, Pythia8, Herwig, Sherpa, Geant4) from source on
+another machine or in Docker: [stack/](stack/README.md).
+
 What is open is the health check [audit_2/01_Health.md](audit_2/01_Health.md) (H1–H16). The finished audit 1
 (V52–V89) and the manual's rebuild plan (V90–V92) are in git: `git show c5cbaa3:docs/audit_1/README.md`,
 `git show c5cbaa3:docs/audit_2/02_Manual.md`.

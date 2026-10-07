@@ -1,0 +1,5 @@
+# The build context of docs/stack/Dockerfile (docker build -f docs/stack/Dockerfile .): only what it
+# copies, never output/, results/ or build/.
+*
+!docs/stack/build_stack.sh
+!utils/Env/patches/
