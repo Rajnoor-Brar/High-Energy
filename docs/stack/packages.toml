@@ -16,9 +16,9 @@
 #   patch     a patch (-p0) for the unpacked source; a path from the repository root
 #   env       environment for its commands
 #   pre, post commands run before configuring and after installing (in {src}; shell words, no shell)
-#   jobs      its parallel jobs (default {jobs})
+#   cores     how many compilers it runs at once, its make -j (default {cores})
 #
-# Placeholders: any setting ({jobs}, {graphics}, …), and {prefix} {inst} {venv} {src} {build}
+# Placeholders: any setting ({cores}, {graphics}, …), and {prefix} {inst} {venv} {src} {build}
 # {install} {release} {series} {py} {pyxy} {pyinc} {cxxflags} {arch} {repo}. A word that is only a
 # list setting ({pdf_sets}) becomes its words.
 
@@ -72,7 +72,7 @@ release = "6.40.04"                                   # not 6.40.00: its rootcli
 url     = "https://root.cern/download/root_v{release}.source.tar.gz"
 kind    = "cmake"
 needs   = ["python"]
-jobs    = "{root_jobs}"
+cores   = "{root_cores}"
 args = [
   "-DPython3_EXECUTABLE={venv}/bin/python", "-Dpyroot=ON",
   "-Dmathmore=ON", "-Droofit=ON", "-Dtmva=ON", "-Dfftw3=ON", "-Dsqlite=ON", "-Dxml=ON", "-Dgdml=ON",

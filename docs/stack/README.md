@@ -8,7 +8,7 @@ build needed. It runs on a Linux machine with apt, or in a Docker container. It 
 | File | Is |
 |---|---|
 | [packages.toml](packages.toml) | each package: release, tarball, how it is built, what it needs |
-| [settings.toml](settings.toml) | the run's settings, each with its default: prefix, jobs, features, the apt, pip and PDF lists |
+| [settings.toml](settings.toml) | the run's settings, each with its default: prefix, cores, features, the apt, pip and PDF lists |
 | [build_stack.py](build_stack.py) | the engine: reads both, then fetches, builds, stamps and logs |
 | [Dockerfile](Dockerfile) (+ `Dockerfile.dockerignore`) | the same build in an Ubuntu 24.04 image |
 
@@ -34,9 +34,16 @@ source ~/HEP/setup.sh                                    # then, in this reposit
 ```
 
 **Settings.** Any key of `settings.toml` is `key=value` on the command line (`prefix=/opt/hep
-jobs=8 graphics=OFF`); any key of a package is `<package>.<key>=value` (`root.release=6.40.06`,
+cores=8 graphics=OFF`); any key of a package is `<package>.<key>=value` (`root.release=6.40.06`,
 `madgraph.url=…`, `fastjet.patch=` for none). For many changes, `--config my.toml`: a TOML file with
 settings and `[package]` tables, which change packages or add new ones. The command line wins.
+
+**Cores.** `cores` is how many compilers run at once: each package's build gets it as
+`make -j<cores>` (autotools) or `cmake --build <build> -j<cores>` (CMake); one compiler keeps one CPU
+busy. `cores = 0` takes every CPU the build may run on: logical CPUs, so hyper-threads count (the
+lab PC's i7-13700K has 16 cores and 24 threads: 24). ROOT has its own, `root_cores`, because each of
+its LLVM/Cling compilers needs ~3 GB: `0` gives one per 3 GB of RAM, at most `cores` (5 on 15 GB).
+`make install`, pip and the downloads do not use it.
 
 **Choosing packages.** `packages = "core"` (the default), `"all"`, or names (`packages="rivet
 pythia8"`). What a named package needs is added when it is not installed; they are always built in
@@ -50,7 +57,7 @@ It is the same commands, without stamps or logs: run it on a fresh prefix.
 
 ```bash
 docker build -f docs/stack/Dockerfile -t hep-stack .
-docker build -f docs/stack/Dockerfile --build-arg PACKAGES=all --build-arg ROOT_JOBS=2 -t hep-stack:all .
+docker build -f docs/stack/Dockerfile --build-arg PACKAGES=all --build-arg ROOT_CORES=2 -t hep-stack:all .
 docker run --rm -it -v "$PWD":/work -w /work hep-stack
 ```
 
@@ -87,7 +94,7 @@ already there is kept.
 | `hepmc3` | 3.3.1 | CMake | the event format between the tools |
 | `fastjet` | 3.5.0 | autotools, the SISCone patch | jets for Rivet, Pythia8, Sherpa, Whizard and module programs |
 | `fjcontrib` | 1.104 | autotools, into FastJet's prefix | the contribs; `libfastjetcontribfragile.so`, which Rivet links |
-| `root` | 6.40.04 | CMake, `builtin_xrootd`, `root_jobs` | App_yd2rt, Paint, Delphes, module programs |
+| `root` | 6.40.04 | CMake, `builtin_xrootd`, `root_cores` | App_yd2rt, Paint, Delphes, module programs |
 | `yoda` | 2.1.3 | autotools | Rivet's histograms; the plot backends |
 | `rivet` | 4.1.3 | autotools | the analyses |
 | `pythia8` | 8.317 | its configure, with ROOT's and Rivet's plugins | App_Pythia, InprocJets |
@@ -130,7 +137,7 @@ Each of these was hit on the lab PC; the TOML files do what is in the right colu
 | FastJet | several Rivets in one process (InprocJets, `rivet_threads`) cluster SISCone jets with one shared random state: other jets, or a FastJet internal error (L16, L29) | `fastjet.patch`: `utils/Env/patches/fastjet-3.5.0-siscone-thread-local-ranlux.patch`, the state per thread; one thread draws exactly what it drew before |
 | fjcontrib | `make install` gives only static contrib libraries | `make fragile-shared-install` as well: `libfastjetcontribfragile.so`, as the lab PC has it |
 | ROOT | 6.40.00's `rootcling_stage1` fails to link (`clang::CodeGenerator::GetModule()`) | pinned to 6.40.04, which fixes that regression |
-| ROOT | parallel compilation of its LLVM/Cling OOM-kills `cc1plus`, and the truncated objects then fail later links with errors that look unrelated | `root_jobs`: one job per 3 GB of RAM (5 on 15 GB); every other package at `jobs` |
+| ROOT | parallel compilation of its LLVM/Cling OOM-kills `cc1plus`, and the truncated objects then fail later links with errors that look unrelated | `root_cores`: one compiler per 3 GB of RAM (5 on 15 GB); every other package at `cores` |
 | ROOT | `-DPYTHON_EXECUTABLE`, `-Dglew`, `-Dpython3` are ignored by 6.40 | `-DPython3_EXECUTABLE=<venv>` (FindPython3), `-Dpyroot=ON` |
 | ROOT | an external xrootd 6.x is untested against ROOT 6.40, and ROOT does not read `XROOTD_ROOT_DIR` | `-Dxrootd=ON -Dbuiltin_xrootd=ON`, `-Ddavix=OFF` |
 | ROOT | the features the framework and the lab PC use | `mathmore roofit tmva fftw3 sqlite xml gdml http imt ssl vdt` on; `x11 opengl webgui asimage` follow `graphics` |

@@ -2,7 +2,7 @@
 """docs/stack/build_stack.py — build the HEP stack from source, as packages.toml and settings.toml say.
 
     python3 docs/stack/build_stack.py                          # the core stack into ~/HEP
-    python3 docs/stack/build_stack.py packages=all jobs=8      # everything, 8 jobs
+    python3 docs/stack/build_stack.py packages=all cores=8     # everything, 8 compilers at once
     python3 docs/stack/build_stack.py packages="rivet pythia8" root.release=6.40.06
     python3 docs/stack/build_stack.py --config my.toml         # settings, and package changes, from a file
     python3 docs/stack/build_stack.py --list                   # each package: release, needs, state
@@ -41,7 +41,7 @@ except ModuleNotFoundError:                                        # Python < 3.
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
 FIELDS = {"release", "url", "kind", "needs", "group", "install", "probe", "args", "optional", "patch",
-          "env", "pre", "post", "jobs"}
+          "env", "pre", "post", "cores"}
 KINDS = ("autotools", "cmake", "unpack", "none")
 PLACEHOLDER = re.compile(r"\{(\w+)\}")
 TARBALLS = (".tar.gz", ".tar.bz2", ".tar.xz", ".tgz")
@@ -163,10 +163,10 @@ def context(s: dict) -> dict:
     prefix = Path(s["prefix"]).expanduser().resolve()
     python = shutil.which(s["python"]) or die(f"no {s['python']}: install Python 3, or set python=")
     py = probe([python, "-c", "import sys; print('%d.%d' % sys.version_info[:2])"])
-    jobs = s["jobs"] or os.cpu_count() or 4
+    cores = s["cores"] or len(os.sched_getaffinity(0))             # the CPUs this process may run on
     machine = os.uname().machine
     return {**s, "prefix": str(prefix), "inst": str(prefix / "install"), "venv": str(prefix / ".venv"),
-            "jobs": jobs, "root_jobs": s["root_jobs"] or max(1, min(jobs, ram_kb() // 3_000_000)),
+            "cores": cores, "root_cores": s["root_cores"] or max(1, min(cores, ram_kb() // 3_000_000)),
             "python": python, "py": py, "pyxy": py.replace(".", ""),
             "pyinc": probe([python, "-c", "import sysconfig; print(sysconfig.get_paths()['include'])"]),
             "cxxflags": f"{s['opt_flags']} -std=c++{s['cxx_std']}", "arch": {"x86_64": "x64"}.get(machine, machine),
@@ -325,7 +325,7 @@ def build(name: str, p: dict, c: dict, shell: Shell, have: set[str]) -> None:
     for other, extra in p.get("optional", {}).items():
         if other in have:
             args += words(extra, k)
-    jobs = f"-j{expand(str(p.get('jobs', '{jobs}')), k)}"
+    jobs = f"-j{expand(str(p.get('cores', '{cores}')), k)}"                 # make's and cmake's: compilers at once
     if kind == "autotools":
         shell.run(["./configure", f"--prefix={k['install']}", *args], k["src"], env)
         shell.run(["make", jobs], k["src"], env)
@@ -406,7 +406,7 @@ def main(argv: list[str]) -> None:
         for folder in folders:
             folder.mkdir(parents=True, exist_ok=True)
     say(f"HEP stack → {prefix}: {' '.join(order)}" + (f"  (added, as needed: {' '.join(added)})" if added else ""))
-    say(f"C++{c['cxx_std']} {c['opt_flags']}, {c['jobs']} jobs (ROOT {c['root_jobs']})"
+    say(f"C++{c['cxx_std']} {c['opt_flags']}, {c['cores']} cores (ROOT {c['root_cores']})"
         + (", dry run: nothing is run" if script else ""))
     if s["system"]:
         system(s, c, shell)

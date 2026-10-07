@@ -59,7 +59,7 @@ def test_overrides_reach_the_tarball_and_the_arguments(bs, tmp_path):
     assert "/3.6.x/" in bs.tarball("madgraph", packages["madgraph"], bs.context(s))[1]   # {series}
 
 
-@pytest.mark.parametrize("arg", ["jobz=3", "root.relase=1", "nope.release=1", "bogus", "jobs=abc",
+@pytest.mark.parametrize("arg", ["corez=3", "root.relase=1", "nope.release=1", "bogus", "cores=abc",
                                  "packages=foo"])
 def test_mistakes_are_refused(bs, tmp_path, arg):
     with pytest.raises(SystemExit):
@@ -68,16 +68,16 @@ def test_mistakes_are_refused(bs, tmp_path, arg):
 
 def test_a_config_file_changes_and_adds_packages(bs, tmp_path):
     extra = tmp_path / "my.toml"
-    extra.write_text('jobs = 3\n[root]\nrelease = "6.40.06"\n'
+    extra.write_text('cores = 3\n[root]\nrelease = "6.40.06"\n'
                      '[mine]\nrelease = "1"\nurl = "https://x/mine-{release}.tgz"\nkind = "cmake"\nneeds = ["root"]\n')
-    (order, added), packages, c = planned(bs, tmp_path, "--config", str(extra), "packages=mine", "jobs=2")
+    (order, added), packages, c = planned(bs, tmp_path, "--config", str(extra), "packages=mine", "cores=2")
     assert order == ["python", "root", "mine"] and added == ["python", "root"]
-    assert c["jobs"] == 2 and packages["root"]["release"] == "6.40.06"   # the command line wins over the file
+    assert c["cores"] == 2 and packages["root"]["release"] == "6.40.06"   # the command line wins over the file
 
 
 def test_the_dry_run_is_a_bash_script_and_writes_nothing(bs, tmp_path, capsys):
     prefix = tmp_path / "hep"
-    bs.main(["--dry-run", f"prefix={prefix}", "packages=all", "system=false", "root_jobs=2"])
+    bs.main(["--dry-run", f"prefix={prefix}", "packages=all", "system=false", "root_cores=2"])
     script = capsys.readouterr().out
     assert not prefix.exists()
     assert script.isascii()                                         # any locale can print and save it

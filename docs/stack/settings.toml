@@ -1,13 +1,15 @@
 # docs/stack/settings.toml — build_stack.py's settings, each with its default.
 #
-# Change one with key=value on the command line (`jobs=8`, `packages="rivet pythia8"`), or with
+# Change one with key=value on the command line (`cores=8`, `packages="rivet pythia8"`), or with
 # --config FILE: a TOML file holding any of these keys, and [package] tables that change or add
 # packages.toml's entries. The command line wins over the file.
 
 prefix      = "~/HEP"      # src/ build/ install/ .venv/ logs/ .stamps/ setup.sh
 packages    = "core"       # "core", "all", or names: "rivet pythia8" (what they need is added)
-jobs        = 0            # parallel jobs; 0: one per core
-root_jobs   = 0            # ROOT's; 0: one per 3 GB of RAM (its LLVM/Cling OOM-kills cc1plus at more)
+cores       = 0            # how many compilers run at once (make -j<cores>, cmake --build -j<cores>);
+                           # 0: every CPU this process may use (hyper-threads count: 24 on the lab PC)
+root_cores  = 0            # the same for ROOT; 0: one per 3 GB of RAM, at most cores (its LLVM/Cling
+                           # needs ~3 GB a compiler, or cc1plus is OOM-killed)
 cxx_std     = 17           # one C++ standard for the whole stack: ROOT, Rivet and Pythia8 share ABIs
 opt_flags   = "-O2"
 python      = "python3"    # the interpreter the venv is made from
