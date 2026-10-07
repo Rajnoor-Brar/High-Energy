@@ -1,17 +1,20 @@
 ! photo_ep.cmnd — shared physics for ep inclusive-jet photoproduction.
 !
-! Base for every PhotoProduction sweep. rivpyth copies this file and appends
+! Base for every PhotoProduction sweep. `hep` reads this file and appends
 ! per-point overrides (later settings win), e.g.
 !   [sweep.cmnd.beams]  → Beams:frameType/eA/eB (or eCM)
 !   [sweep.cmnd.lepton] → Beams:idB (11 = EIC e-, -11 = HERA e+)
 !   [sweep.cmnd.pdf]    → PDF:pSet
 ! Defaults below correspond to the EIC 18x275 GeV configuration.
 
-! Run control. Every sweep overrides these from the point cmnd (rivpyth passes it after this
+! Run control. Every sweep overrides these from the point cmnd (hep-run reads it after this
 ! file, and later settings win): Main:numberOfEvents, Parallelism:numThreads and Random:seed.
 ! Main:numberOfEvents counts next() attempts, not written events: failed events never reach the
 ! output (about 2 % at 5x41 GeV, 1e-4 at 27x920).
-! Main:timesAllowErrors = 40          ! abort run after this many flawed events
+Main:numberOfEvents = 100000
+Main:timesAllowErrors = 40          ! abort run after this many flawed events
+Random:setSeed = on
+Random:seed = 0                     ! 0 = time-based; sweeps write an explicit seed
 
 ! Beams: proton A along +z, lepton B
 Beams:frameType = 2                 ! beams with different energies

@@ -1,4 +1,4 @@
-# herwig.toml — Herwig 7 through the chain (rework v2 schema, docs/rework_v2/04_Config.md).
+# herwig.toml — Herwig 7 through the chain (rework v2 schema, docs/04_Config_Reference.md).
 #
 #   hep run PhotoProduction/herwig             ep NC DIS at 18x275 → rivet: a chain check (P4 S2)
 #   hep run PhotoProduction/herwig export      a custom tool given Herwig's run file, Herwig not run
