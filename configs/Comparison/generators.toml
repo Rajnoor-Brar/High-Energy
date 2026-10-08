@@ -15,7 +15,7 @@ configuration = "compare"
 event_count   = 50_000
 threads       = 4                   # Pythia's; Herwig and Sherpa run one process each
 
-[run.compare]
+[run.cfgs.compare]
 description = "Pythia 8, Herwig 7 and Sherpa 3 on pp → QCD 2→2 at 13 TeV, jets above 20 GeV"
 sweeps      = ["generator"]
 tools       = [["@generator", "spectra"], "yd2rt"]

@@ -1,4 +1,4 @@
-# madgraph.toml — MadGraph → LHE → Pythia shower → Rivet (rework v2 schema, 04_Config.md §8.4).
+# madgraph.toml — MadGraph → LHE → Pythia shower → Rivet (rework v2 schema, docs/03_User_Guide.md §4.10).
 #
 #   hep run PhotoProduction/madgraph          ep NC DIS at 18x275: a chain check (P4 S3)
 #

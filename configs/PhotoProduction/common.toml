@@ -1,0 +1,78 @@
+# common.toml — what every PhotoProduction run TOML shares: the chain's tools, the quantities, the
+# statics and the plot keys they have in common. Not a run (no [run]): each run TOML imports it,
+# directly or through another (`[config] import = ["common"]`, V94), and lays its own tables over it:
+# a quantity or tool of its own replaces the one here whole, [static] and [plot] go key by key.
+#
+# What differs between the studies, a file says in [config.vars] (V96), and the tables here cite:
+#
+#   [config.vars]
+#   card     = "photo_ep.cmnd"     # [tools.pythia].baseconfig: the physics
+#   analysis = "photo_eic"         # [tools.rivet].analyses
+#   product  = "photo"             # Rivet's <product>.yoda, yd2rt's <product>.root
+#   shards   = 10                  # Rivet processes per point (one reads ~1,500 events/s, L27)
+
+[prelim]
+fifo = ["events.hepmc"]
+
+[static]
+lepton = "ep"
+
+# ── the chain: App_Pythia ══FIFO══► Rivet, then the YODA to ROOT ───────────────────────────────────
+
+[tools.pythia]
+tool        = "pythia"
+baseconfig  = "{var:card}"
+output_file = "events.hepmc"
+
+[tools.rivet]
+tool        = "rivet"
+input       = "events.hepmc"
+analyses    = ["{var:analysis}"]
+output_file = "{var:product}.yoda"
+shards      = "{var:shards}"
+
+[tools.yd2rt]
+tool        = "yd2rt"
+input       = "{var:product}.yoda"
+output_file = "{var:product}.root"
+
+# ── quantities ─────────────────────────────────────────────────────────────────────────────────────
+
+[quantities.energies]
+values = [[41, 5], [100, 10], [275, 18], [920, 27.5]]     # [E_p, E_e]: beam A is the proton
+tags   = ["5x41", "10x100", "18x275", "27x920"]
+labels = ['5x41 GeV ($\sqrt{s}$ = 28.6 GeV)', '10x100 GeV ($\sqrt{s}$ = 63.2 GeV)',
+          '18x275 GeV ($\sqrt{s}$ = 140.7 GeV)', '27.5x920 GeV ($\sqrt{s}$ = 318.1 GeV)']
+
+[quantities.lepton]
+key    = { pythia = "Beams:idB" }
+values = [11, -11]
+tags   = ["em", "ep"]
+labels = ["$e^{-}$", "$e^{+}$"]
+
+[quantities.pdf]
+values = ["LHAPDF6:MSTW2008lo68cl", "LHAPDF6:NNPDF23_lo_as_0130_qed", "LHAPDF6:NNPDF23_nlo_as_0119_qed", "LHAPDF6:PDF4LHC21_40_pdfas"]
+tags   = ["MSTW08lo", "NNPDF23lo", "NNPDF23nlo", "PDF4LHC21"]
+labels = ["MSTW 2008 LO", "NNPDF 2.3 QCD+QED LO", "NNPDF 2.3 QCD+QED NLO", "PDF4LHC21"]
+
+[quantities.pt0ref]
+key    = { pythia = "MultipartonInteractions:pT0Ref" }
+values = [2.8, 3.0, 3.2, 3.4]
+tags   = ["pt28", "pt30", "pt32", "pt34"]
+labels = ['$p_{T0}^{\mathrm{ref}}$ = 2.8 GeV', '$p_{T0}^{\mathrm{ref}}$ = 3.0 GeV',
+          '$p_{T0}^{\mathrm{ref}}$ = 3.2 GeV', '$p_{T0}^{\mathrm{ref}}$ = 3.4 GeV']
+
+[quantities.mpi]
+key    = { pythia = "PartonLevel:MPI" }
+values = [true, false]
+tags   = ["mpi", "nompi"]
+labels = ["MPI on", "MPI off"]
+
+# ── plot ───────────────────────────────────────────────────────────────────────────────────────────
+
+[plot]
+ratio       = true
+y_gutter    = "default"
+auto_range  = false
+void_empty  = false
+min_entries = 0

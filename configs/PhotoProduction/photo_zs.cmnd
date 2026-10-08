@@ -1,0 +1,60 @@
+! photo_zs.cmnd — ep photoproduction at HERA (27.5 GeV e+ on 920 GeV p), for the ZEUS 2012
+! inclusive-jet validation (Rivet ZEUS_2012_I1116258). The base card of zeus_validation.toml.
+!
+! Reconstructed from the nine cards of the 2025 ZEUS study
+! (Photo-Production/Backups/v23107_masterwork/daebrns/zeus_2012/{zeus_pdf,zeus_ptref}/), which were
+! one card copied nine times with one line changed in each. That one line is now a quantity in
+! zeus_validation.toml, and this file holds everything they shared:
+!
+!   zeus_pdf/*.cmnd    PDF:pSet                          → [quantities.pdf]     (configuration "pdf")
+!   zeus_ptref/ptref*  MultipartonInteractions:pT0Ref    → [quantities.pt0ref]  (configuration "ptref")
+!   zeus_ptref/nompi   PartonLevel:MPI = off             → [quantities.mpi]     (configuration "mpi")
+!
+! The runner appends each point's values after this file, and later settings win, so the values
+! below are the defaults a configuration sees for anything it does not sweep or pin in [static].
+
+! Run control. The runner writes the event count, the thread count and the seeds for every point
+! (the configuration's event_count; seeds from the point's identity), so these are only what a
+! hand-run of this card would get.
+!Main:timesAllowErrors = 40          ! abort after this many flawed events
+
+! Beams: proton A along +z, positron B — the HERA configuration ZEUS measured.
+! [static] pins the same values (energies = "27x920", lepton = "ep"); stated here too, so the card
+! alone describes the run.
+Beams:frameType = 2                 ! beams with different energies
+Beams:idA = 2212                    ! p+
+Beams:eA = 920.0
+Beams:idB = -11                     ! e+
+Beams:eB = 27.5
+
+! Photoproduction
+PDF:lepton2gamma = on               ! photons emitted from the lepton
+Photon:ProcessType = 0              ! mix of available photon processes (resolved + direct)
+Photon:Q2max = 1.0                  ! maximal photon virtuality (GeV^2), ZEUS: Q^2 < 1 GeV^2
+HardQCD:all = on                    ! all dijet matrix elements
+PhotonParton:all = on               ! all dijet matrix elements with photons
+PhaseSpace:pTHatMin = 6.            ! minimal pT-hat (GeV); ZEUS's lowest jet ET bin starts at 17
+
+! Multiparton interactions: 3.2 GeV is what every zeus_pdf card used. The ptref configuration
+! scans 2.8–3.4 and the mpi configuration turns MPI off.
+PartonLevel:MPI = on
+MultipartonInteractions:pT0Ref = 3.2
+
+! Proton PDF. The zeus_ptref cards set no PDF:pSet, so they ran on Pythia's default, 13 =
+! NNPDF2.3 QCD+QED LO, alpha_s(M_Z) = 0.130 — stated here rather than left implicit. The pdf
+! configuration replaces it per point with an LHAPDF set (PDF:pSet = LHAPDF6:<set>).
+! The photon PDF is CJKL, the only one Pythia has for lepton2gamma (the "_cjkl" in the old names).
+PDF:pSet = 13
+
+! QED radiation off the lepton is not handled by the photoproduction setup
+TimeShower:QEDshowerByL = off
+PDF:lepton = off
+
+! Printout
+Init:showChangedSettings = on
+Init:showChangedParticleData = on
+Init:showMultipartonInteractions = on
+Next:numberShowInfo = 1
+Next:numberShowProcess = 1
+Next:numberShowEvent = 1
+Next:showScaleAndVertex = off

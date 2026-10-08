@@ -1,5 +1,5 @@
 # sherpa.toml — EIC photoproduction with Sherpa 3 (photo_ep.sherpa.yaml), through the same Rivet
-# analysis as eic.toml (rework v2 schema, docs/rework_v2/04_Config.md).
+# analysis as eic.toml (rework v2 schema, docs/04_Config_Reference.md).
 #
 #   hep run PhotoProduction/sherpa            18x275, LO, MPI off: v1 measured 9,636 ± 782 pb (L24)
 #   hep run PhotoProduction/sherpa pdf        the proton PDF swept (MPI_PDF_SET follows it)

@@ -20,38 +20,38 @@ configuration = "single"
 event_count   = 20_000
 threads       = 16
 
-[run.single]
+[run.cfgs.single]
 description = "One run at 7 TeV, both analysis paths"
 sweeps      = []
 tools       = [["pythia", "lamriv", "lambda"], "yd2rt"]
 
-[run.masswindow]
+[run.cfgs.masswindow]
 description = "Mass-window scan through both paths: four points, each its own generation (V9)"
 sweeps      = ["masstol"]
 tools       = [["pythia", "lamriv", "lambda"], "yd2rt"]
 
-[run.costheta]
+[run.cfgs.costheta]
 description = "Does the decay-angle cut buy anything the mass window does not?"
 sweeps      = ["costheta"]
 tools       = [["pythia", "lamriv", "lambda"], "yd2rt"]
 
-[run.cuts_grid]
+[run.cfgs.cuts_grid]
 description = "Mass window x decay angle: one page per angle cut, mass-window curves on it"
 sweeps      = ["masstol", "costheta"]
 plot_points = ["costheta"]
 tools       = [["pythia", "lamriv", "lambda"], "yd2rt"]
 
-[run.sets]
+[run.cfgs.sets]
 description = "The three candidate sets as curves on one page (SET is a Lamriv option; the module books all three anyway)"
 sweeps      = ["set"]
 tools       = [["pythia", "lamriv", "lambda"], "yd2rt"]
 
-[run.energy]
+[run.cfgs.energy]
 description = "Lambda yield against collision energy"
 sweeps      = ["sqrts"]
 tools       = [["pythia", "lamriv", "lambda"], "yd2rt"]
 
-[run.replicas]
+[run.cfgs.replicas]
 description = "Three statistically equivalent runs at 7 TeV, for a stability check"
 sweeps      = ["replica"]
 tools       = [["pythia", "lamriv", "lambda"], "yd2rt"]
@@ -113,14 +113,14 @@ target = ["lamriv/Lamriv", "lambda"]
 key    = { lamriv = "MASSTOL", lambda = "mass_tolerance" }
 values = [0.05, 0.10, 0.15, 0.25]
 tags   = ["m050", "m100", "m150", "m250"]
-labels = ["#pm 50 MeV", "#pm 100 MeV", "#pm 150 MeV", "#pm 250 MeV"]
+labels = ['$\pm$ 50 MeV', '$\pm$ 100 MeV', '$\pm$ 150 MeV', '$\pm$ 250 MeV']
 
 [quantities.costheta]
 target = ["lamriv/Lamriv", "lambda"]
 key    = { lamriv = "COSTHETATOL", lambda = "cos_theta_tolerance" }
 values = [0.0, 0.05, 0.2]
 tags   = ["noct", "ct005", "ct020"]
-labels = ["no cos#theta* cut", "|cos#theta* + 1| < 0.05", "|cos#theta* + 1| < 0.2"]
+labels = ['no cos$\theta$* cut', '|cos$\theta$* + 1| < 0.05', '|cos$\theta$* + 1| < 0.2']
 
 [quantities.set]
 target = "lamriv/Lamriv"

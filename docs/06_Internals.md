@@ -21,7 +21,7 @@ conventions (§15–27). The principles behind both are [01](01_Overview.md#4-pr
 | `utils/Env/` | `hep`, `run`, `hep_env.sh`, `flags.sh`, `stack.toml` and `stack.py` (the software stack), `quantities.toml` (the vocabulary), `latex.toml`, `schema/`, `runner/`, the tool folders, the plot backends (`yoda/`, `mpl/`), `figures/` (the figures' plugins), `patches/` | yes |
 | `utils/Env/patches/` | patches this repository needs in the `~/HEP` stack, applied by hand; each file says to which source (`fastjet-3.5.0-siscone-thread-local-ranlux.patch`: `cd ~/HEP/src/fastjet-3.5.0 && patch -p0 < …`, rebuild, `make install`) | yes |
 | `tests/` | `runner/` (unit), `integration/` (real processes), `cxx/`, `fixtures/` (the configs tests load), `reference/` (data the gates compare against) | yes |
-| `docs/` | this manual; `audit_2/01_Health.md` (the open health check; finished audits are in git) | yes |
+| `docs/` | this manual; `stack/` (building the software stack from source, on a machine or in Docker); `audit_2/01_Health.md` (the open health check; finished audits are in git) | yes |
 | `bots/` | agent rules (`BOT.md`), `intent.md` (ideas not built) | yes |
 | `build/` | everything compiled: apps, `<Project>/`, `Rivet/`, `tests/`, `deps/`, `flags.mk`, `Herwig/` | no |
 | `output/` | technical files per project, `output/tests/` | no |

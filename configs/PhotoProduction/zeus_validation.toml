@@ -1,91 +1,135 @@
 # zeus_validation.toml — HERA validation of the photoproduction card against ZEUS 2012
-# (rework v2 schema, docs/rework_v2/04_Config.md).
+# (rework v2 schema, docs/04_Config_Reference.md).
 #
 #   hep run PhotoProduction/zeus_validation          PDF comparison at HERA kinematics
+#   hep run PhotoProduction/zeus_validation ptref    MPI pT0Ref scan, 2.8–3.4 GeV
+#   hep run PhotoProduction/zeus_validation mpi      MPI on vs off
+#
+# The base card is photo_zs.cmnd, rebuilt from the nine cards of the 2025 ZEUS study
+# (Photo-Production/Backups/v23107_masterwork/daebrns/zeus_2012/): they were one card copied nine
+# times with one line changed, and that line is a quantity here — zeus_pdf/* → pdf, zeus_ptref/ptref*
+# → pt0ref, zeus_ptref/nompi → mpi. Event counts follow them: 1M for the PDFs, 200k for the MPI scans.
 #
 # Translated from the v1 schema-2 file (git show rework/v1-final:configs/PhotoProduction/
 # zeus_validation.toml). v1 fixed the beams in [beams] (ids [2212, 11], energies [920, 27.5]) and
 # pinned the lepton to e+ through [static.use] beams = "ep"; here both are static quantities.
+#
+# The chain, the quantities it shares with eic.toml and the common plot keys are common.toml's
+# (imported, V94); this file says its card, analysis and shards, and what is its own: the
+# configurations, the statics, the PDFs (Pythia's own sets), the backends and ZEUS's data map.
+
+[config]
+import = ["common"]
+
+[config.vars]
+card     = "photo_zs.cmnd"           # rebuilt from the 2025 study's nine cards (above)
+analysis = "ZEUS_2012_I1116258"      # Rivet's own
+product  = "zeus"
+shards   = 6
 
 [run]
+serial        = 2
 name          = "zeus"
 project       = "PhotoProduction"
-configuration = "default"
-event_count   = 1_000_000
-threads       = 20
+configuration = "single"
+sweep_runs    = ["default3", "default4"]
+seed_type     = "random"
+parallelism   = 2
+threads       = 6
+tools         = [["pythia", "rivet"], "yd2rt"]   # every configuration's chain (V99)
 
-[run.default]
+[run.cfgs.default]
+event_count = 25_000_000
 description = "Proton-PDF comparison at 27.5x920 GeV e+p against ZEUS 2012 (built-in Rivet analysis)"
 sweeps      = ["pdf"]
-tools       = [["pythia", "rivet"], "yd2rt"]
 
-[run.single]
+# The same comparison at more events: each is `default` with its own folder and event count.
+[run.cfgs.default01]
+extends     = "default"
+label       = "PDFs_010M"
+event_count = 10_000_000
+
+[run.cfgs.default0]
+extends     = "default"
+label       = "PDFs_025M"
+event_count = 25_000_000
+
+[run.cfgs.default1]
+extends     = "default"
+label       = "PDFs_050M"
+event_count = 50_000_000
+
+[run.cfgs.default2]
+extends     = "default"
+label       = "PDFs_100M"
+event_count = 100_000_000
+
+[run.cfgs.default3]
+extends     = "default"
+label       = "PDFs_150M"
+event_count = 150_000_000
+
+[run.cfgs.default4]
+extends     = "default"
+label       = "PDFs_200M"
+event_count = 200_000_000
+
+[run.cfgs.ptref]
+description = "MPI pT0Ref scan, 2.8–3.4 GeV, at 27.5x920 GeV e+p (the zeus_ptref/ptref*.cmnd set)"
+event_count = 200_000_000
+sweeps      = ["pt0ref"]
+
+[run.cfgs.mpi]
+description = "Multiparton interactions on vs off, at the static pT0Ref (zeus_ptref/nompi.cmnd)"
+event_count = 200_000_000
+sweeps      = ["mpi"]
+
+[run.cfgs.single]
+event_count = 25_000_000
 description = "One run at the static point"
 sweeps      = []
-tools       = [["pythia", "rivet"], "yd2rt"]
-
-[prelim]
-fifo = ["events.hepmc"]
 
 [static]
 energies = "27x920"
-lepton   = "ep"
+pt0ref   = "pt32"
 
-[tools.pythia]
-tool        = "pythia"
-baseconfig  = "photo_ep.cmnd"
-output_file = "events.hepmc"
-
-[tools.rivet]
-tool        = "rivet"
-input       = "events.hepmc"
-analyses    = ["ZEUS_2012_I1116258"]
-output_file = "zeus.yoda"
-
-[tools.yd2rt]
-tool        = "yd2rt"
-input       = "zeus.yoda"
-output_file = "zeus.root"
-
-[quantities.energies]
-values = [[41, 5], [100, 10], [275, 18], [920, 27.5]]
-tags   = ["5x41", "10x100", "18x275", "27x920"]
-labels = ["5x41 GeV (#sqrt{s} = 28.6 GeV)", "10x100 GeV (#sqrt{s} = 63.2 GeV)",
-          "18x275 GeV (#sqrt{s} = 140.7 GeV)", "27.5x920 GeV (#sqrt{s} = 318.1 GeV)"]
-
-[quantities.lepton]
-key    = { pythia = "Beams:idB" }
-values = [11, -11]
-tags   = ["em", "ep"]
-labels = ["e^{-}", "e^{+}"]
-
-[quantities.pdf]
-values = ["MSTW2008lo68cl", "NNPDF23_lo_as_0130_qed", "NNPDF23_nlo_as_0119_qed", "PDF4LHC21_40"]
+[quantities.pdf]                     # Pythia's own sets for the LO and NLO NNPDF/MSTW (common.toml's: LHAPDF's)
+values = [5, 13, 15, "LHAPDF6:PDF4LHC21_40_pdfas"]
+# values = ["LHAPDF6:MSTW2008lo68cl", "LHAPDF6:NNPDF23_lo_as_0130_qed", "LHAPDF6:NNPDF23_nlo_as_0119_qed", "LHAPDF6:PDF4LHC21_40_pdfas"]
 tags   = ["MSTW08lo", "NNPDF23lo", "NNPDF23nlo", "PDF4LHC21"]
-labels = ["MSTW 2008 LO", "NNPDF 2.3 QCD+QED LO", "NNPDF 2.3 QCD+QED NLO", "PDF4LHC21"]
+labels = ["MSTW 2008 LO", "NNPDF 2.3 QCD+QED LO", "NNPDF 2.3 QCD+QED NLO", "PDF4LHC21_40_pdfas"]
 
-[plot]
-void_empty  = true
-min_entries = 10
-auto_range  = true
-ratio       = true
+# [quantities.pdf]
+# values = ["LHAPDF6:MSTW2008lo68cl", "LHAPDF6:MSTW2008lo90cl",
+#           "LHAPDF6:MSTW2008lo68cl_nf3", "LHAPDF6:MSTW2008lo90cl_nf3",
+#           "LHAPDF6:MSTW2008lo68cl_nf4", "LHAPDF6:MSTW2008lo90cl_nf4",
+#           "LHAPDF6:MSTW2008lo68cl_nf4as5", "LHAPDF6:MSTW2008lo90cl_nf4as5",
+#           5]                                     # Pythia's own set 5: MSTW 2008 LO, central member
+# tags   = ["lo68", "lo90", "lo68_nf3", "lo90_nf3", "lo68_nf4", "lo90_nf4", "lo68_nf4as5", "lo90_nf4as5", "pythia5"]
+# labels = ["MSTW2008lo68cl", "MSTW2008lo90cl", "MSTW2008lo68cl_nf3", "MSTW2008lo90cl_nf3",
+#           "MSTW2008lo68cl_nf4", "MSTW2008lo90cl_nf4", "MSTW2008lo68cl_nf4as5", "MSTW2008lo90cl_nf4as5",
+#           "Pythia set 5 (MSTW 2008 LO)"]
+
+[plot]                               # over common.toml's
+backend = ["mpl", "yoda"]
 
 # v1 drew Rivet's own reference data (rivet_refs = true): `rivet:` names that file, which every
-# Rivet installation ships (datasets/ is not in git). The map is the identity.
+# Rivet installation ships (datasets/ is not in git). The map is the identity: explicit, never matched
+# by name (00/B5, L18).
 [plot.data]
 file   = "rivet:ZEUS_2012_I1116258"     # Rivet's own ZEUS 2012 tables (the same numbers as datasets/zeus_eic.yoda)
-legend = "ZEUS 2012"
+legend = "Data"
 
 [plot.data.map]
-"d01-x01-y01" = "/REF/ZEUS_2012_I1116258/d01-x01-y01"
-"d02-x01-y01" = "/REF/ZEUS_2012_I1116258/d02-x01-y01"
-"d03-x01-y01" = "/REF/ZEUS_2012_I1116258/d03-x01-y01"
-"d04-x01-y01" = "/REF/ZEUS_2012_I1116258/d04-x01-y01"
-"d05-x01-y01" = "/REF/ZEUS_2012_I1116258/d05-x01-y01"
-"d06-x01-y01" = "/REF/ZEUS_2012_I1116258/d06-x01-y01"
-"d07-x01-y01" = "/REF/ZEUS_2012_I1116258/d07-x01-y01"
-"d08-x01-y01" = "/REF/ZEUS_2012_I1116258/d08-x01-y01"
-"d09-x01-y01" = "/REF/ZEUS_2012_I1116258/d09-x01-y01"
-"d10-x01-y01" = "/REF/ZEUS_2012_I1116258/d10-x01-y01"
-"d11-x01-y01" = "/REF/ZEUS_2012_I1116258/d11-x01-y01"
-"d12-x01-y01" = "/REF/ZEUS_2012_I1116258/d12-x01-y01"
+"d01-x01-y01" = "/REF/ZEUS_2012_I1116258/d01-x01-y01"   # ET, kT, all eta
+"d02-x01-y01" = "/REF/ZEUS_2012_I1116258/d02-x01-y01"   # eta, kT, ET > ETMIN
+"d03-x01-y01" = "/REF/ZEUS_2012_I1116258/d03-x01-y01"   # eta, kT, ET > ETMIN2
+"d04-x01-y01" = "/REF/ZEUS_2012_I1116258/d04-x01-y01"   # ET, kT, eta < 0
+"d05-x01-y01" = "/REF/ZEUS_2012_I1116258/d05-x01-y01"   # ET, kT, 0 < eta < 1
+"d06-x01-y01" = "/REF/ZEUS_2012_I1116258/d06-x01-y01"   # ET, kT, 1 < eta < 1.5
+"d07-x01-y01" = "/REF/ZEUS_2012_I1116258/d07-x01-y01"   # ET, kT, 1.5 < eta < 2
+"d08-x01-y01" = "/REF/ZEUS_2012_I1116258/d08-x01-y01"   # ET, kT, eta > 3
+"d09-x01-y01" = "/REF/ZEUS_2012_I1116258/d09-x01-y01"   # ET, anti-kT, all eta
+"d10-x01-y01" = "/REF/ZEUS_2012_I1116258/d10-x01-y01"   # ET, SISCone, all eta
+"d11-x01-y01" = "/REF/ZEUS_2012_I1116258/d11-x01-y01"   # eta, anti-kT
+"d12-x01-y01" = "/REF/ZEUS_2012_I1116258/d12-x01-y01"   # eta, SISCone
