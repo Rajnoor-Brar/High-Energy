@@ -15,7 +15,17 @@
 
 ## Now
 
-Nothing is in progress. Waiting on the user:
+**docs/framework/** (2026-10-08): the plan set that moves the framework and its environment into `$HEP` and
+leaves work dirs (many, independent; made by a new `hep setup <dir>`) holding only configs, modules
+and products. Executed by AI agents on a **fresh system**; nothing here changes.
+- Round 1 is done: [docs/framework/README.md](../docs/framework/README.md), with decisions D1–D14, the
+  target, the file set, the agents' coordination, couplings I1–I17 and round 2's brief.
+- **Round 2 is next, on the user's order.**
+  - 2a: `01_Target.md` and `02_Agents.md`, then stop for review.
+  - 2b: the phase files `03`–`09` and `targets/*.md`.
+  - Round 2 writes only `docs/framework/` and this file.
+
+Otherwise nothing is in progress. Waiting on the user:
 
 - **R0 (the user's):**
   - review and commit the migrated `configs/`, together with the untracked
