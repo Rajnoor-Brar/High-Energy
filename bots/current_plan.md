@@ -15,15 +15,22 @@
 
 ## Now
 
-**docs/framework/** (2026-10-08): the plan set that moves the framework and its environment into `$HEP` and
-leaves work dirs (many, independent; made by a new `hep setup <dir>`) holding only configs, modules
-and products. Executed by AI agents on a **fresh system**; nothing here changes.
-- Round 1 is done: [docs/framework/README.md](../docs/framework/README.md), with decisions D1–D14, the
-  target, the file set, the agents' coordination, couplings I1–I17 and round 2's brief.
-- **Round 2 is next, on the user's order.**
-  - 2a: `01_Target.md` and `02_Agents.md`, then stop for review.
-  - 2b: the phase files `03`–`09` and `targets/*.md`.
-  - Round 2 writes only `docs/framework/` and this file.
+**docs/framework/** (2026-10-08): the plan set that moves the framework and its environment into `$HEP`
+(the framework repo **HEimdall**, `$HEP/HEimdall`) and leaves work dirs (many, independent; made by
+`hep setup <dir>`) holding only configs, modules and products. Executed by AI agents on the **lab PC
+after a clean reinstall** (D16). **High-Energy becomes the lean work repo** (branch `work`, D15).
+- Round 1: [README.md](../docs/framework/README.md), D1–D16 (amended in 2a).
+- **Round 2a done:**
+  - [01_Target.md](../docs/framework/01_Target.md): the trees, the boundary between framework and
+    work, C1–C71, the move map (checked: 1554 paths, 191 to HEimdall, 1363 stay), the pre-wipe
+    checklist, D17–D25;
+  - [02_Agents.md](../docs/framework/02_Agents.md): roles, `state.toml`, the step loop,
+    verification, gates, deviations, prompts.
+  - **Waiting for the user's review.**
+- **Round 2b next, on the user's order:**
+  - the phase files `03`–`09` and `targets/*.md`;
+  - the lab PC's baselines, recorded before the wipe.
+- Round 2 writes only `docs/framework/` and this file.
 
 Otherwise nothing is in progress. Waiting on the user:
 

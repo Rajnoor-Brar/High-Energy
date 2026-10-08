@@ -15,10 +15,13 @@ This page fixes what round 2 must not reopen:
 - the couplings to undo (§6);
 - round 2's brief (§7).
 
-Nothing on the lab PC changes in either round: no code, no config, no `~/HEP`. The plans are
-executed on the new machine.
+The planning rounds change nothing on this install: no code, no config, no `~/HEP`. The plans are
+executed on the **lab PC after a clean reinstall** (the fresh system; amended in round 2a), and later
+on other machines.
 
-Written 2026-10-08 against `rework` at `31817f8`.
+Written 2026-10-08 against `rework` at `31817f8`. Amended the same day in round 2a (D2, D5, D13,
+D15–D16): High-Energy becomes the lean work repo, and the fresh system is the reinstalled lab PC.
+[01_Target.md](01_Target.md) details the target.
 
 ---
 
@@ -65,28 +68,34 @@ The user's answers of 2026-10-08:
 - the agents run through and stop at gates;
 - `hep setup <directory>` makes a work dir.
 
+And in round 2a:
+- the framework is called **HEimdall**;
+- **High-Energy itself becomes the first work dir**, lean (the framework removed), at
+  `~/Github/High-Energy`, with all three projects;
+- the fresh system is **the lab PC, reinstalled**, so the old install's state needs no care.
+
 Round 2 details these decisions. It does not reopen them.
 
 | # | Decision |
 |---|---|
 | D1 | **`$HEP` is the machine's home.** It holds the stack (`src/ build/ install/ .venv/ logs/ .stamps/`), the framework repo, the framework's compiled apps and `setup.sh` (`load_hep`). There is one per machine. A second prefix is allowed, and work dirs are not bound to one. |
-| D2 | **The framework is a new git repo with fresh history**, at `$HEP/<fw>/`, seeded from High-Energy at a pinned revision. The import commit names that revision. High-Energy becomes the read-only archive: the record's citations (`git show c5cbaa3:…`, `rework/v1-final`) stay valid there. |
+| D2 | **The framework is a new git repo with fresh history**, at `$HEP/HEimdall/`, seeded from High-Energy at a pinned revision (tag `split/base`). The import commit names that revision. High-Energy keeps the history: the record's citations (`git show c5cbaa3:…`, `rework/v1-final`) stay valid there. *(Amended in 2a: High-Energy is no longer only an archive; see D15.)* |
 | D3 | **A work dir is marked by `hep.toml`** at its root. `hep` finds it by walking up from the working directory, as git does, and `$HEP_WORK` overrides the search. Outside a work dir, work commands refuse and point to `hep setup`. Framework commands work anywhere: `hep explain`, `hep status --stack`, building the framework, `hep setup`. |
 | D4 | **Work dirs are independent.** Each has its own `configs/ modules/ datasets/ build/ output/ results/ reports/`, and may have its own git repo. No path or import crosses work dirs, and they share only `$HEP`. V94's cross-project imports stay valid within a work dir. |
-| D5 | **The framework's apps are compiled once per `$HEP`** and shared: App_*, Paint, Herwig's `HerwigDefaults.rpo` and the flag cache (`flags.mk`). A work dir builds only its own module programs and Rivet plugins, against `$HEP/<fw>/include` and the shared flags. |
-| D6 | **One environment entry.** `$HEP/setup.sh` sources `$HEP/<fw>/env/hep_env.sh`, with no outside checkout. The `HEKIT_*` variables become `HEP_*`: `HEP_FW`, `HEP_WORK`, `HEP_OUTPUT`, `HEP_RESULTS`, `HEP_CONFIGS`. This is the rename K15 ([current_plan](../../bots/current_plan.md)), done here. |
+| D5 | **The framework's apps are compiled once per `$HEP`** and shared: App_*, Paint, Herwig's `HerwigDefaults.rpo`. A work dir builds only its own module programs and Rivet plugins, against `$HEP/HEimdall/kit`. *(Amended in 2a: the flag probe, `flags.sh` with `stack.toml`, is shared; each build tree keeps its own `flags.mk`, so a work dir's build never writes into `$HEP`.)* |
+| D6 | **One environment entry.** `$HEP/setup.sh` sources `$HEP/HEimdall/env/hep_env.sh`, with no outside checkout. The `HEKIT_*` variables become `HEP_*`: `HEP_FW`, `HEP_WORK`, `HEP_OUTPUT`, `HEP_RESULTS`, `HEP_CONFIGS`. This is the rename K15 ([current_plan](../../bots/current_plan.md)), done here. |
 | D7 | **`{repo}` splits in two:** `{fw}` (the framework's apps, Herwig's repository) and `{work}` (`build/Rivet`, the module programs). A leading `./` in a run TOML means the work root, which restates V13. |
 | D8 | **Provenance records two git states**, the framework's and the work dir's, and the `$HEP` prefix. The identity rules are unchanged. The shared apps' `exe_sha256` is the same in every work dir on one machine. |
 | D9 | **The framework's tests run against a frozen fixture work dir** inside the framework repo (`tests/fixtures/work/`, which has its own `hep.toml`). They never touch a real work dir, and V52's guard stays. |
-| D10 | **`docs/stack/` moves into the framework as `stack/`**: `build_stack.py`, `packages.toml`, `settings.toml`, `patches/`, `mac/`, and `container/` (the Dockerfile and an Apptainer definition). Its `setup.sh` points at `$HEP/<fw>`. Bootstrap: clone `<fw>` into `$HEP` first (that needs only git and python3), then build the stack from it. |
+| D10 | **`docs/stack/` moves into the framework as `stack/`**: `build_stack.py`, `packages.toml`, `settings.toml`, `patches/`, `mac/`, and `container/` (the Dockerfile and an Apptainer definition). Its `setup.sh` points at `$HEP/HEimdall`. Bootstrap: clone `HEimdall` into `$HEP` first (that needs only git and python3), then build the stack from it. |
 | D11 | **One framework for every target.** Portability fixes are framework code (P3). The annexes `targets/*.md` hold only differences: system packages, the stack overlay, launching. |
 | D12 | **Three agents:** an orchestrator, a background builder and an independent verifier, with a per-machine state in `$HEP/.setup/` and named gates (§5). |
-| D13 | **Not migrated:** `output/`, `results/`, `build/`, `aux/`, `literature/`, `cross_machine/`, `_text/`, `_vs/`, `archive/`, `reports/`, `generator_comparison.*` and `.vscode/`. They stay in High-Energy. The work dir template may carry an optional `.vscode/c_cpp_properties.json` pointing at `$HEP/<fw>/include`. |
+| D13 | **What is not the framework stays in High-Energy**: `aux/`, `_text/`, `_vs/`, `archive/`, `.vscode/`, `generator_comparison.*` and `docs/Untitled-1.md` (tracked), and `literature/`, `cross_machine/`, `datasets/`, `reports/` (untracked). `output/`, `results/` and `build/` are made afresh. The work dir template may carry an optional `.vscode/c_cpp_properties.json` pointing at `$HEP/HEimdall/kit`. *(Amended in 2a, by D15.)* |
 | D14 | **`hep setup <directory>`** creates an empty, initialised work dir: what the framework requires, and the key folders (§3.1). It is the one supported way to make a work dir, and it also makes D9's fixture work dir. |
+| D15 | **High-Energy becomes the lean work repo**, and the first work dir (2a, the user's). On the fresh system the clone of High-Energy is first the *source* (P0–P1: HEimdall is seeded from it). Then, in P5, on a new branch `work` from `split/base`, its framework files are removed (01 §7's move map), `hep setup --adopt` adds what a work dir needs, and `{repo}` becomes `{work}` (`hep migrate`). It holds PhotoProduction, Lambda and Comparison, and stays at `~/Github/High-Energy`. Pushing `work` is a gate. |
+| D16 | **The fresh system is the lab PC, reinstalled** (2a, the user's). Before the wipe, the user pushes `rework` and keeps what git does not hold (01 §8). The lab PC's baselines are recorded *now*, in round 2b, into these files, so they survive the wipe. Other machines use the same plans later. |
 
-**Left for round 2 to ask:**
-- the framework's name, `<fw>` on this page;
-- where the first work dir goes, and what it is called.
+**Answered in round 2a:** the name is HEimdall, and the first work dir is High-Energy itself (D15).
 
 ---
 
@@ -94,36 +103,35 @@ Round 2 details these decisions. It does not reopen them.
 
 ```
 $HEP/                              one per machine (default ~/HEP)
-  setup.sh                         load_hep → <fw>/env/hep_env.sh
+  setup.sh                         load_hep → HEimdall/env/hep_env.sh
   .venv/  src/ build/ install/ logs/ .stamps/          the stack, as build_stack.py makes it today
   .setup/state.toml, log.md        this machine's agent state and log (not in git; §5)
-  <fw>/                            git: the framework
-    bin/hep, bin/run               env/hep_env.sh, env/flags.sh
-    runner/  tools/<tool>/  backends/{yoda,mpl}/  figures/
-    schema/  quantities.toml  latex.toml  stack.toml  stack.py
-    include/                       Status.hh Kit.hh Module.hh PythiaRun.hh hepkit.py (on the venv's path by a .pth)
+  HEimdall/                        git: the framework
+    bin/                           hep, run
+    env/                           hep_env.sh, flags.sh, stack.toml, stack.py
+    runner/                        the Python package
+    tools/<folder>/                every plugin folder: the tools, the provider lhapdf, the backends yoda and mpl, figures
+    schema/                        run.toml, run.schema.json, quantities.toml, latex.toml
+    kit/                           Status.hh Kit.hh Module.hh PythiaRun.hh hepkit.py (-I, and on the venv's path)
     apps/                          App_Pythia.cc App_PythiaCheck.cc App_yd2rt.cc Paint/
-    Makefile                       the apps, the C++ tests, schema, docs → <fw>/build/ (+ flags.mk, Herwig/)
-    make/work.mk                   the module and Rivet rules, which a work dir's one-line Makefile includes
+    Makefile, make/work.mk         the framework's build; the rules a work dir's one-line Makefile includes
     stack/                         build_stack.py packages.toml settings.toml patches/ mac/ container/
     templates/work/                what `hep setup <dir>` lays down
-    docs/                          the manual 01–07 (rewritten for the split); docs/framework/ (these plans)
-    tests/                         runner/ integration/ cxx/ fixtures/work/ reference/
-    CLAUDE.md                      the framework's agent rules (from bots/BOT.md)
+    docs/  bots/  tests/           the manual and these plans; the plans and ideas; the tests (fixtures/work/)
+    build/                         (ignored) the apps, Herwig/, flags.mk, the C++ tests, test scratch
 
-<work>/                            any number, anywhere; made by `hep setup <work>`
-  hep.toml                         the marker: name; [framework] expects = "<rev>" (warned, never enforced)
+~/Github/High-Energy/              the first work dir: High-Energy, lean (D15); others anywhere, by `hep setup`
+  hep.toml                         the marker: [work] name; [framework] expects = "<rev>" (warned, never enforced)
   Makefile                         include $(HEP_FW)/make/work.mk   (so `make modules/P/X.exe` still works)
   configs/ modules/ datasets/ results/ output/ reports/ build/      the key folders, per project inside
   .gitignore  README.md  CLAUDE.md the work dir's agent rules (configs are the user's; tests never write results)
 ```
 
-The directory names inside `<fw>` are a sketch. Round 2's `01_Target.md` fixes them, together with
-the move map.
+[01_Target.md](01_Target.md) §2–4 give every folder and file.
 
 ### 3.1 `hep setup <directory>`
 
-**What it makes**, from `<fw>/templates/work/` (a new file is a template edit, never a code change):
+**What it makes**, from `HEimdall/templates/work/` (a new file is a template edit, never a code change):
 - the key folders `configs/ datasets/ modules/ results/ output/ reports/ build/`;
 - `hep.toml`, which holds the work dir's name and the framework revision it was made with
   (`[framework] expects`);
@@ -136,13 +144,15 @@ the move map.
 **Options:**
 - `--project <P>` also makes `configs/<P>/` and `modules/<P>/`, with a commented starter run TOML
   and base card that `hep check` accepts;
-- `--git` runs `git init` and makes the first commit.
+- `--git` runs `git init` and makes the first commit;
+- `--adopt` makes a work dir of an existing checkout that has no marker yet (High-Energy in P5). It
+  adds only what is missing and reports the files it kept.
 
 **Safety:**
 - A missing or empty directory is set up.
 - An existing work dir is completed, never overwritten: the command adds only what is missing and
   lists it.
-- A non-empty directory that is not a work dir is refused, with a hint.
+- A non-empty directory that is not a work dir is refused, with a hint, unless `--adopt` is given.
 - Nothing is written outside `<directory>`.
 
 **Verification rows** (round 2 writes them into P3's step):
@@ -165,12 +175,12 @@ the move map.
 | `README.md` | — | this page (round 1) |
 | `01_Target.md` | — | both trees in full; **the seam**: the variables, the two roots, the marker search, placeholders, includes, hepkit, provenance, tests; **the move map** (every `git ls-files` path → its new home, or "stays in High-Energy"); the D-rows extended |
 | `02_Agents.md` | — | the coordination scheme of §5 in full, with the orchestrator's start prompt |
-| `03_Preflight.md` | P0 | survey the machine (OS, arch, cores, RAM, disk, sudo, network, docker/apptainer, python ≥ 3.11); pick the annex; bring High-Energy at a pinned revision (a clone after a push the user approves, or a `git bundle` moved by hand); create `$HEP/.setup/` |
-| `04_Seed.md` | P1 | create `$HEP/<fw>` from the move map: mechanical moves only, the import commit, `git diff --stat` counts against the map |
+| `03_Preflight.md` | P0 | survey the machine (OS, arch, cores, RAM, disk, sudo, network, docker/apptainer, python ≥ 3.11); pick the annex; clone High-Energy (pushed before the reinstall, or from a `git bundle`), tag `split/base`; bring back what was kept before the wipe; create `$HEP/.setup/` |
+| `04_Seed.md` | P1 | create `$HEP/HEimdall` from the move map: mechanical moves only, the import commit, `git diff --stat` counts against the map |
 | `05_Stack.md` | P2 | `stack/build_stack.py` with the annex's overlay, **in the background** (hours) while P3 proceeds; then versions, the FastJet patch, `import ROOT`/`pythia8`/`yoda`, the 21 PDF sets |
 | `06_Seam.md` | P3 | the code changes:<br>• paths: two roots, the marker search<br>• placeholders<br>• the Makefile split<br>• the environment<br>• `hep`'s resolution<br>• **`hep setup <dir>` as its own step** (template, command, tests)<br>• the `HEP_*` rename<br>• provenance<br>• hepkit importable<br>• tests on the fixture work dir<br>• `docs.py`/`test_docs`<br>• the macOS spots of §1 |
 | `07_Framework.md` | P4 | `hep build` (the apps); `make test`, then the slow suite, with pass counts against the lab PC's baseline; `make docs`; the manual rewritten for the split (01 layout, 02 §1 and §12, 05 §2, 06 §1, §2, §14 and §15) |
-| `08_Workdirs.md` | P5 | `hep setup` for each work dir; the first one migrated from High-Energy (`configs/`, `modules/`, `datasets/`), then `hep build`, `hep check` on every config and a small run; a second, empty work dir with a toy project; checks that the two are independent |
+| `08_Workdirs.md` | P5 | High-Energy made lean on branch `work` (framework files removed, `hep setup --adopt`, `hep migrate` for `{repo}`), then `hep build`, `hep check` on every config and a small run; a second, toy work dir by `hep setup --project`; checks that the two are independent |
 | `09_Verify.md` | P6 | the physics gates (`tests/reference`); one small PhotoProduction point against the lab PC's numbers (σ, counts, YODA sums, within stated tolerances); handover: the agent rules, the final report, publishing the framework repo (a gate) |
 | `targets/ubuntu.md`, `cluster.md`, `container.md`, `macos.md` | annexes | **differences only**, under four headings (below) |
 
@@ -228,7 +238,8 @@ At each of these the orchestrator stops and asks the user:
   of Geant4 data);
 - joining the docker group (the user's own action);
 - any deletion outside `$HEP/{src,build}`;
-- any write to the High-Energy source, which is read-only;
+- any write to the High-Energy clone other than P5's branch `work` (it is P1's read-only source);
+- a change to the content of `configs/` or `modules/` (P5's diffs, shown first);
 - pushing or publishing a repo or an image;
 - a verification row that fails twice;
 - anything the plan files do not decide.
@@ -268,16 +279,16 @@ Every row was checked by grep on 2026-10-08. Round 2 re-verifies the rows and ex
 | I5 | Rivet through `build_root()`: `hepfiles.py:73`, `yoda/backend.py:313`, `mpl/backend.py:102` | `build/Rivet` | the work build |
 | I6 | `{repo}` in the tool folders | `pythia/tool.toml:4,44`, `yd2rt:5`, `plotmerge:12`, `herwig:33,48` (apps, Herwig's repository); `rivet:15,26,29,42`, `merge:13` (`build/Rivet`) | `{fw}` for the first group, `{work}` for the second; the contexts in `execute.py:294` and `tools.py:215,264,671,928,994,1030,1046,1099,1324` follow, and so does `schema/run.toml:370` (`[prelim.commands]`) |
 | I7 | `record.py:234-241` | `git_state()` of one repo | two states (D8) |
-| I8 | `Makefile` | one file: `-I utils`; the rules for apps, modules, Rivet, `tests/cxx`, Herwig, flags, schema and docs | `<fw>/Makefile` and `make/work.mk` |
+| I8 | `Makefile` | one file: `-I utils`; the rules for apps, modules, Rivet, `tests/cxx`, Herwig, flags, schema and docs | `HEimdall/Makefile` and `make/work.mk` |
 | I9 | `utils/Env/hep` | root from `HEKIT_ROOT` or `../..`; `make -C $root`; `nproc` | framework and work resolution; `hep setup` (D14); a portable core count |
-| I10 | `utils/Env/hep_env.sh:10-17,133-136,177` | `HEKIT_ROOT` default; `utils/Env` on `PATH`; `hep_cd` | `$HEP/<fw>/bin`; `hep_cd` within the current work dir |
-| I11 | `~/HEP/setup.sh`; `docs/stack/build_stack.py:52-55,177,443`; `settings.toml`'s `hekit_root`; `packages.toml`'s FastJet patch path; the `Dockerfile` (`COPY` paths, `HEKIT_ROOT=/work`); `mac/launch.sh` | the stack points at a checkout | all inside the framework repo; `setup.sh` written for `$HEP/<fw>` |
+| I10 | `utils/Env/hep_env.sh:10-17,133-136,177` | `HEKIT_ROOT` default; `utils/Env` on `PATH`; `hep_cd` | `$HEP/HEimdall/bin`; `hep_cd` within the current work dir |
+| I11 | `~/HEP/setup.sh`; `docs/stack/build_stack.py:52-55,177,443`; `settings.toml`'s `hekit_root`; `packages.toml`'s FastJet patch path; the `Dockerfile` (`COPY` paths, `HEKIT_ROOT=/work`); `mac/launch.sh` | the stack points at a checkout | all inside the framework repo; `setup.sh` written for `$HEP/HEimdall` |
 | I12 | `tests/conftest.py` (`REPO`, `sys.path`, `SCRATCH`, `FIXTURES`, the guard's `OURS`/`THEIRS`), `pytest.ini`, `tests/support.py`, `tests/runner/helpers.py`, `test_paths.py` | one repo | the fixture work dir; scratch under the framework's build |
 | I13 | work → framework by path: `modules/PhotoProduction/delphes_jets.py:16` (`sys.path` `parents[2]/utils`); `modules/PhotoProduction/Inproc/Analysis.hh:68` and the comments at `configs/PhotoProduction/InProc{EIC,Zeus}.toml:23` (all three cite `utils/Env/patches`) | paths into the checkout | hepkit through the venv; the citations repointed in P5's migration (the user's files: shown first, applied with approval) |
 | I14 | the manual and `tests/runner/test_docs.py` | `utils/…` paths throughout | rewritten in P4; `make docs` |
 | I15 | Linux-only: `events.py:17,188-191`, `utils/Apps/Paint/Style.hh:112`, `hep:48`, `Makefile:120`, `hep_env.sh` | — | portable, in P3 |
 | I16 | `HEKIT_ROOT`, `HEKIT_RESULTS`, `HEKIT_OUTPUT`, `HEKIT_CONFIGS` (K15); F14 (v1's `hekit` in the venv) | — | renamed (D6); absent from a fresh venv |
-| I17 | transport | the local `rework` is 125 commits ahead of `origin/rework`, last pushed 2026-09-26 | P0 needs a push (a gate: publishing) or a `git bundle` |
+| I17 | transport | the local `rework` is 125 commits ahead of `origin/rework`, last pushed 2026-09-26 | the user pushes before the reinstall (D16; 01 §8), or keeps a `git bundle` |
 
 ---
 
@@ -290,7 +301,8 @@ and nothing else: no code, configs or `~/HEP`.
 - Re-verify §6 by grep and extend it to a full classification of every `repo_root()`,
   `build_root()` and `{repo}` use.
 - Build the move map from `git ls-files`, so that every tracked path is assigned.
-- Ask the two open questions: the framework's name, and the first work dir.
+- Ask the two open questions: the framework's name, and the first work dir (answered: HEimdall;
+  High-Energy itself, D15).
 - **Stop for the user's review.**
 
 **2b: the phase files `03`–`09` and the four annexes.**
