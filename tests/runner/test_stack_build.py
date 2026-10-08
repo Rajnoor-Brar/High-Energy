@@ -85,7 +85,7 @@ def test_the_dry_run_is_a_bash_script_and_writes_nothing(bs, tmp_path, capsys):
     assert script.isascii()                                         # any locale can print and save it
     assert subprocess.run(["bash", "-n"], input=script, text=True).returncode == 0
     for line in ("set -euo pipefail", "-p0 -i " + str(REPO / "utils/Env/patches"), "--with-hepmcversion=3",
-                 "make fragile-shared-install", f"cmake --build {prefix}/build/root -j2",
+                 "make fragile-shared-install", f"cmake --build {prefix}/build/root -j2", "-m venv --prompt HEP",
                  f"--with-root={prefix}/install/root", "lhapdf install CT14lo CT14nlo", "cat > "):
         assert line in script, line
     assert script.index("# == root") < script.index("# == pythia8")

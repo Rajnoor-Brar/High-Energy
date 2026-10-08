@@ -1,0 +1,343 @@
+# docs/stack/build_by_hand.txt — the HEP stack, built by hand: commands to copy and paste into a
+# terminal, one step at a time, in this order. Ubuntu 24.04 (the lab PC's system); the versions and
+# flags are packages.toml's (docs/stack/README.md §3 says why each flag is there).
+#
+# How to use it:
+#   - Paste STEP 0 first, in every new terminal: it sets the variables and the helper every later step
+#     uses. Closed the terminal half way? Open a new one, paste STEP 0 again, carry on where you were.
+#   - Paste one step at a time, and wait for it to finish. Each ends with a check: if the check prints
+#     an error, stop there and read the last lines above it.
+#   - The whole file is also valid bash, but pasting step by step lets you see where something fails.
+#     (python3 docs/stack/build_stack.py does all of this by itself, with resume and logs.)
+#
+# Time: about 3 hours for the core stack on 16 cores (ROOT alone 1-2 h). Disk: about 20 GB.
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+# STEP 0 — the variables and a helper (paste in every new terminal)
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+export HEP=$HOME/HEP                                  # where everything goes
+export HEKIT_ROOT=$HOME/Github/High-Energy            # this repository (for the FastJet patch, setup.sh)
+export SRC=$HEP/src BUILD=$HEP/build HEP_INSTALL=$HEP/install VENV=$HEP/.venv
+export CORES=$(nproc)                                 # compilers at once: make -j$CORES
+export ROOT_CORES=$(( $(awk '/MemTotal/ {print $2}' /proc/meminfo) / 3000000 ))   # ROOT: one per 3 GB RAM
+[ "$ROOT_CORES" -ge 1 ] || ROOT_CORES=1; [ "$ROOT_CORES" -le "$CORES" ] || ROOT_CORES=$CORES
+export CXXFLAGS="-O2 -std=c++17"                      # one C++ standard for the whole stack
+export PY=$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')      # e.g. 3.12
+export PYINC=$(python3 -c 'import sysconfig; print(sysconfig.get_paths()["include"])')
+export VIRTUAL_ENV=$VENV
+export LHAPDF_DATA_PATH=$HEP_INSTALL/LHAPDF/share/LHAPDF
+for d in LHAPDF hepmc3 fastjet root yoda rivet pythia8 herwig7 delphes sherpa whizard geant4; do
+    export PATH=$HEP_INSTALL/$d/bin:$PATH
+    export LD_LIBRARY_PATH=$HEP_INSTALL/$d/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+    export PYTHONPATH=$HEP_INSTALL/$d/lib/python$PY/site-packages${PYTHONPATH:+:$PYTHONPATH}
+done
+export PATH=$VENV/bin:$PATH
+mkdir -p "$SRC" "$BUILD" "$HEP_INSTALL"
+
+# get NAME URL: download a tarball into $SRC (once) and unpack it, fresh, into $SRC/NAME
+get() {
+    [ -s "$SRC/$1.tar" ] || wget -O "$SRC/$1.tar" "$2" || { rm -f "$SRC/$1.tar"; return 1; }
+    rm -rf "$SRC/$1" && mkdir -p "$SRC/$1" && tar xf "$SRC/$1.tar" -C "$SRC/$1" --strip-components=1
+}
+
+echo "HEP=$HEP  cores=$CORES  ROOT cores=$ROOT_CORES  python=$PY"
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+# STEP 1 — system packages (once; asks for your password)
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+sudo apt-get update
+sudo apt-get install -y --no-install-recommends \
+    build-essential gfortran cmake git wget curl ca-certificates patch pkg-config libtool autoconf automake \
+    python3-venv python3-dev \
+    libxml2-dev libfftw3-dev libsqlite3-dev libx11-dev libxpm-dev libxft-dev libxext-dev liblzma-dev \
+    libpcre3-dev libglew-dev libgif-dev libftgl-dev libgraphviz-dev libcurl4-openssl-dev uuid-dev \
+    libkrb5-dev libssl-dev \
+    libgsl-dev libboost-all-dev libyaml-cpp-dev libzip-dev libbz2-dev \
+    ocaml ocaml-findlib libgc-dev \
+    libxerces-c-dev libgl1-mesa-dev libglu1-mesa-dev libxmu-dev libxi-dev \
+    libtomlplusplus-dev libzstd-dev zlib1g-dev texlive-latex-base texlive-latex-extra
+# check:
+cmake --version | head -1 && gfortran --version | head -1
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+# STEP 2 — the Python venv, shown as (HEP) (every Python binding goes here; the framework's packages)
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+python3 -m venv --prompt HEP "$VENV"                 # the shell shows (HEP) while it is active
+"$VENV/bin/pip" install numpy cython tomli_w rich pyyaml pillow matplotlib uproot awkward pytest
+# check:
+"$VENV/bin/python" -c 'import numpy, tomli_w, rich, uproot; print("venv OK")'
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+# STEP 3 — LHAPDF 6.5.6
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+get lhapdf "https://lhapdf.hepforge.org/downloads/?f=LHAPDF-6.5.6.tar.gz"
+cd "$SRC/lhapdf"
+./configure --prefix="$HEP_INSTALL/LHAPDF"
+make -j"$CORES" && make install
+# check:
+lhapdf-config --version
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+# STEP 4 — HepMC3 3.3.1 (its Python module into the venv; -fno-lto keeps the pybind11 symbols)
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+get hepmc3 "https://hepmc.web.cern.ch/hepmc/releases/HepMC3-3.3.1.tar.gz"
+cmake -S "$SRC/hepmc3" -B "$BUILD/hepmc3" -DCMAKE_INSTALL_PREFIX="$HEP_INSTALL/hepmc3" \
+    -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=17 \
+    -DHEPMC3_ENABLE_PYTHON=ON -DHEPMC3_PYTHON_VERSIONS="$PY" \
+    -DHEPMC3_Python_SITEARCH"${PY/./}"="$VENV/lib/python$PY/site-packages" \
+    -DHEPMC3_ENABLE_ROOTIO=OFF -DHEPMC3_ENABLE_SEARCH=ON -DHEPMC3_BUILD_EXAMPLES=OFF \
+    -DCMAKE_CXX_FLAGS="$CXXFLAGS -fno-lto" -DCMAKE_SHARED_LINKER_FLAGS=-fno-lto
+cmake --build "$BUILD/hepmc3" -j"$CORES" && cmake --install "$BUILD/hepmc3"
+# check:
+HepMC3-config --version && python -c 'import pyHepMC3; print("pyHepMC3 OK")'
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+# STEP 5 — FastJet 3.5.0, with the thread-local SISCone patch (several Rivets in one process, L29)
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+get fastjet "https://fastjet.fr/repo/fastjet-3.5.0.tar.gz"
+patch -d "$SRC/fastjet" -p0 -i "$HEKIT_ROOT/utils/Env/patches/fastjet-3.5.0-siscone-thread-local-ranlux.patch"
+cd "$SRC/fastjet"
+./configure --prefix="$HEP_INSTALL/fastjet" --enable-shared --enable-allcxxplugins
+make -j"$CORES" && make install
+# check (the patch: 2 lines):
+fastjet-config --version && grep -c thread_local "$SRC/fastjet/plugins/SISCone/siscone/siscone/ranlux.cpp"
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+# STEP 6 — fjcontrib 1.104, into FastJet's prefix, with the shared library Rivet links
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+get fjcontrib "https://fastjet.hepforge.org/contrib/downloads/fjcontrib-1.104.tar.gz"
+cd "$SRC/fjcontrib"
+./configure --prefix="$HEP_INSTALL/fastjet" --fastjet-config="$HEP_INSTALL/fastjet/bin/fastjet-config" \
+    CXXFLAGS="$CXXFLAGS -fPIC"
+make -j"$CORES" && make install && make fragile-shared-install
+# check:
+ls "$HEP_INSTALL/fastjet/lib/libfastjetcontribfragile.so"
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+# STEP 7 — ROOT 6.40.04 (1-2 h; few cores: its LLVM/Cling needs ~3 GB per compiler, or it is OOM-killed)
+#          On a machine without a screen (a server), change the four =ON after -Dx11 to =OFF.
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+get root "https://root.cern/download/root_v6.40.04.source.tar.gz"
+cmake -S "$SRC/root" -B "$BUILD/root" -DCMAKE_INSTALL_PREFIX="$HEP_INSTALL/root" \
+    -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=17 \
+    -DPython3_EXECUTABLE="$VENV/bin/python" -Dpyroot=ON \
+    -Dmathmore=ON -Droofit=ON -Dtmva=ON -Dfftw3=ON -Dsqlite=ON -Dxml=ON -Dgdml=ON \
+    -Dhttp=ON -Dimt=ON -Dssl=ON -Dvdt=ON \
+    -Dx11=ON -Dopengl=ON -Dwebgui=ON -Dasimage=ON \
+    -Dbuiltin_freetype=ON -Dbuiltin_pcre=ON -Dxrootd=ON -Dbuiltin_xrootd=ON -Ddavix=OFF
+cmake --build "$BUILD/root" -j"$ROOT_CORES" && cmake --install "$BUILD/root"
+# check:
+root-config --version && python -c 'import ROOT; print("PyROOT OK", ROOT.__version__)'
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+# STEP 8 — YODA 2.1.3
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+get yoda "https://yoda.hepforge.org/downloads?f=YODA-2.1.3.tar.gz"
+cd "$SRC/yoda"
+./configure --prefix="$HEP_INSTALL/yoda"
+make -j"$CORES" && make install
+# check:
+yoda-config --version && python -c 'import yoda; print("yoda OK")'
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+# STEP 9 — Rivet 4.1.3
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+get rivet "https://rivet.hepforge.org/downloads/?f=Rivet-4.1.3.tar.gz"
+cd "$SRC/rivet"
+./configure --prefix="$HEP_INSTALL/rivet" --with-hepmc3="$HEP_INSTALL/hepmc3" --with-yoda="$HEP_INSTALL/yoda" \
+    --with-fastjet="$HEP_INSTALL/fastjet"
+make -j"$CORES" && make install
+# check:
+rivet --version
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+# STEP 10 — Pythia 8.317, after ROOT and Rivet, so its ROOT and Rivet plugins are built
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+get pythia8 "https://pythia.org/download/pythia83/pythia8317.tgz"
+cd "$SRC/pythia8"
+./configure --prefix="$HEP_INSTALL/pythia8" --with-lhapdf6="$HEP_INSTALL/LHAPDF" --with-hepmc3="$HEP_INSTALL/hepmc3" \
+    --with-fastjet3="$HEP_INSTALL/fastjet" --with-root="$HEP_INSTALL/root" --with-rivet="$HEP_INSTALL/rivet" \
+    --with-python-bin="$VENV/bin/" --with-python-lib="$VENV/lib/python$PY" --with-python-include="$PYINC" \
+    --cxx-common="$CXXFLAGS -fPIC"
+make -j"$CORES" && make install
+# check:
+pythia8-config --version
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+# STEP 11 — ThePEG 2.3.0 (Herwig's framework; --with-hepmcversion=3, else it looks for HepMC2)
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+get thepeg "https://thepeg.hepforge.org/downloads/?f=ThePEG-2.3.0.tar.bz2"
+cd "$SRC/thepeg"
+./configure --prefix="$HEP_INSTALL/herwig7" --with-hepmc="$HEP_INSTALL/hepmc3" --with-hepmcversion=3 \
+    --with-fastjet="$HEP_INSTALL/fastjet" --with-lhapdf="$HEP_INSTALL/LHAPDF"
+make -j"$CORES" && make install
+# check:
+ls "$HEP_INSTALL/herwig7/bin/setupThePEG"
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+# STEP 12 — Herwig 7.3.0 (its make install reads CT14lo and CT14nlo: they go in first, L15)
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+lhapdf install CT14lo CT14nlo
+get herwig "https://herwig.hepforge.org/downloads/?f=Herwig-7.3.0.tar.bz2"
+cd "$SRC/herwig"
+./configure --prefix="$HEP_INSTALL/herwig7" --with-thepeg="$HEP_INSTALL/herwig7" --with-fastjet="$HEP_INSTALL/fastjet" \
+    --with-lhapdf="$HEP_INSTALL/LHAPDF"
+make -j"$CORES" && make install
+# check:
+Herwig --version
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+# STEP 13 — Delphes 3.5.1 (PYTHIA8 set: DelphesPythia8 is built too)
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+get delphes "https://github.com/delphes/delphes/archive/refs/tags/3.5.1.tar.gz"
+PYTHIA8="$HEP_INSTALL/pythia8" cmake -S "$SRC/delphes" -B "$BUILD/delphes" \
+    -DCMAKE_INSTALL_PREFIX="$HEP_INSTALL/delphes" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=17 \
+    -DROOT_DIR="$HEP_INSTALL/root/cmake"
+cmake --build "$BUILD/delphes" -j"$CORES" && cmake --install "$BUILD/delphes"
+# check:
+ls "$HEP_INSTALL/delphes/bin/DelphesHepMC3"
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+# STEP 14 — the PDF sets the configs and the tests use (a set already there is skipped)
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+lhapdf install CT14lo CT14nlo CT10 CT18NLO CT18NNLO cteq6l1 MSHT20nlo_as118 MSTW2008lo68cl MSTW2008lo90cl \
+    MSTW2008lo68cl_nf3 MSTW2008lo68cl_nf4 MSTW2008lo68cl_nf4as5 MSTW2008lo90cl_nf3 MSTW2008lo90cl_nf4 \
+    MSTW2008lo90cl_nf4as5 NNPDF23_lo_as_0130_qed NNPDF23_nlo_as_0119_qed NNPDF40_nlo_as_01180 PDF4LHC21_40 \
+    PDF4LHC21_40_pdfas nNNPDF30_nlo_as_0118_A208_Z82
+# check:
+lhapdf list --installed | wc -l
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+# STEP 15 — setup.sh, the environment for every later session (skip it if $HEP/setup.sh exists)
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+[ -e "$HEP/setup.sh" ] || cat > "$HEP/setup.sh" <<EOF
+#!/bin/bash
+# $HEP/setup.sh: source it once per session.
+export HEP=$HEP
+export HEP_INSTALL=\$HEP/install
+export HEKIT_ROOT=\${HEKIT_ROOT:-$HEKIT_ROOT}
+source "\$HEKIT_ROOT/utils/Env/hep_env.sh"
+EOF
+echo "alias load_hep='source $HEP/setup.sh'" >> ~/.bashrc
+# check, in a NEW terminal:
+#   load_hep && hep_status
+# then, in the repository:
+#   cd "$HEKIT_ROOT" && hep build && make test
+
+# ── The core stack is done here. The rest is optional (packages = "all"). ────────────────────────
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+# STEP 16 (optional) — Sherpa 3.0.5
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+get sherpa "https://gitlab.com/sherpa-team/sherpa/-/archive/v3.0.5/sherpa-v3.0.5.tar.gz"
+cmake -S "$SRC/sherpa" -B "$BUILD/sherpa" -DCMAKE_INSTALL_PREFIX="$HEP_INSTALL/sherpa" \
+    -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=17 \
+    -DSHERPA_ENABLE_HEPMC3=ON -DHepMC3_DIR="$HEP_INSTALL/hepmc3/share/HepMC3/cmake" \
+    -DSHERPA_ENABLE_RIVET=ON -DRIVET_DIR="$HEP_INSTALL/rivet" \
+    -DSHERPA_ENABLE_FASTJET=ON -DFASTJET_DIR="$HEP_INSTALL/fastjet" \
+    -DSHERPA_ENABLE_LHAPDF=ON -DLHAPDF_DIR="$HEP_INSTALL/LHAPDF" \
+    -DSHERPA_ENABLE_INTERNAL_PDFS=ON -DSHERPA_ENABLE_EXAMPLES=ON
+cmake --build "$BUILD/sherpa" -j"$CORES" && cmake --install "$BUILD/sherpa"
+# check:
+Sherpa --version | head -1
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+# STEP 17 (optional) — MadGraph 3.7.3: unpacked, then pointed at this LHAPDF and Pythia8
+#          (Launchpad renames releases: if the download fails, take the link from its download page)
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+[ -s "$SRC/madgraph.tar" ] || wget -O "$SRC/madgraph.tar" \
+    "https://launchpad.net/mg5amcnlo/3.0/3.7.x/+download/MG5_aMC_v3.7.3.tar.gz"
+rm -rf "$HEP_INSTALL/madgraph" && mkdir -p "$HEP_INSTALL/madgraph"
+tar xf "$SRC/madgraph.tar" -C "$HEP_INSTALL/madgraph" --strip-components=1
+sed -i.orig \
+    -e "s|^#* *lhapdf *=.*|lhapdf = $HEP_INSTALL/LHAPDF/bin/lhapdf-config|" \
+    -e "s|^#* *pythia8_path *=.*|pythia8_path = $HEP_INSTALL/pythia8|" \
+    -e "s|^#* *automatic_html_opening *=.*|automatic_html_opening = False|" \
+    "$HEP_INSTALL/madgraph/input/mg5_configuration.txt"
+# check:
+cat "$HEP_INSTALL/madgraph/VERSION" | head -2
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+# STEP 18 (optional) — Whizard 3.1.8 (O'Mega needs OCaml: installed in STEP 1)
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+get whizard "https://whizard.hepforge.org/downloads/?f=whizard-3.1.8.tar.gz"
+cd "$SRC/whizard"
+./configure --prefix="$HEP_INSTALL/whizard" --enable-lhapdf --enable-hepmc --with-hepmc="$HEP_INSTALL/hepmc3" \
+    --enable-fastjet --with-fastjet="$HEP_INSTALL/fastjet" --enable-pythia8 --with-pythia8="$HEP_INSTALL/pythia8" \
+    --disable-dependency-tracking FC=gfortran
+make -j"$CORES" && make install
+# check:
+whizard --version | head -1
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+# STEP 19 (optional) — ONNX Runtime 1.29.0: the released binary (x64; on ARM write aarch64 for x64)
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+[ -s "$SRC/onnxruntime.tar" ] || wget -O "$SRC/onnxruntime.tar" \
+    "https://github.com/microsoft/onnxruntime/releases/download/v1.29.0/onnxruntime-linux-x64-1.29.0.tgz"
+rm -rf "$HEP_INSTALL/onnxruntime" && mkdir -p "$HEP_INSTALL/onnxruntime"
+tar xf "$SRC/onnxruntime.tar" -C "$HEP_INSTALL/onnxruntime" --strip-components=1
+# check:
+ls "$HEP_INSTALL"/onnxruntime/lib/libonnxruntime.so*
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+# STEP 20 (optional) — Geant4 11.4.2 (downloads its ~4 GB of datasets during the build)
+#          On a machine without a screen, change -DGEANT4_USE_OPENGL_X11=ON to OFF.
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+get geant4 "https://github.com/Geant4/geant4/archive/refs/tags/v11.4.2.tar.gz"
+cmake -S "$SRC/geant4" -B "$BUILD/geant4" -DCMAKE_INSTALL_PREFIX="$HEP_INSTALL/geant4" \
+    -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=17 \
+    -DGEANT4_BUILD_MULTITHREADED=ON -DGEANT4_INSTALL_DATA=ON -DGEANT4_USE_GDML=ON \
+    -DGEANT4_USE_OPENGL_X11=ON -DGEANT4_USE_SYSTEM_CLHEP=OFF -DGEANT4_USE_SYSTEM_EXPAT=OFF \
+    -DGEANT4_USE_SYSTEM_ZLIB=OFF -DGEANT4_INSTALL_DATA_TIMEOUT=1500
+cmake --build "$BUILD/geant4" -j"$CORES" && cmake --install "$BUILD/geant4"
+# check:
+geant4-config --version
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+# Cleaning up (optional, once everything works): the sources and build trees, ~15 GB
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+#
+#   rm -rf "$HEP/src" "$HEP/build"

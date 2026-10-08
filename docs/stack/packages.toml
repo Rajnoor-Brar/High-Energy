@@ -28,7 +28,7 @@
 [python]
 kind  = "none"
 probe = "{venv}/bin/python"
-pre   = ["{python} -m venv {venv}", "{venv}/bin/pip install {python_packages}"]
+pre   = ["{python} -m venv --prompt HEP {venv}", "{venv}/bin/pip install {python_packages}"]
 
 [lhapdf]
 release = "6.5.6"

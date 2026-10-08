@@ -12,6 +12,7 @@ no other packages.
 | [settings.toml](settings.toml) | the run's settings, each with its default: prefix, cores, features, the apt, pip and PDF lists |
 | [build_stack.py](build_stack.py) | the engine: reads both, then fetches, builds, stamps and logs |
 | [Dockerfile](Dockerfile) (+ `Dockerfile.dockerignore`) | the same build in an Ubuntu 24.04 image |
+| [build_by_hand.txt](build_by_hand.txt) | the same build as commands to paste into a terminal, step by step (Ubuntu 24.04) |
 | [mac/](mac/README.md) | macOS: a Brewfile, the `mac.toml` overlay, `build.sh` and `launch.sh`, and the steps by hand |
 
 The data says what is built; the engine knows only five steps (fetch, unpack, configure or cmake,
