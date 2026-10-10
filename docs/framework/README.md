@@ -21,7 +21,9 @@ on other machines.
 
 Written 2026-10-08 against `rework` at `33b0ed9`. Amended the same day in round 2a (D2, D5, D13,
 D15–D16): High-Energy becomes the lean work repo, and the fresh system is the reinstalled lab PC.
-[01_Target.md](01_Target.md) details the target.
+Round 2b (2026-10-10, against `9cb907a`, after the decks V102–V104) wrote the phase files and the
+annexes. [01_Target.md](01_Target.md) details the target; **[03_Preflight.md](03_Preflight.md) is
+where a fresh machine starts**, after [02_Agents.md](02_Agents.md) §1.
 
 ---
 
@@ -268,7 +270,8 @@ From [BOT.md](../../bots/BOT.md) and the working agreements:
 
 ## 6. The couplings to undo
 
-Every row was checked by grep on 2026-10-08. Round 2 re-verifies the rows and extends them.
+Every row was checked by grep on 2026-10-08. Round 2a re-verified the rows and extended them into
+[01 §6](01_Target.md#6-every-coupling-classified) (C1–C78), which has the current line numbers.
 
 | # | Where | Today | Becomes |
 |---|---|---|---|
@@ -305,7 +308,7 @@ and nothing else: no code, configs or `~/HEP`.
   High-Energy itself, D15).
 - **Stop for the user's review.**
 
-**2b: the phase files `03`–`09` and the four annexes.**
+**2b: the phase files `03`–`09` and the four annexes** (done 2026-10-10).
 - Every row of §6 lands in a named step's tasks.
 - `hep setup` gets its own P3 step (template, command, tests), and P5 uses it for every work dir.
 - Every step has at least one verification row with a number.

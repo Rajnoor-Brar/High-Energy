@@ -10,8 +10,10 @@ it gives three things those phases build on:
 - the classification of every coupling in the code (§6);
 - the list of what the user keeps before the reinstall (§8).
 
-Written 2026-10-08 against `rework` at `33b0ed9`. Every file:line below was checked by grep on that
-day. Phase P1 pins its own revision, tagged `split/base`, and re-checks the rows against it.
+Written 2026-10-08 against `rework` at `33b0ed9`. Updated 2026-10-10 against `9cb907a`, after the
+decks work (`hep deck`, V102–V104: `runner/deck.py`, `runner/viewer.py`, `figures/layout.py`,
+`schema/deck.toml`, `reports_root()`). Every file:line below was checked by grep at `9cb907a`. Phase
+P1 pins its own revision, tagged `split/base`, and re-checks the rows against it.
 
 ---
 
@@ -63,11 +65,11 @@ HEimdall/
   .gitignore         build/ __pycache__/ .pytest_cache/                                  new
   bin/               hep, run                                                            utils/Env/{hep,run}
   env/               hep_env.sh, flags.sh, stack.toml, stack.py                          utils/Env/
-  runner/            the package, its 23 modules                                         utils/Env/runner/
+  runner/            the package, its 25 modules (deck.py and viewer.py since V103–V104)  utils/Env/runner/
   tools/<folder>/    every plugin folder (16): the tools custom delphes herwig madgraph merge module
                      plotmerge pythia rivet sherpa whizard yd2rt; the provider lhapdf; the backends yoda,
                      mpl; figures                                                        utils/Env/<folder>/
-  schema/            run.toml, run.schema.json, quantities.toml, latex.toml              utils/Env/{schema/,*.toml}
+  schema/            run.toml, run.schema.json, deck.toml, quantities.toml, latex.toml   utils/Env/{schema/,*.toml}
   kit/               Status.hh Kit.hh Module.hh PythiaRun.hh hepkit.py                   utils/
   apps/              App_Pythia.cc App_PythiaCheck.cc App_yd2rt.cc Paint/                utils/
   make/work.mk       the module and Rivet rules a work dir includes (§5.4)               from Makefile, split
@@ -75,7 +77,7 @@ HEimdall/
                      patches/ mac/ container/{Dockerfile,Dockerfile.dockerignore,heimdall.def}
                                                                                          docs/stack/, utils/Env/patches/; .def new
   templates/work/    hep.toml Makefile .gitignore README.md CLAUDE.md                    new (§4)
-  docs/              01–07, README.md, audit_2/, framework/ (these plans)                docs/
+  docs/              01–07, README.md, audit_2/, reporter/, framework/ (these plans)     docs/
   bots/              current_plan.md intent.md archive.md                                bots/
   tests/             conftest.py support.py runner/ integration/ cxx/ reference/
                      fixtures/work/{hep.toml,README.md,configs/,modules/,datasets/}      tests/; fixtures re-rooted (§5.7)
@@ -88,8 +90,8 @@ HEimdall/
   "tools"`, and nothing else in it moves. As a side effect, the yoda and rivet folders no longer
   sit on `sys.path` next to the real `yoda` and `rivet` packages (the hazard `hepkit.py`'s
   docstring warns about).
-- **`schema/`** is the language a run TOML speaks: its keys, its quantity vocabulary, its label
-  macros.
+- **`schema/`** is the language a run TOML speaks (its keys, its quantity vocabulary, its label
+  macros), and a deck's recipe (`deck.toml`, V103).
 - **`env/`** is what the shell and make need before Python: `hep_env.sh`, `flags.sh`, and the stack
   registry that both read.
 - **`kit/`** is what a module includes (`-I $HEP_FW/kit`) and what a Python tool imports, `hepkit`
@@ -176,13 +178,13 @@ What stays (D13), unchanged:
 | `HEP_INSTALL` | `setup.sh` | `$HEP/install` |
 | `HEP_FW` | `setup.sh` (`${HEP_FW:-$HEP/HEimdall}`) | the framework: `bin/` on `PATH`, `make -C`. Replaces `HEKIT_ROOT` |
 | `HEP_WORK` | the user, the tests | the work dir, instead of the search (§5.2) |
-| `HEP_CONFIGS`, `HEP_OUTPUT`, `HEP_RESULTS` | the user, the tests | replace the work dir's `configs/`, `output/`, `results/` (V52's roles, renamed) |
+| `HEP_CONFIGS`, `HEP_OUTPUT`, `HEP_RESULTS`, `HEP_REPORTS` | the user, the tests | replace the work dir's `configs/`, `output/`, `results/`, `reports/` (V52's roles and V103's, renamed) |
 | `HEP_SETUP`, `HEP_ENV_LOADED` | `hep_env.sh` | as today |
 | `HEP_STATUS_FD` | the runner, per tool | as today |
 | `LHAPDF_DATA_PATH`, `GEANT4_DATA_DIR`, `ONNXRUNTIME_DIR` | `hep_env.sh` | as today |
 | `RIVET_ANALYSIS_PATH` | the rivet and merge folders, per run | `{work}/build/Rivet` |
 
-**Retired:** `HEKIT_ROOT`, `HEKIT_CONFIGS`, `HEKIT_OUTPUT` and `HEKIT_RESULTS` (K15). If one of them
+**Retired:** `HEKIT_ROOT`, `HEKIT_CONFIGS`, `HEKIT_OUTPUT`, `HEKIT_RESULTS` and `HEKIT_REPORTS` (K15). If one of them
 is set, every command refuses and names its replacement. A stale shell or script fails loudly, not
 silently (01 §4.5 of the manual).
 
@@ -216,15 +218,19 @@ directory (§5.3).
 | `configs_root()` | `$HEP_CONFIGS` or `work_root()/configs` |
 | `output_root()` | `$HEP_OUTPUT` or `work_root()/output` |
 | `results_root()` | `$HEP_RESULTS` or `work_root()/results` |
+| `reports_root()` | `$HEP_REPORTS` or `work_root()/reports`: decks (V103) |
 | `work_build()` | `work_root()/build`: module programs, `Rivet/`, `deps/`, `flags.mk` |
 | `fw_build()` | `fw_root()/build`: the apps, `Herwig/`, `flags.mk`, the C++ tests, `scratch/` |
 | `datasets_root()` | `work_root()/datasets` |
+
+A root whose variable is set never searches for the work dir. Tests that set all four variables, as
+`test_deck*.py` do, therefore run without one.
 
 **Which commands need which root:**
 
 | Commands | Need |
 |---|---|
-| `run`, `plot`, `overlay`, `check`, `ls`, `status <config>`, `clean`, `reproduce`, `migrate`, `build`, `make` | a work dir |
+| `run`, `plot`, `overlay`, `deck`, `check`, `ls`, `status <config>`, `clean`, `reproduce`, `migrate`, `build`, `make` | a work dir |
 | `explain`, `status --stack`, `build --framework`, `make --framework` | the framework only |
 | `setup`, `where`, `watch` without a config | nothing; they run anywhere |
 
@@ -346,8 +352,8 @@ These copies are frozen like `configs/`: a change goes only together with the te
 **A session (`tests/conftest.py`):**
 1. Sync `tests/fixtures/work/` into `build/scratch/work/`. Only changed files are copied, and
    `build/` there is never touched, so make rebuilds only what changed.
-2. Set `HEP_WORK` to that copy, `HEP_OUTPUT` to `build/scratch/output`, and `HEP_RESULTS` to
-   `build/scratch/results`.
+2. Set `HEP_WORK` to that copy, and `HEP_OUTPUT`, `HEP_RESULTS` and `HEP_REPORTS` to
+   `build/scratch/{output,results,reports}`.
 3. Use `build/scratch/pytest` as the basetemp.
 4. The integration tests that need module programs or plugins run `make -C build/scratch/work all`
    once per session (a session fixture).
@@ -385,7 +391,7 @@ code is 2 when the root asked for does not exist.
 
 ## 6. Every coupling, classified
 
-This extends README §6. Each row names one call site at `33b0ed9` and what it becomes. P3's tasks
+This extends README §6. Each row names one call site at `9cb907a` and what it becomes. P3's tasks
 cite these rows by number (C1…).
 
 **Kind:**
@@ -398,12 +404,12 @@ cite these rows by number (C1…).
 
 | # | Site | Today | Kind | Becomes |
 |---|---|---|---|---|
-| C1 | `paths.py:23-47` | `MARKERS`, `HEKIT_ROOT`, `repo_root()` by markers | — | `fw_root()`, `work_root()` (§5.2); the `HEKIT_*` guard |
-| C2 | `paths.py:50-70` | `results/output/configs_root`, `build_root` | work | `HEP_*` variables; `work_build()`, `fw_build()` |
-| C3 | `paths.py:77-86` | `ROOTS` | work | the table in §5.3 |
-| C4 | `paths.py:104` | `./` → `repo_root()` | work | `work_root()` |
+| C1 | `paths.py:23-48` | `MARKERS`, `HEKIT_ROOT`, `repo_root()` by markers | — | `fw_root()`, `work_root()` (§5.2); the `HEKIT_*` guard |
+| C2 | `paths.py:51-76` | `results/output/reports/configs_root`, `build_root` | work | `HEP_*` variables; `work_build()`, `fw_build()` |
+| C3 | `paths.py:85-92` | `ROOTS` | work | the table in §5.3 |
+| C4 | `paths.py:111` | `./` → `repo_root()` | work | `work_root()` |
 | C5 | `labels.py:22` | `utils/Env/latex.toml` | fw | `schema/latex.toml` |
-| C6 | `schema.py:33` | `utils/Env/schema/run.toml` | fw | `schema/run.toml` |
+| C6 | `schema.py:35-36` | `utils/Env/schema/<name>.toml` (run, deck) | fw | `schema/<name>.toml` |
 | C7 | `quantities.py:31` | `utils/Env/quantities.toml` | fw | `schema/quantities.toml` |
 | C8 | `quantities.py:73` | glob `utils/Env/*/quantities.toml` | fw | `tools/*/quantities.toml` |
 | C9 | `quantities.py:272` | `utils/Env/<name>/provider.py` | fw | `tools/<name>/provider.py` |
@@ -414,23 +420,26 @@ cite these rows by number (C1…).
 | C14 | `tools.py:105,268` | paths shown relative to `repo_root()` | fw | relative to `fw_root()` |
 | C15 | `tools.py:215,264,671,928,994,1030,1046,1099,1324` | contexts with `"repo"` | both | contexts with `"fw"` and `"work"`; `"repo"` gone |
 | C16 | `tools.py:270`, `:674` (hints) | "make utils/App_*.exe", "see utils/Env/<f>/tool.toml" | fw | "`hep build --framework`", `tools/<f>/tool.toml` |
-| C17 | `tools.py:326`; `cli.py:678` | `utils/Env/stack.py` | fw | `env/stack.py` |
-| C18 | `tools.py:422,983,1318`; `cli.py:162,607,774,786`; `results.py:58`; `house.py:32,48,195,196,210,216`; `plot.py:630,1240,1241` | `output/results/configs_root()` | ok | — |
-| C19 | `tools.py:1164` (message) | "or $HEKIT_OUTPUT" | work | `$HEP_OUTPUT` |
+| C17 | `tools.py:326`; `cli.py:708` | `utils/Env/stack.py` | fw | `env/stack.py` |
+| C18 | `tools.py:422,983,1318`; `cli.py:169,637,804,816`; `results.py:58`; `house.py:32,48,195,196,210,216`; `plot.py:630,1241,1242`; `deck.py:101,193,232,236` | `output/results/configs/reports_root()` | ok | — |
+| C19 | `tools.py:1164` (message); `cli.py:811` (`hep reproduce`'s environment) | `HEKIT_OUTPUT`, `HEKIT_RESULTS` | work | `HEP_OUTPUT`, `HEP_RESULTS` |
 | C20 | `execute.py:294` | `[prelim]` context `"repo"` | both | `"fw"`, `"work"` |
 | C21 | `record.py:234-241,266` | `git_state()` at `repo_root()` | both | two states, `hep`, `work` (§5.6) |
 | C22 | `hepfiles.py:73` | `build_root()/Rivet` | work | `work_build()/Rivet` |
 | C23 | `plot.py:127` | `utils/Env/<name>/backend.py` | fw | `tools/<name>/backend.py` |
-| C24 | `plot.py:168`; `docs.py:81` | `utils/Apps/Paint/base.toml` | fw | `apps/Paint/base.toml` |
+| C24 | `plot.py:168`; `docs.py:81`; `cli.py:72` (`--style` help) | `utils/Apps/Paint/base.toml` | fw | `apps/Paint/base.toml` |
 | C25 | `plot.py:189` (hint) | "utils/Apps/Paint/base.toml has: …" | fw | `apps/Paint/base.toml` |
 | C26 | `plot.py:292,328` | `build_root()/App_yd2rt.exe` | fw | `fw_build()` |
-| C27 | `plot.py:1083,1236` | `build_root()/Paint.exe` | fw | `fw_build()` |
-| C28 | `plot.py:397,486,1117` | `utils/Env/figures/{derive,sheet}.py` | fw | `tools/figures/` |
+| C27 | `plot.py:1083,1237` | `build_root()/Paint.exe` | fw | `fw_build()` |
+| C28 | `plot.py:397,486,1118`; `deck.py:442` | `utils/Env/figures/{derive,layout}.py` | fw | `tools/figures/` |
 | C29 | `docs.py:159,165,174` | `repo_root()/docs` | fw | `fw_root()/docs` |
-| C30 | `cli.py:778` | `parents[1]/"run"` | fw | `fw_root()/bin/run` |
+| C30 | `cli.py:808` | `parents[1]/"run"` | fw | `fw_root()/bin/run` |
 | C31 | `cli.py` (new) | — | — | `setup` (`--project`, `--git`, `--adopt`), `where`; `build`/`make --framework` live in `bin/hep` |
 | C32 | `migrate.py` (new rule) | — | work | `{repo}` → `{work}` in run TOMLs (§5.3) |
+| C78 | `cli.py:807` (`hep reproduce` on a `seed_type = "random"` configuration) | `--set run.<cfg>.seed_type`, the form before V98, which `apply_sets` turns into a `[run.<cfg>]` table that V98's `[run]` refuses (found 2026-10-10, not run) | — | `run.cfgs.<cfg>.seed_type` and `run.cfgs.<cfg>.manual_seed`, with a test that reproduces a random-seed point. Only if it is still so at `split/base` |
 | C33 | `results.py:3` (docstring) | `sys.path.insert(0, "<repo>/utils/Env")` | fw | `from runner import results` through the `.pth` (§5.5) |
+| C72 | `deck.py:101` | a deck by name under `reports_root()`; `./`, `../`, `/` taken from the working directory | work | unchanged: a deck path is the user's own file argument, like `hep overlay`'s, not a run TOML path (V13 is about run TOMLs) |
+| C73 | `runner/viewer.py` | serves a deck's folder | ok | — (no root of its own) |
 
 ### 6.2 Plugins, data and scripts
 
@@ -447,13 +456,14 @@ cite these rows by number (C1…).
 | C42 | `hep_env.sh:10-17,133-136,177` | `HEKIT_ROOT`, `hep_cd`, `PATH` | fw | §5.8 |
 | C43 | `hepkit.py:6` (docstring) | the `sys.path` line from `modules/<P>/` | fw | "import hepkit" (§5.5) |
 | C44 | `Makefile` | one file | both | `Makefile` and `make/work.mk` (§5.4); `Makefile:120`'s `sed -i` made portable (I15) |
+| C76 | `apps/Paint/Style.hh:59,110-115` (`basePath()`) | `utils/Apps/Paint/base.toml` beside `build/`, from `/proc/self/exe`, or under `$HEKIT_ROOT` | fw | `apps/Paint/base.toml` under `$HEP_FW` first, then beside `build/` from `/proc/self/exe` (Linux only; I15). Paint is plot-only: no identity changes |
 
 ### 6.3 Stack recipes (`docs/stack/` → `stack/`)
 
 | # | Site | Today | Becomes |
 |---|---|---|---|
 | C45 | `build_stack.py:52-55` | the `setup.sh` text: `HEKIT_ROOT`, `utils/Env/hep_env.sh` | §5.8 |
-| C46 | `build_stack.py:177`; `settings.toml` `hekit_root` | `{repo}`, `{hekit_root}` | `{repo}` is the HEimdall checkout (as today: `REPO` is the recipe's own repo); `hekit_root` removed |
+| C46 | `build_stack.py:43,177`; `settings.toml` `hekit_root` | `REPO = HERE.parent.parent`; `{repo}`, `{hekit_root}` | `REPO = HERE.parent` (the recipe now sits one level down, in `HEimdall/stack/`), so `{repo}` is the HEimdall checkout; `hekit_root` removed |
 | C47 | `build_stack.py:443` | keeps an existing `setup.sh` | unchanged |
 | C48 | `packages.toml` `[fastjet] patch` | `utils/Env/patches/…` | `stack/patches/…` |
 | C49 | `Dockerfile` (`COPY docs/stack/`, `utils/Env/patches/`, `HEKIT_ROOT=/work`); `Dockerfile.dockerignore` | the repo's layout | `stack/container/`; the image holds `/opt/hep/HEimdall` and mounts a work dir |
@@ -464,7 +474,7 @@ cite these rows by number (C1…).
 
 | # | Site | Becomes |
 |---|---|---|
-| C52 | `conftest.py:23-33` | `FW = parents[1]`; `sys.path` gets `FW`; the scratch work (§5.7); `HEP_*`; the guard without `THEIRS` |
+| C52 | `conftest.py:23-34` | `FW = parents[1]`; `sys.path` gets `FW`; the scratch work (§5.7); `HEP_*` (with `HEP_REPORTS`); the guard without `THEIRS` |
 | C53 | `pytest.ini` | unchanged |
 | C54 | `test_paths.py` (whole) | rewritten for §5.2–5.3: `fw_root`, the walk-up search, `HEP_WORK`, the `tests/` skip, the `HEKIT_*` refusal, `{repo}` refused |
 | C55 | `test_hepkit.py:14-20` | `FW/kit` |
@@ -473,6 +483,8 @@ cite these rows by number (C1…).
 | C58 | `test_modules_p4.py:19`; `test_plot.py:91`; `test_plot_stage.py:88` | module programs and plugins under the scratch work's `build/` |
 | C59 | `test_gates_run_sweep.py:124` (`cwd=REPO`) | `cwd` = the scratch work |
 | C60 | `test_layers.py:268` (message) | `env/stack.toml` |
+| C74 | `test_layout.py:15-22` | `FW/tools/figures/layout.py` |
+| C75 | `test_deck.py:32-33,170`; `test_deck_build.py:52-53,129` | `HEP_RESULTS`, `HEP_OUTPUT`, `HEP_REPORTS` |
 | C61 | `test_docs.py` | `DOCS = FW/docs`; `CODE` scans `runner/ tools/ kit/ apps/ env/ bin/ tests/ make/`, not `modules/` (none in the repo; the fixture modules are under `tests/`) |
 | C62 | `test_stack_build.py` | `stack/` paths; the setup text without `hekit_root` |
 | C63 | `test_imports.py` | `runner/` under `FW`; the "core never names a tool" check reads `tools/` |
@@ -485,6 +497,7 @@ cite these rows by number (C1…).
 | C65 | `configs/PhotoProduction/eic.toml:170` | `{work}/modules/PhotoProduction/delphes_jets.py` (by `hep migrate`) |
 | C66 | `modules/PhotoProduction/delphes_jets.py:16` | the `sys.path` line removed |
 | C67 | `modules/PhotoProduction/Inproc/Analysis.hh:68`; `configs/PhotoProduction/InProc{EIC,Zeus}.toml:23` (comments) | `$HEP_FW/stack/patches/…` |
+| C77 | comments that cite framework paths: `Inproc/Stamp.hh:3`, `Inproc/Engines.hh:13` (`utils/PythiaRun.hh`), `Inproc/Analysis.hh:13` (`utils/Env/patches/`), `delphes_jets.py:9` (`utils/hepkit.py`), `modules/Lambda/README.md:8` (`utils/Module.hh`) | `kit/PythiaRun.hh`, `$HEP_FW/stack/patches/`, `kit/hepkit.py`, `kit/Module.hh` (by 06's renames); shown with C65–C67 |
 | C68 | comments citing old manual sections (current_plan: `Comparison/generators.toml`, `Lambda/lambda.toml`, `PhotoProduction/eic.toml`, `xx/madgraph.toml`) | left to the user, as now |
 
 ### 6.6 The manual (`docs/`, P4)
@@ -492,8 +505,8 @@ cite these rows by number (C1…).
 | # | Where | Becomes |
 |---|---|---|
 | C69 | 01 (layout), 02 §1 and §12, 05 §2, 06 §1, §2, §14, §15, §16, §25 | rewritten for the three places; `utils/Env/<x>` → `tools/<x>`, `utils/X.hh` → `kit/X.hh`, and so on |
-| C70 | 07 (the record) | new V-rows for this split (V102 onward); D-rows here are cited from them |
-| C71 | `docs/README.md` | the reading paths, plus `stack/` and `docs/framework/` |
+| C70 | 07 (the record) | new V-rows for this split (V105 onward: V102–V104 are the decks); D-rows here are cited from them |
+| C71 | `docs/README.md` | the reading paths, plus `stack/`, `docs/reporter/` and `docs/framework/` |
 
 ---
 
@@ -535,7 +548,7 @@ rules = [
   ["docs/stack/Dockerfile*",    "fw",   "stack/container/"],
   ["docs/stack/**",             "fw",   "stack/"],
   ["docs/Untitled-1.md",        "work", ""],
-  ["docs/**",                   "fw",   "docs/"],             # 01–07, README, audit_2/, framework/
+  ["docs/**",                   "fw",   "docs/"],             # 01–07, README, audit_2/, reporter/, framework/
   ["bots/BOT.md",               "fw",   "CLAUDE.md"],         # rewritten in P1 for HEimdall
   ["bots/**",                   "fw",   "bots/"],
   # the tests
@@ -555,16 +568,17 @@ rules = [
 ]
 ```
 
-**Counts at `33b0ed9`:** 1554 tracked paths (P1 recounts at `split/base`).
+**Counts at `9cb907a`:** 1567 tracked paths (P1 recounts at `split/base`). The rules were checked
+against that list: every path matches one rule, and no two paths land on one HEimdall path.
 
 | Group | Paths | Side |
 |---|---|---|
-| `utils/` | 80 (`Env/` 66, kits 5, apps 9) | fw |
-| `tests/` | 83 | fw |
-| `docs/` except `Untitled-1.md` | 22 (pages 8, `audit_2` 1, `framework` 1 at 33b0ed9, `stack` 12) | fw |
+| `utils/` | 83 (`Env/` 69, kits 5, apps 9) | fw |
+| `tests/` | 86 | fw |
+| `docs/` except `Untitled-1.md` | 29 (pages 8, `audit_2` 1, `reporter` 5, `framework` 3, `stack` 12) | fw |
 | `bots/` | 4 | fw |
 | `Makefile`, `pytest.ini` | 2 | fw |
-| **fw total** | **191** | |
+| **fw total** | **204** | |
 | `configs/` | 25 | work |
 | `modules/` | 18 | work (and copied into the fixture) |
 | `aux/` | 1311 | work |
@@ -592,7 +606,8 @@ to copy to a disk that survives the wipe:
 | High-Energy, every branch and tag | the source of everything | `git push origin rework` (and the tags), or `git bundle create HE.bundle --all` |
 | `datasets/` (`zeus_eic.yoda`, 20 kB) | not in git; the work dir and the fixture use it | copy |
 | `literature/`, `cross_machine/`, `reports/` | the user's, not in git | copy |
-| `$HEP/src/*.tar*`, `*.tgz` (optional) | saves the downloads: `build_stack.py` uses a tarball already in `$prefix/src` | copy |
+| `$HEP/src/*.tar*`, `*.tgz` and `$HEP/LHAPDF-6.5.6.tar.gz` (optional, 555 MB) | saves the downloads: `build_stack.py` uses a tarball already in `$prefix/src`; 05 §S2 renames them to its names | copy |
+| **the reference point** (90 kB): `output/PhotoProduction/inproc_zeus/01_default/NNPDF23lo/{cards,config,provenance.json}` and `results/PhotoProduction/inproc_zeus/01_default/NNPDF23lo/` | P6 runs it again on its seed and compares (09 S1) | copy, keeping the paths under `kept/reference/` |
 | `results/` (optional) | only to look at again; the comparisons in `09` use numbers recorded in these files | copy if wanted |
 | `~/.claude/projects/…High-Energy/memory/` (optional) | the agents' notes about this repo | copy |
 | the Mac paths in `.vscode/` | nothing to do | they stay in High-Energy (D13) |
@@ -630,7 +645,7 @@ These continue README §2's table.
 | Risk | Where it bites | Plan |
 |---|---|---|
 | The reinstall is Ubuntu 26.04: some `apt_packages` names may be gone or renamed (`libpcre3-dev` is a likely one: Debian has been removing PCRE 1), and Python and GCC are newer | P2 | P0 checks every package with `apt-cache policy`. The ubuntu annex lists allowed renames as *allowed adjustments* (02 §7). A compiler or Python incompatibility in ROOT, Herwig or Whizard is a gate, not a quiet fix |
-| A move breaks a relative assumption the grep did not see | P3 | the fast suite after every task group; C1–C71 are each a task |
+| A move breaks a relative assumption the grep did not see | P3 | the fast suite after every task group; C1–C78 are each a task |
 | The fixture's frozen modules drift from High-Energy's | P4, later | they are test data (V52's rule): changed only with a test |
 | Identities: everything reruns on the new install | P5, P6 | expected; the comparisons in `09` are by numbers within tolerances, not by identity |
 | `aux/` (1311 files) makes High-Energy heavy | none for the plans | stays (D13); moving it is the user's choice, later |

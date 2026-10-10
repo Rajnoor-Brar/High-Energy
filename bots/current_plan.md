@@ -21,16 +21,23 @@
 `hep setup <dir>`) holding only configs, modules and products. Executed by AI agents on the **lab PC
 after a clean reinstall** (D16). **High-Energy becomes the lean work repo** (branch `work`, D15).
 - Round 1: [README.md](../docs/framework/README.md), D1–D16 (amended in 2a).
-- **Round 2a done:**
-  - [01_Target.md](../docs/framework/01_Target.md): the trees, the boundary between framework and
-    work, C1–C71, the move map (checked: 1554 paths, 191 to HEimdall, 1363 stay), the pre-wipe
-    checklist, D17–D25;
-  - [02_Agents.md](../docs/framework/02_Agents.md): roles, `state.toml`, the step loop,
-    verification, gates, deviations, prompts.
-  - **Waiting for the user's review.**
-- **Round 2b next, on the user's order:**
-  - the phase files `03`–`09` and `targets/*.md`;
-  - the lab PC's baselines, recorded before the wipe.
+- Round 2a: [01_Target.md](../docs/framework/01_Target.md) (the trees, the seam, C1–C78, the move map,
+  the pre-wipe checklist, D17–D25) and [02_Agents.md](../docs/framework/02_Agents.md).
+- **Round 2b done (2026-10-10, against 9cb907a, the decks V102–V104 included):**
+  - the phase files: [03](../docs/framework/03_Preflight.md) P0 preflight,
+    [04](../docs/framework/04_Seed.md) P1 seeding (the move-map script, tested: 204 fw / 1363 work),
+    [05](../docs/framework/05_Stack.md) P2 the stack, [06](../docs/framework/06_Seam.md) P3 the seam,
+    [07](../docs/framework/07_Framework.md) P4 build/tests/manual, [08](../docs/framework/08_Workdirs.md)
+    P5 work dirs, [09](../docs/framework/09_Verify.md) P6 verification and handover;
+  - the annexes `targets/{ubuntu,cluster,container,macos}.md`;
+  - the lab PC's baselines inside them: stack versions, 21 PDF sets, the reference point
+    inproc_zeus/default/NNPDF23lo (σ 72,987.12 ± 30.34 pb, 999,892 events, seed 246223968).
+- **Next, the user's:** review; then before the wipe, 01 §8's checklist (push `rework`, keep
+  datasets/literature/cross_machine/reports, the reference point, optionally tarballs and memory).
+- Found while writing 2b (not fixed): `hep reproduce` builds `--set run.<cfg>.seed_type`, the form
+  before V98, so it probably fails on a `seed_type = "random"` configuration (C78); `build/flags.mk`
+  was last probed without `load_hep` (FOUND = toml zstd zlib; self-heals on the next `hep build`
+  with the environment loaded).
 - Round 2 writes only `docs/framework/` and this file.
 
 Otherwise nothing is in progress. Waiting on the user:

@@ -83,7 +83,8 @@ ram_gb = 31
 disk_free_gb = 412              # where $HEP is
 sudo = true
 network = true
-docker = "absent"               # "usable", "installed, no group", "absent"; apptainer likewise
+docker = "absent"               # "usable", "installed, no group", "absent"
+apptainer = "absent"            # its version, or "absent"
 python = "3.13.2"
 annex = "ubuntu"                # targets/<annex>.md
 
@@ -223,8 +224,8 @@ gate instance, never the next one of the same kind.
 | a download, with its list and total size (asked once per phase: the stack's tarballs; Geant4's ~4 GB of data) | P2 |
 | a change to the user's account or groups (joining the docker group is the user's own action) | container annex |
 | a deletion outside `$HEP/{src,build}` and `$HEP/.setup/verify` | any |
-| a write to the High-Energy clone, except P5's commits on branch `work` | any |
-| a change to the content of `configs/` or `modules/` (P5's diffs C65–C67, shown first) | P5 |
+| a write to the High-Energy clone, except P0's tag `split/base` and P5's commits on branch `work` | any |
+| a change to the content of `configs/` or `modules/` (P5's diffs C65–C67 and C77, shown first) | P5 |
 | `git push`, publishing a repo or an image anywhere | P5, P6 |
 | a verification row failing twice | any |
 | anything the plan files do not decide, or decide in a way that cannot be done here | any |
@@ -371,7 +372,7 @@ phase is expected to meet.
 | P0 | `03_Preflight.md` | survey the machine and choose the annex; `$HEP/.setup/`; tag `split/base`; bring back `kept/` | — | sudo, if `git` or `python3-venv` are missing |
 | P1 | `04_Seed.md` | `$HEP/HEimdall` from the move map (01 §7), the fixture work dir, `CLAUDE.md`; the import commit | — | none (writes only `$HEP`) |
 | P2 | `05_Stack.md` | system packages; `stack/build_stack.py` with the annex's overlay; the stack's checks | the build | sudo/apt, downloads |
-| P3 | `06_Seam.md` | C1–C64: the roots, the placeholders, the rename, the build split, the environment, `hep setup`/`hep where`, provenance, the tests, portability | — (overlaps P2) | none |
+| P3 | `06_Seam.md` | C1–C64, C72–C76 and C78: the roots, the placeholders, the rename, the build split, the environment, `hep setup`/`hep where`, provenance, the tests, portability | — (overlaps P2) | none |
 | P4 | `07_Framework.md` | `hep build --framework`; the fast suite, then the slow one, against the baselines; `make docs`; the manual rewritten (C69–C71) | the slow suite | none |
-| P5 | `08_Workdirs.md` | High-Energy made lean on `work` (01 §4.3, C65–C67); a toy work dir by `hep setup --project`; independence | — | the user's file diffs; push of `work` |
+| P5 | `08_Workdirs.md` | High-Energy made lean on `work` (01 §4.3, C65–C67, C77); a toy work dir by `hep setup --project`; independence | — | the user's file diffs; push of `work` |
 | P6 | `09_Verify.md` | the physics gates; the baselines compared; handover (`CLAUDE.md`s, the final report, memory); publishing HEimdall | — | push / publish |
