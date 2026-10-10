@@ -40,7 +40,12 @@ PIL for the other half.
 - `tests/integration/test_plot_stage.py::test_a_sheet_tiles_drawn_pages` passes, with its PNG check reading the rendered PNG; its docstring and V89's 04 text say "rendered from its PDF".
 
 **Log**
-- (empty)
+- 2026-10-10: done, with S2 (one module, written whole). `figures/sheet.py` → `figures/layout.py` (git mv); `plot.sheet` loads it as `layout`.
+  - `size_of` reads each page as it shows: pdfinfo's size turned by its rotation (EIC's older Paint PDFs are portrait A4 sheets cropped and turned 90°; ZEUS's are landscape), a PNG by its header and pHYs. That fixes H12's first-page size and hard-coded fallback.
+  - Units are `bp` (PDF points), so a composite's page is its box exactly (400 × 222 pt, not TeX `pt`'s 398.5).
+  - `tile`: cells of the largest page, the PNG rendered by pdftoppm at the pages' own PNG size when all have one (V89's geometry, so `test_a_sheet_tiles_drawn_pages` passes unchanged but for its docstring), else at 300 dpi. A sheet always writes both formats.
+  - Probe: batch_1's ZEUS d01 (five PDFs and the `_AB.png`) as a labelled, titled 3 × 2 composite in 0.3 s; EIC's rotated pages tiled upright.
+  - `tests/runner/test_layout.py`: 5 tests. Docs: 03 §7.8, 04 (schema notes, `make docs`, `make schema`), 06, 07 V102.
 
 ## S2: sizes, labels and titles
 
@@ -61,4 +66,4 @@ PIL for the other half.
 - A label with `_` and `%` builds.
 
 **Log**
-- (empty)
+- 2026-10-10: done with S1: `SIZES` (`full` 400 × 222, `half` 196 × 222, `a4`, `square`), `labels`, `title`, and `tex()` (specials escaped, `$…$` kept as math).

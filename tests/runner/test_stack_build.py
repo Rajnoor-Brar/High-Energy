@@ -111,3 +111,9 @@ def test_the_mac_overlay(bs, tmp_path, monkeypatch, capsys):
         assert line in script, line
     assert "apt-get" not in script and "export LD_LIBRARY_PATH=" not in script
     assert subprocess.run(["bash", "-n"], input=script, text=True, encoding="utf-8").returncode == 0
+
+
+def test_the_system_packages_carry_what_decks_need(bs, tmp_path):
+    """hep deck (docs/reporter): pandoc for the slides, poppler for a figure's PNG, the Beamer class."""
+    _, s, _ = bs.options([f"prefix={tmp_path}"])
+    assert {"pandoc", "poppler-utils", "texlive-latex-recommended"} <= set(s["apt_packages"])

@@ -884,8 +884,8 @@ A figure is a recipe for pages (V80); its classes, each with an example, are
 | `op` | a string: `"ratio"`, `"difference"`, `"sum"`, `"projection-x"`, `"projection-y"` |  | a derived figure's: `ratio`, `difference`, `sum` (two objects), `projection-x`, `projection-y` (one) |
 | `x` | a string |  | a scan figure's quantity (a numeric curve axis) and number (`sigma`, `entries`, `integral`, `mean`, `bin:N`); `sigma` and `entries` need no object |
 | `y` | a string |  | a scan figure's quantity (a numeric curve axis) and number (`sigma`, `entries`, `integral`, `mean`, `bin:N`); `sigma` and `entries` need no object |
-| `pages` | a list (a string each) |  | a sheet's (V89): the drawn pages whose names (`18x275/d02-x01-y01`, `*/eta_algorithms`) the globs match, in the globs' order, tiled `columns` wide into `plots/<backend>/sheets/<name>.pdf` and `.png`, each pad the page as it was drawn alone (pdflatex places the PDFs as vectors; PIL pastes the PNGs). For Paint's and mpl's pages. A sheet takes no page keys (its pages' figures set those); a glob naming no page fails the sheet |
-| `columns` | an integer, ≥ 1 |  | a sheet's (V89): the drawn pages whose names (`18x275/d02-x01-y01`, `*/eta_algorithms`) the globs match, in the globs' order, tiled `columns` wide into `plots/<backend>/sheets/<name>.pdf` and `.png`, each pad the page as it was drawn alone (pdflatex places the PDFs as vectors; PIL pastes the PNGs). For Paint's and mpl's pages. A sheet takes no page keys (its pages' figures set those); a glob naming no page fails the sheet |
+| `pages` | a list (a string each) |  | a sheet's (V89): the drawn pages whose names (`18x275/d02-x01-y01`, `*/eta_algorithms`) the globs match, in the globs' order, tiled `columns` wide into `plots/<backend>/sheets/<name>.pdf` and `.png`, each pad the page as it was drawn alone (pdflatex places the PDFs as vectors, a PNG where a page has no PDF; the `.png` is that PDF rendered by pdftoppm, V102). For Paint's and mpl's pages. A sheet takes no page keys (its pages' figures set those); a glob naming no page fails the sheet |
+| `columns` | an integer, ≥ 1 |  | a sheet's (V89): the drawn pages whose names (`18x275/d02-x01-y01`, `*/eta_algorithms`) the globs match, in the globs' order, tiled `columns` wide into `plots/<backend>/sheets/<name>.pdf` and `.png`, each pad the page as it was drawn alone (pdflatex places the PDFs as vectors, a PNG where a page has no PDF; the `.png` is that PDF rendered by pdftoppm, V102). For Paint's and mpl's pages. A sheet takes no page keys (its pages' figures set those); a glob naming no page fails the sheet |
 | `over` | a list (a string each) |  | a merged figure's: curve axes of the configuration (swept, not `plot_points`, not combined), checked at plan time; it may not also `band` them |
 | `configurations` | a list (a string each) |  | a compare figure's, two or more, in curve order; one at least of this file. `"<Project>/<config>:<cfg>"` (V88) names a configuration of another run TOML: its points (as its last run left them) are curves beside this run's, labelled `<its run> <its label>` by default and by its own quantities; its page axes must have this run's tags. The pages are this run's (`<run>/compare/<name>/`), drawn by this run's plot stage or `hep plot` |
 | `labels` | a list (a string each) |  | an overlay's: one legend label per object; a compare figure's: one per configuration (default: each configuration's `label`) |
@@ -1063,3 +1063,50 @@ The plot checks follow the same shape:
 - **reference data converted for Paint:** `output/<P>/.cache/datasets/<name>.root`.
 
 Where everything goes, as a tree, is [06 §14](06_Internals.md#14-where-files-go).
+
+---
+
+## 15. A deck's recipe: `deck.toml`
+
+A deck is a folder, `reports/<deck>/`, made by `hep deck <deck>` (05). Its `deck.toml` says where its
+plots come from; `utils/Env/schema/deck.toml` holds every key, as below. A recipe has `[deck]` and
+`[blocks.<name>]` tables, and nothing else; with no block, the deck takes the folder's own PDF and PNG
+files (folder mode, grouped by `[deck].group`).
+
+**`[deck]`:**
+
+<!-- generated: keys deck -->
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `size` | a string: `"full"`, `"half"`, `"a4"`, `"square"` | `"full"` | a composite's size: full, a 16:9 slide's content area under its title; half, one of its two columns; a4, A4 landscape; square |
+| `labels` | true or false | `true` | each panel's label above it, on the composite figures |
+| `titles` | true or false | `false` | a block's title above its grid, on the composite figures (a slide has its own title) |
+| `columns` | an integer, ≥ 1 |  | a composite's columns (default: the count that shows its panels largest) |
+| `targets` | a list (a string each): `"pdf"`, `"pptx"`, `"html"`, `"overleaf"`, `"viewer"` | `["pdf", "pptx", "html", "overleaf", "viewer"]` | what a build makes: deck.pdf (Beamer), deck.pptx, deck.html (dzslides, offline), overleaf.zip, index.html (the viewer) |
+| `backend` | a string or a list (a string each): `"root"`, `"mpl"`, `"yoda"` | `"root"` | whose drawn pages a block takes, plots/<backend>/ of each result folder; a list in order of preference (per folder, the first that drew the page) |
+| `dpi` | an integer, ≥ 50 | `200` | the resolution a composite's PNG is rendered at, from its PDF |
+| `group` | a string | `"^(?P<block>.+)_(?P<panel>[^_]+)$"` | folder mode's regex over file stems: its group `block` names the block, `panel` the panel (natural order) |
+<!-- /generated -->
+
+**`[blocks.<name>]`:** a block per page its `pages` name, `<name>-<page>` (`zeus-d01`), with a panel
+per result folder its `folders` name, then its `extra` file.
+
+<!-- generated: keys block -->
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `from` | a string | **required** | the run whose result folders the block takes: "<Project>/<run>", results/<Project>/<run>/ |
+| `folders` | a list (a string each) | **required** | its result folders (`01_PDFs_010M`), names in their order, globs in natural order: a panel each |
+| `pages` | a list (a string each) | **required** | globs of page names in each folder's plots/<backend>/ (`d01-x01-y01`, `18x275/d0*`): a block each, named <block>-<page> |
+| `backend` | a string or a list (a string each): `"root"`, `"mpl"`, `"yoda"` |  | as [deck].backend, for this block |
+| `label` | a string: `"events"`, `"folder"` | `"events"` | a panel's label: events, the events its folder was run with (its provenance, else the count its name ends in, `_010M`; else what its YODA's /RAW/_EVTCOUNT counted), as 10M; folder, its folder's name without the serial |
+| `extra` | a string |  | one more panel, a file of the deck's: a path pattern with {block}, {page} and {short} (`extras/zeus_{short}_AB.png`) |
+| `columns` | an integer, ≥ 1 |  | as [deck].columns, for this block |
+| `size` | a string: `"full"`, `"half"`, `"a4"`, `"square"` |  | as [deck].size, for this block |
+| `labels` | true or false |  | as [deck].labels, for this block |
+| `titles` | true or false |  | as [deck].titles, for this block |
+| `title` | a string |  | its composites' title, a pattern with {block}, {page} and {short} (`ZEUS {short} · PDFs`; default: the block's name and the page's, `zeus d01`) |
+<!-- /generated -->
+
+No run TOML is read: a block takes its result folders as they are on disk (`results/<Project>/<run>/`),
+whichever config file made them. A page a folder lacks is refused, naming the backend that drew it there,
+if one did.

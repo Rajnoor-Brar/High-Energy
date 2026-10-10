@@ -1,4 +1,5 @@
-"""The run TOML's schema: utils/Env/schema/run.toml, and checking a table against it (rank 0).
+"""The run TOML's schema: utils/Env/schema/run.toml, and checking a table against it (rank 0). A deck's
+recipe has its own, utils/Env/schema/deck.toml (tables "deck" and "block", V103).
 
 docs/04_Config_Reference.md. Every key's type, allowed values, smallest value, default, inheritance and
 whether it takes "default" is written once, in run.toml (V55); config.py and plot.py check their tables
@@ -25,20 +26,22 @@ NAMES = {"int": "an integer", "float": "a number", "str": "a string", "bool": "t
          "table": "a table"}
 #: The tables of run.toml that describe keys (the rest, [sections], describe the file).
 TABLES = ("config", "run", "configuration", "prelim", "quantity", "tool", "plot", "figure", "data")
+#: The tables of deck.toml, a deck's recipe (reports/<name>/deck.toml, V103).
+DECK_TABLES = ("deck", "block")
 #: A figure's own keys: the rest are what it sets for its pages.
 FIGURE_OWN = ("class", "type", "name", "objects", "labels", "over", "configurations", "op", "x", "y", "pages", "columns")
 
 
-def path() -> Path:
-    return repo_root() / "utils" / "Env" / "schema" / "run.toml"
+def path(name: str = "run") -> Path:
+    return repo_root() / "utils" / "Env" / "schema" / f"{name}.toml"
 
 
 @functools.cache
-def spec() -> dict:
+def spec(name: str = "run") -> dict:
     try:
-        return tomllib.loads(path().read_text(encoding="utf-8"))
+        return tomllib.loads(path(name).read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError) as error:
-        raise HepError(f"cannot read the schema: {error}", where=str(path())) from None
+        raise HepError(f"cannot read the schema: {error}", where=str(path(name))) from None
 
 
 #: Configuration keys [run] gives every configuration (V99; they were [run.defaults]'s), besides the
@@ -57,6 +60,8 @@ def keys(table: str) -> dict[str, dict]:
     if table == "run":
         given = {k: {**spec()["configuration"][k], "inherit": True} for k in RUN_GIVES}
         return spec().get("run", {}) | given
+    if table in DECK_TABLES:
+        return spec("deck").get(table, {})
     return spec().get(table, {})
 
 

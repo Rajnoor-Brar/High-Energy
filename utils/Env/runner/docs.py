@@ -142,13 +142,13 @@ def commands() -> str:
 
 def render(what: str) -> str:
     kind, _, arg = what.strip().partition(" ")
-    if kind == "keys" and arg in schema.TABLES:
+    if kind == "keys" and arg in schema.TABLES + schema.DECK_TABLES:
         return keys(arg)
     if kind == "style" and not arg:
         return style()
     if kind == "commands" and not arg:
         return commands()
-    raise ValueError(f"no generated block '{what}': keys <{'|'.join(schema.TABLES)}>, style or commands")
+    raise ValueError(f"no generated block '{what}': keys <{'|'.join(schema.TABLES + schema.DECK_TABLES)}>, style or commands")
 
 
 def updated(text: str) -> str:

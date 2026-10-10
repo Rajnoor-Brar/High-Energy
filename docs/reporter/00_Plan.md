@@ -4,8 +4,11 @@ The plan for building talks and shareable reports from the framework's drawn pag
 with the user on 2026-10-08, after a discussion of the current features, the new ones, and their
 structure. It was reviewed on 2026-10-10 against the code, the results on disk and pandoc itself (§8).
 Phase files: [D1_Layout.md](D1_Layout.md), [D2_Collect.md](D2_Collect.md),
-[D3_Build.md](D3_Build.md), [D4_Stack_and_Docs.md](D4_Stack_and_Docs.md). Each step is implemented
-only on the user's order.
+[D3_Build.md](D3_Build.md), [D4_Stack_and_Docs.md](D4_Stack_and_Docs.md).
+
+**Status: done, 2026-10-10** (on the user's order of that day): D1–D4, V102–V104, each phase's Log
+says how. The by-hand check is `reports/batch_1_deck/`: batch_1 rebuilt from a recipe over the real
+result folders (9 blocks, 44 panels, every target in 3.5 s). The manual has it: 03 §11, 04 §15, 05 §1.8.
 
 ---
 
@@ -48,7 +51,7 @@ None of it can be rebuilt after new runs, and none of it gives slides.
 | D-R10 | **Theme:** plain now (pandoc's default Beamer and pptx); a `template` key later. |
 | D-R11 | **Sheets stay, and share the layout:** `sheet` and the deck composites use one layout module. |
 | D-R12 | **Pages are picked by result folder** *(2026-10-10)*: `from = "<Project>/<run>"` and `folders` (names or globs) under `results/`. Result folders outlive and drift from run TOMLs (two config files share the run `zeus`; configurations were renamed), so no run TOML is read. |
-| D-R13 | **Labels come from the files** *(2026-10-10)*: a panel's event count from its folder's provenance (`events`) when `output/` keeps it, else from its YODA's `/RAW/_EVTCOUNT`, shown to 2 significant figures (`9,999,062` → `10M`); or the folder's label (`label = "folder"`). Two panels of a block with one label are refused. |
+| D-R13 | **Labels come from the files** *(2026-10-10, refined in D2)*: a panel's label is the events its folder was run with. It comes from the folder's provenance (`events`) while `output/` keeps it, else from the count its name ends in (`_010M`), else from what its YODA's `/RAW/_EVTCOUNT` counted, which is a little short (980k for 1M), shown to 2 significant figures (`9,999,062` → `10M`). Or it is the folder's label (`label = "folder"`). Two panels of a block with one label are refused. |
 
 ## 4. Structure
 
@@ -89,7 +92,8 @@ targets = ["pdf", "pptx", "html", "overleaf", "viewer"]
 from = "PhotoProduction/zeus"                        # results/<Project>/<run>/
 folders = ["01_PDFs_010M", "01_PDFs_025M", "01_PDFs_050M", "03_PDFs_150M", "03_PDFs_200M"]
 pages = ["d01-x01-y01", "d02-x01-y01", "d11-x01-y01", "d12-x01-y01"]
-extra = "extras/zeus_{page}_AB.png"                  # the user's own image, as a last panel
+backend = ["root", "mpl"]                            # per folder, the first that drew the page (D2)
+extra = "extras/zeus_{short}_AB.png"                 # the user's own image, as a last panel
 columns = 3
 ```
 

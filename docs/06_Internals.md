@@ -50,7 +50,7 @@ utils/
 │   ├── runner/               the runner: one flat Python package (§2.1)
 │   ├── <tool>/               one folder per standard tool: tool.toml (+ quantities.toml, render.py, filters.toml)
 │   ├── yoda/, mpl/           the plot backends besides Paint: backend.py
-│   └── figures/              the figures' plugins: derive.py (YODA's Python), sheet.py (pdflatex, PIL)
+│   └── figures/              the figures' plugins: derive.py (YODA's Python), layout.py (pdflatex, pdftoppm)
 ├── Status.hh, Kit.hh         ─── C++ ─── the status protocol; exit codes, arguments, JSON
 ├── Module.hh, PythiaRun.hh   the kit for module programs; App_Pythia's Pythia rules, shared
 ├── App_Pythia.cc             the standard Pythia tool (+ App_PythiaCheck.cc: its card check)
@@ -73,10 +73,11 @@ layering was not had nine cycles.)
 | Rank | Module | Owns |
 |---|---|---|
 | 0 | `errors.py` | `HepError(message, where, hint)`, `did_you_mean` |
-| 0 | `paths.py` | the repository root (by markers, or `$HEKIT_ROOT`), the `configs/`, `output/` and `results/` roots, the path rules (04 §2) |
-| 0 | `schema.py` | the run TOML's schema, `utils/Env/schema/run.toml`: every key's type, choices, bounds, default, inheritance, doc and notes; checking a table against it; the editor schema (V55, V90) |
+| 0 | `paths.py` | the repository root (by markers, or `$HEKIT_ROOT`), the `configs/`, `output/`, `results/` and `reports/` roots, the path rules (04 §2) |
+| 0 | `schema.py` | the run TOML's schema, `utils/Env/schema/run.toml`: every key's type, choices, bounds, default, inheritance, doc and notes; checking a table against it; the editor schema (V55, V90); a deck's, `deck.toml` (V103) |
 | 0 | `hepfiles.py` | reading YODA text (1D and 2D objects, `/RAW` twins, counters; `.gz` too) and Rivet's data directories, once (V60) |
 | 0 | `plugins.py` | loading a folder's Python by path, once: `render.py`, `backend.py`, `provider.py`, the figures' plugins (V61) |
+| 0 | `viewer.py` | the viewer: a page of blocks of labelled panels, sizes and columns, ← → (V104) |
 | 1 | `config.py` | load the TOML, `[config].import`, `--set`, the strict schema check and the figure rules; the typed model (`RunConfig`, `Configuration`, `Tool`, `Quantity`) |
 | 1 | `quantities.py` | the master TOML, static values and selectors, who consumes what (C7), provider checks (C10) |
 | 1 | `sweep.py` | points from `sweeps` (grid and zip), point names, pages, `--points` |
@@ -90,6 +91,7 @@ layering was not had nine cycles.)
 | 4 | `watch.py` | the reducer of events (`State`), the live and plain views, `hep watch` |
 | 4 | `plot.py` | the plot stage: figures, the merged sweep, page configs, the style layers, Paint and the other backends; `hep overlay` on files |
 | 4 | `post.py` | the pre, combined and post stages |
+| 4 | `deck.py` | `hep deck`: a deck's blocks from result folders or its own files, labelled and copied into `panels/` (V103); their composites, and `deck.md` through pandoc to Beamer, pptx, dzslides HTML and an Overleaf zip, the viewer, `--init` (V104) |
 | 5 | `cli.py` | `argparse`: `run`, `plot`, `overlay`, `watch`, `check`, …; the order of events |
 | 5 | `house.py` | `ls`, `explain`, `status`, `clean` (V74) |
 | 5 | `migrate.py` | `hep migrate`: run TOMLs and cards rewritten in today's forms (V79) |
@@ -633,7 +635,7 @@ one table, `Kit::Exit` in `utils/Kit.hh` (V73), and `hepkit.Exit` in Python:
      (V87).
    - **Indexes:** an `index.html` per backend tree (`write_index`, V70), where the backend writes
      none of its own.
-   - **Then:** the sheet figures tile what was drawn (`sheet`, `sheet.py`). A compare figure is
+   - **Then:** the sheet figures tile what was drawn (`sheet`, `figures/layout.py`'s `tile`). A compare figure is
      drawn by each of its own configurations' plot stages, once every configuration it names has
      complete points; `others(ref)` gives another configuration's plans (`cli.others_of`).
 
@@ -648,7 +650,7 @@ plan time (`check_style`). Keys a backend cannot honour are errors, never silent
 ## 14. Where files go
 
 **Technical files go in `output/`, products in `results/`, compiled things in `build/`.** A run
-writes nothing else.
+writes nothing else; `hep deck` writes only into its deck's folder, under `reports/`.
 
 ```
 output/<P>/<run>/<cfg>/
@@ -670,6 +672,12 @@ results/<P>/<run>/<cfg>/
   plots/<backend>/index.html          every page, by cell
   plots/<backend>/sheets/<figure>.{pdf,png}   sheets
 results/<P>/<run>/compare/<figure>/<backend>/  a compare figure's pages
+
+reports/<deck>/                       a deck (hep deck, V103, V104): yours, deck.toml  deck.md  extras/
+  panels/<block>/<NN>_<label>.<ext>   the panels, copied from results/
+  figures/<block>[.<variant>].{pdf,png,sha256}   the composites
+  build/                              deck.md's build copies, deck.tex
+  deck.pdf  deck.pptx  deck.html  overleaf.zip  index.html
 ```
 
 `<run>` and `<cfg>` are `NN_<name>` when they have a serial. `<point>` is the swept tags joined by

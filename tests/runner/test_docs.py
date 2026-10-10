@@ -58,9 +58,15 @@ def test_the_manual_is_the_seven_pages_and_its_index():
     assert (DOCS / "README.md").exists()
 
 
+def prose(body: str) -> str:
+    """A page without its code: fenced blocks and inline spans hold examples, not links (a deck.md's
+    `![](zeus-d01)` names a block, V104)."""
+    return re.sub(r"`[^`\n]*`", "", re.sub(r"^```.*?^```", "", body, flags=re.M | re.S))
+
+
 @pytest.mark.parametrize("page", PAGES + [REPO / "bots" / "BOT.md"], ids=lambda p: p.name)
 def test_every_relative_link_resolves(page):
-    for target in re.findall(r"\]\(([^)\s]+)\)", text(page)):
+    for target in re.findall(r"\]\(([^)\s]+)\)", prose(text(page))):
         if re.match(r"[a-z]+://", target) or target.startswith("mailto:"):
             continue
         name, _, anchor = target.partition("#")

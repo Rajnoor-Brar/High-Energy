@@ -11,6 +11,7 @@
 - the manual's rebuild (V90–V92, `git show 3a5ec16:docs/audit_2/02_Manual.md`).
 - `[config]` (V93–V97): it replaces `[master]`; `import` nests, crosses projects and takes `only` a part; `drop`; `vars`; `meta` (version warnings). The doc is 04 §3.
 - `[run.cfgs.<cfg>]` (V98–V100): configurations moved out of `[run]`; `[run]` gives every configuration its keys (`[run.defaults]` gone); an import's location rule is per folder. The user's configs were migrated by `hep migrate` (2026-10-06, backup in the scratchpad `configs_before_cfgs/`), uncommitted.
+- Decks, `hep deck` (V102–V104, docs/reporter, 2026-10-10): `figures/layout.py` (sheets and composites: pdflatex, PNG by pdftoppm), `runner/deck.py` (blocks from result folders or a folder's files; composites; deck.md through pandoc to Beamer, pptx, dzslides HTML, an Overleaf zip), `runner/viewer.py`; the manual's 03 §11, 04 §15, 05 §1.8. Example: `reports/batch_1_deck/` (not in git).
 - PhotoProduction TOMLs refactored (2026-10-06, uncommitted): `configs/PhotoProduction/common.toml` (new) holds the chain's tools (parameterised by `[config.vars]` card/analysis/product/shards), the shared quantities, statics and plot keys; eic and zeus_validation import it, zeus_seedSweep and InProcZeus import zeus_validation, InProcEIC eic. Identities unchanged except zeus_seedSweep's (its PDFs now zeus_validation's Pythia sets) and InProcEIC's new pt28 points (pt0ref's 4 values). Backup: scratchpad `refactor_before/`.
 
 ## Now
@@ -31,14 +32,6 @@ after a clean reinstall** (D16). **High-Energy becomes the lean work repo** (bra
   - the phase files `03`–`09` and `targets/*.md`;
   - the lab PC's baselines, recorded before the wipe.
 - Round 2 writes only `docs/framework/` and this file.
-
-**docs/reporter/** (planned 2026-10-08, reviewed 2026-10-10; **being executed**, on the user's order of 2026-10-10): decks for talks and sharing, `hep deck`.
-- `reports/<name>/` holds the user's `deck.md` (the talk, never rewritten) and `deck.toml` (plot sources: result folders × pages).
-- A build copies the pages and draws a composite per block: a PDF by pdflatex, its PNG rendered by pdftoppm (`figures/layout.py`, shared with `sheet`).
-- pandoc then gives `deck.pdf` (Beamer), `deck.pptx`, `deck.html` (dzslides, offline) and `overleaf.zip`; the viewer gives `index.html`.
-- [00_Plan.md](../docs/reporter/00_Plan.md) has D-R1–D-R13, the structure and the review (§8, R1–R7); phases D1 layout, D2 collect, D3 build, D4 stack and docs. Progress is in each phase file's Log.
-- pandoc 3.1.3 is installed on the lab PC (the user, 2026-10-10).
-- `hep deck` is a work command whose code moves into HEimdall with the runner (docs/framework D4).
 
 Otherwise nothing is in progress. Waiting on the user:
 

@@ -258,7 +258,8 @@ def test_a_2d_object_is_a_heat_map_per_point(stage):
 
 @pytest.mark.skipif(not shutil.which("pdflatex"), reason="pdflatex tiles a sheet's PDF")
 def test_a_sheet_tiles_drawn_pages(stage):
-    """V89: the pages its globs name, in order, tiled as drawn: a PDF by pdflatex, a PNG by PIL."""
+    """V89: the pages its globs name, in order, tiled as drawn: a PDF by pdflatex, and (V102) its PNG
+    rendered from that PDF, at the pages' own PNG size."""
     from PIL import Image
     run, configuration, plans = stage
     run.plot["formats"] = ["pdf", "png"]

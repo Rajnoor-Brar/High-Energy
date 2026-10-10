@@ -2,9 +2,9 @@
 
 * The runner package is importable as `runner` (utils/Env on sys.path), and tests/ is on sys.path for
   `support` (the shared helpers).
-* Tests read and write only their own places, whatever the shell has set: HEKIT_RESULTS and HEKIT_OUTPUT
-  point into output/tests/, and HEKIT_CONFIGS to tests/fixtures/configs (frozen copies), so a test
-  never reads the user's configs/ and fails only when the code changed.
+* Tests read and write only their own places, whatever the shell has set: HEKIT_RESULTS, HEKIT_OUTPUT
+  and HEKIT_REPORTS point into output/tests/, and HEKIT_CONFIGS to tests/fixtures/configs (frozen
+  copies), so a test never reads the user's configs/ and fails only when the code changed.
 * The basetemp is output/tests/pytest from the repository, wherever pytest is started.
 * The session guard: tests/fixtures and tests/reference must come out byte for byte as they went in
   (a failure). results/, configs/ and modules/ are the user's, who may edit them while tests run, so a
@@ -27,6 +27,7 @@ SCRATCH = REPO / "output" / "tests"
 FIXTURES = REPO / "tests" / "fixtures" / "configs"
 os.environ["HEKIT_RESULTS"] = str(SCRATCH / "results")
 os.environ["HEKIT_OUTPUT"] = str(SCRATCH / "output")
+os.environ["HEKIT_REPORTS"] = str(SCRATCH / "reports")
 os.environ["HEKIT_CONFIGS"] = str(FIXTURES)
 
 OURS = (REPO / "tests" / "fixtures", REPO / "tests" / "reference")         # must not change: content hashes

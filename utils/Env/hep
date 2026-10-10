@@ -4,6 +4,7 @@
 #   hep run <config> [<configuration>] [options]   the runner (utils/Env/run)
 #   hep plot <config> [<configuration>]            a configuration's pages
 #   hep overlay FILE…                              any YODA/ROOT files overlaid
+#   hep deck <deck>                                a deck of slides from drawn pages (reports/<deck>/)
 #   hep watch [<config>]                           attach the live view
 #   hep ls | explain | status | clean              housekeeping (docs/05_Commands_and_Tools.md §1)
 #   hep build [targets…] [--tests] [--clean] [--configure] [-j N]    make, from the repo root
@@ -19,6 +20,7 @@ usage: hep <command> [options]
   run <config> [<configuration>]   plan and run a configuration          (hep run --help)
   plot <config> [<configuration>]  draw a configuration's pages from its complete points
   overlay FILE…                    overlay any YODA/ROOT files (hep overlay --help)
+  deck <deck>                      a deck of slides from drawn pages, reports/<deck>/ (hep deck --help)
   watch [<config>]                 attach the live view to a running job (hep watch --help)
   check [<config>…]                check run TOMLs: every configuration planned, nothing run
   ls [<project>]                   every config and its configurations
@@ -40,7 +42,7 @@ EOF
 cmd=${1-}
 [ $# -gt 0 ] && shift
 case "$cmd" in
-    run|watch|plot|overlay|check|ls|explain|status|clean|reproduce|migrate)
+    run|watch|plot|overlay|deck|check|ls|explain|status|clean|reproduce|migrate)
         exec python3 "$here/run" "$cmd" "$@"
         ;;
     build)

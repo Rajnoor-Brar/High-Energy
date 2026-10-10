@@ -26,6 +26,7 @@ ROOT_VAR = "HEKIT_ROOT"
 RESULTS_VAR = "HEKIT_RESULTS"
 OUTPUT_VAR = "HEKIT_OUTPUT"
 CONFIGS_VAR = "HEKIT_CONFIGS"
+REPORTS_VAR = "HEKIT_REPORTS"
 
 
 def is_root(path: Path) -> bool:
@@ -57,6 +58,12 @@ def output_root() -> Path:
     """Where technical files go: $HEKIT_OUTPUT (tests set it) or <repo>/output."""
     value = os.environ.get(OUTPUT_VAR)
     return Path(value).resolve() if value else repo_root() / "output"
+
+
+def reports_root() -> Path:
+    """Where decks go (docs/reporter): $HEKIT_REPORTS (tests set it) or <repo>/reports."""
+    value = os.environ.get(REPORTS_VAR)
+    return Path(value).resolve() if value else repo_root() / "reports"
 
 
 def configs_root() -> Path:

@@ -52,6 +52,15 @@ Every subcommand and its arguments (options and positionals may come in any orde
 | `--ratio` | a ratio panel against the first curve |
 | `--style FILE` | a style file over utils/Apps/Paint/base.toml |
 
+**`hep deck`**: a deck of slides from drawn pages, in reports/<deck>/ (deck.toml, deck.md)
+
+| Argument | Meaning |
+|---|---|
+| `deck` | reports/<deck>, or a path starting ./, ../ or / |
+| `--list` | each block, its panels and where they came from; nothing written |
+| `--only TARGETS` | some of pdf, pptx, html, overleaf, viewer (comma-separated) |
+| `--init` | write deck.md once: a title slide and a slide per block |
+
 **`hep ls`**: every config and its configurations
 
 | Argument | Meaning |
@@ -247,6 +256,26 @@ its `--set` overrides (the provenance records them) and its seed.
   - anything else byte for byte.
 - **A changed setup:** if the identity is not the one the provenance records, it prints what changed,
   as `--why` does, and stops. `--anyway` runs today's setup with the recorded seed.
+
+### 1.8 `hep deck`
+
+`hep deck <deck>` makes slides from pages already drawn (V103, V104), in `reports/<deck>/` (a path
+starting `./`, `../` or `/` is taken as it is). How to make a talk with it is
+[03 §11](03_Plots.md#11-decks-talks-and-reports-hep-deck); its `deck.toml` keys are
+[04 §15](04_Config_Reference.md#15-a-decks-recipe-decktoml).
+- **What a run does, in order:**
+  1. reads `deck.toml`'s blocks, or the folder's own files;
+  2. copies the panels into `panels/`, again only when one changed;
+  3. draws each composite into `figures/`, again only when its panels or settings changed;
+  4. makes each target.
+- **The targets:** `deck.pdf` (Beamer), `overleaf.zip`, `deck.pptx`, `deck.html` (dzslides) and
+  `index.html` (the viewer). `[deck].targets`, or `--only pdf,pptx`, picks some. The slides need
+  pandoc; the viewer does not.
+- **`--list`:** the blocks, their panels and labels, and where each came from. Nothing is written.
+- **`--init`:** writes `deck.md` once (a title slide, then a section per table and a slide per
+  block), and a starter `deck.toml` where there is none. It refuses when `deck.md` is there.
+- **What it needs:** pdflatex and poppler (`pdftoppm`, `pdfinfo`) for the composites, pandoc and
+  the Beamer class for the slides (docs/stack/README.md §4).
 
 ---
 

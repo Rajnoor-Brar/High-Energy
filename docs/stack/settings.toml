@@ -49,6 +49,8 @@ apt_packages = [
   "libxerces-c-dev", "libgl1-mesa-dev", "libglu1-mesa-dev", "libxmu-dev", "libxi-dev",
   # the framework: Paint, App_Pythia, the module kit; pdflatex for sheet figures
   "libtomlplusplus-dev", "libzstd-dev", "zlib1g-dev", "texlive-latex-base", "texlive-latex-extra",
+  # decks and sheets (hep deck, docs/reporter): pandoc, poppler's pdftoppm and pdfinfo, the Beamer class
+  "pandoc", "poppler-utils", "texlive-latex-recommended",
 ]
 
 # The build's environment. Besides these, every install's bin/, lib/ and Python directory is put on

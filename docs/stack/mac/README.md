@@ -100,6 +100,7 @@ hep build && make test
 | fjcontrib's shared library | `libfastjetcontribfragile.so` | `.dylib` (the `{dylib}` placeholder) |
 | ONNX Runtime | `onnxruntime-linux-<arch>` | `onnxruntime-osx-<arm64 or x86_64>` |
 | setup.sh | the stub | the stub, then `DYLD_LIBRARY_PATH` and GNU make, sed, coreutils first on `PATH` (`setup_extra`) |
+| decks (`hep deck`) | `pandoc`, `poppler-utils`, `texlive-latex-recommended` (apt) | `pandoc`, `poppler` (Brewfile); the Beamer class comes with BasicTeX or MacTeX |
 
 ---
 

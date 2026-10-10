@@ -162,7 +162,8 @@ With `system = true` (the default), the run first installs `settings.toml`'s `ap
 apt-get, through sudo when not root (its password is asked before anything is logged), and stamps
 `system`. The list is grouped there by what needs each package: the build tools, Python, ROOT,
 ThePEG and Herwig, LHAPDF, Sherpa, Whizard (OCaml), Geant4, and the framework itself (toml++,
-zstd, zlib for Paint, App_Pythia and the module kit; pdflatex for sheet figures).
+zstd, zlib for Paint, App_Pythia and the module kit; pdflatex for sheet figures; pandoc, poppler
+and the Beamer class for decks and sheets, `hep deck`).
 
 On a distribution without apt, install the same packages under its names and run with
 `system=false`.

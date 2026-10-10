@@ -1112,9 +1112,10 @@ def draw(run, configuration, plans, say, others=None) -> int:
 
 def sheet(run, figure: Figure, todo: list[Page], say) -> int:
     """A sheet figure (V89): the drawn pages its globs name, in their order, tiled `columns` wide by
-    utils/Env/figures/sheet.py into plots/<backend>/sheets/<name>.pdf and .png, for Paint's pages and
-    mpl's (mkhtml lays its files out its own way). 1 when it could not be made."""
-    module = plugins.load(repo_root() / "utils" / "Env" / "figures" / "sheet.py", "sheet")
+    utils/Env/figures/layout.py into plots/<backend>/sheets/<name>.pdf, and its .png rendered from that
+    PDF (V102), for Paint's pages and mpl's (mkhtml lays its files out its own way). 1 when it could
+    not be made."""
+    module = plugins.load(repo_root() / "utils" / "Env" / "figures" / "layout.py", "layout")
     chosen_pages: list[Page] = []
     for glob in figure.table_pages:
         found = [p for p in todo if fnmatch.fnmatch(p.name, glob) and p not in chosen_pages]

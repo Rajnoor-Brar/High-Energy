@@ -43,7 +43,10 @@ from the collected panels (D2), then turns the user's `deck.md` into every targe
 - An unknown block reference is refused, naming the nearest.
 
 **Log**
-- (empty)
+- 2026-10-10: done, with S2. The build half of `runner/deck.py` (`talk`, `draw`, `build`, `init`), `runner/viewer.py` (rank 0), `hep deck <deck> [--only …] [--init]`.
+  - **Probe** (a scratch deck over the real results, 9 blocks): every target in 3.9 s, then nothing redrawn. `deck.pdf` 12 pages; `overleaf.zip` compiles alone with pdflatex; `deck.html` has no web reference and its 9 PNGs inlined; a bullets-beside-a-block slide renders in both Beamer and pptx (LibreOffice); `deck.md` byte for byte unchanged.
+  - Block-reference attributes `panels`, `size`, `columns` make a variant composite (`figures/<block>.<hash>`); other attributes (`width=60%`) pass through; a plain image path is passed as it is.
+  - `tests/runner/test_deck_build.py`: 4 tests, 2.3 s. Docs: 05 (generated), 06 §2.1, 07 V104.
 
 ## S2: `--init`, and the viewer
 
@@ -66,4 +69,4 @@ from the collected panels (D2), then turns the user's `deck.md` into every targe
   - `deck.html` and `index.html` in a browser.
 
 **Log**
-- (empty)
+- 2026-10-10: done with S1: `--init` (deck.md once, with a starter `deck.toml` where there is none; refused when deck.md is there) and the viewer as the `viewer` target (`index.html`): 9 blocks, 44 panels, composite links, checked in a browser.

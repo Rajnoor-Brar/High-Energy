@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import config as configmod
+from . import deck as deckmod
 from . import execute, house, plot, post, record, sweep, tools
 from .errors import HepError
 from .paths import output_root, results_root
@@ -69,6 +70,12 @@ def parser() -> argparse.ArgumentParser:
     overlay.add_argument("--formats", default="pdf,png", help="pdf, png, svg, eps (default pdf,png)")
     overlay.add_argument("--ratio", action="store_true", help="a ratio panel against the first curve")
     overlay.add_argument("--style", metavar="FILE", help="a style file over utils/Apps/Paint/base.toml")
+
+    deck = commands.add_parser("deck", help="a deck of slides from drawn pages, in reports/<deck>/ (deck.toml, deck.md)")
+    deck.add_argument("deck", help="reports/<deck>, or a path starting ./, ../ or /")
+    deck.add_argument("--list", action="store_true", help="each block, its panels and where they came from; nothing written")
+    deck.add_argument("--only", metavar="TARGETS", help="some of pdf, pptx, html, overleaf, viewer (comma-separated)")
+    deck.add_argument("--init", action="store_true", help="write deck.md once: a title slide and a slide per block")
 
     listing = commands.add_parser("ls", help="every config and its configurations")
     listing.add_argument("project", nargs="?", help="only this project's configs")
@@ -576,6 +583,29 @@ def cmd_overlay(args) -> int:
                            objects=args.objects, formats=formats, ratio=args.ratio, style=args.style) else 0
 
 
+def cmd_deck(args) -> int:
+    """`hep deck DECK` (docs/reporter): the deck's blocks, their panels collected into panels/ (V103), then
+    its composites and slides built (V104); --init writes deck.md once."""
+    made = deckmod.load(args.deck)
+    if args.list:
+        for line in deckmod.listing(made):
+            print(line)
+        return 0
+    if args.init:
+        for path in deckmod.init(made):
+            print(f"deck: wrote {path}")
+        return 0
+    only = [t.strip() for t in args.only.split(",") if t.strip()] if args.only else None
+    wrong = [t for t in only or () if t not in deckmod.TARGETS]
+    if wrong:
+        raise HepError(f"no target '{wrong[0]}'", hint=f"the targets: {', '.join(deckmod.TARGETS)}")
+    copied = deckmod.gather(made)
+    panels = sum(len(b.panels) for b in made.blocks)
+    print(f"deck: {len(made.blocks)} block(s), {panels} panel(s); {copied} file(s) copied into {made.dir / deckmod.PANELS}")
+    deckmod.build(made, only, print)
+    return 0
+
+
 def cmd_plot(args) -> int:
     """`hep plot CONFIG [CONFIGURATION]`: the configuration's pages from its complete points (what
     `hep run … --only plot` does)."""
@@ -851,6 +881,8 @@ def main(argv: list[str]) -> int:
             return cmd_check(args)
         if args.command == "overlay":
             return cmd_overlay(args)
+        if args.command == "deck":
+            return cmd_deck(args)
         if args.command == "ls":
             for line in house.ls(args.project):
                 print(line)

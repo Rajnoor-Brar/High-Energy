@@ -1,0 +1,106 @@
+# utils/Env/schema/deck.toml — a deck's recipe, reports/<name>/deck.toml (docs/reporter, V103).
+#
+# Every key's type, default and meaning, written once: runner/schema.py checks a recipe against it
+# (its tables "deck" and "block"), and `make docs` writes the tables into docs/04_Config_Reference.md.
+# Entries as in run.toml: type, items, choices, min, default, required, doc, notes.
+
+[deck.size]
+type    = "str"
+choices = ["full", "half", "a4", "square"]
+default = "full"
+doc     = "a composite's size: full, a 16:9 slide's content area under its title; half, one of its two columns; a4, A4 landscape; square"
+
+[deck.labels]
+type    = "bool"
+default = true
+doc     = "each panel's label above it, on the composite figures"
+
+[deck.titles]
+type    = "bool"
+default = false
+doc     = "a block's title above its grid, on the composite figures (a slide has its own title)"
+
+[deck.columns]
+type = "int"
+min  = 1
+doc  = "a composite's columns (default: the count that shows its panels largest)"
+
+[deck.targets]
+type    = "list"
+items   = "str"
+choices = ["pdf", "pptx", "html", "overleaf", "viewer"]
+default = ["pdf", "pptx", "html", "overleaf", "viewer"]
+doc     = "what a build makes: deck.pdf (Beamer), deck.pptx, deck.html (dzslides, offline), overleaf.zip, index.html (the viewer)"
+
+[deck.backend]
+type    = "str|list"
+items   = "str"
+choices = ["root", "mpl", "yoda"]
+default = "root"
+doc     = "whose drawn pages a block takes, plots/<backend>/ of each result folder; a list in order of preference (per folder, the first that drew the page)"
+
+[deck.dpi]
+type    = "int"
+min     = 50
+default = 200
+doc     = "the resolution a composite's PNG is rendered at, from its PDF"
+
+[deck.group]
+type    = "str"
+default = '^(?P<block>.+)_(?P<panel>[^_]+)$'
+doc     = "folder mode's regex over file stems: its group `block` names the block, `panel` the panel (natural order)"
+
+[block.from]
+type     = "str"
+required = true
+doc      = "the run whose result folders the block takes: \"<Project>/<run>\", results/<Project>/<run>/"
+
+[block.folders]
+type     = "list"
+items    = "str"
+required = true
+doc      = "its result folders (`01_PDFs_010M`), names in their order, globs in natural order: a panel each"
+
+[block.pages]
+type     = "list"
+items    = "str"
+required = true
+doc      = "globs of page names in each folder's plots/<backend>/ (`d01-x01-y01`, `18x275/d0*`): a block each, named <block>-<page>"
+
+[block.backend]
+type    = "str|list"
+items   = "str"
+choices = ["root", "mpl", "yoda"]
+doc     = "as [deck].backend, for this block"
+
+[block.label]
+type    = "str"
+choices = ["events", "folder"]
+default = "events"
+doc     = "a panel's label: events, the events its folder was run with (its provenance, else the count its name ends in, `_010M`; else what its YODA's /RAW/_EVTCOUNT counted), as 10M; folder, its folder's name without the serial"
+
+[block.extra]
+type = "str"
+doc  = "one more panel, a file of the deck's: a path pattern with {block}, {page} and {short} (`extras/zeus_{short}_AB.png`)"
+
+[block.columns]
+type = "int"
+min  = 1
+doc  = "as [deck].columns, for this block"
+
+[block.size]
+type    = "str"
+choices = ["full", "half", "a4", "square"]
+doc     = "as [deck].size, for this block"
+
+[block.labels]
+type = "bool"
+doc  = "as [deck].labels, for this block"
+
+[block.titles]
+type = "bool"
+doc  = "as [deck].titles, for this block"
+
+[block.title]
+type = "str"
+doc  = "its composites' title, a pattern with {block}, {page} and {short} (`ZEUS {short} · PDFs`; default: the block's name and the page's, `zeus d01`)"

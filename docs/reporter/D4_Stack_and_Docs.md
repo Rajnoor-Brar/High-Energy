@@ -17,7 +17,7 @@ framework is installed, and a place in the manual.
 - `tests/runner/test_stack_build.py` still passes, and its dry run lists `pandoc` and `poppler-utils`.
 
 **Log**
-- (empty)
+- 2026-10-10: done. `apt_packages` gets a "decks and sheets" group (`pandoc`, `poppler-utils`, `texlive-latex-recommended`), as does `build_by_hand.txt` step 1; the Brewfile `pandoc` and `poppler`; a line in the stack README §4 and a row in the Mac README's table. `test_stack_build.py` checks the three are in the list. The user's own `cores`/`root_cores` edit in `settings.toml` was left out of the commit (only these lines were staged).
 
 ## S2: the manual
 
@@ -41,4 +41,4 @@ framework is installed, and a place in the manual.
 - `make docs` leaves nothing stale; `tests/runner/test_docs.py` passes.
 
 **Log**
-- (empty)
+- 2026-10-10: done. 03 §11 (decks: the files, a talk from result folders, `deck.md`, folder mode), 04 §15 (generated tables, with D2), 05 §1.8 `hep deck` (and its generated table), 06 §2.1 (`deck`, `viewer`) and §14 (a deck's tree), 07 V102–V104, `docs/README.md`'s index lines. `test_docs.py`'s link check now skips code (fenced blocks and inline spans), where a deck.md example's `![](zeus-d01)` names a block, not a file. `make docs` leaves nothing stale.

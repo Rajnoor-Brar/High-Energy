@@ -59,7 +59,8 @@ sudo apt-get install -y --no-install-recommends \
     libgsl-dev libboost-all-dev libyaml-cpp-dev libzip-dev libbz2-dev \
     ocaml ocaml-findlib libgc-dev \
     libxerces-c-dev libgl1-mesa-dev libglu1-mesa-dev libxmu-dev libxi-dev \
-    libtomlplusplus-dev libzstd-dev zlib1g-dev texlive-latex-base texlive-latex-extra
+    libtomlplusplus-dev libzstd-dev zlib1g-dev texlive-latex-base texlive-latex-extra \
+    pandoc poppler-utils texlive-latex-recommended
 # check:
 cmake --version | head -1 && gfortran --version | head -1
 

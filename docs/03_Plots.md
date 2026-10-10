@@ -399,8 +399,10 @@ columns = 3                                                         # default: u
 - **What it makes:** after the configuration's pages are drawn, the pages the globs name are tiled
   `columns` wide into `plots/<backend>/sheets/<name>.pdf` and `.png`. Each pad is its page exactly
   as it was drawn alone:
-  - pdflatex places the PDFs, as vectors;
-  - PIL pastes the PNGs.
+  - pdflatex places the PDFs, as vectors (a page's PNG where it has no PDF), in cells of the
+    largest page's size;
+  - the `.png` is that PDF rendered by pdftoppm (V102), so no page needs a PNG of its own; when
+    every page has one, the sheet's PNG is as many of their pixels wide and high.
 - **Which backends:** Paint's and mpl's pages.
 - **What it takes:** a sheet takes no page keys; its pages' figures set those.
 - **When it fails:** a glob that names no page fails the sheet.
@@ -497,3 +499,99 @@ one per point of a merged sweep file, labelled from its `points.json`.
 
 The pages are Paint's, with an `index.html` beside them. The options are in
 [05 §1.2](05_Commands_and_Tools.md#12-hep-plot-and-hep-overlay).
+
+---
+
+## 11. Decks: talks and reports, `hep deck`
+
+A **deck** is a folder, `reports/<deck>/`, that makes slides from pages already drawn (V103, V104). It
+holds two files of yours:
+- **`deck.toml`**, where its plots come from: blocks, each a grid of panels;
+- **`deck.md`**, the talk: your slides, in Markdown.
+
+`hep deck <deck>` copies the panels into the folder, draws each block as one figure (its composite,
+the same picture in every target), and turns `deck.md` into:
+
+| File | What it is | Opens in |
+|---|---|---|
+| `deck.pdf` | Beamer slides, 16:9, the plots as vectors | any PDF viewer |
+| `deck.pptx` | slides on PowerPoint's own layouts, editable | PowerPoint; Keynote and Google Slides import it |
+| `deck.html` | one offline file (dzslides), the plots inlined | any browser, also sent by mail |
+| `overleaf.zip` | `deck.tex` and the figures it uses | Overleaf (New project → Upload project), or pdflatex |
+| `index.html` | the viewer: every block's panels, sizes 2 \| 3 \| 4 columns, ← → | a browser, for choosing |
+
+**A rebuild refreshes the plots and keeps your words.** `deck.md` is only read. After new runs,
+`hep deck <deck>` again copies what changed, redraws only the composites whose panels changed, and
+remakes the slides.
+
+### 11.1 A talk from result folders
+
+```toml
+# reports/batch_1/deck.toml
+[blocks.zeus]                                        # a block per page: zeus-d01, zeus-d02, …
+from    = "PhotoProduction/zeus"                     # results/PhotoProduction/zeus/
+folders = ["01_PDFs_010M", "01_PDFs_025M", "01_PDFs_050M", "03_PDFs_150M", "03_PDFs_200M"]
+pages   = ["d01-x01-y01", "d02-x01-y01", "d11-x01-y01", "d12-x01-y01"]
+backend = ["root", "mpl"]                            # 150M and 200M were drawn by mpl only
+extra   = "extras/zeus_{short}_AB.png"               # your own image, as the last panel
+title   = "ZEUS {short} · PDFs"
+```
+
+```bash
+hep deck batch_1 --list      # the blocks, their panels, labels, and where each came from
+hep deck batch_1 --init      # deck.md, once: a title slide, a section per table, a slide per block
+hep deck batch_1             # everything: panels/, figures/, deck.pdf, deck.pptx, deck.html, overleaf.zip, index.html
+hep deck batch_1 --only pdf  # one target
+```
+
+**What a panel is labelled:** the events its folder was run with (`10M`), from the folder's
+provenance while `output/` keeps it, else from the count its name ends in (`_010M`), else from
+what its YODA counted; or the folder's name, with `label = "folder"`. No run TOML is read: result
+folders are taken as they are on disk, whichever config file made them.
+
+**What is refused:** a page a folder lacks (naming the backend that drew it there, if one did), two
+folders with one label, a glob that names nothing, an unknown key (with the nearest one).
+
+### 11.2 The talk: `deck.md`
+
+```markdown
+---
+title: Photoproduction at EIC and ZEUS
+author: R. Brar
+date: group meeting
+---
+
+# ZEUS validation
+
+## Event count: d01
+![](zeus-d01)
+
+## What changes with statistics
+:::: columns
+::: column
+- tails settle by 50M
+- ratio within 5% at 150M
+:::
+::: column
+![](zeus-d11){panels="10M 200M" size=half}
+:::
+::::
+```
+
+- **The slides:** `#` a section, `##` a slide, `---` above only the title block.
+- **A block's composite:** an image whose source is the block's name.
+- **Its attributes make a variant:** `panels` (some of its panels, by label), `size` (`full`, `half`,
+  `a4`, `square`), `columns`. Other attributes (`width=60%`) pass to pandoc.
+- **Any other image:** its path, as in any Markdown (`extras/photo.png`).
+- **Beside words:** pandoc's `::: columns`, in every target; a `half` composite fits a column.
+- **Without `deck.md`:** a slide per block, generated each time and never written.
+
+### 11.3 A folder of files
+
+With no block in `deck.toml` (or no `deck.toml`), a deck takes the PDF and PNG files in its folder
+(**folder mode**). It groups them into blocks by name: `zeus_d01_PDFs_010M.pdf` is block
+`zeus_d01_PDFs`, panel `10M events`, in natural order (1M < 10M < 150M), images after PDFs.
+`[deck].group` is the regex (04 §15).
+
+The keys are [04 §15](04_Config_Reference.md#15-a-decks-recipe-decktoml); the command is
+[05 §1.8](05_Commands_and_Tools.md#18-hep-deck).

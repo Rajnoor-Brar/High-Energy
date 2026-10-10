@@ -42,7 +42,12 @@ as they are on disk.
   - the refusals.
 
 **Log**
-- (empty)
+- 2026-10-10: done, with S2 (one module, `runner/deck.py`).
+  - **Schema:** `utils/Env/schema/deck.toml`; `schema.spec(name)`, `DECK_TABLES`; `docs.py` renders `keys deck` and `keys block` (04 §15). `paths.reports_root()` and `$HEKIT_REPORTS` (set by conftest).
+  - **Found on the real results:** ZEUS `03_PDFs_150M` and `03_PDFs_200M` have no Paint pages, only mpl's, so `backend` takes a list in order of preference. A missing page's refusal names the backend that drew it (`backend = ["root", "mpl"]`).
+  - **Labels:** EIC's YODA counts are about 2 % short of what was asked (980k for 1M) and EIC's `output/` is gone, so a label is the events asked for: provenance, else the count the folder's name ends in, else the YODA's. A `title` is a pattern too (`ZEUS {short} · PDFs`).
+  - **Probe:** batch_1's ZEUS and EIC halves as a recipe over the real results: 9 blocks, 44 panels, 40 copied in under a second; a second run copies 0.
+  - `tests/runner/test_deck.py`: 18 tests. Docs: 04 §15 (generated), 05 (generated), 07 V103.
 
 ## S2: folder mode, and `--list`
 
@@ -59,4 +64,4 @@ as they are on disk.
 - `--list` writes nothing.
 
 **Log**
-- (empty)
+- 2026-10-10: done with S1: folder mode (`[deck].group`, natural order, `10M events` labels for counted names) and `hep deck <deck> --list`.

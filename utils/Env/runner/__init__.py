@@ -6,11 +6,11 @@ the one table of ranks: tests/runner/test_imports.py enforces it, and tests/runn
 """
 
 RANKS = {
-    "errors": 0, "paths": 0, "schema": 0, "hepfiles": 0, "plugins": 0,
+    "errors": 0, "paths": 0, "schema": 0, "hepfiles": 0, "plugins": 0, "viewer": 0,
     "config": 1, "quantities": 1, "sweep": 1, "labels": 1, "events": 1,
     "tools": 2,
     "execute": 3, "status": 3, "record": 3, "results": 3,
-    "watch": 4, "plot": 4, "post": 4,
+    "watch": 4, "plot": 4, "post": 4, "deck": 4,
     "cli": 5, "house": 5, "migrate": 5, "docs": 5,
 }
 
