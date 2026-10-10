@@ -23,7 +23,7 @@ P0 S1 records `apptainer` in `[machine]`. With it, propose A at P0's end.
 
 | | Way A | Way B |
 |---|---|---|
-| system packages | inside the image | modules: record the exact `module load` lines in `[choices]`, and put them in `setup.sh` through `setup_extra` (`settings.toml`) |
+| system packages | inside the image | modules: record the exact `module load` lines in `[choices]`, and put them in `stack/setup_extra.sh` through `settings.toml`'s `setup_extra` (`settings.toml`) |
 | overlay | none | `system=false graphics=OFF`; `geant4_data=OFF` if the build node has no network (Geant4 then runs only without its datasets) |
 | launching | `apptainer exec --bind <work>:<work> heimdall.sif bash -lc 'cd <work> && hep run …'` | `source $HEP/setup.sh` after the module loads |
 

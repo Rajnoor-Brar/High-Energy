@@ -26,11 +26,13 @@ agent starts:
    ```
 4. Start Claude Code in `~/Github/High-Energy` and give it the start prompt (§11.1).
 
-Everything after that is the orchestrator's.
+Everything after that is the orchestrator's. High-Energy is only the source: P1 creates
+`~/Github/Heimdall` from it, and nothing in High-Energy changes (D31).
 
 **Where the plans are read from:**
 - in P0 and P1, from the High-Energy clone (`docs/framework/`);
-- from P1's end, from `$HEP/HEimdall/docs/framework/`, which is identical at that point.
+- from P1's end, from `~/Github/Heimdall/docs/framework/` (`$HEP/docs/framework/`), which is identical at
+  that point.
 
 The deviations of §7 are committed there, so the next machine gets them.
 
@@ -66,13 +68,14 @@ Everything per machine is in `$HEP/.setup/`, which is never in git:
 | `verify/<phase>/` | the verifier's scratch and its tables | the verifier |
 | `movemap.py`, … | small scripts a step writes (the move map's applier) | the step that needs them |
 
-P0's first action creates `$HEP/.setup/`. `$HEP` is `~/HEP` unless the user's start prompt names
-another prefix.
+P0's first action creates `$HEP/.setup/`, before Heimdall's repo exists (P1 makes it in the same folder,
+and its `.gitignore` leaves `.setup/` out). `$HEP` is `~/Github/Heimdall` unless the user's start prompt
+names another place.
 
 ### 3.1 `state.toml`
 
 ```toml
-# $HEP/.setup/state.toml — HEimdall's setup on this machine. Written only by the orchestrator (02 §3).
+# $HEP/.setup/state.toml — Heimdall's setup on this machine. Written only by the orchestrator (02 §3).
 
 [machine]                       # P0.S1
 host = "Lab_PC"
@@ -119,13 +122,13 @@ step = "P2.S1"
 planned = "apt: libpcre3-dev"
 did = "apt: libpcre2-dev (libpcre3-dev has no candidate on 26.04)"
 allowed_by = "targets/ubuntu.md §allowed adjustments"
-folded = ""                     # the HEimdall commit that put it into the plan files, once done
+folded = ""                     # the Heimdall commit that put it into the plan files, once done
 ```
 
 **Resuming:**
 - Read `state.toml`, then take the first step that is not `done`.
 - Re-run that step's **preconditions**. They decide whether its partial work is reusable: the
-  stack's stamps make P2 resumable on their own (stack/README §1).
+  stack's stamps (`$HEP/stack/.stamps/`) make P2 resumable on their own (`docs/stack/README.md` §1).
 - A `running` step found on resume means the session died. Treat it as `failed`, collect what is
   there (§5.2), and run it again.
 
@@ -155,7 +158,8 @@ The orchestrator repeats, until P6 is verified:
 4. **Tasks:** do them as written, in order. Commands are copied, not paraphrased. Edits are made at
    the file:line the step names; when the line has moved, find it by the quoted text, not by
    guessing.
-5. **Commit** (HEimdall from P1 on; High-Energy's `work` branch in P5): stage by path, never `-a`.
+5. **Commit** (in Heimdall, from P1 on; Top-Quark's first commit is `hep setup --git`'s): stage by
+   path, never `-a`.
    The message is `P<n>.S<m>: <what>`, with the attribution line the session is configured for.
 6. **Verify:** run the step's rows (§5) and record each number in `state.toml`.
 7. **Record** `done`, with a log line. Then go to 1.
@@ -175,7 +179,7 @@ Every step ends with rows of this shape (the phase files use it):
 |---|---|---|
 | R1 | `root-config --version` | `6.40.04` |
 | R2 | `lhapdf list --installed \| wc -l` | `21` |
-| R3 | `hep where --work` (from `~/Github/High-Energy/configs`) | `/home/<user>/Github/High-Energy`, exit 0 |
+| R3 | `hep where --work` (from `~/Github/Top-Quark/configs`) | `/home/<user>/Github/Top-Quark`, exit 0 |
 
 **The rules:**
 - The **command** is exact and runs from a stated directory, with `load_hep` done unless the row
@@ -202,7 +206,7 @@ At a phase's end, the orchestrator starts the verifier with the prompt in §11.2
 name. The verifier:
 - **runs** every row of every step of that phase, exactly as written, from a clean shell
   (`load_hep` only);
-- **writes** to `verify/<phase>/` and to the scratch the rows name (the tests' `build/scratch/`),
+- **writes** to `verify/<phase>/` and to the scratch the rows name (the tests' `forge/scratch/`),
   and nowhere else;
 - **returns** a table: `# · command · expected · got · pass/fail`;
 - **adds** anything it noticed that no row covers, as a separate list;
@@ -223,9 +227,9 @@ gate instance, never the next one of the same kind.
 | `sudo`, or any system package install or removal | P0, P2 (annex: system packages) |
 | a download, with its list and total size (asked once per phase: the stack's tarballs; Geant4's ~4 GB of data) | P2 |
 | a change to the user's account or groups (joining the docker group is the user's own action) | container annex |
-| a deletion outside `$HEP/{src,build}` and `$HEP/.setup/verify` | any |
-| a write to the High-Energy clone, except P0's tag `split/base` and P5's commits on branch `work` | any |
-| a change to the content of `configs/` or `modules/` (P5's diffs C65–C67 and C77, shown first) | P5 |
+| a deletion outside `$HEP/{stash,forge}` and `$HEP/.setup/verify` (D27); and `git clean -x` in Heimdall, never (D33) | any |
+| a write to the High-Energy clone, except P0's tag `split/base` (D31: it is left alone) | any |
+| a change to the content of a work dir's `configs/` or `modules/` that the user made (Top-Quark's starter is `hep setup`'s; High-Energy's are parked, D31) | any |
 | `git push`, publishing a repo or an image anywhere | P5, P6 |
 | a verification row failing twice | any |
 | anything the plan files do not decide, or decide in a way that cannot be done here | any |
@@ -234,7 +238,7 @@ gate instance, never the next one of the same kind.
 
 ```
 GATE P2.S1 — sudo apt-get install: 61 packages, about 1.2 GB (the list: $HEP/.setup/log.md, 09:01).
-Why: the stack's system packages (stack/settings.toml apt_packages; targets/ubuntu.md).
+Why: the stack's system packages (settings.toml's apt_packages; targets/ubuntu.md).
 If no: P2 cannot start; P3 can proceed meanwhile.
 Approve? yes / no / change …
 ```
@@ -254,7 +258,7 @@ Everything else is a gate.
 **Every deviation:**
 - is recorded in `state.toml` (`[[deviation]]`) and in the log;
 - is named in the phase report;
-- is folded back into the plan files in `$HEP/HEimdall/docs/framework/`, by a commit at the end of
+- is folded back into the plan files in `$HEP/docs/framework/`, by a commit at the end of
   its phase, so that the next machine does not hit it.
 
 ---
@@ -263,15 +267,15 @@ Everything else is a gate.
 
 **The rules:**
 - **One stack build at a time.** ROOT's compilers need about 3 GB each (`root_cores`).
-- **One pytest session at a time.** The basetemp `build/scratch/pytest` is wiped per session.
-- **P2 and P3 overlap.** P3 needs only HEimdall's code. While P2 builds, P3 may run the unit tests
+- **One pytest session at a time.** The basetemp `forge/scratch/pytest` is wiped per session.
+- **P2 and P3 overlap.** P3 needs only Heimdall's code. While P2 builds, P3 may run the unit tests
   that need no stack, and must not compile against the stack. The rest of P3's tests wait for P2.
 - **During the build**, the orchestrator keeps CPU-heavy work off the machine: no parallel compiles
   and no slow suite. `cores` in the build was chosen with that in mind (`[choices]`).
 - **The slow suite (P4)** runs as the builder, in the background, after the fast suite passes.
 
 **Cores and RAM:** P0 records them. P2 chooses `cores` and `root_cores` from them, by
-`stack/README`'s rules (one ROOT compiler per 3 GB). The choice is written to `[choices]` before
+`docs/stack/README.md`'s rules (one ROOT compiler per 3 GB). The choice is written to `[choices]` before
 the build starts.
 
 ---
@@ -295,23 +299,25 @@ what is needed. Nothing else is said between reports, except to answer the user.
 
 ## 10. Rules carried over
 
-These come from High-Energy's `bots/BOT.md` and the working agreements, and become HEimdall's
+These come from High-Energy's `bots/BOT.md` and the working agreements, and become Heimdall's
 `CLAUDE.md` in P1.
 
 - **Commits:**
   - stage named paths, never `git commit -a`;
   - one commit per step;
   - never push without the gate.
-- **Tests** write only their scratch (`build/scratch/`). They never read or write a real work dir's
+- **Tests** write only their scratch (`forge/scratch/`). They never read or write a real work dir's
   `configs/`, `modules/` or `results/`. The fixtures and `tests/reference/` are never regenerated.
 - **Text files** are read and written with `encoding="utf-8"` (L17: reading a YODA file resets the
   locale).
 - **Before touching a tool's code or folder**, read its rows in the knowledge ledger
   (`docs/07_Record.md` §3).
-- **The user's files are the user's.** `configs/` and `modules/` change only through P5's listed,
-  shown and approved diffs.
+- **The user's files are the user's.** A work dir's `configs/` and `modules/` change only through
+  listed, shown and approved diffs. High-Energy is not touched at all (D31).
+- **Never `git clean -x` in Heimdall:** it would delete `stack/`, hours of building (D33). `forge/`
+  and `stash/` may be emptied by hand.
 - **The manual** stays generated where it is generated: after a schema `doc`/`notes`, `base.toml`
-  comment or CLI help change, run `make docs` (and `make schema`) in HEimdall.
+  comment or CLI help change, run `make docs` (and `make schema`) in Heimdall.
 - **Plans are not code.** An agent following these files changes code only as a step's tasks say.
   Ideas found on the way go to `bots/intent.md`, not into the code.
 
@@ -322,11 +328,11 @@ These come from High-Energy's `bots/BOT.md` and the working agreements, and beco
 ### 11.1 Start (the user gives it to the first session)
 
 ```
-You are the orchestrator for setting up HEimdall on this machine, following the plan files in
+You are the orchestrator for setting up Heimdall on this machine, following the plan files in
 docs/framework/ of this repository (High-Energy).
 
 Read, in order: docs/framework/README.md, 01_Target.md, 02_Agents.md. Then read
-$HEP/.setup/state.toml if it exists ($HEP is ~/HEP unless I say otherwise here).
+$HEP/.setup/state.toml if it exists ($HEP is ~/Github/Heimdall unless I say otherwise here).
 
 Follow 02_Agents.md exactly: run the next step whose preconditions hold; stop at every gate of
 02 §6 and ask me in its form; record every step in state.toml and log.md; have the verifier check
@@ -340,11 +346,11 @@ Begin with P0 (03_Preflight.md), or resume where the state says.
 ### 11.2 The verifier (the orchestrator starts it at a phase's end)
 
 ```
-You are the verifier for phase <P> of HEimdall's setup. You are read-only: do not edit, build,
+You are the verifier for phase <P> of Heimdall's setup. You are read-only: do not edit, build,
 install, commit or delete anything. You may write only to $HEP/.setup/verify/<P>/ and to the
 scratch locations a row itself names.
 
-Read $HEP/HEimdall/docs/framework/02_Agents.md §5 and the phase file <file>. Open a fresh shell,
+Read $HEP/docs/framework/02_Agents.md §5 and the phase file <file>. Open a fresh shell,
 run `source $HEP/setup.sh`, then run every verification row of every step of <P> exactly as written,
 from the directory it states. Do not read $HEP/.setup/log.md or state.toml to decide a row.
 
@@ -355,8 +361,8 @@ $HEP/.setup/verify/<P>/table.md. Then list anything you noticed that no row cove
 ### 11.3 Resume (any later session)
 
 ```
-Resume HEimdall's setup as its orchestrator: read $HEP/HEimdall/docs/framework/README.md,
-01_Target.md and 02_Agents.md (or docs/framework/ in ~/Github/High-Energy if HEimdall does not
+Resume Heimdall's setup as its orchestrator: read $HEP/docs/framework/README.md,
+01_Target.md and 02_Agents.md (or docs/framework/ in ~/Github/High-Energy if Heimdall does not
 exist yet), then $HEP/.setup/state.toml and the end of log.md, and continue by 02 §4.
 ```
 
@@ -370,9 +376,9 @@ phase is expected to meet.
 | Phase | File | Does | Background | Gates expected |
 |---|---|---|---|---|
 | P0 | `03_Preflight.md` | survey the machine and choose the annex; `$HEP/.setup/`; tag `split/base`; bring back `kept/` | — | sudo, if `git` or `python3-venv` are missing |
-| P1 | `04_Seed.md` | `$HEP/HEimdall` from the move map (01 §7), the fixture work dir, `CLAUDE.md`; the import commit | — | none (writes only `$HEP`) |
-| P2 | `05_Stack.md` | system packages; `stack/build_stack.py` with the annex's overlay; the stack's checks | the build | sudo/apt, downloads |
+| P1 | `04_Seed.md` | `~/Github/Heimdall` from the move map (01 §7), `setup.sh`, `.gitignore`, the fixture work dir, `CLAUDE.md`; the import commit | — | none (writes only `$HEP`) |
+| P2 | `05_Stack.md` | system packages; `build_stack.py` from Heimdall's root, into `stack/ forge/ stash/` and `env/venv/`, with the annex's overlay; the stack's checks | the build | sudo/apt, downloads |
 | P3 | `06_Seam.md` | C1–C64, C72–C76 and C78: the roots, the placeholders, the rename, the build split, the environment, `hep setup`/`hep where`, provenance, the tests, portability | — (overlaps P2) | none |
 | P4 | `07_Framework.md` | `hep build --framework`; the fast suite, then the slow one, against the baselines; `make docs`; the manual rewritten (C69–C71) | the slow suite | none |
-| P5 | `08_Workdirs.md` | High-Energy made lean on `work` (01 §4.3, C65–C67, C77); a toy work dir by `hep setup --project`; independence | — | the user's file diffs; push of `work` |
-| P6 | `09_Verify.md` | the physics gates; the baselines compared; handover (`CLAUDE.md`s, the final report, memory); publishing HEimdall | — | push / publish |
+| P5 | `08_Workdirs.md` | Top-Quark made fresh by `hep setup --project Starter --git` (01 §4.3), built, checked, run; a throwaway second work dir; independence. Appendix: High-Energy's conversion, parked (D31) | — | none (Top-Quark's push is the user's choice, P6) |
+| P6 | `09_Verify.md` | the physics gates; the baselines compared; handover (`CLAUDE.md`s, the final report, memory); publishing Heimdall | — | push / publish |

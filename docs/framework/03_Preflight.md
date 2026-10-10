@@ -28,7 +28,7 @@ Nothing else.
 
 1. Create the state's folders:
    ```bash
-   export HEP=${HEP:-$HOME/HEP}
+   export HEP=${HEP:-$HOME/Github/Heimdall}        # Heimdall's folder: P1 makes the repo in it (D26)
    mkdir -p "$HEP/.setup/kept" "$HEP/.setup/verify"
    ```
 2. Survey, and write `[machine]` into `$HEP/.setup/state.toml` with 02 §3.1's keys, from:
@@ -68,7 +68,7 @@ Nothing else.
 |---|---|---|
 | R1 | `python3 -c "import tomllib; m = tomllib.load(open('$HEP/.setup/state.toml','rb'))['machine']; print(len(m))"` | `12` (the keys of 02 §3.1) |
 | R2 | `python3 -c 'import sys; print(sys.version_info >= (3, 11))'` | `True` |
-| R3 | `df -BG --output=avail "$HEP" \| tail -1 \| tr -dc 0-9` | ≥ `60`: the stack, with everything, used 19.9 GB on the lab PC (`install` 6.0, `src` 5.6, `build` 6.8, `.venv` 1.5), plus room for results |
+| R3 | `df -BG --output=avail "$HEP" \| tail -1 \| tr -dc 0-9` | ≥ `60`: the stack, with everything, used 19.9 GB on the lab PC (its `~/HEP`: `install` 6.0, `src` 5.6, `build` 6.8, `.venv` 1.5; here `stack/`, `stash/`, `forge/`, `env/venv/`), plus room for results |
 | R4 | `test -f docs/framework/targets/$(python3 -c "import tomllib; print(tomllib.load(open('$HEP/.setup/state.toml','rb'))['machine']['annex'])").md && echo ok` | `ok` |
 | R5 | `python3 -c 'import os; print(os.cpu_count())'` and the RAM, against the lab PC before the wipe: 24 logical CPUs, 15 GB | recorded; a smaller machine is not a failure, but P2's `cores` and `root_cores` follow it |
 
@@ -98,7 +98,7 @@ Nothing else.
    `<path>`) into `$HEP/.setup/kept/`, keeping their layout:
    ```
    kept/datasets/  kept/literature/  kept/cross_machine/  kept/reports/       (the user's, D13)
-   kept/src/       (optional: the stack's tarballs, used by 05 S2)
+   kept/stash/     (optional: the stack's tarballs, used by 05 S2)
    kept/memory/    (optional: the agents' notes, used by 09 S2)
    kept/reference/output/…/NNPDF23lo/{cards,config,provenance.json}
    kept/reference/results/…/NNPDF23lo/{zeus.yoda,zeus.yoda.json,zeus.root}   (01 §8; used by 09 S1)

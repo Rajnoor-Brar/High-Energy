@@ -1,7 +1,7 @@
 # Target: macOS (Homebrew)
 
-A Mac, Apple Silicon or Intel. The recipes are `stack/mac/`: a `Brewfile`, the `mac.toml` overlay,
-`build.sh` and `launch.sh`, moved from `docs/stack/mac/` (stack/mac/README.md has every step by
+A Mac, Apple Silicon or Intel. The recipes are `platforms/mac/`: a `Brewfile`, the `mac.toml` overlay,
+`build.sh` and `launch.sh`, moved from `docs/stack/mac/` (platforms/mac/README.md has every step by
 hand). Only what differs from the phase files is here (D11).
 
 ## Prerequisites (P0 S1)
@@ -15,27 +15,27 @@ hand). Only what differs from the phase files is here (D11).
 
 ## System packages (P2 S1)
 
-- `brew bundle --file=$HEP/HEimdall/stack/mac/Brewfile` replaces apt. It includes `pandoc` and
+- `brew bundle --file=$HEP/platforms/mac/Brewfile` replaces apt. It includes `pandoc` and
   `poppler` for decks.
 - No sudo, so no gate, but it is a download: ask with the others.
 - Homebrew's own HEP formulae (`root`, `hepmc3`, `lhapdf`, `pythia`, `yoda`, `rivet`, `fastjet`)
-  must not be installed (stack/mac/README.md §5). A gate if they are.
+  must not be installed (platforms/mac/README.md §5). A gate if they are.
 
 ## Overlay and launching
 
-- **The build:** `bash $HEP/HEimdall/stack/mac/build.sh prefix=$HEP packages=all cores=… root_cores=…`
+- **The build:** `bash $HEP/platforms/mac/build.sh packages=all cores=… root_cores=…`
   stands in for P2 S2's command. It runs `build_stack.py` with `mac.toml`, with GNU make, sed and
   coreutils first on `PATH`.
-- **Launching:** `stack/mac/launch.sh` opens a bash 5 with `$HEP/setup.sh` loaded, or runs one
-  command in it. `setup.sh`'s `setup_extra` (from `mac.toml`) adds `DYLD_LIBRARY_PATH` and the GNU
-  tools.
+- **Launching:** `platforms/mac/launch.sh` opens a bash 5 with `$HEP/setup.sh` loaded, or runs one
+  command in it. `stack/setup_extra.sh`, written from `mac.toml`'s `setup_extra` and sourced by
+  `setup.sh`, adds `DYLD_LIBRARY_PATH` and the GNU tools.
 
 ## What P3 made portable (I15, D11)
 
 | Spot | On macOS |
 |---|---|
 | `runner/events.py` (the watch socket) | a socket file `hep-watch-<pid>.sock` in `${XDG_RUNTIME_DIR:-$TMPDIR}/hep-watch-<uid>/`. This is the one place where runtime state touches the disk (the user's rule of 2026-10-03 cannot hold without abstract sockets) |
-| Paint's `basePath()` (C76) | `$HEP_FW/apps/Paint/base.toml`; `setup.sh` exports `HEP_FW` |
+| Paint's `basePath()` (C76) | `$HEP/src/Apps/Paint/base.toml`; `setup.sh` exports `HEP` |
 | `bin/hep`'s core count | `os.cpu_count()` |
 | the Makefile's `sed -i` | a temporary file and `mv` |
 
@@ -61,7 +61,7 @@ Everything else is a gate, and above all any new line in `mac.toml`.
 - **Not yet run on a Mac.** The recipes follow the Linux build, which the lab PC proved. Their dry
   run is tested; the real build is not. Expect gates.
 - **macOS drops `DYLD_LIBRARY_PATH`** whenever one of its own programs starts (System Integrity
-  Protection). The stack does not rely on it: absolute install names and rpaths (stack/mac/README.md
+  Protection). The stack does not rely on it: absolute install names and rpaths (platforms/mac/README.md
   §4).
 - **The test suite on macOS:** some integration tests use Linux tools (`/proc`). A test that cannot
   run there must skip with that reason, never fail silently. P3 S3 lists them when the target is

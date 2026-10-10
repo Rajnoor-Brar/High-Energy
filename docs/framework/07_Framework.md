@@ -1,6 +1,6 @@
 # 07 — P4: The framework built, tested and documented
 
-**Goal.** HEimdall, after the seam, passes everything it passed in High-Energy:
+**Goal.** Heimdall, after the seam, passes everything it passed in High-Energy:
 - the C++ tests and the fast suite (S1);
 - the slow suite with its physics gates (S2);
 - a manual that describes the split, its generated blocks current (S3).
@@ -9,7 +9,7 @@
 - 07 §8 of the manual (the gates' numbers), copied here as rows;
 - 01 §6.6 (C69–C71).
 
-**Writes:** HEimdall (`build/`, the manual, the record), one commit per step.
+**Writes:** Heimdall (`framework/Apps/`, `forge/`, the manual, the record), one commit per step.
 
 **Gates:**
 - a gate row that differs from its number twice (S2);
@@ -22,12 +22,12 @@
 **Preconditions:**
 - P3 is verified.
 - `source $HEP/setup.sh`.
-- `git -C $HEP/HEimdall status --porcelain` is empty.
+- `git -C $HEP status --porcelain` is empty.
 
 **Tasks:**
 
 1. `hep build --framework --tests`: the apps, Herwig's repository and the C++ tests.
-2. `make -C $HEP/HEimdall test`: runs the C++ tests, then `pytest -m "not slow"`. Collect the
+2. `make -C $HEP test`: runs the C++ tests, then `pytest -m "not slow"`. Collect the
    summary line and every skip with its reason (`-rs`).
 3. Compare with P3 S3 R1. The counts must match: S1 adds no test.
 
@@ -35,13 +35,13 @@
 
 | # | Command | Expected |
 |---|---|---|
-| R1 | `ls $HEP/HEimdall/build/tests/*.exe \| wc -l` | `3` (test_kit, test_module_kit, test_status) |
-| R2 | `for t in $HEP/HEimdall/build/tests/*.exe; do $t >/dev/null \|\| echo FAIL $t; done \| wc -l` | `0` |
-| R3 | `cd $HEP/HEimdall && python3 -m pytest -q -m "not slow" -rs -p no:cacheprovider 2>&1 \| tail -1` | `N passed[, K skipped]`, 0 failed, 0 errors; N equal to P3 S3 R1's |
-| R4 | `cd $HEP/HEimdall && make docs && make schema && git status --porcelain \| wc -l` | `0` (the generated blocks and the editor schema were current) |
+| R1 | `ls $HEP/forge/tests/*.exe \| wc -l` | `3` (test_kit, test_module_kit, test_status) |
+| R2 | `for t in $HEP/forge/tests/*.exe; do $t >/dev/null \|\| echo FAIL $t; done \| wc -l` | `0` |
+| R3 | `cd $HEP && python3 -m pytest -q -m "not slow" -rs -p no:cacheprovider 2>&1 \| tail -1` | `N passed[, K skipped]`, 0 failed, 0 errors; N equal to P3 S3 R1's |
+| R4 | `cd $HEP && make docs && make schema && git status --porcelain \| wc -l` | `0` (the generated blocks and the editor schema were current) |
 
 **On failure:** a test that passed in P3 and fails now means the build changed something. Bisect by
-`git -C $HEP/HEimdall log`. No test is ever skipped to pass the row.
+`git -C $HEP log`. No test is ever skipped to pass the row.
 
 ---
 
@@ -51,7 +51,7 @@
 
 **Tasks:**
 
-1. As the builder: `cd $HEP/HEimdall && nohup make test-slow > $HEP/.setup/slow.log 2>&1 &`. Watch
+1. As the builder: `cd $HEP && nohup make test-slow > $HEP/.setup/slow.log 2>&1 &`. Watch
    for its summary.
 2. Read the gates' outcomes into the rows below. They are the manual's 07 §8, measured on the lab PC
    by these same tests.
@@ -94,17 +94,18 @@ floating point in the last bits, and with it the events.
      project, now inside a work dir, `hep setup --project`);
    - 05 §2 (the environment, `hep build` and `make`, the variables table of 01 §5.1; the new
      commands `setup` and `where`);
-   - 06 §1 (layout: the three places), §2 (components, re-rooted), §14 (where files go: the work
-     dir), §15 (the build: `Makefile` and `make/work.mk`, per-tree flags), §16 (tool folders under
-     `tools/`), §25 (tests: the fixture work dir).
+   - 06 §1 (layout: Heimdall and work dirs), §2 (components, re-rooted), §14 (where files go: the
+     work dir; Heimdall's `stack/ forge/ stash/`), §15 (the build: `Makefile` and
+     `framework/work.mk`, per-tree flags), §16 (tool folders under `framework/tools/`), §25 (tests:
+     the fixture work dir, `forge/scratch/`).
 
-   Apply the renames of 06's table everywhere else in the pages, including `docs/framework/`
-   (its links to `../stack/…` become `../../stack/…`) and `docs/reporter/`.
+   Apply the renames of 06's table everywhere else in the pages, including `docs/framework/` (its
+   links to `../stack/mac/…` become `../../platforms/mac/…`), `docs/stack/` and `docs/reporter/`.
 2. **The record** (C70). Add V-rows from V105, each citing its D-rows here:
 
    | V-row | Covers |
    |---|---|
-   | V105 | HEimdall in `$HEP` (D1, D2, D10, D17) |
+   | V105 | Heimdall in `$HEP` (D1, D2, D10, D17) |
    | V106 | work dirs, `hep.toml` and `hep setup` (D3, D4, D14, D18, D25) |
    | V107 | names and placeholders (D6, D7, D19; K15 closed) |
    | V108 | the build split and per-tree flags (D5, D21) |
@@ -116,22 +117,22 @@ floating point in the last bits, and with it the events.
 
    Add an L-row for anything P2–P4 learned the hard way (a package that needed a flag on the new
    OS, R2's outcome).
-3. **The index** (C71): `docs/README.md` lists `stack/`, `docs/reporter/` and `docs/framework/`,
-   and its reading paths start at HEimdall's `README.md`.
+3. **The index** (C71): `docs/README.md` lists `docs/stack/`, `docs/reporter/` and `docs/framework/`,
+   and its reading paths start at Heimdall's `README.md`.
 4. `make docs && make schema`, then commit: `P4.S3: the manual and the record for the split
    (V105–V113)`.
 5. Write the link checker the rows use, `$HEP/.setup/links.py`. Code is stripped first, as
    `test_docs.prose()` does, because a deck's `![](block)` example is not a link. It was tested on
-   High-Energy's `docs/` at 9cb907a (0 broken):
+   High-Energy's `docs/` at 9cb907a and on `docs/framework/` at 2c (0 broken):
    ```python
    #!/usr/bin/env python3
-   """links.py ROOT: every relative link in every .md under ROOT (build/ and .git/ left out) that does not resolve."""
+   """links.py ROOT: every relative link in every .md under ROOT that does not resolve (ignored trees left out)."""
    import re, sys
    from pathlib import Path
    root = Path(sys.argv[1])
    bad = []
    for page in sorted(root.rglob("*.md")):
-       if {"build", ".git"} & set(page.relative_to(root).parts):
+       if {"build", ".git", "stack", "forge", "stash", "venv", ".setup", "Apps"} & set(page.relative_to(root).parts):
            continue
        text = page.read_text(encoding="utf-8")
        prose = re.sub(r"`[^`\n]*`", "", re.sub(r"^[ \t]*```.*?^[ \t]*```", "", text, flags=re.M | re.S))
@@ -146,8 +147,8 @@ floating point in the last bits, and with it the events.
 
 | # | Command | Expected |
 |---|---|---|
-| R1 | `cd $HEP/HEimdall && grep -rn 'utils/Env\|utils/App\|utils/Status\|utils/Module\|HEKIT_' docs/0[1-6]*.md docs/README.md \| wc -l` | `0` (07, the record, keeps its history as written) |
-| R2 | `cd $HEP/HEimdall && python3 -m pytest -q tests/runner/test_docs.py -p no:cacheprovider 2>&1 \| tail -1` | `N passed`, 0 failed |
-| R3 | `python3 $HEP/.setup/links.py $HEP/HEimdall \| head -1` | `0`: every relative link in every page resolves, including `stack/`, `docs/reporter/` and `docs/framework/` |
-| R4 | `grep -c '^| \*\*V1[01][0-9]\*\*' $HEP/HEimdall/docs/07_Record.md` | ≥ `9` (V105–V113) |
-| R5 | `git -C $HEP/HEimdall status --porcelain \| wc -l` | `0` |
+| R1 | `cd $HEP && grep -rn 'utils/Env\|utils/App\|utils/Status\|utils/Module\|HEKIT_' docs/0[1-6]*.md docs/README.md \| wc -l` | `0` (07, the record, keeps its history as written) |
+| R2 | `cd $HEP && python3 -m pytest -q tests/runner/test_docs.py -p no:cacheprovider 2>&1 \| tail -1` | `N passed`, 0 failed |
+| R3 | `python3 $HEP/.setup/links.py $HEP \| head -1` | `0`: every relative link in every page resolves, including `docs/stack/`, `platforms/`, `docs/reporter/` and `docs/framework/` |
+| R4 | `grep -c '^| \*\*V1[01][0-9]\*\*' $HEP/docs/07_Record.md` | ≥ `9` (V105–V113) |
+| R5 | `git -C $HEP status --porcelain \| wc -l` | `0` |

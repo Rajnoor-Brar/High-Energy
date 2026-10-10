@@ -11,14 +11,14 @@ differs from the phase files is here (D11).
 
 ## System packages (P2 S1)
 
-`stack/settings.toml`'s `apt_packages`: 51 at 9cb907a, grouped there by what needs each one. That
+`settings.toml`'s `apt_packages`: 51 at 9cb907a, grouped there by what needs each one. That
 includes `pandoc`, `poppler-utils` and `texlive-latex-recommended` for decks (V102–V104). They are
 installed once, at P2 S1's gate, and the build then runs with `system=false`.
 
 ## Overlay and launching
 
 - **Overlay:** none. `packages.toml` and `settings.toml` are the lab PC's.
-- **Launching:** `source ~/HEP/setup.sh`, or the alias `load_hep` (09 S2 asks to add it).
+- **Launching:** `source ~/Github/Heimdall/setup.sh`, or the alias `load_hep` (09 S2 asks to add it).
 
 ## Allowed adjustments (02 §7)
 

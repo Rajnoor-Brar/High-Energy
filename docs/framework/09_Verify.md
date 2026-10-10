@@ -13,8 +13,12 @@
 
 **Reads:** 01 §8 (what was kept), P4 S2's rows.
 
-**Writes:** High-Energy's `results/` and `output/` (the reference point only), HEimdall's
-`bots/current_plan.md`, and `$HEP/.setup/report.md`.
+**Writes:**
+- a scratch work dir for the reference point, `$HEP/.setup/verify/P6/ref`;
+- Heimdall's `bots/current_plan.md`;
+- `$HEP/.setup/report.md`.
+
+High-Energy is only read (D31).
 
 **Gates:**
 - a reference setup that differs from the kept one (S1);
@@ -25,7 +29,7 @@
 ## S1: the physics
 
 **Preconditions:**
-- P5 S1 is `done`.
+- P5 is verified.
 - P4 S2 is `done`, with its R2 decided if it failed.
 - The machine is otherwise idle: the reference uses 12 threads plus 10 Rivets.
 
@@ -44,16 +48,22 @@
 
 **Tasks:**
 
-1. **Plan it** with its threads and seed pinned. `InProcZeus.toml` asked for 14 threads by
-   2026-10-10. This is a check run, so it goes to scratch roots, not High-Energy's `results/`:
+1. **A scratch work dir with the reference's project.** High-Energy is left alone (D31), so the
+   point runs in a work dir of its own, filled from High-Energy at `split/base`. `hep migrate`
+   runs on the copy only:
    ```bash
-   cd ~/Github/High-Energy
-   R=$HEP/.setup/verify/P6 && mkdir -p $R && touch $R/stamp
-   export HEP_OUTPUT=$R/output HEP_RESULTS=$R/results
+   R=$HEP/.setup/verify/P6/ref && hep setup $R
+   git -C ~/Github/High-Energy archive split/base configs/PhotoProduction modules/PhotoProduction | tar -x -C $R
+   cp $HEP/.setup/kept/datasets/zeus_eic.yoda $R/datasets/
+   cd $R && hep migrate --apply && hep build && touch $R/stamp
+   ```
+2. **Plan it** with its threads and seed pinned. By 2026-10-10 `InProcZeus.toml` asked for 14
+   threads, not the reference's 12:
+   ```bash
    SETS=(--set 'run.cfgs.default.threads=12' --set 'run.cfgs.default.seed_type="manual"' --set 'run.cfgs.default.manual_seed=246223968')
    hep run PhotoProduction/InProcZeus default --points NNPDF23lo "${SETS[@]}" --plan
    ```
-2. **The setup is the same.** Diff the point card and the program's config against the kept ones.
+   **The setup is the same:** diff the point card and the program's config against the kept ones.
    Comment lines are skipped, and the config's paths differ by place:
    ```bash
    K=$HEP/.setup/kept/reference/output/PhotoProduction/inproc_zeus/01_default/NNPDF23lo
@@ -61,10 +71,10 @@
    diff <(grep -v '^ *!' $K/cards/pythia.point.cmnd) <(grep -v '^ *!' $N/cards/pythia.point.cmnd)
    diff <(grep -v '/' $K/config/inproc.toml) <(grep -v '/' $N/config/inproc.toml)
    ```
-   (The plan writes the cards: if `--plan` does not, run task 3 first and diff after.)
-   - **A difference is a gate.** The configs changed after the reference ran, so the comparison
-     below would be of two setups. Show the diff, and the user decides: compare anyway (the rows
-     become informative only), or pin the changed keys too.
+   (The plan writes the cards. If `--plan` does not, run task 3 first and diff after.)
+   - **A difference is a gate.** The configs at `split/base` differ from the ones the reference ran
+     with, so the comparison below would be of two setups. Show the diff, and the user decides:
+     compare anyway (the rows become informative only), or pin the changed keys too.
 3. **Run it:** the same command without `--plan`, with `--plain`. It took about 90 s on the lab PC.
 4. **Compare.** Write `$HEP/.setup/compare_ref.py`, tested on the lab PC (the kept files against
    themselves: all `same`, exit 0):
@@ -123,7 +133,7 @@
 | R1 | task 2's two `diff`s, `\| wc -l` | `0` and `0` |
 | R2 | task 4's `compare_ref.py …; echo "exit $?"` | four lines, each `same` or `ok`; `exit 0` |
 | R3 | `python3 -c "import json; d=json.load(open('$(ls -d $R/results/PhotoProduction/inproc_zeus/*default/NNPDF23lo)/zeus.yoda.json')); print(d['sigma_from'], d['stopped'])"` | `generator False` |
-| R4 | `find ~/Github/High-Energy/results ~/Github/High-Energy/output -newer $HEP/.setup/verify/P6/stamp \| wc -l` | `0` (the check stayed in scratch) |
+| R4 | `git -C ~/Github/High-Energy status --porcelain \| wc -l; find ~/Github/High-Energy -newer $R/stamp -not -path '*/.git/*' \| wc -l` | `0` and `0` (High-Energy was only read) |
 | R5 | P4 S2 R1–R10 in `state.toml` | all `done`, with R2 either byte-identical or decided by the user (a V-row) |
 
 **On failure:** R2's `FAIL` on σ but not on the entries, or the other way round, is the more
@@ -137,38 +147,41 @@ informative case. Keep both outputs, and report `sigma_from` and the threads tha
 
 **Tasks:**
 
-1. **HEimdall's `bots/current_plan.md`:**
+1. **Heimdall's `bots/current_plan.md`:**
    - the split is done, with the date, both repos' revisions, and the numbers of S1 and P4;
    - **what is still open**, carried from High-Energy's plan (`docs/audit_2/01_Health.md` R0–R3,
-     the items "Later", `bots/intent.md`), with `configs/` matters now pointing at High-Energy.
+     the items "Later", `bots/intent.md`), and High-Energy's parked conversion (08's appendix).
 
    Commit.
 2. **The report**, `$HEP/.setup/report.md`, one page:
    - the phases with their times;
    - every gate and its answer;
    - every deviation and where it was folded in;
-   - the disk used (`du -sh $HEP/install $HEP/.venv $HEP/HEimdall`);
+   - the disk used (`du -sh $HEP/stack $HEP/env/venv $HEP/forge $HEP/stash $HEP/framework/Apps`);
    - P4's test counts;
    - S1's table;
    - **"how to work now"** in five lines:
      ```bash
-     source ~/HEP/setup.sh                 # load_hep
-     cd ~/Github/High-Energy && hep run PhotoProduction/eic --plan
+     source ~/Github/Heimdall/setup.sh     # load_hep
+     cd ~/Github/Top-Quark && hep run Starter/starter --plan
      hep setup ~/Github/<new> --project <P> --git     # another work dir
-     hep build --framework                 # after changing HEimdall's apps (identities change, 06 §27)
+     hep build --framework                 # after changing Heimdall's apps (identities change, 06 §27)
      hep where                             # which framework and work dir this shell sees
      ```
-3. **Clean the stack's build trees.** `$HEP/build/` (6.8 GB on the lab PC) and the unpacked folders
-   in `$HEP/src/` go. The tarballs in `$HEP/src/` stay. This is inside `$HEP/{src,build}`, so 02 §6
-   needs no gate; report the space freed.
+3. **Clean the stack's build trees.** The stack's trees in `$HEP/forge/<pkg>/` (6.8 GB on the lab
+   PC) and the unpacked folders in `$HEP/stash/` go. The archives in `$HEP/stash/`, and
+   `forge/make/`, `forge/tests/`, `forge/scratch/` stay. This is inside `$HEP/{stash,forge}`, so 02 §6
+   needs no gate; report the space freed. Never `git clean -x` (D33).
 4. **Gates, asked together, each answered on its own:**
-   - **publish HEimdall:** a new private GitHub repository `Rajnoor-Brar/HEimdall` (the user creates
+   - **publish Heimdall:** a new private GitHub repository `Rajnoor-Brar/Heimdall` (the user creates
      it, or approves `gh repo create --private`), then `git push -u origin main`;
-   - **push High-Energy's `work`** branch, if P5 did not;
-   - **`load_hep`:** add `alias load_hep='source ~/HEP/setup.sh'` to `~/.bashrc`;
+   - **Top-Quark:** keep it local, or give it a remote (the user's choice; it is a test);
+   - **`load_hep`:** add `alias load_hep='source ~/Github/Heimdall/setup.sh'` to `~/.bashrc`;
    - **the agents' memory:** copy `$HEP/.setup/kept/memory/` (if it was kept, 01 §8) back to
      `~/.claude/projects/-home-<user>-Github-High-Energy/memory/`, and update its lab-PC entries to
-     the new install (the stack's path, HEimdall, work dirs).
+     the new install (Heimdall at `~/Github/Heimdall`, Top-Quark, High-Energy left alone).
+   - **the user's kept folders** (`datasets/ literature/ cross_machine/ reports/` in
+     `$HEP/.setup/kept/`): where they go is the user's (D31).
 
 **Verification:**
 
@@ -176,7 +189,8 @@ informative case. Keep both outputs, and report `sigma_from` and the threads tha
 |---|---|---|
 | R1 | `python3 -c "import tomllib; s=tomllib.load(open('$HEP/.setup/state.toml','rb'))['step']; print(sum(v['status']!='done' for v in s.values()))"` | `0` |
 | R2 | `python3 -c "import tomllib; d=tomllib.load(open('$HEP/.setup/state.toml','rb')).get('deviation',[]); print(sum(not x['folded'] for x in d))"` | `0` (every deviation folded into the plans) |
-| R3 | `git -C $HEP/HEimdall status --porcelain \| wc -l; git -C ~/Github/High-Energy status --porcelain \| wc -l` | `0` and `0` |
+| R3 | `git -C $HEP status --porcelain \| wc -l; git -C ~/Github/High-Energy status --porcelain \| wc -l` | `0` and `0` |
 | R4 | `test -s $HEP/.setup/report.md && grep -c '^## ' $HEP/.setup/report.md` | ≥ `5` |
-| R5 | `ls -d $HEP/build 2>/dev/null \| wc -l` | `0` |
-| R6 | `bash -lc 'source ~/HEP/setup.sh >/dev/null; cd ~/Github/High-Energy && hep where'` | three lines: `hep=…/HEP`, `fw=…/HEP/HEimdall <revision>`, `work=…/Github/High-Energy` |
+| R5 | `ls -d $HEP/forge/root $HEP/forge/geant4 2>/dev/null \| wc -l` | `0` (the stack's trees are gone) |
+| R6 | `bash -lc 'source ~/Github/Heimdall/setup.sh >/dev/null; cd ~/Github/Top-Quark && hep where'` | two lines: `hep=…/Github/Heimdall <revision>`, `work=…/Github/Top-Quark` |
+| R7 | `ls $HEP/stack/.stamps \| wc -l` | `18` (the cleaning left the installs) |

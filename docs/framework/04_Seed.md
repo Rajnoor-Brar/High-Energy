@@ -1,7 +1,7 @@
-# 04 — P1: Seed HEimdall
+# 04 — P1: Seed Heimdall
 
-**Goal.** Create `$HEP/HEimdall` from High-Energy at `split/base`. The step is mechanical:
-- every path the move map (01 §7) sends to HEimdall is copied there, from git, not from the
+**Goal.** Create Heimdall, `~/Github/Heimdall` (`$HEP`), from High-Energy at `split/base`. The step is mechanical:
+- every path the move map (01 §7) sends to Heimdall is copied there, from git, not from the
   working tree;
 - the files 01 §3 calls new are added;
 - the fixture work dir is assembled;
@@ -11,7 +11,7 @@ No code changes here, so nothing runs yet. The seam is P3's.
 
 **Reads:** 01 §3, §5.7, §7; `$HEP/.setup/kept/`.
 
-**Writes:** `$HEP/HEimdall/` and `$HEP/.setup/movemap.py`.
+**Writes:** `$HEP/` and `$HEP/.setup/movemap.py`.
 
 **Gates:** none.
 
@@ -22,12 +22,12 @@ No code changes here, so nothing runs yet. The seam is P3's.
 **Preconditions:**
 - P0 is verified.
 - `git -C ~/Github/High-Energy rev-parse split/base` gives `[source] revision`.
-- `$HEP/HEimdall` does not exist.
+- `$HEP` holds only `.setup/` (P0 made it).
 
 **Tasks:**
 
 1. **Write the applier.** Copy this into `$HEP/.setup/movemap.py` exactly. It was tested against
-   `9cb907a` (204 fw, 1363 work, 0 unmatched; 204 files written, with the six executables).
+   `81253a4` with 2c's rules (215 fw, 1363 work, 0 unmatched; 215 files written, with the six executables).
 
    ```python
    #!/usr/bin/env python3
@@ -117,13 +117,13 @@ No code changes here, so nothing runs yet. The seam is P3's.
 2. **Check, then apply:**
    ```bash
    python3 $HEP/.setup/movemap.py --src ~/Github/High-Energy --check          # → fw N, work M, unmatched 0
-   python3 $HEP/.setup/movemap.py --src ~/Github/High-Energy --dst $HEP/HEimdall
+   python3 $HEP/.setup/movemap.py --src ~/Github/High-Energy --dst $HEP
    ```
    Record N and M in `[step."P1.S1"] rows`. An unmatched path is a gate: a new top-level folder or
    file landed after 2b. Propose a rule for it in 01 §7, and do not guess.
 3. **Make the repo:**
    ```bash
-   git -C $HEP/HEimdall init -b main
+   git -C $HEP init -b main
    ```
    Nothing is committed yet; S2 makes the one import commit.
 
@@ -132,14 +132,16 @@ No code changes here, so nothing runs yet. The seam is P3's.
 | # | Command | Expected |
 |---|---|---|
 | R1 | `python3 $HEP/.setup/movemap.py --src ~/Github/High-Energy --check 2>&1 \| tail -1` | `fw N, work M, unmatched 0`, where N + M = `git -C ~/Github/High-Energy ls-files \| wc -l` at `split/base` (204 + 1363 = 1567 at 9cb907a) |
-| R2 | `find $HEP/HEimdall -type f -not -path '*/.git/*' \| wc -l` | N |
-| R3 | `cd $HEP/HEimdall && LC_ALL=C ls -1F \| tr '\n' ' '` | `CLAUDE.md Makefile apps/ bin/ bots/ docs/ env/ kit/ pytest.ini runner/ schema/ stack/ tests/ tools/` |
-| R4 | `cd $HEP/HEimdall && find . -type f -perm -u+x -not -path './.git/*' \| sort \| tr '\n' ' '` | `./bin/hep ./bin/run ./env/flags.sh ./stack/build_stack.py ./stack/mac/build.sh ./stack/mac/launch.sh` |
-| R5 | `diff <(git -C ~/Github/High-Energy show split/base:utils/Env/runner/tools.py) $HEP/HEimdall/runner/tools.py && echo same` | `same` (a file from git, not the worktree) |
-| R6 | `ls $HEP/HEimdall/tools \| wc -l` | `16` (the plugin folders, 01 §3) |
+| R2 | `find $HEP -type f -not -path '*/.git/*' -not -path "$HEP/.setup/*" \| wc -l` | N |
+| R3 | `cd $HEP && LC_ALL=C ls -1F \| tr '
+' ' '` | `CLAUDE.md Makefile bots/ build_stack.py* docs/ env/ framework/ packages.toml patches/ platforms/ pytest.ini settings.toml src/ tests/` (`.setup/` is hidden) |
+| R4 | `cd $HEP && find . -type f -perm -u+x -not -path './.git/*' -not -path './.setup/*' \| sort \| tr '
+' ' '` | `./build_stack.py ./env/flags.sh ./framework/bin/hep ./framework/bin/run ./platforms/mac/build.sh ./platforms/mac/launch.sh` |
+| R5 | `diff <(git -C ~/Github/High-Energy show split/base:utils/Env/runner/tools.py) $HEP/runner/tools.py && echo same` | `same` (a file from git, not the worktree) |
+| R6 | `ls $HEP/framework/tools \| wc -l` | `16` (the plugin folders, 01 §2) |
 
-**On failure:** R2 ≠ N means a write failed half-way. Delete `$HEP/HEimdall` (made in this step,
-so no gate is needed) and run the step again.
+**On failure:** R2 ≠ N means a write failed half-way. Delete everything in `$HEP` except `.setup/`
+(made in this step, so no gate is needed) and run the step again.
 
 ---
 
@@ -149,29 +151,37 @@ so no gate is needed) and run the step again.
 
 **Tasks:**
 
-1. **`.gitignore`**:
+1. **`.gitignore`** (D26, D27):
    ```
-   build/
+   stack/
+   forge/
+   stash/
+   env/venv/
+   framework/Apps/
+   .setup/
    __pycache__/
    .pytest_cache/
    ```
-2. **`README.md`**, about 40 lines:
-   - what HEimdall is (the framework of 01 §1, in two sentences);
-   - where it lives (`$HEP/HEimdall`) and how it is installed (`stack/README.md`, then `source
-     $HEP/setup.sh`);
-   - the folders (01 §3's table, shortened);
+2. **`setup.sh`**, exactly 01 §5.8's text (tracked; it finds its own folder).
+3. **`README.md`**, about 40 lines:
+   - what Heimdall is (01 §1, in two sentences);
+   - where it lives (`~/Github/Heimdall`) and how a machine gets it: clone, `python3 build_stack.py`
+     (`docs/stack/README.md`), then `source setup.sh`;
+   - the folders (01 §2's tree, shortened);
+   - **never `git clean -x` here**: it deletes `stack/` (D33); and the editor exclusions;
    - "make a work dir: `hep setup <dir>`";
    - the manual (`docs/README.md`);
    - that its history before the seeding is High-Energy's (`split/base`, with the revision).
-3. **`CLAUDE.md`** comes from High-Energy's `bots/BOT.md`, which the map put there. Rewrite only:
-   - **the directory table:** HEimdall's folders (01 §3) instead of the repository's;
-   - **paths** in the text: `utils/Env/runner/` → `runner/`, `utils/Env/<tool>/` → `tools/<tool>/`,
-     `utils/*.hh` → `kit/`;
-   - **the testing rules:** tests write only `build/scratch/` (01 §5.7). The rule "never write into
-     `results/` or `configs/`" becomes "never name a real work dir in a test".
+4. **`CLAUDE.md`** comes from High-Energy's `bots/BOT.md`, which the map put there. Rewrite only:
+   - **the directory table:** Heimdall's folders (01 §2) instead of the repository's;
+   - **paths** in the text, by 06's renames: `utils/Env/runner/` → `framework/runner/`,
+     `utils/Env/<tool>/` → `framework/tools/<tool>/`, `utils/*.hh` → `src/`;
+   - **the testing rules:** tests write only `forge/scratch/` (01 §5.7). The rule "never write into
+     `results/` or `configs/`" becomes "never name a real work dir in a test";
+   - **one new rule:** never `git clean -x` in Heimdall (D33).
 
    Every rule BOT.md has stays a rule.
-4. **The fixture work dir** (01 §5.7). The map already put `configs/` and `README.md` there.
+5. **The fixture work dir** (01 §5.7). The map already put `configs/` and `README.md` there.
    - Write `tests/fixtures/work/hep.toml`:
      ```toml
      # hep.toml — the tests' work dir (01_Target.md §5.7). Frozen: changed only with the test that needs it.
@@ -183,36 +193,37 @@ so no gate is needed) and run the step again.
      ```
    - Copy the modules from git:
      ```bash
-     git -C ~/Github/High-Energy archive split/base modules | tar -x -C $HEP/HEimdall/tests/fixtures/work
+     git -C ~/Github/High-Energy archive split/base modules | tar -x -C $HEP/tests/fixtures/work
      ```
    - Copy the dataset from what was kept:
      ```bash
-     mkdir -p $HEP/HEimdall/tests/fixtures/work/datasets
-     cp $HEP/.setup/kept/datasets/zeus_eic.yoda $HEP/HEimdall/tests/fixtures/work/datasets/
+     mkdir -p $HEP/tests/fixtures/work/datasets
+     cp $HEP/.setup/kept/datasets/zeus_eic.yoda $HEP/tests/fixtures/work/datasets/
      ```
    - Add one paragraph to `tests/fixtures/work/README.md`: the modules are frozen copies of
      High-Energy's `modules/` at `split/base`; the dataset is `datasets/zeus_eic.yoda` (sha256
      `625723465b10ea69…`); and the old paragraphs' `HEKIT_CONFIGS` becomes `HEP_WORK` (01 §5.7).
-5. **The import commit.** Stage by path (`git add .` is allowed here only, because everything in
-   the tree is this step's own), then:
+6. **The import commit.** Stage by path (`git add .` is allowed here only, because everything in
+   the tree is this step's own and `.setup/` is ignored), then:
    ```bash
-   git -C $HEP/HEimdall add .
-   git -C $HEP/HEimdall commit -m "P1: HEimdall seeded from High-Energy split/base ($(git -C ~/Github/High-Energy rev-parse split/base))" -m "<the attribution line>"
+   git -C $HEP add .
+   git -C $HEP commit -m "P1: Heimdall seeded from High-Energy split/base ($(git -C ~/Github/High-Energy rev-parse split/base))" -m "<the attribution line>"
    ```
-6. **From now on, read the plans from `$HEP/HEimdall/docs/framework/`** (02 §1).
+7. **From now on, read the plans from `$HEP/docs/framework/`** (02 §1).
 
 **Verification:**
 
 | # | Command | Expected |
 |---|---|---|
-| R1 | `git -C $HEP/HEimdall rev-list --count HEAD` | `1` |
-| R2 | `git -C $HEP/HEimdall log -1 --format=%s \| grep -c "$(git -C ~/Github/High-Energy rev-parse split/base)"` | `1` |
-| R3 | `git -C $HEP/HEimdall status --porcelain \| wc -l` | `0` |
-| R4 | `find $HEP/HEimdall/tests/fixtures/work/modules -type f \| wc -l` | the number of `modules/` paths at `split/base` (`18` at 9cb907a) |
-| R5 | `python3 -c "import tomllib; print(tomllib.load(open('$HEP/HEimdall/tests/fixtures/work/hep.toml','rb'))['work']['name'])"` | `fixture` |
-| R6 | `git -C $HEP/HEimdall ls-files \| wc -l` | N + 3 (`.gitignore`, `README.md`, `hep.toml`) + R4 + 1 (the dataset) |
-| R7 | `grep -c 'utils/Env' $HEP/HEimdall/CLAUDE.md` | `0` |
-| R8 | `diff -r ~/Github/High-Energy/docs/framework $HEP/HEimdall/docs/framework && echo same` | `same` (if the clone is still at `split/base`) |
+| R1 | `git -C $HEP rev-list --count HEAD` | `1` |
+| R2 | `git -C $HEP log -1 --format=%s \| grep -c "$(git -C ~/Github/High-Energy rev-parse split/base)"` | `1` |
+| R3 | `git -C $HEP status --porcelain \| wc -l` | `0` |
+| R4 | `find $HEP/tests/fixtures/work/modules -type f \| wc -l` | the number of `modules/` paths at `split/base` (`18` at 9cb907a) |
+| R5 | `python3 -c "import tomllib; print(tomllib.load(open('$HEP/tests/fixtures/work/hep.toml','rb'))['work']['name'])"` | `fixture` |
+| R6 | `git -C $HEP ls-files \| wc -l` | N + 4 (`.gitignore`, `setup.sh`, `README.md`, `hep.toml`) + R4 + 1 (the dataset) |
+| R7 | `grep -c 'utils/Env' $HEP/CLAUDE.md` | `0` |
+| R8 | `diff -r ~/Github/High-Energy/docs/framework $HEP/docs/framework && echo same` | `same` (if the clone is still at `split/base`) |
+| R9 | `git -C $HEP check-ignore -q stack forge stash env/venv framework/Apps .setup && echo ok` | `ok` |
 
 **On failure:**
 - R6 off by a few: list the difference with `git ls-files` against the map's `--list fw` and the
