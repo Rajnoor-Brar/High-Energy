@@ -32,6 +32,14 @@ after a clean reinstall** (D16). **High-Energy becomes the lean work repo** (bra
   - the lab PC's baselines, recorded before the wipe.
 - Round 2 writes only `docs/framework/` and this file.
 
+**docs/reporter/** (planned 2026-10-08, reviewed 2026-10-10; **being executed**, on the user's order of 2026-10-10): decks for talks and sharing, `hep deck`.
+- `reports/<name>/` holds the user's `deck.md` (the talk, never rewritten) and `deck.toml` (plot sources: result folders × pages).
+- A build copies the pages and draws a composite per block: a PDF by pdflatex, its PNG rendered by pdftoppm (`figures/layout.py`, shared with `sheet`).
+- pandoc then gives `deck.pdf` (Beamer), `deck.pptx`, `deck.html` (dzslides, offline) and `overleaf.zip`; the viewer gives `index.html`.
+- [00_Plan.md](../docs/reporter/00_Plan.md) has D-R1–D-R13, the structure and the review (§8, R1–R7); phases D1 layout, D2 collect, D3 build, D4 stack and docs. Progress is in each phase file's Log.
+- pandoc 3.1.3 is installed on the lab PC (the user, 2026-10-10).
+- `hep deck` is a work command whose code moves into HEimdall with the runner (docs/framework D4).
+
 Otherwise nothing is in progress. Waiting on the user:
 
 - **R0 (the user's):**
