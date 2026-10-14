@@ -1,0 +1,89 @@
+# brookhaven.toml — inclusive-jet photoproduction off protons and nuclei at EIC-like energies:
+# 9 GeV electrons on p, d, ⁴He, ¹⁰⁷Ag and ¹⁹⁷Au (photo_eic.cmnd).
+#
+# The nuclei by the nuclear-PDF route: beam A stays a proton, and the hard process sees the bound
+# nucleon of the nucleus named by `ions` (Pythia's PDF:nPDFBeamA, with EPPS16 NLO and the nucleus's
+# proton/neutron mix, PDF:nPDFSetA = 3 in the card). The free-proton points run with it off
+# (`nuclear`). Not modelled: multiparton interactions with several nucleons, the nuclear breakup,
+# in-medium effects (an eA generator's).
+#
+#   hep run PhotoProduction/brookhaven            the configuration named in [run] (single)
+#   hep run PhotoProduction/brookhaven --plan     look before running
+#
+# The chain, the quantities and the plot keys are common.toml's (imported); this file says its card,
+# analysis and shards, its beams and its own configuration.
+#
+# Beam A's energy is per nucleon (GeV/u); √s below is per electron–nucleon collision, √(4 E_e E_N).
+
+[config]
+import = ["common"]
+
+[config.vars]
+card     = "photo_eic.cmnd"
+analysis = "photo_eic"
+product  = "photo"
+shards   = 10
+
+[run]
+name          = "brookhaven"
+serial        = 2
+project       = "PhotoProduction"
+configuration = "single"
+threads       = 12
+tools         = ["inproc", "yd2rt"]
+
+[prelim]
+fifo = []
+
+[tools.inproc.config]
+engine        = "parallel"    # PythiaParallel as App_Pythia runs it; "serial": one Pythia8::Pythia
+rivet_threads = 12            # Rivets on threads of their own, merged at the end (V34, L29)
+
+[tools.inproc]                # the integrated program (V21, V33)
+tool           = "module"
+executable     = "InprocJets.exe"
+output_file    = "photo.yoda" # as the imported rivet table's, which yd2rt and merge read
+pythia_cmnd    = true         # [tools.pythia]'s point card: sweeps and seeds included
+rivet_analyses = true         # [tools.rivet]'s analyses (options included) and the plugin path
+
+[run.cfgs.single]
+label       = "Energies_10M"
+event_count = 10_000_000
+description = "Electron–ion comparison: each nucleus at its own beam energy, 9 GeV electrons"
+sweeps      = [["ions", "energies", "nuclear"]]   # entangled: the n-th of each together
+
+[static]                     # what the sweep leaves fixed; `lepton` is common.toml's quantity
+pdf    = "NNPDF23lo"
+pt0ref = "pt32"
+mpi    = "mpi"
+lepton = "em"
+
+[quantities.energies]                         # [E_A per nucleon, E_e] in GeV: beam A is the proton
+values = [[130, 9], [275, 9], [130, 9], [166, 9], [115, 9], [100, 9]]
+tags   = ["9x130", "9x275", "9x130d", "9x166", "9x115", "9x100"]
+labels = ['9x130 GeV ($\sqrt{s_{eN}}$ = 68.4 GeV)', '9x275 GeV ($\sqrt{s_{eN}}$ = 99.5 GeV)',
+          '9x130 GeV ($\sqrt{s_{eN}}$ = 68.4 GeV)', '9x166 GeV ($\sqrt{s_{eN}}$ = 77.3 GeV)',
+          '9x115 GeV ($\sqrt{s_{eN}}$ = 64.3 GeV)', '9x100 GeV ($\sqrt{s_{eN}}$ = 60.0 GeV)']
+
+[quantities.ions]                             # the nucleus whose bound nucleon beam A is: 100ZZZAAAI
+key    = { pythia = "PDF:nPDFBeamA" }
+values = [2212, 2212, 1000010020, 1000020040, 1000471070, 1000791970]
+tags   = ["p", "p275", "d", "He4", "Ag107", "Au197"]
+labels = ["p", "p", "d", '$^{4}$He', '$^{107}$Ag', '$^{197}$Au']
+
+[quantities.nuclear]                          # the nuclear PDF correction: off for the free proton
+key    = { pythia = "PDF:useHardNPDFA" }
+values = [false, false, true, true, true, true]
+tags   = ["free", "free275", "npdf", "npdfHe", "npdfAg", "npdfAu"]
+labels = ["free proton", "free proton", "EPPS16", "EPPS16", "EPPS16", "EPPS16"]
+
+[plot]
+backend = ["root", "yoda", "mpl"]
+formats = ["pdf", "png"]
+
+[plot.style]
+legend.position = "best"
+ratio.range     = [0, 2.5]
+ratio.limits    = [0, 2.5]
+text.legend     = 9
+text.header     = 8

@@ -6,9 +6,9 @@
 
 prefix      = "~/HEP"      # src/ build/ install/ .venv/ logs/ .stamps/ setup.sh
 packages    = "core"       # "core", "all", or names: "rivet pythia8" (what they need is added)
-cores       = 0            # how many compilers run at once (make -j<cores>, cmake --build -j<cores>);
+cores       = 20            # how many compilers run at once (make -j<cores>, cmake --build -j<cores>);
                            # 0: every CPU this process may use (hyper-threads count: 24 on the lab PC)
-root_cores  = 0            # the same for ROOT; 0: one per 3 GB of RAM, at most cores (its LLVM/Cling
+root_cores  = 12            # the same for ROOT; 0: one per 3 GB of RAM, at most cores (its LLVM/Cling
                            # needs ~3 GB a compiler, or cc1plus is OOM-killed)
 cxx_std     = 17           # one C++ standard for the whole stack: ROOT, Rivet and Pythia8 share ABIs
 opt_flags   = "-O2"

@@ -120,6 +120,11 @@ backend = ["mpl", "yoda"]
 file   = "rivet:ZEUS_2012_I1116258"     # Rivet's own ZEUS 2012 tables (the same numbers as datasets/zeus_eic.yoda)
 legend = "Data"
 
+[plot.style]
+legend.position = "best"
+ratio.range     = [0.5, 1.5]
+ratio.limits    = [0.5, 1.5]
+
 [plot.data.map]
 "d01-x01-y01" = "/REF/ZEUS_2012_I1116258/d01-x01-y01"   # ET, kT, all eta
 "d02-x01-y01" = "/REF/ZEUS_2012_I1116258/d02-x01-y01"   # eta, kT, ET > ETMIN

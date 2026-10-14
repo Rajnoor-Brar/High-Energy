@@ -3,5 +3,6 @@
     "workbench.colorTheme": "HEP Contrast Light",
     "workbench.iconTheme": "material-icon-theme",
     "workbench.preferredDarkColorTheme": "HEP Contrast Dark",
-    "workbench.preferredHighContrastColorTheme": "HEP Contrast Light"
+    "workbench.preferredHighContrastColorTheme": "HEP Contrast Light",
+    "pdf-preview.default.scale": "page-fit"
 }

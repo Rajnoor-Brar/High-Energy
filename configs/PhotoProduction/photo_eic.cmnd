@@ -1,0 +1,63 @@
+! photo_eic.cmnd — inclusive-jet photoproduction off protons and nuclei (brookhaven.toml).
+!
+! photo_ep.cmnd's physics, with nuclei by the nuclear-PDF route: beam A is a proton, and the hard
+! process sees a nucleon bound in the nucleus PDF:nPDFBeamA names (its EPPS16 modification and its
+! proton/neutron mix). Multiparton interactions and the beam remnant stay a free proton's, and nothing
+! of the nucleus's other nucleons is modelled (no Angantyr: it takes no electron beam in 8.317).
+! The run TOML sets per point (later settings win):
+!   [quantities.ions]     → PDF:nPDFBeamA (a nucleus, 100ZZZAAAI: 1000791970 = Au-197)
+!   [quantities.nuclear]  → PDF:useHardNPDFA (off for the free proton)
+!   [quantities.energies] → Beams:eA (per nucleon), Beams:eB
+!   [quantities.lepton]   → Beams:idB (11 = e-, -11 = e+)
+!   [quantities.pdf]      → PDF:pSet (the free-proton PDF the modification multiplies)
+! Defaults below: 9 GeV electrons on a nucleon in gold at 100 GeV.
+
+! The nuclei of brookhaven.toml, defined just in case, with Pythia 8.317's own values (ParticleData.xml),
+! so these lines change nothing when Pythia already knows them. The fields of `:all` are: name,
+! antiName, spinType (2S+1), chargeType (3 × charge), colType, m0 (GeV), mWidth, mMin, mMax, tau0.
+1000010020:all = 2H 2Hbar 1 3 0 1.87561 0.0 0.0 0.0 0.0
+1000020040:all = 4He 4Hebar 1 6 0 3.7284 0.0 0.0 0.0 0.0
+1000471070:all = 107Ag 107Agbar 2 141 0 99.58145 0.0 0.0 0.0 0.0
+1000791970:all = 197Au 197Aubar 2 237 0 183.47319 0.0 0.0 0.0 0.0
+
+! Beams: proton A along +z (a nucleon of the nucleus below), lepton B
+Beams:frameType = 2                 ! beams with different energies
+Beams:idA = 2212                    ! p+
+Beams:eA = 100.0                    ! per nucleon
+Beams:idB = 11                      ! e-
+Beams:eB = 9.0
+
+! Nuclear PDFs for beam A's hard process: the free-proton PDF times the nucleus's modification, and
+! isospin for its neutrons. EPPS16 reads its grid file EPPS16NLOR_<A> from Pythia's PDF data folder
+! (share/Pythia8/pdfdata), one per mass number. Set 0 is the proton/neutron mix alone, the
+! reference to divide by.
+PDF:useHardNPDFA = on
+PDF:nPDFSetA = 3                    ! 0 isospin only, 1/2 EPS09 LO/NLO, 3 EPPS16 NLO
+PDF:nPDFBeamA = 1000791970          ! Au-197
+
+! Photoproduction
+PDF:lepton2gamma = on               ! photons emitted from the lepton
+! With the hadron as beam A and the photon from the lepton, 0 and 1 give identical events here,
+! 2 fails init(), and 3 turns MPI off; the direct contribution needs its own card (00/B13).
+Photon:ProcessType = 0              ! mix of available photon processes
+Photon:Q2max = 1.0                  ! maximal photon virtuality (GeV^2)
+HardQCD:all = on                    ! all dijet matrix elements
+PhotonParton:all = on               ! all dijet matrix elements with photons
+PhaseSpace:pTHatMin = 6.            ! minimal pT-hat (GeV)
+MultipartonInteractions:pT0Ref = 3.2  ! tuned ep value
+
+! Proton PDF: [quantities.pdf] sets it per point
+! PDF:pSet = 15                     ! NNPDF2.3 QCD+QED NLO, alpha_s(M_Z) = 0.119
+
+! QED radiation off the lepton is not handled by the photoproduction setup
+TimeShower:QEDshowerByL = off
+PDF:lepton = off
+
+! Printout
+Init:showChangedSettings = on
+Init:showChangedParticleData = on
+Init:showMultipartonInteractions = on
+Next:numberShowInfo = 1
+Next:numberShowProcess = 1
+Next:numberShowEvent = 1
+Next:showScaleAndVertex = off
