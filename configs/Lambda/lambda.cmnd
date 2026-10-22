@@ -4,7 +4,7 @@
 ! appends the per-point settings a sweep decided. Ported from
 ! legacy/lambda/configs/Lambda_Reconstruction.cmnd.
 
-! Beams are NOT set here: [beams] in the TOML owns them, and hep appends them per point.
+! Beams are NOT set here: the TOML's beam quantities own them, and heimdall appends them per point.
 ! A card that sets them too is rejected rather than silently overridden.
 
 ! Inelastic, non-diffractive minimum bias — where the strangeness comes from.

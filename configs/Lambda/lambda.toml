@@ -1,10 +1,10 @@
 # lambda.toml — Λ → p π⁻ from Pythia (Angantyr Ne-20 on Ne-20, lambda.cmnd), through two
-# analysis paths on the same events (rework v2 schema, docs/03_User_Guide.md §4.13).
+# analysis paths on the same events (the run TOML's v3 form: $HEP/docs/04_Config_Reference.md).
 #
-#   hep run Lambda/lambda                   one run at 7 TeV, both paths
-#   hep run Lambda/lambda masswindow        the mass window swept through both paths at once
+#   heimdall run Lambda/lambda              one run at 7 TeV, both paths
+#   heimdall run Lambda/lambda masswindow   the mass window swept through both paths at once
 #
-# App_Pythia fans out to two FIFOs: the Rivet analysis Lamriv reads one, the module program Lambda
+# App_Pythia fans out to two FIFOs (from the chain, 04 §6): the Rivet analysis Lamriv reads one, the module program Lambda
 # (modules/Lambda/Lambda.cc) the other. Both use modules/Lambda/Reconstruction.hh, so on the same
 # events they agree to floating-point precision, which checks both frameworks.
 #
@@ -16,71 +16,55 @@
 [run]
 name          = "lambda"
 project       = "Lambda"
-configuration = "single"
-event_count   = 20_000
+run           = "single"
+events        = 20_000
 threads       = 16
+chain         = [["pythia", "lamriv", "lambda"], "yd2rt"]   # every configuration's, unless it says its own
 
-[run.cfgs.single]
+[cfgs.single]
 description = "One run at 7 TeV, both analysis paths"
-sweeps      = []
-tools       = [["pythia", "lamriv", "lambda"], "yd2rt"]
 
-[run.cfgs.masswindow]
+[cfgs.masswindow]
 description = "Mass-window scan through both paths: four points, each its own generation (V9)"
-sweeps      = ["masstol"]
-tools       = [["pythia", "lamriv", "lambda"], "yd2rt"]
+vary        = ["masstol"]
 
-[run.cfgs.costheta]
+[cfgs.costheta]
 description = "Does the decay-angle cut buy anything the mass window does not?"
-sweeps      = ["costheta"]
-tools       = [["pythia", "lamriv", "lambda"], "yd2rt"]
+vary        = ["costheta"]
 
-[run.cfgs.cuts_grid]
+[cfgs.cuts_grid]
 description = "Mass window x decay angle: one page per angle cut, mass-window curves on it"
-sweeps      = ["masstol", "costheta"]
+vary        = ["masstol", "costheta"]
 plot_points = ["costheta"]
-tools       = [["pythia", "lamriv", "lambda"], "yd2rt"]
 
-[run.cfgs.sets]
+[cfgs.sets]
 description = "The three candidate sets as curves on one page (SET is a Lamriv option; the module books all three anyway)"
-sweeps      = ["set"]
-tools       = [["pythia", "lamriv", "lambda"], "yd2rt"]
+vary        = ["set"]
 
-[run.cfgs.energy]
+[cfgs.energy]
 description = "Lambda yield against collision energy"
-sweeps      = ["sqrts"]
-tools       = [["pythia", "lamriv", "lambda"], "yd2rt"]
+vary        = ["sqrts"]
 
-[run.cfgs.replicas]
+[cfgs.replicas]
 description = "Three statistically equivalent runs at 7 TeV, for a stability check"
-sweeps      = ["replica"]
-tools       = [["pythia", "lamriv", "lambda"], "yd2rt"]
-
-[prelim]
-fifo = ["to_rivet.hepmc", "to_module.hepmc"]     # fan-out: one FIFO per reader (V16)
-
-[static]
-sqrts  = "7tev"
-beam_a = "Ne20"
-beam_b = "Ne20"
+vary        = ["replica"]
 
 [tools.pythia]
-tool        = "pythia"
-baseconfig  = "lambda.cmnd"
-output_file = ["to_rivet.hepmc", "to_module.hepmc"]
+card        = "lambda.cmnd"
+output      = ["to_rivet.hepmc", "to_module.hepmc"]
 
 [tools.lamriv]
-tool        = "rivet"
+uses        = "rivet"
 input       = "to_rivet.hepmc"
 analyses    = ["Lamriv"]
 options     = { RESERVED = 2 }     # the module's reserved_protons: the two paths' cuts must match
-output_file = "lamriv.yoda"
+output      = "lamriv.yoda"
 
 [tools.lambda]
-tool        = "module"
+uses        = "module"
 executable  = "Lambda.exe"         # build/Lambda/Lambda.exe, from modules/Lambda/Lambda.cc
 input       = "to_module.hepmc"
-output_file = "lambda.root"
+output      = "lambda.root"
 
 [tools.lambda.config]              # Lamriv's option defaults, under the module's names
 mass_tolerance      = 0.15         # |m(pπ) − m(Λ)| accepted, GeV
@@ -91,48 +75,57 @@ track_eta_max       = 8.0
 bins                = 100
 
 [tools.yd2rt]
-tool        = "yd2rt"
-input       = "lamriv.yoda"
-output_file = "lamriv.root"
+input       = "lamriv"
+output      = "lamriv.root"
 
 [quantities.sqrts]
-values = [900.0, 7000.0, 13000.0]
-tags   = ["900gev", "7tev", "13tev"]
-labels = ["900 GeV", "7 TeV", "13 TeV"]
+fixed  = "7tev"
+points = [
+  { tag = "900gev", value = 900.0, label = "900 GeV" },
+  { tag = "7tev", value = 7000.0, label = "7 TeV" },
+  { tag = "13tev", value = 13000.0, label = "13 TeV" },
+]
 
 [quantities.beam_a]
-values = [1000100200]
-tags   = ["Ne20"]
+fixed  = "Ne20"
+points = [{ tag = "Ne20", value = 1000100200 }]
 
 [quantities.beam_b]
-values = [1000100200]
-tags   = ["Ne20"]
+fixed  = "Ne20"
+points = [{ tag = "Ne20", value = 1000100200 }]
 
 [quantities.masstol]               # one quantity, two consumers, a key for each
-target = ["lamriv/Lamriv", "lambda"]
-key    = { lamriv = "MASSTOL", lambda = "mass_tolerance" }
-values = [0.05, 0.10, 0.15, 0.25]
-tags   = ["m050", "m100", "m150", "m250"]
-labels = ['$\pm$ 50 MeV', '$\pm$ 100 MeV', '$\pm$ 150 MeV', '$\pm$ 250 MeV']
+to     = { "lamriv/Lamriv" = "MASSTOL", lambda = "mass_tolerance" }
+points = [
+  { tag = "m050", value = 0.05, label = '$\pm$ 50 MeV' },
+  { tag = "m100", value = 0.1, label = '$\pm$ 100 MeV' },
+  { tag = "m150", value = 0.15, label = '$\pm$ 150 MeV' },
+  { tag = "m250", value = 0.25, label = '$\pm$ 250 MeV' },
+]
 
 [quantities.costheta]
-target = ["lamriv/Lamriv", "lambda"]
-key    = { lamriv = "COSTHETATOL", lambda = "cos_theta_tolerance" }
-values = [0.0, 0.05, 0.2]
-tags   = ["noct", "ct005", "ct020"]
-labels = ['no cos$\theta$* cut', '|cos$\theta$* + 1| < 0.05', '|cos$\theta$* + 1| < 0.2']
+to     = { "lamriv/Lamriv" = "COSTHETATOL", lambda = "cos_theta_tolerance" }
+points = [
+  { tag = "noct", value = 0.0, label = 'no cos$\theta$* cut' },
+  { tag = "ct005", value = 0.05, label = '|cos$\theta$* + 1| < 0.05' },
+  { tag = "ct020", value = 0.2, label = '|cos$\theta$* + 1| < 0.2' },
+]
 
 [quantities.set]
-target = "lamriv/Lamriv"
-key    = "SET"
-values = ["unvalidated", "validated", "selected"]
-tags   = ["unval", "val", "sel"]
-labels = ["all pairs", "in the mass window", "ranked, one-to-one"]
+to     = { "lamriv/Lamriv" = "SET" }
+points = [
+  { tag = "unval", value = "unvalidated", label = "all pairs" },
+  { tag = "val", value = "validated", label = "in the mass window" },
+  { tag = "sel", value = "selected", label = "ranked, one-to-one" },
+]
 
 [quantities.replica]
-target = "pythia/seed"
-values = [1, 2, 3]
-tags   = ["s1", "s2", "s3"]
+to     = { "pythia/seed" = true }
+points = [
+  { tag = "s1", value = 1 },
+  { tag = "s2", value = 2 },
+  { tag = "s3", value = 3 },
+]
 
 # Pages come from the YODA product (lamriv.yoda); the module's lambda.root is for ROOT users.
 [plot]

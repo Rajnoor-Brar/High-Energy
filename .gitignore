@@ -32,3 +32,9 @@ cross_machine/*
 presentables/*
 reports/*
 presentations/*
+
+# Heimdall (heimdall setup): what the runner and the build make
+records/
+.cache/
+results/
+# /Heimdall

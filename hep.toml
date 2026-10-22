@@ -1,0 +1,23 @@
+# hep.toml — this folder is a Heimdall work dir (made by `heimdall setup`, 2026-10-22).
+# [work] marks it; [framework] expects is the Heimdall it was made by: a Heimdall without that
+# revision warns (docs/framework/01_Target.md §4.2). [run] and [cluster] are optional; any other table is refused.
+[work]
+name = "High-Energy"
+
+[framework]
+expects = "2186975620225c92fb631cfcccecdd4127854cde"
+
+# On a Slurm cluster, this work dir's defaults for `heimdall cluster` (docs/04_Config_Reference.md §16), over
+# the machine root's machine.toml [cluster]; a run TOML's [cluster] is over them. Uncomment what the
+# site needs:
+# [cluster]
+# account   = "my-group"
+# partition = "standard"
+# setup     = ["module load gcc/13"]
+
+# What every run here keeps beyond records/ and results/ (with machine.toml's [run] keep and heimdall run
+# --keep): logs (every tool's whole output), journal (status.jsonl), work (a finished point's whole working
+# folder: by default only its cards/ and config/ stay), cache (card checks, converted data, the plot
+# stage's working files). By default none: a failed tool's last lines and the prepare caches only.
+# [run]
+# keep = ["logs"]
