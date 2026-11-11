@@ -1,5 +1,5 @@
 # lambda.toml — Λ → p π⁻ from Pythia (Angantyr Ne-20 on Ne-20, lambda.cmnd), through two
-# analysis paths on the same events (the run TOML's v3 form: $HEP/docs/04_Config_Reference.md).
+# analysis paths on the same events (the run TOML's v3 form: $HEIMDALL/docs/04_Config_Reference.md).
 #
 #   heimdall run Lambda/lambda              one run at 7 TeV, both paths
 #   heimdall run Lambda/lambda masswindow   the mass window swept through both paths at once
@@ -13,9 +13,9 @@
 # quantities are targeted quantities. A module option can now be swept (masstol, costheta), which v1
 # could not do (00/B40). The v1 `RESERVED = 2` (pp's 2 × Z) is kept with Ne–Ne beams, as v1 had it.
 
-[run]
+[errand]
 name          = "lambda"
-project       = "Lambda"
+assignment    = "Lambda"
 run           = "single"
 events        = 20_000
 threads       = 16

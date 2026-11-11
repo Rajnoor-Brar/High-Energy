@@ -6,7 +6,7 @@
 	],
 	"settings": {
 		"workbench.iconTheme": "material-icon-theme",
-		"workbench.preferredHighContrastLightColorTheme": "HEP Contrast",
+		"workbench.preferredHighContrastLightColorTheme": "Heimdall Contrast",
 		"workbench.preferredDarkColorTheme": "Xcode Default (Dark)",
 		"workbench.colorCustomizations": {
 		

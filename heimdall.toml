@@ -1,4 +1,4 @@
-# hep.toml — this folder is a Heimdall work dir (made by `heimdall setup`, 2026-10-22).
+# heimdall.toml — this folder is a Heimdall work dir (made by `heimdall setup`, 2026-10-22).
 # [work] marks it; [framework] expects is the Heimdall it was made by: a Heimdall without that
 # revision warns (docs/framework/01_Target.md §4.2). [run] and [cluster] are optional; any other table is refused.
 [work]

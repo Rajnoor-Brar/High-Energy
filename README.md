@@ -1,7 +1,7 @@
 # High-Energy
 
 A Heimdall work dir (made by `heimdall setup` on 2026-10-22). Heimdall, the framework and its stack, is
-elsewhere: `heimdall where` says which one this shell uses. Its manual is `$HEP/docs/README.md`.
+elsewhere: `heimdall where` says which one this shell uses. Its manual is `$HEIMDALL/docs/README.md`.
 `gjallarhorn High-Energy` loads Heimdall's environment and comes here, from anywhere (`heimdall recognise
 --list` shows the titles this machine knows); `bifrost <pkg>` adds a package to the environment.
 

@@ -1,5 +1,5 @@
 # generators.toml — Pythia, Herwig and Sherpa through one chain (the run TOML's v3 form:
-# $HEP/docs/04_Config_Reference.md).
+# $HEIMDALL/docs/04_Config_Reference.md).
 #
 #   heimdall run Comparison/generators     pp → QCD 2→2 at 13 TeV: three points, four pages
 #
@@ -9,9 +9,9 @@
 # `sqrts` reaches all three; `beams` only Pythia and Sherpa, because Herwig's pp snippet fixes its
 # own (an @-chain accepts a value that another alternative consumes, C7).
 
-[run]
+[errand]
 name          = "generators"
-project       = "Comparison"
+assignment    = "Comparison"
 run           = "compare"
 events        = 50_000
 threads       = 4                   # Pythia's; Herwig and Sherpa run one process each
